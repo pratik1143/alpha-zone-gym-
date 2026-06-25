@@ -1,0 +1,396 @@
+import { create } from 'zustand';
+import API from '../services/api';
+import { signInWithEmailAndPassword, signOut } from 'firebase/auth';
+import { auth } from '../lib/firebase';
+
+export type Role = 'super_admin' | 'gym_owner' | 'branch_manager' | 'trainer' | 'receptionist' | 'member';
+
+export interface User {
+  uid: string;
+  name: string;
+  email: string;
+  role: Role;
+  branch?: string;
+  gymId?: string;
+  avatar?: string;
+  token?: string;
+}
+
+// 1. AUTH STORE
+interface AuthStore {
+  user: User | null;
+  isLoading: boolean;
+  isAuthenticated: boolean;
+  setUser: (user: User | null) => void;
+  login: (credentials: { email: string; password: string }) => Promise<User>;
+  logout: () => Promise<void>;
+}
+
+export const useAuthStore = create<AuthStore>((set) => ({
+  user: typeof window !== 'undefined' && localStorage.getItem('alpha_zone_user') 
+    ? JSON.parse(localStorage.getItem('alpha_zone_user')!) 
+    : null,
+  isLoading: false,
+  isAuthenticated: typeof window !== 'undefined' && !!localStorage.getItem('alpha_zone_user'),
+  setUser: (user) => {
+    if (user) {
+      localStorage.setItem('alpha_zone_user', JSON.stringify(user));
+    } else {
+      localStorage.removeItem('alpha_zone_user');
+    }
+    set({ user, isAuthenticated: !!user });
+  },
+  login: async (credentials) => {
+    set({ isLoading: true });
+    try {
+      // Step 1: Authenticate with Firebase (REQUIRED — no fallback)
+      const userCredential = await signInWithEmailAndPassword(auth, credentials.email, credentials.password);
+      const idToken = await userCredential.user.getIdToken();
+
+      // Step 2: Send Firebase ID token to backend to get user profile
+      try {
+        const res = await API.post('/auth/login', { idToken, email: credentials.email });
+        const user = res.data;
+        localStorage.setItem('alpha_zone_user', JSON.stringify(user));
+        set({ user, isAuthenticated: true, isLoading: false });
+        return user;
+      } catch (backendErr) {
+        // Backend unavailable — build user from Firebase token claims
+        const fbUser = userCredential.user;
+        const user = {
+          uid: fbUser.uid,
+          name: fbUser.displayName || fbUser.email?.split('@')[0] || 'Admin',
+          email: fbUser.email || credentials.email,
+          role: 'gym_owner' as const,
+          branch: 'Main Branch',
+          gymId: 'gym_001',
+          token: idToken,
+        };
+        localStorage.setItem('alpha_zone_user', JSON.stringify(user));
+        set({ user, isAuthenticated: true, isLoading: false });
+        return user;
+      }
+    } catch (firebaseErr: any) {
+      set({ isLoading: false });
+      // Firebase auth failed — user does not exist or wrong password
+      throw new Error('Invalid Email or Password');
+    }
+  },
+  logout: async () => {
+    try {
+      await signOut(auth);
+    } catch (fbErr) {
+      console.warn('Firebase client signout failed:', fbErr);
+    }
+    localStorage.removeItem('alpha_zone_user');
+    set({ user: null, isAuthenticated: false });
+  }
+}));
+
+// 2. GYM MANAGEMENT STORE
+interface GymStore {
+  members: any[];
+  attendance: any[];
+  payments: any[];
+  selectedBranch: string;
+  sidebarCollapsed: boolean;
+  deviceStatus: 'connected' | 'syncing' | 'offline';
+  isLoading: boolean;
+  
+  fetchMembers: () => Promise<void>;
+  addMember: (member: any) => Promise<void>;
+  updateMember: (id: string, updates: any) => Promise<void>;
+  deleteMember: (id: string) => Promise<void>;
+  toggleFreeze: (id: string) => Promise<void>;
+  resetPassword: (id: string, password: string) => Promise<void>;
+  sendCredentials: (id: string) => Promise<void>;
+  
+  fetchAttendance: () => Promise<void>;
+  triggerCheckIn: (payload: { memberId: string; method?: string; branch?: string }) => Promise<void>;
+  checkoutAttendance: (id: string) => Promise<void>;
+  syncLogs: () => Promise<void>;
+  triggerGateUnlock: () => Promise<void>;
+
+  fetchPayments: () => Promise<void>;
+  addPayment: (payment: any) => Promise<void>;
+  setSelectedBranch: (branch: string) => void;
+  setSidebarCollapsed: (collapsed: boolean) => void;
+}
+
+export const useGymStore = create<GymStore>((set, get) => ({
+  members: [],
+  attendance: [],
+  payments: [],
+  selectedBranch: 'Mohali, Punjab',
+  sidebarCollapsed: false,
+  deviceStatus: 'connected',
+  isLoading: false,
+
+  fetchMembers: async () => {
+    try {
+      const res = await API.get('/members');
+      // Deduplicate by id to prevent React key conflicts
+      const seen = new Set<string>();
+      const unique = (res.data as any[]).filter(m => {
+        if (seen.has(m.id)) return false;
+        seen.add(m.id);
+        return true;
+      });
+      set({ members: unique });
+    } catch (err) {
+      console.error('Failed to fetch members:', err);
+    }
+  },
+  addMember: async (member) => {
+    await API.post('/members', member);
+    // Always re-fetch from server to avoid duplicates from optimistic local appends
+    await get().fetchMembers();
+    get().fetchPayments(); // refresh invoices ledger
+  },
+  updateMember: async (id, updates) => {
+    const res = await API.put(`/members/${id}`, updates);
+    set({ members: get().members.map(m => m.id === id ? res.data : m) });
+  },
+  deleteMember: async (id) => {
+    await API.delete(`/members/${id}`);
+    set({ members: get().members.filter(m => m.id !== id) });
+  },
+  toggleFreeze: async (id) => {
+    const res = await API.post(`/members/${id}/freeze`);
+    set({ members: get().members.map(m => m.id === id ? res.data : m) });
+  },
+  resetPassword: async (id, password) => {
+    await API.post(`/members/${id}/reset-password`, { password });
+  },
+  sendCredentials: async (id) => {
+    await API.post(`/members/${id}/send-credentials`);
+  },
+
+  fetchAttendance: async () => {
+    try {
+      const res = await API.get('/attendance');
+      set({ attendance: res.data });
+    } catch (err) {
+      console.error('Failed to fetch attendance:', err);
+    }
+  },
+  triggerCheckIn: async (payload) => {
+    await API.post('/attendance/checkin', payload);
+    get().fetchAttendance();
+    get().fetchMembers(); // refresh attendance counts and active streaks
+  },
+  checkoutAttendance: async (id) => {
+    await API.put(`/attendance/checkout/${id}`);
+    get().fetchAttendance();
+  },
+  syncLogs: async () => {
+    set({ deviceStatus: 'syncing' });
+    await API.post('/attendance/unlock'); // mock sync call
+    setTimeout(() => {
+      set({ deviceStatus: 'connected' });
+      get().fetchAttendance();
+    }, 1200);
+  },
+  triggerGateUnlock: async () => {
+    await API.post('/attendance/unlock');
+  },
+
+  fetchPayments: async () => {
+    try {
+      const res = await API.get('/billing');
+      set({ payments: res.data });
+    } catch (err) {
+      console.error('Failed to fetch invoices:', err);
+    }
+  },
+  addPayment: async (payment) => {
+    const res = await API.post('/billing', payment);
+    set({ payments: [res.data, ...get().payments] });
+    get().fetchMembers(); // refresh expiry dates
+  },
+  setSelectedBranch: (selectedBranch) => set({ selectedBranch }),
+  setSidebarCollapsed: (sidebarCollapsed) => set({ sidebarCollapsed })
+}));
+
+// 3. CHAT STORE
+interface ChatStore {
+  messages: any[];
+  fetchChatHistory: (userA: string, userB: string) => Promise<void>;
+  sendMsg: (payload: { from: string; to: string; text?: string; image?: string }) => Promise<void>;
+}
+
+export const useChatStore = create<ChatStore>((set, get) => ({
+  messages: [],
+  fetchChatHistory: async (userA, userB) => {
+    try {
+      const res = await API.get(`/chat/${userA}/${userB}`);
+      set({ messages: res.data });
+    } catch (err) {
+      console.error('Failed to fetch chat logs:', err);
+    }
+  },
+  sendMsg: async (payload) => {
+    const res = await API.post('/chat', payload);
+    set({ messages: [...get().messages, res.data] });
+  }
+}));
+
+// 4. TRAINER PANEL STORE
+interface TrainerStore {
+  workoutPlan: any | null;
+  dietPlan: any | null;
+  cheatMeals: any[];
+  dailyLog: any | null;
+  fetchWorkout: (memberId: string) => Promise<void>;
+  saveWorkout: (payload: { memberId: string; name: string; type: string; duration: string; exercises: any[] }) => Promise<void>;
+  fetchDiet: (memberId: string) => Promise<void>;
+  saveDiet: (payload: { memberId: string; name: string; calories: number; protein: number; carbs: number; fats: number; waterGoal: number; meals: any; status?: string }) => Promise<void>;
+  generateAIDiet: (memberId: string) => Promise<void>;
+  approveDiet: (id: string) => Promise<void>;
+  duplicateDiet: (id: string, targetMemberId: string) => Promise<void>;
+  archiveDiet: (id: string) => Promise<void>;
+  fetchCheatMeals: () => Promise<void>;
+  handleCheatMeal: (id: string, status: 'approved' | 'rejected', trainerNotes?: string) => Promise<void>;
+  fetchDailyLog: (memberId: string, date: string) => Promise<void>;
+  saveDailyLog: (payload: any) => Promise<void>;
+}
+
+export const useTrainerStore = create<TrainerStore>((set, get) => ({
+  workoutPlan: null,
+  dietPlan: null,
+  cheatMeals: [],
+  dailyLog: null,
+  fetchWorkout: async (memberId) => {
+    try {
+      const res = await API.get(`/trainers/workouts/${memberId}`);
+      set({ workoutPlan: res.data[0] || null });
+    } catch (err) {
+      console.error('Failed to fetch workouts:', err);
+    }
+  },
+  saveWorkout: async (payload) => {
+    const res = await API.post('/trainers/workouts', payload);
+    set({ workoutPlan: res.data });
+  },
+  fetchDiet: async (memberId) => {
+    try {
+      const res = await API.get(`/trainers/diets/${memberId}`);
+      set({ dietPlan: res.data || null });
+    } catch (err) {
+      console.error('Failed to fetch diets:', err);
+    }
+  },
+  saveDiet: async (payload) => {
+    const res = await API.post('/trainers/diets', payload);
+    set({ dietPlan: res.data });
+  },
+  generateAIDiet: async (memberId) => {
+    try {
+      const res = await API.post('/trainers/diets/generate-ai', { memberId });
+      set({ dietPlan: res.data });
+    } catch (err) {
+      console.error('Failed to generate AI diet:', err);
+      throw err;
+    }
+  },
+  approveDiet: async (id) => {
+    try {
+      const res = await API.post(`/trainers/diets/${id}/approve`);
+      set({ dietPlan: res.data });
+    } catch (err) {
+      console.error('Failed to approve diet:', err);
+      throw err;
+    }
+  },
+  duplicateDiet: async (id, targetMemberId) => {
+    try {
+      const res = await API.post(`/trainers/diets/${id}/duplicate`, { targetMemberId });
+      set({ dietPlan: res.data });
+    } catch (err) {
+      console.error('Failed to duplicate diet:', err);
+      throw err;
+    }
+  },
+  archiveDiet: async (id) => {
+    try {
+      await API.delete(`/trainers/diets/${id}`);
+      set({ dietPlan: null });
+    } catch (err) {
+      console.error('Failed to archive diet:', err);
+      throw err;
+    }
+  },
+  fetchCheatMeals: async () => {
+    try {
+      const res = await API.get('/trainers/cheat-meals');
+      set({ cheatMeals: res.data });
+    } catch (err) {
+      console.error('Failed to fetch cheat meals:', err);
+    }
+  },
+  handleCheatMeal: async (id, status, trainerNotes) => {
+    try {
+      const res = await API.put(`/trainers/cheat-meals/${id}`, { status, trainerNotes });
+      set({ cheatMeals: get().cheatMeals.map(cm => cm.id === id ? res.data : cm) });
+    } catch (err) {
+      console.error('Failed to handle cheat meal request:', err);
+      throw err;
+    }
+  },
+  fetchDailyLog: async (memberId, date) => {
+    try {
+      const res = await API.get(`/members/diets/${memberId}/logs/${date}`);
+      set({ dailyLog: res.data || null });
+    } catch (err) {
+      console.error('Failed to fetch daily log:', err);
+    }
+  },
+  saveDailyLog: async (payload) => {
+    try {
+      const res = await API.post('/members/diets/logs', payload);
+      set({ dailyLog: res.data });
+    } catch (err) {
+      console.error('Failed to save daily log:', err);
+      throw err;
+    }
+  }
+}));
+
+// 5. PROGRESS & REFERRAL STORE
+interface ProgressStore {
+  progressTimeline: any[];
+  referrals: any[];
+  fetchTimeline: (memberId: string) => Promise<void>;
+  addRecord: (payload: { memberId: string; weight: number; height: number; bodyFat: number; waist: number; chest: number; arms: number; shoulders: number }) => Promise<void>;
+  fetchReferrals: (memberId: string) => Promise<void>;
+  inviteFriend: (payload: { memberId: string; friendName: string; friendEmail: string }) => Promise<void>;
+}
+
+export const useProgressStore = create<ProgressStore>((set, get) => ({
+  progressTimeline: [],
+  referrals: [],
+  fetchTimeline: async (memberId) => {
+    try {
+      const res = await API.get(`/progress/${memberId}`);
+      set({ progressTimeline: res.data });
+    } catch (err) {
+      console.error('Failed to fetch progress logs:', err);
+    }
+  },
+  addRecord: async (payload) => {
+    const res = await API.post('/progress', payload);
+    set({ progressTimeline: [...get().progressTimeline, res.data] });
+  },
+  fetchReferrals: async (memberId) => {
+    try {
+      const res = await API.get(`/referrals/${memberId}`);
+      set({ referrals: res.data });
+    } catch (err) {
+      console.error('Failed to fetch referrals:', err);
+    }
+  },
+  inviteFriend: async (payload) => {
+    const res = await API.post('/referrals', payload);
+    set({ referrals: [...get().referrals, res.data] });
+  }
+}));

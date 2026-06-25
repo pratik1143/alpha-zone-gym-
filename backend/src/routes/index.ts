@@ -1,0 +1,106 @@
+import { Router } from 'express';
+import { loginUser } from '../controllers/auth.controller';
+import { getMembers, createMember, updateMember, deleteMember, toggleFreezeMember, resetMemberPassword, sendMemberCredentials } from '../controllers/member.controller';
+import { getAttendanceFeed, createCheckIn, checkoutLog, triggerGateUnlock, getAccessLogs, getDoorStatus } from '../controllers/attendance.controller';
+import { getDevices, createDevice, updateDevice, deleteDevice, getDeviceLogs, triggerSimulationTap, restartDevice, queueConnectionTest, queueReadUsers, queueReadAttendance, getTesterStatus, queueSyncFirebase, queueImportUsers, startEnrollFingerprint, deleteEnrollment, syncMemberToDevice, getEnrollmentStatus } from '../controllers/device.controller';
+import { getInvoices, createInvoice } from '../controllers/billing.controller';
+import { 
+  getWorkoutPlan, saveWorkoutPlan, getDietPlan, saveDietPlan,
+  generateAIDiet, approveDietPlan, duplicateDietPlan, archiveDietPlan,
+  getCheatMeals, createCheatMealRequest, handleCheatMealRequest,
+  getDailyLog, saveDailyLog,
+  getTrainersList, createTrainerProfile, updateTrainerProfile, deleteTrainerProfile, assignMembersToTrainer
+} from '../controllers/trainer.controller';
+import { getChatHistory, sendChatMessage } from '../controllers/chat.controller';
+import { getProgressTimeline, addProgressRecord, getReferralsByMember, createReferralInvitation } from '../controllers/progress.controller';
+import { authenticateToken } from '../middleware/auth';
+
+const router = Router();
+
+// Auth Endpoints (Public)
+router.post('/auth/login', loginUser);
+
+// Protect all CRM / dashboard operations
+router.use(authenticateToken);
+
+// Member CRUD & Actions
+router.get('/members', getMembers);
+router.post('/members', createMember);
+router.put('/members/:id', updateMember);
+router.delete('/members/:id', deleteMember);
+router.post('/members/:id/freeze', toggleFreezeMember);
+router.post('/members/:id/reset-password', resetMemberPassword);
+router.post('/members/:id/send-credentials', sendMemberCredentials);
+
+// Attendance & Hardware Controller Sync
+router.get('/attendance', getAttendanceFeed);
+router.post('/attendance/checkin', createCheckIn);
+router.put('/attendance/checkout/:id', checkoutLog);
+router.post('/attendance/unlock', triggerGateUnlock);
+router.get('/access-control/logs', getAccessLogs);
+router.get('/access-control/doors', getDoorStatus);
+
+// Device Management & Logs
+router.get('/devices', getDevices);
+router.post('/devices', createDevice);
+router.put('/devices/:id', updateDevice);
+router.delete('/devices/:id', deleteDevice);
+router.get('/devices/logs', getDeviceLogs);
+router.post('/devices/simulate-tap', triggerSimulationTap);
+router.post('/devices/:id/restart', restartDevice);
+router.post('/devices/testing/connect', queueConnectionTest);
+router.post('/devices/testing/read-users', queueReadUsers);
+router.post('/devices/testing/read-attendance', queueReadAttendance);
+router.post('/devices/testing/sync-firebase', queueSyncFirebase);
+router.post('/devices/testing/import-users', queueImportUsers);
+router.get('/devices/testing/status', getTesterStatus);
+
+// Smart Biometric Enrollment
+router.post('/devices/biometric/enroll-fingerprint', startEnrollFingerprint);
+router.post('/devices/biometric/delete', deleteEnrollment);
+router.post('/devices/biometric/sync', syncMemberToDevice);
+router.get('/devices/biometric/status/:memberId', getEnrollmentStatus);
+
+// Invoices & Billing
+router.get('/billing', getInvoices);
+router.post('/billing', createInvoice);
+
+// Trainer Workout & Diet Builders
+router.get('/trainers/workouts/:memberId', getWorkoutPlan);
+router.post('/trainers/workouts', saveWorkoutPlan);
+router.get('/trainers/diets/:memberId', getDietPlan);
+router.post('/trainers/diets', saveDietPlan);
+
+// Trainer CRUD & Assignment routes
+router.get('/trainers', getTrainersList);
+router.post('/trainers', createTrainerProfile);
+router.put('/trainers/:id', updateTrainerProfile);
+router.delete('/trainers/:id', deleteTrainerProfile);
+router.post('/trainers/:id/assign-members', assignMembersToTrainer);
+
+// New Diet Management API routes
+router.post('/trainers/diets/generate-ai', generateAIDiet);
+router.post('/trainers/diets/:id/approve', approveDietPlan);
+router.post('/trainers/diets/:id/duplicate', duplicateDietPlan);
+router.delete('/trainers/diets/:id', archiveDietPlan);
+
+// Cheat meal routes
+router.get('/trainers/cheat-meals', getCheatMeals);
+router.post('/trainers/cheat-meals', createCheatMealRequest);
+router.put('/trainers/cheat-meals/:id', handleCheatMealRequest);
+
+// Daily Diet Log routes
+router.get('/members/diets/:memberId/logs/:date', getDailyLog);
+router.post('/members/diets/logs', saveDailyLog);
+
+// Member-Trainer Messaging Chat
+router.get('/chat/:userA/:userB', getChatHistory);
+router.post('/chat', sendChatMessage);
+
+// Progress Timeline & Referrals
+router.get('/progress/:memberId', getProgressTimeline);
+router.post('/progress', addProgressRecord);
+router.get('/referrals/:memberId', getReferralsByMember);
+router.post('/referrals', createReferralInvitation);
+
+export default router;
