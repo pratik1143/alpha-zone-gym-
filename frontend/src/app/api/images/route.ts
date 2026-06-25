@@ -1,26 +1,20 @@
 import { NextResponse } from 'next/server';
-import fs from 'fs';
-import path from 'path';
 
 export async function GET() {
   try {
-    const dirPath = path.join(process.cwd(), 'public', 'alpha');
-    
-    if (!fs.existsSync(dirPath)) {
-      return NextResponse.json({ images: [] });
+    // Since the 240 frames are static assets, generating the URLs dynamically 
+    // prevents Vercel from tracking and bundling the 410MB public/alpha directory 
+    // into this Serverless Function, which exceeds Vercel's 250MB limit.
+    const images: string[] = [];
+    for (let i = 1; i <= 240; i++) {
+      const frameNum = String(i).padStart(3, '0');
+      images.push(`/alpha/ezgif-frame-${frameNum}.png`);
     }
-
-    const files = fs.readdirSync(dirPath);
     
-    // Scan and filter image files, sorting naturally (ezgif-frame-001 -> ezgif-frame-002, etc.)
-    const images = files
-      .filter(file => /\.(png|jpe?g|webp|gif|svg)$/i.test(file))
-      .sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }))
-      .map(file => `/alpha/${file}`);
-
     return NextResponse.json({ images });
   } catch (error) {
-    console.error('Error reading alpha images:', error);
+    console.error('Error generating alpha images list:', error);
     return NextResponse.json({ error: 'Failed to read images' }, { status: 500 });
   }
 }
+
