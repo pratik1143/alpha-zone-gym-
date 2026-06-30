@@ -103,20 +103,54 @@ export default function AttendancePage() {
   };
 
   // Statistics calculations (Phase B Requirements)
+  const parseCheckInDate = (checkIn: any): Date | null => {
+    if (!checkIn) return null;
+    if (typeof checkIn === 'string') {
+      const d = new Date(checkIn);
+      return isNaN(d.getTime()) ? null : d;
+    }
+    if (typeof checkIn.toDate === 'function') {
+      return checkIn.toDate();
+    }
+    if (checkIn.seconds !== undefined) {
+      return new Date(checkIn.seconds * 1000);
+    }
+    if (checkIn._seconds !== undefined) {
+      return new Date(checkIn._seconds * 1000);
+    }
+    const d = new Date(checkIn);
+    return isNaN(d.getTime()) ? null : d;
+  };
+
+  const getCheckInStr = (checkIn: any): string => {
+    const d = parseCheckInDate(checkIn);
+    return d ? d.toISOString() : '';
+  };
+
   const todayStr = new Date().toISOString().split('T')[0];
-  const todayAttendanceCount = attendance.filter(a => a.checkIn && a.checkIn.startsWith(todayStr)).length;
+  const todayAttendanceCount = attendance.filter(a => {
+    const str = getCheckInStr(a.checkIn);
+    return typeof str === 'string' && str.startsWith(todayStr);
+  }).length;
 
   const sevenDaysAgo = new Date();
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-  const weeklyAttendanceCount = attendance.filter(a => a.checkIn && new Date(a.checkIn) >= sevenDaysAgo).length;
+  const weeklyAttendanceCount = attendance.filter(a => {
+    const d = parseCheckInDate(a.checkIn);
+    return d && d >= sevenDaysAgo;
+  }).length;
 
   const thirtyDaysAgo = new Date();
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-  const monthlyAttendanceCount = attendance.filter(a => a.checkIn && new Date(a.checkIn) >= thirtyDaysAgo).length;
+  const monthlyAttendanceCount = attendance.filter(a => {
+    const d = parseCheckInDate(a.checkIn);
+    return d && d >= thirtyDaysAgo;
+  }).length;
 
   const lastAttendanceRecord = attendance.length > 0 ? attendance[0] : null;
-  const lastAttendanceText = lastAttendanceRecord 
-    ? `${lastAttendanceRecord.memberName} (${new Date(lastAttendanceRecord.checkIn).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})})`
+  const lastCheckInDate = lastAttendanceRecord ? parseCheckInDate(lastAttendanceRecord.checkIn) : null;
+  const lastAttendanceText = lastAttendanceRecord && lastCheckInDate
+    ? `${lastAttendanceRecord.memberName} (${lastCheckInDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})})`
     : 'None today';
 
   // Find seeded ESSL device configuration

@@ -4,6 +4,8 @@ import * as dotenv from 'dotenv';
 import router from './routes';
 import { provisionAdminAccounts } from './firebase';
 import { initDeviceSyncService } from './services/deviceSync.service';
+import { startCleanupJob } from './jobs/cleanup';
+import { startPresenceJob } from './jobs/presence';
 
 // Trigger reload after Firestore activation by user
 dotenv.config();
@@ -54,5 +56,25 @@ app.listen(PORT, async () => {
     initDeviceSyncService();
   } catch (err) {
     console.error('Failed to initialize Device Sync service on boot:', err);
+  }
+
+  // Start the automated Firebase Spark Plan cleanup cron job
+  startCleanupJob();
+
+  // Start the LIVE MEMBERS INSIDE ENGINE cron job
+  startPresenceJob();
+
+  // Start daily automated emails scheduler (runs every 12 hours)
+  try {
+    const { runDailyAutomationChecks } = require('./services/automation.service');
+    setTimeout(() => {
+      runDailyAutomationChecks().catch((err: any) => console.error('Error running daily automation checks:', err));
+    }, 10000);
+
+    setInterval(() => {
+      runDailyAutomationChecks().catch((err: any) => console.error('Error running daily automation checks:', err));
+    }, 12 * 60 * 60 * 1000);
+  } catch (err) {
+    console.error('Failed to initialize daily automation scheduler:', err);
   }
 });

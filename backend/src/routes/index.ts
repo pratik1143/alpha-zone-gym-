@@ -1,7 +1,8 @@
 import { Router } from 'express';
+import enquiryRoutes from './enquiry.routes';
 import { loginUser } from '../controllers/auth.controller';
 import { getMembers, createMember, updateMember, deleteMember, toggleFreezeMember, resetMemberPassword, sendMemberCredentials } from '../controllers/member.controller';
-import { getAttendanceFeed, createCheckIn, checkoutLog, triggerGateUnlock, getAccessLogs, getDoorStatus } from '../controllers/attendance.controller';
+import { getAttendanceFeed, createCheckIn, checkoutLog, triggerGateUnlock, getAccessLogs, getDoorStatus, getDashboardAnalyticsFeed, getAttendanceSummaryFeed } from '../controllers/attendance.controller';
 import { getDevices, createDevice, updateDevice, deleteDevice, getDeviceLogs, triggerSimulationTap, restartDevice, queueConnectionTest, queueReadUsers, queueReadAttendance, getTesterStatus, queueSyncFirebase, queueImportUsers, startEnrollFingerprint, deleteEnrollment, syncMemberToDevice, getEnrollmentStatus } from '../controllers/device.controller';
 import { getInvoices, createInvoice } from '../controllers/billing.controller';
 import { 
@@ -13,7 +14,11 @@ import {
 } from '../controllers/trainer.controller';
 import { getChatHistory, sendChatMessage } from '../controllers/chat.controller';
 import { getProgressTimeline, addProgressRecord, getReferralsByMember, createReferralInvitation } from '../controllers/progress.controller';
+import { nextBiometricId, migrateMembers, rollbackMigration, mapBiometricUser, getDeviceUsers, getMigrations, seedDeviceUsers, purgeCRMData } from '../controllers/migration.controller';
+import { getSmtpConfig, saveSmtpConfig, getTemplates, saveTemplatesController, sendTestEmail, getInvoicePreview } from '../controllers/automation.controller';
+import { getPlansController, createPlanController, updatePlanController, deletePlanController } from '../controllers/plan.controller';
 import { authenticateToken } from '../middleware/auth';
+
 
 const router = Router();
 
@@ -23,8 +28,15 @@ router.post('/auth/login', loginUser);
 // Protect all CRM / dashboard operations
 router.use(authenticateToken);
 
+router.use('/enquiries', enquiryRoutes);
+
 // Member CRUD & Actions
 router.get('/members', getMembers);
+router.get('/members/next-biometric-id', nextBiometricId);
+router.post('/members/migrate', migrateMembers);
+router.post('/members/rollback-migration', rollbackMigration);
+router.post('/members/purge-all', purgeCRMData);
+router.post('/members/map-biometric', mapBiometricUser);
 router.post('/members', createMember);
 router.put('/members/:id', updateMember);
 router.delete('/members/:id', deleteMember);
@@ -33,7 +45,9 @@ router.post('/members/:id/reset-password', resetMemberPassword);
 router.post('/members/:id/send-credentials', sendMemberCredentials);
 
 // Attendance & Hardware Controller Sync
+router.get('/analytics/dashboard', getDashboardAnalyticsFeed);
 router.get('/attendance', getAttendanceFeed);
+router.get('/attendance/summary/:memberId', getAttendanceSummaryFeed);
 router.post('/attendance/checkin', createCheckIn);
 router.put('/attendance/checkout/:id', checkoutLog);
 router.post('/attendance/unlock', triggerGateUnlock);
@@ -54,6 +68,9 @@ router.post('/devices/testing/read-attendance', queueReadAttendance);
 router.post('/devices/testing/sync-firebase', queueSyncFirebase);
 router.post('/devices/testing/import-users', queueImportUsers);
 router.get('/devices/testing/status', getTesterStatus);
+router.get('/devices/testing/device-users', getDeviceUsers);
+router.post('/devices/testing/seed-users', seedDeviceUsers);
+router.get('/migrations', getMigrations);
 
 // Smart Biometric Enrollment
 router.post('/devices/biometric/enroll-fingerprint', startEnrollFingerprint);
@@ -102,5 +119,19 @@ router.get('/progress/:memberId', getProgressTimeline);
 router.post('/progress', addProgressRecord);
 router.get('/referrals/:memberId', getReferralsByMember);
 router.post('/referrals', createReferralInvitation);
+
+// Automation Settings & Email Templates
+router.get('/automation/smtp', getSmtpConfig);
+router.post('/automation/smtp', saveSmtpConfig);
+router.get('/automation/templates', getTemplates);
+router.post('/automation/templates', saveTemplatesController);
+router.post('/automation/smtp/test', sendTestEmail);
+router.get('/automation/invoice/preview', getInvoicePreview);
+
+// Membership Packages / Plans
+router.get('/plans', getPlansController);
+router.post('/plans', createPlanController);
+router.put('/plans/:id', updatePlanController);
+router.delete('/plans/:id', deletePlanController);
 
 export default router;

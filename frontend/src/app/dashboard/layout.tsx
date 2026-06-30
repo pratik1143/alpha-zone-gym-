@@ -1,12 +1,12 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   LayoutDashboard, Users, Clock, CreditCard, Dumbbell,
-  Settings, Bell, Search, LogOut, ChevronDown, Menu, X, HelpCircle, 
+  Settings, Bell, Search, LogOut, ChevronDown, Menu, X, HelpCircle, ClipboardList,
   ChevronLeft, ChevronRight, Shield, Trophy, Smartphone, ArrowUpRight, Plus,
   Home as HomeIcon, Award, Play, Pause, Square, Sun, Moon, RefreshCw,
   Upload, Mail, BarChart2, AlertTriangle, UserPlus, UserX, Apple as AppleIcon,
@@ -18,6 +18,7 @@ import toast from 'react-hot-toast';
 import { collection, query, orderBy, limit, onSnapshot } from 'firebase/firestore';
 import { db as fDb, isFirebaseReady } from '@/lib/firebase';
 import { useCallback } from 'react';
+import AttendancePopupManager from './components/AttendancePopupManager';
 
 export default function DashboardLayout({
   children,
@@ -52,21 +53,7 @@ export default function DashboardLayout({
     });
   };
 
-  // Popup notifications state
-  interface LivePopupNotification {
-    id: string;
-    memberName: string;
-    memberCode: string;
-    timestamp: string;
-    deviceName: string;
-    branch: string;
-    avatarUrl?: string;
-    plan: string;
-    trainer: string;
-    status: 'active' | 'expiring' | 'expired';
-  }
-  const [popups, setPopups] = useState<LivePopupNotification[]>([]);
-  const [lastAttendanceId, setLastAttendanceId] = useState<string | null>(null);
+  const lastNotifDocRef = useRef<string>('');
 
   const [isCopilotOpen, setIsCopilotOpen] = useState(false);
   const [launchingCampaign, setLaunchingCampaign] = useState(false);
@@ -100,6 +87,8 @@ export default function DashboardLayout({
 
   // Real-time Feed State
   const [realtimeFeed, setRealtimeFeed] = useState<any[]>([]);
+  const [unreadNotifCount, setUnreadNotifCount] = useState(0);
+
 
   // Firestore Listeners
   useEffect(() => {
@@ -113,83 +102,78 @@ export default function DashboardLayout({
       return null;
     };
 
-    // 1. Listen for new check-ins for popup
-    const attCollection = collection(fDb, 'attendance');
-    const qPop = query(attCollection, orderBy('createdAt', 'desc'), limit(1));
-    const unsubscribePop = onSnapshot(qPop, (snapshot) => {
-      snapshot.docChanges().forEach((change) => {
-        if (change.type === 'added') {
-          const data = change.doc.data();
-          const docId = change.doc.id;
-          
-          if (data && data.status === 'granted') {
-            const createdAtDate = toJsDate(data.createdAt);
-            const createdAtTime = createdAtDate ? createdAtDate.getTime() : 0;
-            const diffSeconds = (Date.now() - createdAtTime) / 1000;
-            
-            if (diffSeconds < 15 && docId !== lastAttendanceId) {
-              setLastAttendanceId(docId);
-              
-              const gymMembers = useGymStore.getState().members;
-              const match = gymMembers.find((m: any) => 
-                m.id === data.memberId || 
-                m.memberId === data.memberCode || 
-                (m.name && data.memberName && m.name.toLowerCase() === data.memberName.toLowerCase())
-              );
-              
-              const days = match?.expiryDate 
-                ? Math.ceil((new Date(match.expiryDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)) 
-                : 0;
-                
-              let status: 'active' | 'expiring' | 'expired' = 'expired';
-              if (days > 7) {
-                status = 'active';
-              } else if (days > 0 && days <= 7) {
-                status = 'expiring';
-              } else {
-                status = 'expired';
-              }
+    // 1. Listen for popup check-ins logic has been moved to AttendancePopupManager
 
-              const newPopup: LivePopupNotification = {
-                id: docId,
-                memberName: match?.name || data.memberName || 'Athlete',
-                memberCode: match?.memberId || data.memberCode || 'AZ-2026-0000',
-                timestamp: (() => { 
-                  const d = toJsDate(data.timestamp) || toJsDate(data.createdAt) || new Date(); 
-                  return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }); 
-                })(),
-                deviceName: data.deviceName || 'Biometric Terminal',
-                branch: match?.branch || data.branch || 'Mohali, Punjab',
-                avatarUrl: match?.avatarUrl || data.avatarUrl || '',
-                plan: match?.plan || 'Monthly Membership',
-                trainer: match?.trainer || 'No Coach Assigned',
-                status
-              };
-              
-              setPopups(prev => [newPopup, ...prev]);
-              playDingSound();
-              
-              setTimeout(() => {
-                setPopups(prev => prev.filter(p => p.id !== docId));
-              }, 7000);
-            }
-          }
-        }
-      });
-    });
+    const attCollection = collection(fDb, 'attendance_logs');
 
     // 2. Listen for latest 5 check-ins for sidebar
     const qFeed = query(attCollection, orderBy('createdAt', 'desc'), limit(5));
     const unsubscribeFeed = onSnapshot(qFeed, (snapshot) => {
-      const logs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const logs = snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as any) }));
       setRealtimeFeed(logs);
     });
 
+    // 3. Listen for push notifications from device service (checkin, alert, enrollment)
+    const notifCollection = collection(fDb, 'notifications');
+    const qNotif = query(notifCollection, orderBy('timestamp', 'desc'), limit(30));
+    const unsubscribeNotif = onSnapshot(qNotif, (snapshot) => {
+      // Update unread badge count
+      const unread = snapshot.docs.filter(d => !d.data().read).length;
+      setUnreadNotifCount(unread);
+
+      // Show toast for brand-new notifications (not historical ones)
+      snapshot.docChanges().forEach((change) => {
+        if (change.type !== 'added') return;
+        const data = change.doc.data();
+        const docId = change.doc.id;
+        if (docId === lastNotifDocRef.current) return;
+
+        // Only show toast if notification was created in last 20 seconds
+        const ts = data.timestamp ? new Date(data.timestamp).getTime() : 0;
+        if (Date.now() - ts > 20000) return;
+
+        lastNotifDocRef.current = docId;
+        const type = data.type || '';
+        const body = data.body || data.title || 'New notification';
+
+        if (type === 'checkin') {
+          // Checkin notifications handled by attendance popup — skip duplicate toast
+          return;
+        } else if (type === 'alert') {
+          toast(body, {
+            icon: '⚠️',
+            duration: 6000,
+            style: { background: '#111', color: '#fff', border: '1px solid rgba(245,158,11,0.4)', borderRadius: '16px', fontSize: '12px', fontWeight: '600' }
+          });
+          if (soundEnabled) playDingSound();
+        } else if (type === 'enrollment') {
+          toast.success(body, {
+            duration: 5000,
+            style: { background: '#111', color: '#fff', border: '1px solid rgba(168,85,247,0.4)', borderRadius: '16px', fontSize: '12px', fontWeight: '600' }
+          });
+          if (soundEnabled) playDingSound();
+        } else if (type === 'enrollment_error') {
+          toast.error(body, {
+            duration: 6000,
+            style: { background: '#111', color: '#fff', border: '1px solid rgba(239,68,68,0.4)', borderRadius: '16px', fontSize: '12px', fontWeight: '600' }
+          });
+        }
+      });
+    });
+
+    // 4. Listen for gym_presence for Live Members Engine
+    const presenceCollection = collection(fDb, 'gym_presence');
+    const unsubscribePresence = onSnapshot(presenceCollection, (snapshot) => {
+      const presenceList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      useGymStore.getState().setGymPresence(presenceList);
+    });
+
     return () => {
-      unsubscribePop();
       unsubscribeFeed();
+      unsubscribeNotif();
+      unsubscribePresence();
     };
-  }, [isFirebaseReady, playDingSound, lastAttendanceId, members]);
+  }, [isFirebaseReady, playDingSound]);
 
   // Fix React hydration mismatch by ensuring store auth state is read only on client
   useEffect(() => {
@@ -274,6 +258,8 @@ export default function DashboardLayout({
               {[
                 { to: '/dashboard', label: 'Home', icon: HomeIcon },
                 { to: '/dashboard/members', label: 'Members', icon: Users },
+                { to: '/dashboard/enquiries', label: 'Enquiries', icon: ClipboardList },
+                { to: '/dashboard/expired', label: 'Expired', icon: UserX },
                 { to: '/dashboard/trainers', label: 'Trainers', icon: UserCheck },
                 { to: '/dashboard/follow-up', label: 'Follow Up', icon: AlertTriangle },
                 { to: '/dashboard/risk-radar', label: 'Risk Radar', icon: ShieldAlert },
@@ -285,7 +271,8 @@ export default function DashboardLayout({
                 { to: '/dashboard/trainer-desk', label: 'Trainer Desk', icon: Dumbbell },
                 { to: '/dashboard/diet-management', label: 'Diet Management', icon: AppleIcon },
                 { to: '/dashboard/billing', label: 'Billing', icon: CreditCard },
-                { to: '/dashboard/import', label: 'CSV Import', icon: Upload },
+                { to: '/dashboard/settings/member-migration', label: 'CSV Import', icon: Upload },
+                { to: '/dashboard/settings/enquiry-form', label: 'Enquiry Form', icon: ClipboardList },
                 { to: '/dashboard/automation', label: 'Automation', icon: Mail },
                 { to: '/dashboard/analytics', label: 'Analytics', icon: BarChart2 },
                 { to: '/dashboard/memberships', label: 'Memberships', icon: Award },
@@ -348,12 +335,12 @@ export default function DashboardLayout({
         </aside>
 
         {/* ─── Column 2: Middle Content Panel ─── */}
-        <main className="flex-grow flex flex-col gap-6 text-left overflow-y-auto h-full pr-2">
+        <main className="flex-grow min-w-0 flex flex-col gap-6 text-left overflow-y-auto h-full pt-4 pb-4 pr-2">
           {children}
         </main>
 
         {/* ─── Column 3: Right Content Panel ─── */}
-        <aside className="w-full lg:w-[330px] flex-shrink-0 flex flex-col gap-6 text-left overflow-y-auto h-full pr-2">
+        <aside className="w-full lg:w-[330px] flex-shrink-0 flex flex-col gap-6 text-left overflow-y-auto h-full pt-4 pb-4 pr-2">
           
           {/* Top header row: Profile card, toggles */}
           <div className="flex justify-between items-center bg-white/60 p-2.5 rounded-2xl border border-white/45 shadow-sm gap-2">
@@ -544,127 +531,8 @@ export default function DashboardLayout({
 
         </aside>
 
-      {/* Real-time Popups Portal (Top-Right) */}
-      <div className="fixed top-8 right-8 z-50 pointer-events-none space-y-4 max-w-md w-full">
-        <AnimatePresence>
-          {popups.map((popup) => (
-            <motion.div
-              key={popup.id}
-              initial={{ opacity: 0, y: 50, scale: 0.9, rotateX: -10 }}
-              animate={{ opacity: 1, y: 0, scale: 1, rotateX: 0 }}
-              exit={{ opacity: 0, scale: 0.9, y: -20 }}
-              transition={{ type: 'spring', damping: 15, stiffness: 120 }}
-              className={`pointer-events-auto w-[380px] bg-slate-950/95 border-2 backdrop-blur-3xl rounded-[28px] p-5.5 shadow-[0_25px_60px_-15px_rgba(0,0,0,0.85)] flex flex-col gap-4 relative overflow-hidden ${
-                popup.status === 'active' 
-                  ? 'border-emerald-500/35 shadow-emerald-500/5' 
-                  : popup.status === 'expiring' 
-                    ? 'border-amber-500/35 shadow-amber-500/5' 
-                    : 'border-rose-500/35 shadow-rose-500/5'
-              }`}
-            >
-              {/* Glowing Aura BG Effect */}
-              <div className={`absolute -right-16 -top-16 w-36 h-36 rounded-full blur-[70px] pointer-events-none opacity-30 ${
-                popup.status === 'active' 
-                  ? 'bg-emerald-500' 
-                  : popup.status === 'expiring' 
-                    ? 'bg-amber-500' 
-                    : 'bg-rose-500'
-              }`} />
-
-              <div className="flex gap-4 items-center relative z-10">
-                {/* Large Profile Image */}
-                <div className="relative shrink-0">
-                  <img 
-                    src={popup.avatarUrl || `https://api.dicebear.com/7.x/adventurer/svg?seed=${(popup.memberName || 'Member').replace(/ /g, '')}`} 
-                    alt={popup.memberName || 'Member'} 
-                    className={`w-18 h-18 rounded-[20px] object-cover bg-slate-800 border-2 ${
-                      popup.status === 'active' 
-                        ? 'border-emerald-500/50' 
-                        : popup.status === 'expiring' 
-                          ? 'border-amber-500/50' 
-                          : 'border-rose-500/50'
-                    }`}
-                    onError={(e) => { (e.target as HTMLImageElement).src = `https://api.dicebear.com/7.x/adventurer/svg?seed=${popup.memberName || 'Member'}` }}
-                  />
-                  {/* Small floating badge */}
-                  <span className={`absolute -bottom-1.5 -right-1.5 p-1 rounded-lg border border-slate-950 font-black shadow-md ${
-                    popup.status === 'active' 
-                      ? 'bg-emerald-500' 
-                      : popup.status === 'expiring' 
-                        ? 'bg-amber-500' 
-                        : 'bg-rose-500'
-                  }`}>
-                    {popup.status === 'active' ? (
-                      <UserCheck size={11} className="text-white" />
-                    ) : popup.status === 'expiring' ? (
-                      <AlertTriangle size={11} className="text-white" />
-                    ) : (
-                      <UserX size={11} className="text-white" />
-                    )}
-                  </span>
-                </div>
-
-                {/* Text details */}
-                <div className="text-left flex-grow space-y-1">
-                  <div className="flex items-center gap-1.5">
-                    <span className={`text-[8px] font-black uppercase tracking-wider px-2 py-0.5 rounded border ${
-                      popup.status === 'active' 
-                        ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
-                        : popup.status === 'expiring' 
-                          ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' 
-                          : 'bg-rose-500/10 text-rose-450 border-rose-500/20'
-                    }`}>
-                      {popup.status === 'active' ? 'ACCESS GRANTED' : popup.status === 'expiring' ? 'EXPIRING SOON' : 'EXPIRED'}
-                    </span>
-                    <span className="text-[8px] font-bold text-slate-500 font-mono">
-                      {popup.timestamp}
-                    </span>
-                  </div>
-
-                  <h3 className="text-base font-black text-white leading-tight font-display tracking-tight">
-                    {popup.memberName}
-                  </h3>
-
-                  <div className="flex gap-x-2 text-[9px] font-bold text-slate-400">
-                    <span>ID: <span className="font-mono text-white">{popup.memberCode}</span></span>
-                    <span className="text-slate-650">•</span>
-                    <span>{popup.plan}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Bottom Quick info details block */}
-              <div className="grid grid-cols-2 gap-2 bg-white/5 border border-white/10 rounded-2xl p-2.5 relative z-10 text-[9.5px]">
-                <div>
-                  <span className="text-[7px] font-bold uppercase tracking-wider text-slate-500 block">Assigned Coach</span>
-                  <span className="font-extrabold text-slate-200 truncate block mt-0.5">
-                    {popup.trainer || 'No PT Coach'}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-[7px] font-bold uppercase tracking-wider text-slate-500 block">Punch Terminal</span>
-                  <span className="font-extrabold text-slate-200 truncate block mt-0.5">
-                    {popup.deviceName}
-                  </span>
-                </div>
-              </div>
-
-              {/* Status Alert Banner */}
-              {popup.status !== 'active' && (
-                <div className={`p-2 rounded-xl text-[8.5px] font-bold uppercase tracking-wide text-center border relative z-10 ${
-                  popup.status === 'expiring' 
-                    ? 'bg-amber-500/10 border-amber-500/20 text-amber-400' 
-                    : 'bg-rose-500/10 border-rose-500/20 text-rose-400'
-                }`}>
-                  {popup.status === 'expiring' 
-                    ? '⚠️ membership is expiring soon. Renew at desk.' 
-                    : '❌ membership has expired. access restricted.'}
-                </div>
-              )}
-            </motion.div>
-          ))}
-        </AnimatePresence>
-      </div>
+      {/* Top Right Live Attendance Popups - Redesigned Signature Manager */}
+      <AttendancePopupManager />
 
       {/* AI Gym Copilot Helper */}
       {(() => {

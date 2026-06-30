@@ -10,13 +10,14 @@
 
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import {
   collection, onSnapshot, query, where,
   orderBy, limit, Timestamp, getDocs
 } from 'firebase/firestore';
 import { db, isFirebaseReady } from '@/lib/firebase';
 import API from '@/services/api';
+import toast from 'react-hot-toast';
 
 export interface LiveActivity {
   id: string;
@@ -50,6 +51,9 @@ export interface DashboardMetrics {
   // Device
   esslOnline: boolean;
   lastSync: string | null;
+
+  // Notifications
+  unreadNotifications: number;
 }
 
 const EMPTY_METRICS: DashboardMetrics = {
@@ -66,6 +70,7 @@ const EMPTY_METRICS: DashboardMetrics = {
   recentActivity: [],
   esslOnline: false,
   lastSync: null,
+  unreadNotifications: 0,
 };
 
 // ─── Helper: format timestamp ────────────────────────────────
@@ -110,6 +115,7 @@ export function useRealtimeDashboard() {
   const [metrics, setMetrics] = useState<DashboardMetrics>(EMPTY_METRICS);
   const [isLoading, setIsLoading] = useState(true);
   const [source, setSource] = useState<'firebase' | 'api' | 'none'>('none');
+  const lastNotifIdRef = useRef<string>('');
 
   // ── FIREBASE PATH ──────────────────────────────────────────
   useEffect(() => {
@@ -125,12 +131,16 @@ export function useRealtimeDashboard() {
       const today = new Date();
       const thirtyDaysFromNow = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000);
 
-      // Occupancy
-      const membersInside = attendance.filter(a => {
-        if (a.checkOut) return false;
+      // Occupancy (Unique members inside)
+      const uniqueInside = new Set<string>();
+      attendance.forEach(a => {
+        if (a.checkOut || !a.checkIn || !a.memberId) return;
         const checkInDate = a.checkIn?.toDate ? a.checkIn.toDate() : new Date(a.checkIn);
-        return (Date.now() - checkInDate.getTime()) < 3600000;
-      }).length;
+        if ((Date.now() - checkInDate.getTime()) < 3600000) {
+          uniqueInside.add(a.memberId);
+        }
+      });
+      const membersInside = uniqueInside.size;
       const todayAttendance = attendance.filter(a => isToday(a.checkIn)).length;
 
       // Revenue
@@ -175,13 +185,14 @@ export function useRealtimeDashboard() {
           branch: a.branch,
         }));
 
-      setMetrics({
+      setMetrics(prev => ({
+        ...prev,
         membersInside, todayAttendance,
         todayRevenue, monthRevenue, yearRevenue, pendingRevenue,
         totalMembers, activeMembers, expiringMembers, expiredMembers,
         recentActivity,
         esslOnline: false, lastSync: null,
-      });
+      }));
       setIsLoading(false);
     };
 
@@ -211,6 +222,57 @@ export function useRealtimeDashboard() {
       recalculate();
     }));
 
+    // onSnapshot: notifications — show toast for new checkin/alert events
+    const notifQ = query(
+      collection(db, 'notifications'),
+      orderBy('timestamp', 'desc'),
+      limit(20)
+    );
+    unsubs.push(onSnapshot(notifQ, snap => {
+      const unread = snap.docs.filter(d => !d.data().read).length;
+      setMetrics(prev => ({ ...prev, unreadNotifications: unread }));
+
+      // Show toast for brand-new notifications (added after mount)
+      snap.docChanges().forEach(change => {
+        if (change.type !== 'added') return;
+        const data = change.doc.data();
+        const docId = change.doc.id;
+        if (docId === lastNotifIdRef.current) return;
+
+        // Only fire for very recent notifications (within 30s)
+        const ts = data.timestamp ? new Date(data.timestamp).getTime() : 0;
+        if (Date.now() - ts > 30000) return;
+
+        lastNotifIdRef.current = docId;
+        const type = data.type || '';
+        const title = data.title || 'Notification';
+        const body = data.body || '';
+
+        if (type === 'checkin') {
+          toast.success(`${title}\n${body}`, {
+            duration: 5000,
+            style: { background: '#0a0a0f', color: '#fff', border: '1px solid #22c55e40', borderRadius: '16px', fontSize: '12px' }
+          });
+        } else if (type === 'alert') {
+          toast(body || title, {
+            icon: '⚠️',
+            duration: 6000,
+            style: { background: '#0a0a0f', color: '#fff', border: '1px solid #f59e0b40', borderRadius: '16px', fontSize: '12px' }
+          });
+        } else if (type === 'enrollment') {
+          toast.success(body || title, {
+            duration: 5000,
+            style: { background: '#0a0a0f', color: '#fff', border: '1px solid #a855f740', borderRadius: '16px', fontSize: '12px' }
+          });
+        } else if (type === 'enrollment_error') {
+          toast.error(body || title, {
+            duration: 6000,
+            style: { background: '#0a0a0f', color: '#fff', border: '1px solid #ef444440', borderRadius: '16px', fontSize: '12px' }
+          });
+        }
+      });
+    }));
+
     return () => unsubs.forEach(u => u());
   }, []);
 
@@ -235,30 +297,64 @@ export function useRealtimeDashboard() {
         const thisMonth = new Date().getMonth();
         const thisYear = new Date().getFullYear();
 
+        const parseCheckIn = (checkIn: any): Date | null => {
+          if (!checkIn) return null;
+          if (typeof checkIn === 'string') {
+            const d = new Date(checkIn);
+            return isNaN(d.getTime()) ? null : d;
+          }
+          if (typeof checkIn.toDate === 'function') {
+            return checkIn.toDate();
+          }
+          if (checkIn.seconds !== undefined) return new Date(checkIn.seconds * 1000);
+          if (checkIn._seconds !== undefined) return new Date(checkIn._seconds * 1000);
+          const d = new Date(checkIn);
+          return isNaN(d.getTime()) ? null : d;
+        };
+
+        const getCheckInStr = (checkIn: any): string => {
+          const d = parseCheckIn(checkIn);
+          return d ? d.toISOString() : '';
+        };
+
         const oneHourAgo = Date.now() - 3600000;
-        const membersInside = att.filter((a: any) => {
-          if (a.checkOut || !a.checkIn) return false;
-          const checkInTime = new Date(a.checkIn).getTime();
-          return !isNaN(checkInTime) && checkInTime > oneHourAgo;
+        const uniqueInside = new Set<string>();
+        att.forEach((a: any) => {
+          if (a.checkOut || !a.checkIn || !a.memberId) return;
+          const d = parseCheckIn(a.checkIn);
+          const checkInTime = d ? d.getTime() : NaN;
+          if (!isNaN(checkInTime) && checkInTime > oneHourAgo) {
+            uniqueInside.add(a.memberId);
+          }
+        });
+        const membersInside = uniqueInside.size;
+        
+        const todayAttendance = att.filter((a: any) => {
+          const str = getCheckInStr(a.checkIn);
+          return str && str.startsWith(today);
         }).length;
-        const todayAttendance = att.filter((a: any) => a.checkIn?.startsWith(today)).length;
+        
         const todayRevenue = pay.filter((p: any) => p.date?.startsWith(today) && p.status === 'paid').reduce((s: number, p: any) => s + p.amount, 0);
         const monthRevenue = pay.filter((p: any) => new Date(p.date || '').getMonth() === thisMonth && p.status === 'paid').reduce((s: number, p: any) => s + p.amount, 0);
         const yearRevenue = pay.filter((p: any) => new Date(p.date || '').getFullYear() === thisYear && p.status === 'paid').reduce((s: number, p: any) => s + p.amount, 0);
         const pendingRevenue = pay.filter((p: any) => p.status === 'overdue' || p.status === 'pending').reduce((s: number, p: any) => s + p.amount, 0);
 
-        const recentActivity: LiveActivity[] = att.slice(0, 10).map((a: any) => ({
-          id: a.id,
-          type: a.checkOut ? 'exit' : 'entry',
-          msg: a.checkOut
-            ? `${a.memberName || 'Member'} checked out`
-            : `${a.memberName || 'Member'} checked in via ${a.method || 'Biometric'}`,
-          time: a.checkIn ? new Date(a.checkIn).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '',
-          memberName: a.memberName,
-          branch: a.branch,
-        }));
+        const recentActivity: LiveActivity[] = att.slice(0, 10).map((a: any) => {
+          const d = parseCheckIn(a.checkIn);
+          return {
+            id: a.id,
+            type: a.checkOut ? 'exit' : 'entry',
+            msg: a.checkOut
+              ? `${a.memberName || 'Member'} checked out`
+              : `${a.memberName || 'Member'} checked in via ${a.method || 'Biometric'}`,
+            time: d ? d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '',
+            memberName: a.memberName,
+            branch: a.branch,
+          };
+        });
 
-        setMetrics({
+        setMetrics(prev => ({
+          ...prev,
           membersInside, todayAttendance,
           todayRevenue, monthRevenue, yearRevenue, pendingRevenue,
           totalMembers: mem.length,
@@ -267,7 +363,7 @@ export function useRealtimeDashboard() {
           expiredMembers: mem.filter((m: any) => m.status === 'expired').length,
           recentActivity,
           esslOnline: false, lastSync: null,
-        });
+        }));
         setIsLoading(false);
       } catch {
         setIsLoading(false);

@@ -5,11 +5,13 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Settings, Shield, User, Bell, Wifi, WifiOff, RefreshCw, 
   CheckCircle, AlertTriangle, Fingerprint, Server, Plus, 
-  Trash2, Activity, Lock, ChevronRight, Zap, Database, Edit2, Play, Info
+  Trash2, Activity, Lock, ChevronRight, Zap, Database, Edit2, Play, Info,
+  Upload
 } from 'lucide-react';
 import { useAuthStore } from '@/store';
 import toast from 'react-hot-toast';
 import API from '@/services/api';
+import { useRouter } from 'next/navigation';
 
 interface Device {
   id: string;
@@ -46,6 +48,7 @@ interface Member {
 }
 
 export default function SettingsPage() {
+  const router = useRouter();
   const { user, setUser } = useAuthStore();
   const [gymName, setGymName] = useState('Alpha Zone Gym');
   const [operatorName, setOperatorName] = useState(user?.name || '');
@@ -386,10 +389,16 @@ export default function SettingsPage() {
               <Plus size={13} /> Link Device
             </button>
             <button
-              onClick={() => window.location.href = '/dashboard/settings/device-diagnostics'}
-              className="px-4 py-2 text-xs font-bold border border-brand-border bg-slate-50 hover:bg-slate-100 dark:bg-zinc-800 text-brand-text-primary rounded-xl flex items-center gap-1.5 transition-all cursor-pointer font-bold"
+              onClick={() => router.push('/dashboard/settings/device-diagnostics')}
+              className="px-4 py-2 text-xs font-bold border border-brand-border bg-slate-50 hover:bg-slate-100 dark:bg-zinc-800 text-brand-text-primary rounded-xl flex items-center gap-1.5 transition-all cursor-pointer"
             >
               <Activity size={12} className="text-blue-500" /> Device Diagnostics
+            </button>
+            <button
+              onClick={() => router.push('/dashboard/settings/member-migration')}
+              className="px-4 py-2 text-xs font-bold border border-brand-border bg-[#d4ff00] hover:brightness-110 text-slate-950 rounded-xl flex items-center gap-1.5 transition-all cursor-pointer"
+            >
+              <Upload size={12} className="text-slate-950" /> Member Migration Center
             </button>
           </div>
         </div>

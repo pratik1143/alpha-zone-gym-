@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { db } from '../firebase';
+import { triggerPaymentEmail } from '../services/automation.service';
 
 export const getInvoices = async (req: Request, res: Response) => {
   try {
@@ -31,6 +32,9 @@ export const createInvoice = async (req: Request, res: Response) => {
       method: method || 'UPI',
       status: 'paid'
     });
+
+    // Trigger Payment Invoice & Receipt Email
+    triggerPaymentEmail(invoice).catch(err => console.error('[Automation] Payment email failed:', err));
 
     // Automatically extend membership expiry if payment was successful
     let daysToAdd = 30;

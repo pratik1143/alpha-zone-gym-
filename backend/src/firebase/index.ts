@@ -1,6 +1,7 @@
 import * as admin from 'firebase-admin';
 import * as fs from 'fs';
 import * as dotenv from 'dotenv';
+import * as path from 'path';
 
 dotenv.config();
 
@@ -9,7 +10,123 @@ export let mockBranches = [
   { id: 'b1', name: 'Alpha Gym - Mohali', city: 'Mohali', members: 0, revenue: 0, attendance: 0, status: 'active', manager: 'Karan Verma', capacity: 500 },
 ];
 
-export let mockMembers: any[] = [];
+export let mockMembers: any[] = [
+  {
+    id: 'm1',
+    uid: 'm1',
+    memberId: 'AZ-2026-0001',
+    name: 'Sahil',
+    phone: '9877466899',
+    email: 'sahil@alphagym.com',
+    gender: 'Male',
+    age: 24,
+    weight: 75,
+    height: 180,
+    bmi: 23.1,
+    plan: 'Monthly Standard',
+    branch: 'Mohali, Punjab',
+    trainer: 'Karan Verma',
+    status: 'active',
+    joinDate: '2026-01-15',
+    expiryDate: '2026-07-15',
+    biometricId: '1',
+    streak: 5,
+    attendancePercent: 88,
+    daysLeft: 45
+  },
+  {
+    id: 'm2',
+    uid: 'm2',
+    memberId: 'AZ-2026-0002',
+    name: 'Arjun Mehta',
+    phone: '9877407660',
+    email: 'arjun@alphagym.com',
+    gender: 'Male',
+    age: 28,
+    weight: 82,
+    height: 178,
+    bmi: 25.9,
+    plan: 'Quarterly Prime',
+    branch: 'Mohali, Punjab',
+    trainer: 'Dev Rana',
+    status: 'active',
+    joinDate: '2026-04-10',
+    expiryDate: '2026-07-10',
+    biometricId: '2',
+    streak: 12,
+    attendancePercent: 95,
+    daysLeft: 10
+  },
+  {
+    id: 'm3',
+    uid: 'm3',
+    memberId: 'AZ-2026-0003',
+    name: 'Simran Kaur',
+    phone: '7814854830',
+    email: 'simran@alphagym.com',
+    gender: 'Female',
+    age: 26,
+    weight: 60,
+    height: 165,
+    bmi: 22.0,
+    plan: 'Monthly Standard',
+    branch: 'Mohali, Punjab',
+    trainer: 'Sneha Kapoor',
+    status: 'active',
+    joinDate: '2026-05-20',
+    expiryDate: '2026-06-20',
+    biometricId: '3',
+    streak: 3,
+    attendancePercent: 75,
+    daysLeft: -10
+  },
+  {
+    id: 'm4',
+    uid: 'm4',
+    memberId: 'AZ-2026-0004',
+    name: 'Priya Sharma',
+    phone: '6239139878',
+    email: 'priya@alphagym.com',
+    gender: 'Female',
+    age: 23,
+    weight: 54,
+    height: 162,
+    bmi: 20.6,
+    plan: 'Annual Premium',
+    branch: 'Mohali, Punjab',
+    trainer: 'Riya Menon',
+    status: 'expired',
+    joinDate: '2025-06-01',
+    expiryDate: '2026-06-01',
+    biometricId: '',
+    streak: 0,
+    attendancePercent: 60,
+    daysLeft: -29
+  },
+  {
+    id: 'm5',
+    uid: 'm5',
+    memberId: 'AZ-2026-0005',
+    name: 'Kabir Singh',
+    phone: '9988776650',
+    email: 'kabir@alphagym.com',
+    gender: 'Male',
+    age: 31,
+    weight: 90,
+    height: 185,
+    bmi: 26.3,
+    plan: 'Semi-Annual Pro',
+    branch: 'Mohali, Punjab',
+    trainer: 'Rohit Sharma',
+    status: 'frozen',
+    joinDate: '2025-12-01',
+    expiryDate: '2026-09-01',
+    biometricId: '4',
+    streak: 0,
+    attendancePercent: 90,
+    daysLeft: 120
+  }
+];
 export let mockTrainers = [
   { id: 't1', name: 'Karan Verma', email: 'karan@alphagym.com', phone: '9988776655', specialization: 'Strength & Conditioning', experience: 6, rating: 4.9, branch: 'Mohali, Punjab', sessions: 12, salary: 45000, status: 'active', certifications: ['ACE', 'NASM', 'CPR'], photo: 'https://images.unsplash.com/photo-1567013127542-490d757e51fc?q=80&w=150', bio: 'Passionate about strength building and posture correction.', joiningDate: '2025-01-10', instagram: 'karan_conditioning', achievements: 'Gold medalist in Powerlifting 2024' },
   { id: 't2', name: 'Sneha Kapoor', email: 'sneha@alphagym.com', phone: '9988776656', specialization: 'Yoga & Flexibility', experience: 4, rating: 4.8, branch: 'Mohali, Punjab', sessions: 8, salary: 38000, status: 'active', certifications: ['RYT-200', 'ACE'], photo: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=150', bio: 'Helping clients connect mind, body, and breath through Vinyasa flow.', joiningDate: '2025-03-15', instagram: 'sneha_yoga_flow', achievements: 'Trained over 500+ students in flex workshops' },
@@ -19,8 +136,14 @@ export let mockTrainers = [
   { id: 't6', name: 'Rohit Sharma', email: 'rohit@alphagym.com', phone: '9988776650', specialization: 'Weight Loss Specialist', experience: 8, rating: 4.9, branch: 'Mohali, Punjab', sessions: 22, salary: 50000, status: 'active', certifications: ['ACE', 'CSCS', 'CPR'], photo: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?q=80&w=150', bio: 'Certified weight loss coach with 8 years of experience. Expert in body composition changes.', joiningDate: '2024-05-10', instagram: 'rohit_sharma_coach', achievements: 'Best Weight Loss Coach award 2025' }
 ];
 
-export let mockAttendance: any[] = [];
-export let mockPayments: any[] = [];
+export let mockAttendance: any[] = [
+  { id: 'a1', memberId: 'm1', memberName: 'Sahil', checkIn: new Date(Date.now() - 30*60*1000).toISOString(), checkOut: null, deviceId: 'k90-main-gate', doorName: 'Main Entrance Gate', status: 'active', temp: '36.5', mask: 'yes' },
+  { id: 'a2', memberId: 'm2', memberName: 'Arjun Mehta', checkIn: new Date(Date.now() - 2*60*60*1000).toISOString(), checkOut: new Date(Date.now() - 1*60*60*1000).toISOString(), deviceId: 'k90-main-gate', doorName: 'Main Entrance Gate', status: 'completed' },
+];
+export let mockPayments: any[] = [
+  { id: 'p1', memberId: 'm1', memberName: 'Sahil', amount: 2500, plan: 'Monthly Standard', method: 'UPI', date: '2026-05-15', status: 'paid', invoice: 'INV-001', gst: 450 },
+  { id: 'p2', memberId: 'm2', memberName: 'Arjun Mehta', amount: 6500, plan: 'Quarterly Prime', method: 'Card', date: '2026-04-10', status: 'paid', invoice: 'INV-002', gst: 1170 },
+];
 export let mockWorkouts: any[] = [];
 export let mockDietPlans: any[] = [];
 export let mockCheatMealRequests: any[] = [];
@@ -28,6 +151,62 @@ export let mockDailyDietLogs: any[] = [];
 export let mockProgressLogs: any[] = [];
 export let mockChatMessages: any[] = [];
 export let mockReferrals: any[] = [];
+export let mockMigrations: any[] = [];
+
+export let mockPlans: any[] = [
+  {
+    id: 'p_mon',
+    name: 'Monthly Standard',
+    price: 2500,
+    duration: '30 Days',
+    durationDays: 30,
+    features: ['Biometric Access Roster', 'Daily facility check-ins', 'Locker Room access'],
+    badge: null,
+    accent: '#3b82f6',
+    accentBg: 'rgba(59,130,246,0.08)',
+    border: '2px solid rgba(59,130,246,0.2)',
+    icon: 'Shield'
+  },
+  {
+    id: 'p_qrt',
+    name: 'Quarterly Prime',
+    price: 6500,
+    duration: '90 Days',
+    durationDays: 90,
+    features: ['All Monthly benefits', '2 PT consultation sessions', 'Steam Bath Access'],
+    badge: 'Popular',
+    accent: '#8b5cf6',
+    accentBg: 'rgba(139,92,246,0.08)',
+    border: '2px solid rgba(139,92,246,0.2)',
+    icon: 'Zap'
+  },
+  {
+    id: 'p_semi',
+    name: 'Semi-Annual Pro',
+    price: 11500,
+    duration: '180 Days',
+    durationDays: 180,
+    features: ['All Quarterly benefits', 'Diet & Nutrition builder', 'Body fat measurements'],
+    badge: 'Best Value',
+    accent: '#10b981',
+    accentBg: 'rgba(16,185,129,0.08)',
+    border: '2px solid rgba(16,185,129,0.2)',
+    icon: 'Star'
+  },
+  {
+    id: 'p_ann',
+    name: 'Annual Premium',
+    price: 18000,
+    duration: '365 Days',
+    durationDays: 365,
+    features: ['All Semi-Annual benefits', 'Dedicated coach + personal locker', 'Guest passes (5/month)'],
+    badge: '🏆 Elite',
+    accent: '#f59e0b',
+    accentBg: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 50%, #fef9ec 100%)',
+    border: '2px solid rgba(245,158,11,0.35)',
+    icon: 'Crown'
+  }
+];
 
 export let mockDevices: any[] = [
   { id: 'dev1', deviceId: 'k90-main-gate', deviceName: 'Main Gate K90 Pro', deviceType: 'ESSL K90 Pro', ip: '192.168.1.100', port: 4370, branch: 'Alpha Zone Main Branch', enabled: true, lastSync: new Date().toISOString(), status: 'connected', connectionHealth: 100 },
@@ -39,6 +218,68 @@ export let mockAccessLogs: any[] = [];
 export let mockDoorStatus: any[] = [
   { id: 'dev_k90_main', doorId: 'dev_k90_main', doorName: 'Main Entrance Gate', status: 'locked', lastOpen: new Date().toISOString(), lastUser: 'Arjun Mehta', lastEvent: 'Access Granted' }
 ];
+
+const MOCK_DB_FILE = path.join(__dirname, 'mockDb.json');
+
+export const saveMockDb = () => {
+  try {
+    fs.writeFileSync(MOCK_DB_FILE, JSON.stringify({
+      mockMembers,
+      mockAttendance,
+      mockPayments,
+      mockTrainers,
+      mockBranches,
+      mockWorkouts,
+      mockDietPlans,
+      mockCheatMealRequests,
+      mockDailyDietLogs,
+      mockProgressLogs,
+      mockChatMessages,
+      mockReferrals,
+      mockMigrations,
+      mockPlans,
+      mockDevices,
+      mockDeviceLogs,
+      mockAccessLogs,
+      mockDoorStatus
+    }, null, 2));
+  } catch (e) {
+    console.error('Failed to write mock database:', e);
+  }
+};
+
+export const loadMockDb = () => {
+  try {
+    if (fs.existsSync(MOCK_DB_FILE)) {
+      const data = JSON.parse(fs.readFileSync(MOCK_DB_FILE, 'utf8'));
+      if (data.mockMembers) { mockMembers.length = 0; mockMembers.push(...data.mockMembers); }
+      if (data.mockAttendance) { mockAttendance.length = 0; mockAttendance.push(...data.mockAttendance); }
+      if (data.mockPayments) { mockPayments.length = 0; mockPayments.push(...data.mockPayments); }
+      if (data.mockTrainers) { mockTrainers.length = 0; mockTrainers.push(...data.mockTrainers); }
+      if (data.mockBranches) { mockBranches.length = 0; mockBranches.push(...data.mockBranches); }
+      if (data.mockWorkouts) { mockWorkouts.length = 0; mockWorkouts.push(...data.mockWorkouts); }
+      if (data.mockDietPlans) { mockDietPlans.length = 0; mockDietPlans.push(...data.mockDietPlans); }
+      if (data.mockCheatMealRequests) { mockCheatMealRequests.length = 0; mockCheatMealRequests.push(...data.mockCheatMealRequests); }
+      if (data.mockDailyDietLogs) { mockDailyDietLogs.length = 0; mockDailyDietLogs.push(...data.mockDailyDietLogs); }
+      if (data.mockProgressLogs) { mockProgressLogs.length = 0; mockProgressLogs.push(...data.mockProgressLogs); }
+      if (data.mockChatMessages) { mockChatMessages.length = 0; mockChatMessages.push(...data.mockChatMessages); }
+      if (data.mockReferrals) { mockReferrals.length = 0; mockReferrals.push(...data.mockReferrals); }
+      if (data.mockMigrations) { mockMigrations.length = 0; mockMigrations.push(...data.mockMigrations); }
+      if (data.mockPlans) { mockPlans.length = 0; mockPlans.push(...data.mockPlans); }
+      if (data.mockDevices) { mockDevices.length = 0; mockDevices.push(...data.mockDevices); }
+      if (data.mockDeviceLogs) { mockDeviceLogs.length = 0; mockDeviceLogs.push(...data.mockDeviceLogs); }
+      if (data.mockAccessLogs) { mockAccessLogs.length = 0; mockAccessLogs.push(...data.mockAccessLogs); }
+      if (data.mockDoorStatus) { mockDoorStatus.length = 0; mockDoorStatus.push(...data.mockDoorStatus); }
+      console.log(`[Offline Mock DB] Loaded ${mockMembers.length} members from mockDb.json`);
+    } else {
+      saveMockDb();
+    }
+  } catch (e) {
+    console.error('Failed to load mock database:', e);
+  }
+};
+
+loadMockDb();
 
 // Real Firebase Init
 const serviceAccountPath = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
@@ -65,17 +306,110 @@ if (serviceAccountPath && fs.existsSync(serviceAccountPath)) {
   console.log('No Firebase config file found. Using memory-backed Mock Database.');
 }
 
-const getFirestoreDb = () => {
+export const getFirestoreDb = () => {
   return isFirebaseInitialized ? admin.firestore() : null;
 };
 
+let membersCache: any[] | null = null;
+
 // Database helper functions (asynchronous to support Firestore)
 export const db = {
+  saveMockDb: () => {
+    saveMockDb();
+  },
+  invalidateMembersCache: () => {
+    membersCache = null;
+  },
+
   getMembers: async (): Promise<any[]> => {
+    if (membersCache) {
+      return membersCache;
+    }
     const firestore = getFirestoreDb();
     if (firestore) {
-      const snapshot = await firestore.collection('members').get();
-      return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      try {
+        // Fetch both collections in parallel for maximum speed
+        const [membersSnap, usersSnap] = await Promise.all([
+          firestore.collection('members').get(),
+          firestore.collection('users').where('role', '==', 'member').get()
+        ]);
+
+        const membersList = membersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        const memberUsers = usersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any[];
+
+        const existingUids = new Set(membersList.map(m => m.id));
+        const newMembersToCreate: any[] = [];
+
+        for (const u of memberUsers) {
+          if (!existingUids.has(u.id)) {
+            // Provision a default member profile matching this User Auth record
+            const currentYear = new Date().getFullYear();
+            const prefix = `AZ-${currentYear}-`;
+            
+            const count = membersList.length + newMembersToCreate.length + 1;
+            const memberId = `${prefix}${String(count).padStart(4, '0')}`;
+
+            const defaultMember = {
+              memberId,
+              uid: u.id,
+              name: u.name || 'Gym Member',
+              phone: (u as any).phone || '9876543210',
+              email: (u as any).email || '',
+              plan: 'Monthly',
+              joinDate: (u as any).createdAt ? (u as any).createdAt.split('T')[0] : new Date().toISOString().split('T')[0],
+              expiryDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+              status: 'active',
+              branch: (u as any).branch || 'Mohali, Punjab',
+              trainer: '',
+              gender: 'Male',
+              age: 25,
+              weight: 70,
+              height: 170,
+              bmi: 24.2,
+              bloodGroup: 'O+',
+              emergencyContact: '',
+              maritalStatus: 'Single',
+              anniversaryDate: '',
+              birthdayDate: '',
+              medicalConditions: '',
+              fitnessGoal: 'General Fitness',
+              occupation: '',
+              address: '',
+              avatarUrl: (u as any).avatar || '',
+              biometricId: '',
+              daysLeft: 30,
+              attendanceCount: 0,
+              attendanceStreak: 0,
+              streak: 1,
+              password: '1234567',
+              fingerprintStatus: 'none',
+              biometricEnrolled: false
+            };
+            
+            newMembersToCreate.push({ id: u.id, data: defaultMember });
+            membersList.push({ id: u.id, ...defaultMember });
+          }
+        }
+
+        // Commit missing profiles in background so we don't add latency to the API request
+        if (newMembersToCreate.length > 0) {
+          const batch = firestore.batch();
+          newMembersToCreate.forEach(m => {
+            const docRef = firestore.collection('members').doc(m.id);
+            batch.set(docRef, m.data);
+          });
+          batch.commit()
+            .then(() => console.log(`[Self-Healing] Successfully auto-provisioned ${newMembersToCreate.length} missing member profiles.`))
+            .catch(err => console.error('[Self-Healing] Failed to commit auto-provisioned members batch:', err));
+        }
+
+        membersCache = membersList;
+        return membersCache;
+      } catch (error) {
+        console.error('Error fetching/healing members:', error);
+        // fallback to whatever is loaded in cache or empty
+        return membersCache || [];
+      }
     }
     return mockMembers;
   },
@@ -88,30 +422,29 @@ export const db = {
     const prefix = `AZ-${currentYear}-`;
     let nextNum = 1;
     
+    // Since we want accurate IDs, query Firestore or mockMembers
+    const azIds: string[] = [];
     if (firestore) {
       const snap = await firestore.collection('members').get();
-      const azIds = snap.docs
-        .map(d => d.data().memberId as string)
-        .filter(id => id && id.startsWith(prefix));
-      if (azIds.length > 0) {
-        const nums = azIds.map(id => {
-          const parts = id.split('-');
-          return parseInt(parts[2], 10) || 0;
-        });
-        nextNum = Math.max(...nums) + 1;
-      }
+      snap.docs.forEach(d => {
+        const id = d.data().memberId;
+        if (id && id.startsWith(prefix)) azIds.push(id);
+      });
     } else {
-      const azIds = mockMembers
-        .map(m => m.memberId as string)
-        .filter(id => id && id.startsWith(prefix));
-      if (azIds.length > 0) {
-        const nums = azIds.map(id => {
-          const parts = id.split('-');
-          return parseInt(parts[2], 10) || 0;
-        });
-        nextNum = Math.max(...nums) + 1;
-      }
+      mockMembers.forEach(m => {
+        const id = m.memberId;
+        if (id && id.startsWith(prefix)) azIds.push(id);
+      });
     }
+
+    if (azIds.length > 0) {
+      const nums = azIds.map(id => {
+        const parts = id.split('-');
+        return parseInt(parts[2], 10) || 0;
+      });
+      nextNum = Math.max(...nums) + 1;
+    }
+    
     const memberId = `${prefix}${String(nextNum).padStart(4, '0')}`;
 
     const newMember = {
@@ -129,7 +462,13 @@ export const db = {
     if (firestore) {
       const docId = member.uid || firestore.collection('members').doc().id;
       await firestore.collection('members').doc(docId).set(newMember);
-      return { id: docId, ...newMember };
+      const added = { id: docId, ...newMember };
+      if (membersCache) {
+        membersCache.push(added);
+      } else {
+        membersCache = null; // force fetch next time
+      }
+      return added;
     }
 
     const docId = member.uid || ('m' + (mockMembers.length + 1));
@@ -140,10 +479,30 @@ export const db = {
 
   updateMember: async (id: string, updates: any): Promise<any> => {
     const firestore = getFirestoreDb();
+    
+    // Automatically recalculate expiryDate if plan is updated
+    if (updates.plan && !updates.expiryDate) {
+      let days = 30; // default 1 MONTH
+      const p = updates.plan.toUpperCase();
+      if (p.includes('SEMI-ANNUAL') || p.includes('SEMI ANNUAL') || p.includes('6 MONTH')) {
+        days = 180;
+      } else if (p.includes('ANNUAL') || p.includes('YEAR')) {
+        days = 365;
+      } else if (p.includes('3 MONTH') || p.includes('2+1') || p.includes('QUARTERLY')) {
+        days = 90;
+      }
+      
+      updates.expiryDate = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    }
+
     if (firestore) {
       await firestore.collection('members').doc(id).update(updates);
       const doc = await firestore.collection('members').doc(id).get();
-      return { id: doc.id, ...doc.data() };
+      const updated = { id: doc.id, ...doc.data() };
+      if (membersCache) {
+        membersCache = membersCache.map(m => m.id === id ? updated : m);
+      }
+      return updated;
     }
 
     const idx = mockMembers.findIndex(m => m.id === id);
@@ -158,6 +517,9 @@ export const db = {
     const firestore = getFirestoreDb();
     if (firestore) {
       await firestore.collection('members').doc(id).delete();
+      if (membersCache) {
+        membersCache = membersCache.filter(m => m.id !== id);
+      }
       return true;
     }
 
@@ -168,17 +530,154 @@ export const db = {
   getAttendance: async (): Promise<any[]> => {
     const firestore = getFirestoreDb();
     if (firestore) {
-      const snapshot = await firestore.collection('attendance').orderBy('checkIn', 'desc').get();
+      // Use attendance_logs and limit to 150 to avoid massive reads
+      const snapshot = await firestore.collection('attendance_logs').orderBy('checkIn', 'desc').limit(150).get();
       return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     }
     return mockAttendance;
   },
 
+  getAttendanceSummary: async (memberId: string): Promise<any> => {
+    const firestore = getFirestoreDb();
+    if (firestore) {
+      const doc = await firestore.collection('attendance_summary').doc(memberId).get();
+      if (doc.exists) return { id: doc.id, ...doc.data() };
+      return null;
+    }
+    return null;
+  },
+
+  getDashboardAnalytics: async (): Promise<any> => {
+    const firestore = getFirestoreDb();
+    if (firestore) {
+      const doc = await firestore.collection('analytics').doc('dashboard').get();
+      if (doc.exists) return { id: doc.id, ...doc.data() };
+      return { totalMembers: 0, todayAttendance: 0, activeMembers: 0, revenue: 0 };
+    }
+    return { totalMembers: 0, todayAttendance: 0, activeMembers: 0, revenue: 0 };
+  },
+
   addAttendance: async (log: any): Promise<any> => {
     const firestore = getFirestoreDb();
     if (firestore) {
-      const docRef = await firestore.collection('attendance').add(log);
-      return { id: docRef.id, ...log };
+      const presenceRef = firestore.collection('gym_presence').doc(log.memberId);
+      const presenceDoc = await presenceRef.get();
+      
+      let isDuplicate = false;
+      if (presenceDoc.exists) {
+        const pData = presenceDoc.data();
+        if (pData?.inside === true) {
+           isDuplicate = true;
+           // ONLY update lastPunch
+           await presenceRef.update({
+             lastPunch: log.checkIn || new Date().toISOString()
+           });
+        }
+      }
+
+      if (isDuplicate) {
+         // Log the duplicate attempt so the frontend popup can notify the user
+         const docRef = await firestore.collection('attendance_logs').add({
+           ...log,
+           status: 'duplicate',
+           createdAt: new Date().toISOString()
+         });
+
+         await firestore.collection('punch_history').add({
+           memberId: log.memberId,
+           memberName: log.memberName || 'Unknown',
+           deviceId: log.deviceId || 'unknown',
+           branchId: log.branch || 'unknown',
+           punchTime: log.checkIn || new Date().toISOString(),
+           punchType: log.method || 'biometric',
+           isDuplicatePunch: true,
+           isInside: true,
+           sessionId: presenceDoc.id
+         });
+
+         const analyticsRef = firestore.collection('analytics').doc('dashboard');
+         await analyticsRef.set({
+           todayTotalPunches: admin.firestore.FieldValue.increment(1),
+           duplicatePunchesToday: admin.firestore.FieldValue.increment(1)
+         }, { merge: true });
+
+         return { id: docRef.id, status: 'duplicate', ...log };
+      }
+
+      // Not a duplicate: Add to presence
+      const checkInTime = log.checkIn || new Date().toISOString();
+      const expectedExit = new Date(new Date(checkInTime).getTime() + 60 * 60 * 1000).toISOString();
+      await presenceRef.set({
+        memberId: log.memberId,
+        memberName: log.memberName || 'Unknown',
+        inside: true,
+        entryTime: checkInTime,
+        expectedExit: expectedExit,
+        lastPunch: checkInTime,
+        branch: log.branch || 'Mohali, Punjab',
+        trainer: log.trainer || null
+      });
+
+      // 1. Save temporary log in attendance_logs
+      // Adding status: 'granted' to trigger frontend UI popups
+      const docRef = await firestore.collection('attendance_logs').add({
+        ...log,
+        status: log.status || 'granted',
+        createdAt: new Date().toISOString()
+      });
+
+      // Log to punch_history
+      await firestore.collection('punch_history').add({
+        memberId: log.memberId,
+        memberName: log.memberName || 'Unknown',
+        deviceId: log.deviceId || 'unknown',
+        branchId: log.branch || 'unknown',
+        punchTime: checkInTime,
+        punchType: log.method || 'biometric',
+        isDuplicatePunch: false,
+        isInside: true,
+        sessionId: presenceRef.id
+      });
+      
+      // 2. Update attendance_summary
+      const summaryRef = firestore.collection('attendance_summary').doc(log.memberId);
+      const summaryDoc = await summaryRef.get();
+      if (summaryDoc.exists) {
+        await summaryRef.update({
+          totalAttendance: admin.firestore.FieldValue.increment(1),
+          monthlyAttendance: admin.firestore.FieldValue.increment(1),
+          weeklyAttendance: admin.firestore.FieldValue.increment(1),
+          todayAttendance: 'Present',
+          lastAttendance: checkInTime.split('T')[0],
+          lastPunchTime: checkInTime
+        });
+      } else {
+        await summaryRef.set({
+          totalAttendance: 1,
+          monthlyAttendance: 1,
+          weeklyAttendance: 1,
+          todayAttendance: 'Present',
+          attendanceStreak: 1,
+          lastAttendance: checkInTime.split('T')[0],
+          lastPunchTime: checkInTime
+        });
+      }
+
+      // 3. Update dashboard analytics
+      const analyticsRef = firestore.collection('analytics').doc('dashboard');
+      await analyticsRef.set({
+        todayAttendance: admin.firestore.FieldValue.increment(1),
+        todayTotalPunches: admin.firestore.FieldValue.increment(1),
+        todayUniqueMembers: admin.firestore.FieldValue.increment(1)
+      }, { merge: true });
+
+      // 4. Update member attendanceCount
+      const memberRef = firestore.collection('members').doc(log.memberId);
+      await memberRef.update({
+        attendanceCount: admin.firestore.FieldValue.increment(1)
+      }).catch(e => console.error('Failed to update member attendance count', e));
+
+      return { id: docRef.id, ...log, status: 'granted' };
     }
 
     const newLog = {
@@ -193,8 +692,8 @@ export const db = {
     const checkOutTime = new Date().toISOString();
     const firestore = getFirestoreDb();
     if (firestore) {
-      await firestore.collection('attendance').doc(id).update({ checkOut: checkOutTime });
-      const doc = await firestore.collection('attendance').doc(id).get();
+      await firestore.collection('attendance_logs').doc(id).update({ checkOut: checkOutTime });
+      const doc = await firestore.collection('attendance_logs').doc(id).get();
       return { id: doc.id, ...doc.data() };
     }
 
@@ -212,7 +711,7 @@ export const db = {
 
     if (firestore) {
       try {
-        const snapshot = await firestore.collection('attendance')
+        const snapshot = await firestore.collection('attendance_logs')
           .where('checkOut', '==', null)
           .get();
 
@@ -241,7 +740,7 @@ export const db = {
 
             if (!isNaN(checkInDate.getTime()) && checkInDate < oneHourAgo) {
               const checkOutTime = new Date(checkInDate.getTime() + 60 * 60 * 1000).toISOString();
-              await firestore.collection('attendance').doc(doc.id).update({
+              await firestore.collection('attendance_logs').doc(doc.id).update({
                 checkOut: checkOutTime,
                 autoCheckedOut: true
               });
@@ -725,6 +1224,169 @@ export const db = {
       return true;
     }
     return false;
+  },
+
+  getSmtpConfig: async (): Promise<any> => {
+    const firestore = getFirestoreDb();
+    if (firestore) {
+      const doc = await firestore.collection('system_config').doc('smtp').get();
+      if (doc.exists) return doc.data();
+    }
+    const configPath = './smtp_config.json';
+    if (fs.existsSync(configPath)) {
+      try {
+        return JSON.parse(fs.readFileSync(configPath, 'utf8'));
+      } catch (e) {}
+    }
+    return {
+      host: 'smtp.gmail.com',
+      port: '587',
+      secure: false,
+      user: '',
+      pass: '',
+      fromName: 'Alpha Zone Gym',
+      fromEmail: 'noreply@alphagym.com',
+      triggers: {
+        welcome: true,
+        expiry7: true,
+        expiry3: true,
+        payment: true,
+        expired: false
+      }
+    };
+  },
+
+  saveSmtpConfig: async (config: any): Promise<any> => {
+    const firestore = getFirestoreDb();
+    if (firestore) {
+      await firestore.collection('system_config').doc('smtp').set(config, { merge: true });
+    }
+    const configPath = './smtp_config.json';
+    try {
+      fs.writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf8');
+    } catch (e) {}
+    return config;
+  },
+
+  getPlans: async (): Promise<any[]> => {
+    const firestore = getFirestoreDb();
+    if (firestore) {
+      const snapshot = await firestore.collection('plans').get();
+      if (snapshot.empty) {
+        // Seed default plans
+        for (const plan of mockPlans) {
+          await firestore.collection('plans').doc(plan.id).set(plan);
+        }
+        return mockPlans;
+      }
+      return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    }
+    return mockPlans;
+  },
+
+  addPlan: async (plan: any): Promise<any> => {
+    const newPlan = {
+      ...plan,
+      id: plan.id || 'p_' + Date.now()
+    };
+    const firestore = getFirestoreDb();
+    if (firestore) {
+      await firestore.collection('plans').doc(newPlan.id).set(newPlan);
+      return newPlan;
+    }
+    mockPlans.push(newPlan);
+    return newPlan;
+  },
+
+  updatePlan: async (id: string, updates: any): Promise<any> => {
+    const firestore = getFirestoreDb();
+    if (firestore) {
+      await firestore.collection('plans').doc(id).update(updates);
+      const doc = await firestore.collection('plans').doc(id).get();
+      return { id: doc.id, ...doc.data() };
+    }
+    const idx = mockPlans.findIndex(p => p.id === id);
+    if (idx !== -1) {
+      mockPlans[idx] = { ...mockPlans[idx], ...updates };
+      return mockPlans[idx];
+    }
+    return null;
+  },
+
+  deletePlan: async (id: string): Promise<boolean> => {
+    const firestore = getFirestoreDb();
+    if (firestore) {
+      await firestore.collection('plans').doc(id).delete();
+      return true;
+    }
+    const idx = mockPlans.findIndex(p => p.id === id);
+    if (idx !== -1) {
+      mockPlans.splice(idx, 1);
+      return true;
+    }
+    return false;
+  },
+
+  getMigrations: async (): Promise<any[]> => {
+    const firestore = getFirestoreDb();
+    if (firestore) {
+      const snap = await firestore.collection('migrations').orderBy('timestamp', 'desc').get();
+      return snap.docs.map(doc => doc.data());
+    }
+    return mockMigrations;
+  },
+
+  addMigration: async (migration: any): Promise<any> => {
+    const firestore = getFirestoreDb();
+    if (firestore) {
+      await firestore.collection('migrations').doc(migration.sessionId).set(migration);
+      return migration;
+    }
+    mockMigrations.push(migration);
+    return migration;
+  },
+
+  rollbackMockMigration: async (uids: string[], sessionId: string): Promise<void> => {
+    // Remove from mockMembers
+    mockMembers = mockMembers.filter(m => !uids.includes(m.id || m.uid));
+    
+    // Remove from mockPayments
+    mockPayments = mockPayments.filter(p => !uids.includes(p.memberId));
+    
+    // Remove from mockAttendance
+    mockAttendance = mockAttendance.filter(a => !uids.includes(a.memberId));
+
+    const mig = mockMigrations.find(m => m.sessionId === sessionId);
+    if (mig) {
+      mig.status = 'rolled_back';
+      mig.rolledBackAt = new Date().toISOString();
+    }
+  },
+
+  purgeMocks: async (): Promise<any> => {
+    mockMembers = [];
+    mockAttendance = [];
+    mockPayments = [];
+    mockWorkouts = [];
+    mockDietPlans = [];
+    mockCheatMealRequests = [];
+    mockDailyDietLogs = [];
+    mockProgressLogs = [];
+    mockChatMessages = [];
+    mockReferrals = [];
+    mockMigrations = [];
+    membersCache = null;
+    return {
+      members: 0,
+      attendance: 0,
+      payments: 0,
+      workouts: 0,
+      diets: 0,
+      cheatMeals: 0,
+      logs: 0,
+      referrals: 0,
+      migrations: 0
+    };
   }
 };
 

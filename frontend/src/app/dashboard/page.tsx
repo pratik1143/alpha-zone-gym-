@@ -13,8 +13,8 @@ import { db as fDb, isFirebaseReady } from '@/lib/firebase';
 
 export default function DashboardPage() {
   const {
-    members, attendance, fetchMembers, fetchAttendance, fetchPayments,
-    triggerGateUnlock
+    members, attendance, gymPresence, fetchMembers, fetchAttendance, fetchPayments,
+    triggerGateUnlock, dashboardAnalytics, fetchDashboardAnalytics
   } = useGymStore();
 
   const [isMounted, setIsMounted] = useState(false);
@@ -28,19 +28,15 @@ export default function DashboardPage() {
     fetchMembers();
     fetchAttendance();
     fetchPayments();
-  }, [fetchMembers, fetchAttendance, fetchPayments]);
+    fetchDashboardAnalytics();
+  }, [fetchMembers, fetchAttendance, fetchPayments, fetchDashboardAnalytics]);
 
-  // Derive live occupancy count from real attendance
+  // Derive live occupancy count from real gymPresence
   useEffect(() => {
-    if (!attendance) return;
-    const oneHourAgo = Date.now() - 60 * 60 * 1000;
-    const activeNow = attendance.filter((a: any) => {
-      if (!a.checkIn || a.checkOut) return false;
-      const checkInTime = new Date(a.checkIn).getTime();
-      return !isNaN(checkInTime) && checkInTime > oneHourAgo;
-    }).length;
+    if (!gymPresence) return;
+    const activeNow = gymPresence.filter((p: any) => p.inside === true).length;
     setLiveCount(activeNow);
-  }, [attendance]);
+  }, [gymPresence]);
 
   const handleManualUnlock = async () => {
     setGateUnlocked(true);

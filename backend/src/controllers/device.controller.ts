@@ -40,7 +40,13 @@ export const getDevices = async (req: Request, res: Response) => {
 
     // Attendance Registered Today
     const todayStr = new Date().toISOString().split('T')[0];
-    const attendanceToday = attendanceLogs.filter(a => a.checkIn && a.checkIn.startsWith(todayStr)).length;
+    const attendanceToday = attendanceLogs.filter(a => {
+      if (!a.checkIn) return false;
+      const checkInStr = (typeof a.checkIn === 'string')
+        ? a.checkIn
+        : (a.checkIn.toDate ? a.checkIn.toDate().toISOString() : (a.checkIn.seconds ? new Date(a.checkIn.seconds * 1000).toISOString() : ''));
+      return checkInStr.startsWith(todayStr);
+    }).length;
 
     res.json({
       devices: list,
@@ -54,6 +60,7 @@ export const getDevices = async (req: Request, res: Response) => {
       }
     });
   } catch (error: any) {
+    console.error('Error in getDevices:', error);
     res.status(500).json({ error: error.message });
   }
 };

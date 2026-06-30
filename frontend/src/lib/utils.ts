@@ -57,3 +57,21 @@ export const getRandomColor = (name: string): string => {
   }
   return colors[sum % colors.length];
 };
+
+export const calculateRealAttendance = (joinDateString: string, attendanceCount: number): number => {
+  if (!attendanceCount || attendanceCount <= 0) return 0;
+  if (!joinDateString) return 0;
+  
+  const joinDate = new Date(joinDateString);
+  const today = new Date();
+  
+  // Cap at 0 if join date is in the future
+  if (joinDate > today) return 0;
+
+  const diffTime = today.getTime() - joinDate.getTime();
+  const elapsedDays = Math.max(1, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
+  
+  // Calculate percentage (can't be over 100%)
+  const percentage = Math.round((attendanceCount / elapsedDays) * 100);
+  return Math.min(100, percentage);
+};

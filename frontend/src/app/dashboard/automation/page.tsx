@@ -1,12 +1,13 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Mail, Server, Key, Eye, EyeOff, Save, Play, RefreshCw,
-  CheckCircle2, AlertTriangle, Zap, Send, Settings, FileText
+  CheckCircle2, AlertTriangle, Zap, Send, Settings, FileText, Download
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import API from '@/services/api';
 
 // ── Default HTML Templates ──────────────────────────────────────────
 const TEMPLATES: Record<string, { subject: string; html: string }> = {
@@ -184,13 +185,17 @@ interface SmtpConfig {
 }
 
 export default function AutomationPage() {
-  const [activeTab, setActiveTab] = useState<'smtp' | 'templates'>('smtp');
+  const [activeTab, setActiveTab] = useState<'smtp' | 'templates' | 'invoice-pdf'>('smtp');
   const [activeTemplate, setActiveTemplate] = useState<keyof typeof TEMPLATES>('welcome');
   const [showPass, setShowPass] = useState(false);
   const [previewMode, setPreviewMode] = useState<'code' | 'preview'>('preview');
   const [testEmail, setTestEmail] = useState('');
   const [sendingTest, setSendingTest] = useState(false);
   const [savingSmtp, setSavingSmtp] = useState(false);
+
+  // PDF Preview states
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [loadingPdf, setLoadingPdf] = useState(false);
 
   const [smtp, setSmtp] = useState<SmtpConfig>({
     host: 'smtp.gmail.com',
@@ -202,7 +207,89 @@ export default function AutomationPage() {
     fromEmail: 'noreply@alphagym.com',
   });
 
+  const [triggers, setTriggers] = useState({
+    welcome: true,
+    expiry7: true,
+    expiry3: true,
+    payment: true,
+    expired: false
+  });
+
   const [templates, setTemplates] = useState({ ...TEMPLATES });
+
+  useEffect(() => {
+    const loadSettings = async () => {
+      try {
+        const smtpRes = await API.get('/automation/smtp');
+        if (smtpRes.data) {
+          setSmtp({
+            host: smtpRes.data.host || 'smtp.gmail.com',
+            port: smtpRes.data.port || '587',
+            secure: !!smtpRes.data.secure,
+            user: smtpRes.data.user || '',
+            pass: smtpRes.data.pass || '',
+            fromName: smtpRes.data.fromName || 'Alpha Zone Gym',
+            fromEmail: smtpRes.data.fromEmail || 'noreply@alphagym.com',
+          });
+          if (smtpRes.data.triggers) {
+            setTriggers(smtpRes.data.triggers);
+          }
+        }
+
+        const templatesRes = await API.get('/automation/templates');
+        if (templatesRes.data) {
+          setTemplates(templatesRes.data);
+        }
+      } catch (err) {
+        console.error('Failed to load automation settings:', err);
+      }
+    };
+    loadSettings();
+  }, []);
+
+  const fetchPdfPreview = async () => {
+    setLoadingPdf(true);
+    try {
+      const res = await API.get('/automation/invoice/preview', {
+        responseType: 'blob'
+      });
+      const blob = new Blob([res.data], { type: 'application/pdf' });
+      // Clean up previous URL if any
+      if (pdfUrl) {
+        URL.revokeObjectURL(pdfUrl);
+      }
+      const url = URL.createObjectURL(blob);
+      setPdfUrl(url);
+    } catch (err) {
+      console.error('Failed to load PDF preview:', err);
+      toast.error('Failed to load invoice PDF preview.');
+    } finally {
+      setLoadingPdf(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'invoice-pdf') {
+      fetchPdfPreview();
+    }
+    // Cleanup URL on unmount
+    return () => {
+      if (pdfUrl) {
+        URL.revokeObjectURL(pdfUrl);
+      }
+    };
+  }, [activeTab]);
+
+  const handleDownloadPdf = () => {
+    if (!pdfUrl) return;
+    const link = document.createElement('a');
+    link.href = pdfUrl;
+    link.download = 'Alpha_Zone_Invoice_Template.pdf';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast.success('Downloaded Invoice PDF Template!');
+  };
 
   const handleSmtpSave = async () => {
     if (!smtp.host || !smtp.user || !smtp.pass) {
@@ -211,16 +298,29 @@ export default function AutomationPage() {
     }
     setSavingSmtp(true);
     try {
-      const res = await fetch('/api/automation/smtp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(smtp),
-      }).catch(() => null);
+      await API.post('/automation/smtp', {
+        ...smtp,
+        triggers
+      });
       toast.success('SMTP settings saved successfully!');
     } catch (e) {
-      toast.success('SMTP settings saved locally!');
+      toast.error('Failed to save SMTP settings.');
     } finally {
       setSavingSmtp(false);
+    }
+  };
+
+  const handleToggleTrigger = async (key: string) => {
+    const updatedTriggers = { ...triggers, [key]: !triggers[key as keyof typeof triggers] };
+    setTriggers(updatedTriggers);
+    try {
+      await API.post('/automation/smtp', {
+        ...smtp,
+        triggers: updatedTriggers
+      });
+      toast.success('Trigger settings updated!');
+    } catch (err) {
+      toast.error('Failed to update trigger settings');
     }
   };
 
@@ -228,19 +328,38 @@ export default function AutomationPage() {
     if (!testEmail) { toast.error('Enter a test email address'); return; }
     setSendingTest(true);
     try {
-      await new Promise(r => setTimeout(r, 1500));
+      await API.post('/automation/smtp/test', {
+        to: testEmail,
+        subject: 'Alpha Zone Test Email ⚡',
+        body: `
+          <div style="font-family: sans-serif; padding: 20px; border: 1px solid #eee; border-radius: 8px; max-width: 500px; margin: auto;">
+            <h2 style="color: #0f172a; border-bottom: 2px solid #d4ff00; padding-bottom: 8px;">Alpha Zone SMTP Test</h2>
+            <p>Your SMTP configurations are correct! Mail was sent successfully.</p>
+            <p style="color: #94a3b8; font-size: 12px; margin-top: 20px;">Sent at: ${new Date().toLocaleString()}</p>
+          </div>
+        `
+      });
       toast.success(`Test email sent to ${testEmail}!`);
-    } catch (e) {
-      toast.error('Failed to send test email. Check SMTP settings.');
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || 'Failed to send test email. Check SMTP settings.');
     } finally {
       setSendingTest(false);
+    }
+  };
+
+  const handleSaveTemplate = async () => {
+    try {
+      await API.post('/automation/templates', templates);
+      toast.success(`${TEMPLATE_TABS.find(t => t.key === activeTemplate)?.label} template saved!`);
+    } catch (e) {
+      toast.error('Failed to save template');
     }
   };
 
   const TEMPLATE_TABS = [
     { key: 'welcome', label: 'Welcome Mail', icon: '👋', color: '#10b981' },
     { key: 'expiry', label: 'Expiry Alert', icon: '⚠️', color: '#ef4444' },
-    { key: 'receipt', label: 'Payment Receipt', icon: '✅', color: '#0052FF' },
+    { key: 'receipt', label: 'Invoice & Receipt', icon: '📄', color: '#0052FF' },
     { key: 'renewal', label: 'Renewal Prompt', icon: '💪', color: '#f59e0b' },
   ] as const;
 
@@ -275,6 +394,7 @@ export default function AutomationPage() {
           {[
             { key: 'smtp', label: 'SMTP Settings', icon: Server },
             { key: 'templates', label: 'Email Templates', icon: Mail },
+            { key: 'invoice-pdf', label: 'Invoice PDF Template', icon: FileText },
           ].map(({ key, label, icon: Icon }) => (
             <button
               key={key}
@@ -435,24 +555,28 @@ export default function AutomationPage() {
                 </h3>
                 <div className="space-y-3">
                   {[
-                    { label: 'New Member Joins', template: 'Welcome Email', active: true, color: '#10b981' },
-                    { label: 'Membership Expiring (7 days)', template: 'Expiry Alert', active: true, color: '#f59e0b' },
-                    { label: 'Membership Expiring (3 days)', template: 'Expiry Alert', active: true, color: '#ef4444' },
-                    { label: 'Payment Received', template: 'Receipt + Invoice', active: true, color: '#0052FF' },
-                    { label: 'Membership Expired', template: 'Renewal Prompt', active: false, color: '#8b5cf6' },
-                  ].map((rule, i) => (
-                    <div key={i} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
-                      <div>
-                        <p className="text-[10px] font-black text-black">{rule.label}</p>
-                        <p className="text-[9px] text-slate-400 font-bold mt-0.5">→ Sends {rule.template}</p>
+                    { key: 'welcome', label: 'New Member Joins', template: 'Welcome Email', color: '#10b981' },
+                    { key: 'expiry7', label: 'Membership Expiring (7 days)', template: 'Expiry Alert', color: '#f59e0b' },
+                    { key: 'expiry3', label: 'Membership Expiring (3 days)', template: 'Expiry Alert', color: '#ef4444' },
+                    { key: 'payment', label: 'Payment Received', template: 'Receipt + Invoice', color: '#0052FF' },
+                    { key: 'expired', label: 'Membership Expired', template: 'Renewal Prompt', color: '#8b5cf6' },
+                  ].map((rule, i) => {
+                    const isActive = triggers[rule.key as keyof typeof triggers] ?? false;
+                    return (
+                      <div key={i} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
+                        <div>
+                          <p className="text-[10px] font-black text-black">{rule.label}</p>
+                          <p className="text-[9px] text-slate-400 font-bold mt-0.5">→ Sends {rule.template}</p>
+                        </div>
+                        <div
+                          onClick={() => handleToggleTrigger(rule.key)}
+                          className={`w-8 h-4.5 rounded-full transition-all relative cursor-pointer ${isActive ? 'bg-black' : 'bg-slate-200'}`}
+                        >
+                          <span className={`absolute top-0.5 w-3.5 h-3.5 bg-white rounded-full shadow transition-all ${isActive ? 'left-[18px]' : 'left-0.5'}`} />
+                        </div>
                       </div>
-                      <div
-                        className={`w-8 h-4.5 rounded-full transition-all relative cursor-pointer ${rule.active ? 'bg-black' : 'bg-slate-200'}`}
-                      >
-                        <span className={`absolute top-0.5 w-3.5 h-3.5 bg-white rounded-full shadow transition-all ${rule.active ? 'left-[18px]' : 'left-0.5'}`} />
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
 
@@ -553,7 +677,7 @@ export default function AutomationPage() {
             {/* Save Template button */}
             <div className="flex gap-3">
               <button
-                onClick={() => toast.success(`${TEMPLATE_TABS.find(t => t.key === activeTemplate)?.label} template saved!`)}
+                onClick={handleSaveTemplate}
                 className="flex items-center gap-2 bg-black text-white px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-wider hover:bg-slate-800 transition-colors"
               >
                 <Save size={13} />
@@ -581,6 +705,127 @@ export default function AutomationPage() {
                 {['{{memberName}}', '{{plan}}', '{{startDate}}', '{{expiryDate}}', '{{branch}}', '{{daysLeft}}', '{{invoice}}', '{{amount}}', '{{gst}}', '{{total}}', '{{method}}', '{{date}}'].map(v => (
                   <code key={v} className="text-[9px] bg-white border border-slate-200 text-slate-600 px-2 py-1 rounded-lg font-mono font-bold">{v}</code>
                 ))}
+              </div>
+            </div>
+
+            {activeTemplate === 'receipt' && (
+              <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4">
+                <p className="text-[10px] font-black text-emerald-700 mb-1">📄 Automated PDF Invoice Attachment</p>
+                <p className="text-[9px] text-emerald-600 leading-relaxed">
+                  When sending this email, the system automatically compiles a premium next-level PDF invoice using the client's membership details and your gym's logo (<code className="font-mono bg-white px-1.5 py-0.5 rounded text-emerald-800">gym_logo.png</code>). The PDF contains complete billing entries, GST (18%) taxation layout, and a "PAID" stamp, attached directly as a document file.
+                </p>
+              </div>
+            )}
+          </motion.div>
+        )}
+
+        {/* ── Invoice PDF Template Panel ── */}
+        {activeTab === 'invoice-pdf' && (
+          <motion.div
+            key="invoice-pdf"
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -16 }}
+            className="flex flex-col gap-4"
+          >
+            {/* Header info */}
+            <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+              <div>
+                <h3 className="text-sm font-black text-black flex items-center gap-2">
+                  <FileText size={16} /> Automated Invoice PDF Template
+                </h3>
+                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">
+                  High-fidelity PDFKit Generator · Dynamic Billing Entries · Print-Ready Layout
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={fetchPdfPreview}
+                  disabled={loadingPdf}
+                  className="flex items-center gap-1.5 bg-slate-100 text-slate-700 hover:bg-slate-200 px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-colors disabled:opacity-50"
+                >
+                  <RefreshCw size={12} className={loadingPdf ? 'animate-spin' : ''} />
+                  Refresh Preview
+                </button>
+                <button
+                  onClick={handleDownloadPdf}
+                  disabled={!pdfUrl || loadingPdf}
+                  className="flex items-center gap-1.5 bg-black text-white hover:bg-slate-800 px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-colors disabled:opacity-50"
+                >
+                  <Download size={12} />
+                  Download Sample PDF
+                </button>
+              </div>
+            </div>
+
+            {/* Preview and details side by side */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+              {/* PDF Preview Frame (8 cols on lg) */}
+              <div className="lg:col-span-8 bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden flex flex-col min-h-[600px]">
+                <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 bg-slate-50">
+                  <span className="text-[10px] font-black text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                    <Eye size={11} /> Live PDF Document Viewer
+                  </span>
+                  {loadingPdf && (
+                    <span className="text-[9px] text-slate-400 flex items-center gap-1.5">
+                      <RefreshCw size={10} className="animate-spin" /> Rendering PDF...
+                    </span>
+                  )}
+                </div>
+                <div className="flex-1 bg-slate-100 p-4 flex items-center justify-center relative">
+                  {loadingPdf ? (
+                    <div className="flex flex-col items-center gap-2">
+                      <RefreshCw size={24} className="animate-spin text-slate-400" />
+                      <p className="text-[11px] font-bold text-slate-400">Compiling Premium Layout...</p>
+                    </div>
+                  ) : pdfUrl ? (
+                    <iframe
+                      src={pdfUrl}
+                      className="w-full h-full min-h-[600px] rounded-xl border-0 bg-white shadow-sm"
+                      title="Invoice PDF Preview"
+                    />
+                  ) : (
+                    <p className="text-[11px] font-bold text-slate-400">Failed to render PDF preview.</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Design Breakdown & Info (4 cols on lg) */}
+              <div className="lg:col-span-4 flex flex-col gap-4">
+                {/* Highlights Card */}
+                <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm space-y-4">
+                  <h4 className="text-[10px] font-black text-black uppercase tracking-wider border-b border-slate-100 pb-2">
+                    ✨ Premium Layout Specs
+                  </h4>
+                  <div className="space-y-3">
+                    {[
+                      { title: 'Corporate Shield Logo', desc: 'Auto-embeds the high-res gym brand asset.' },
+                      { title: 'Structured Info Cards', desc: 'Displays Billed To and Billed By details inside distinct clean card layout panels.' },
+                      { title: 'Tax-Itemized Table', desc: 'Neat grid rows for memberships with exact validity periods and subtotal rows.' },
+                      { title: 'GST Calculation', desc: 'Automatically splits 18% tax into CGST (9%) and SGST (9%) rows.' },
+                      { title: 'Tilted Digital Stamp', desc: 'Tilted PAID stamp in emerald green (-10 degrees) for authentic receipt validation.' },
+                      { title: 'Gym Tagline Footer', desc: 'Elegant dark bar at the bottom with tracking-spaced branding motto.' },
+                    ].map((item, idx) => (
+                      <div key={idx} className="flex gap-2">
+                        <span className="text-emerald-500 font-bold text-xs">✓</span>
+                        <div>
+                          <p className="text-[10px] font-black text-slate-800 leading-tight">{item.title}</p>
+                          <p className="text-[9px] text-slate-400 font-bold mt-0.5 leading-normal">{item.desc}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Automation Tip */}
+                <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-5 space-y-2">
+                  <p className="text-[10px] font-black text-emerald-800 flex items-center gap-1">
+                    ⚡ Automation Rules
+                  </p>
+                  <p className="text-[9px] text-emerald-600 leading-relaxed font-bold font-sans">
+                    This PDF invoice compiles dynamically and attaches instantly to receipt emails whenever a payment is registered or plan is purchased. It guarantees that athletes receive zero-lag receipts right in their email inbox.
+                  </p>
+                </div>
               </div>
             </div>
           </motion.div>

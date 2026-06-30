@@ -5,23 +5,85 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Upload, FileText, CheckCircle2, AlertTriangle, XCircle,
   Download, RefreshCw, Users, Trash2, Eye, ChevronRight,
-  Table2, FileSpreadsheet, Zap, Info
+  Table2, FileSpreadsheet, Zap, Info, HelpCircle
 } from 'lucide-react';
 import { useGymStore } from '@/store';
 import toast from 'react-hot-toast';
+import API from '@/services/api';
 
 // ── Column auto-mapping ────────────────────────────────────────────
 const FIELD_MAP: Record<string, string[]> = {
+  clientId:   ['client id', 'clientid', 'id', 'biometric id', 'biometricid', 'member id', 'memberid'],
   name:       ['name', 'full name', 'fullname', 'member name', 'member'],
   phone:      ['phone', 'mobile', 'contact', 'phone number', 'mobile number', 'number'],
   email:      ['email', 'email address', 'mail'],
-  plan:       ['plan', 'membership', 'membership plan', 'subscription'],
   branch:     ['branch', 'location', 'gym', 'center'],
   gender:     ['gender', 'sex'],
   age:        ['age', 'years'],
   address:    ['address', 'residential', 'home address', 'addr'],
-  joinDate:   ['join date', 'joining date', 'start date', 'date'],
+  registrationDate: ['registration date', 'registrationdate', 'join date', 'joining date', 'start date', 'date'],
+  membershipPackage: ['package', 'membershippackage', 'plan', 'membership', 'membership plan', 'subscription'],
+  membershipExpiry: ['expiry', 'expiry date', 'expirydate', 'membershipexpiry', 'expiration', 'membership expiry'],
   amount:     ['amount', 'fee', 'fees', 'price', 'payment'],
+};
+
+const parseCSVDate = (dateStr: string): string => {
+  if (!dateStr) return '';
+  const cleaned = dateStr.trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(cleaned)) return cleaned;
+
+  const normalized = cleaned.replace(/[\/\.]/g, '-');
+  const parts = normalized.split('-');
+
+  if (parts.length === 3) {
+    let part0 = parts[0].trim();
+    let part1 = parts[1].trim();
+    let part2 = parts[2].trim();
+
+    const monthNames: Record<string, string> = {
+      jan: '01', feb: '02', mar: '03', apr: '04', may: '05', jun: '06',
+      jul: '07', aug: '08', sep: '09', oct: '10', nov: '11', dec: '12',
+      january: '01', february: '02', march: '03', april: '04', june: '06',
+      july: '07', august: '08', september: '09', october: '10', november: '11', december: '12'
+    };
+
+    const getMonthNum = (m: string): string => {
+      const lower = m.toLowerCase();
+      if (monthNames[lower]) return monthNames[lower];
+      const val = parseInt(m, 10);
+      if (!isNaN(val) && val >= 1 && val <= 12) {
+        return String(val).padStart(2, '0');
+      }
+      return '';
+    };
+
+    if (part2.length === 4 || part2.length === 2) {
+      let year = part2.length === 2 ? '20' + part2 : part2;
+      let month = getMonthNum(part1);
+      let day = parseInt(part0, 10);
+      if (month && !isNaN(day) && day >= 1 && day <= 31) {
+        return `${year}-${month}-${String(day).padStart(2, '0')}`;
+      }
+    }
+
+    if (part0.length === 4 || part0.length === 2) {
+      let year = part0.length === 2 ? '20' + part0 : part0;
+      let month = getMonthNum(part1);
+      let day = parseInt(part2, 10);
+      if (month && !isNaN(day) && day >= 1 && day <= 31) {
+        return `${year}-${month}-${String(day).padStart(2, '0')}`;
+      }
+    }
+  }
+
+  const parsed = new Date(cleaned);
+  if (!isNaN(parsed.getTime())) {
+    const y = parsed.getFullYear();
+    const m = String(parsed.getMonth() + 1).padStart(2, '0');
+    const d = String(parsed.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+  return '';
 };
 
 function detectColumn(header: string): string {
@@ -66,7 +128,7 @@ Priya Kaur,9812345678,priya@email.com,Quarterly,Mohali Punjab,Female,25,Sector 7
 Amit Singh,9988776655,,Annual Premium,Mohali Punjab,Male,32,Phase 11 Mohali`;
 
 export default function ImportPage() {
-  const { members, addMember } = useGymStore();
+  const { members, addMember, fetchMembers } = useGymStore();
   const fileRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
   const [step, setStep] = useState<'upload' | 'preview' | 'importing' | 'done'>('upload');
@@ -76,8 +138,23 @@ export default function ImportPage() {
   const [columnMap, setColumnMap] = useState<Record<number, string>>({});
   const [parsed, setParsed] = useState<ParsedMember[]>([]);
   const [importProgress, setImportProgress] = useState(0);
-  const [importResult, setImportResult] = useState({ success: 0, failed: 0, dupes: 0 });
-  const [history, setHistory] = useState<{ date: string; file: string; imported: number; dupes: number }[]>([]);
+  const [migrationHistory, setMigrationHistory] = useState<any[]>([]);
+  const [backendSummary, setBackendSummary] = useState<any | null>(null);
+
+  const fetchMigrationHistory = useCallback(async () => {
+    try {
+      const res = await API.get('/migrations');
+      if (Array.isArray(res.data)) {
+        setMigrationHistory(res.data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch migrations:', err);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    fetchMigrationHistory();
+  }, [fetchMigrationHistory]);
 
   // ── Process file ──────────────────────────────────────────────────
   const processFile = (file: File) => {
@@ -110,23 +187,60 @@ export default function ImportPage() {
 
   // ── Validate rows ─────────────────────────────────────────────────
   const validateRows = useCallback((): ParsedMember[] => {
-    const existingPhones = new Set(members.map((m: any) => m.phone?.trim()));
+    const existingPhones = new Set(members.map((m: any) => String(m.phone).trim()));
+    const existingBios = new Set(members.map((m: any) => m.biometricId ? String(m.biometricId).trim() : ''));
+
     return rawRows.map((row, idx) => {
       const data: Record<string, string> = {};
       Object.entries(columnMap).forEach(([colIdx, field]) => {
         data[field] = row[Number(colIdx)]?.trim() || '';
       });
+
+      // Multiline package and expiry resolution
+      const pkgRaw = data.membershipPackage || data.plan || 'Monthly';
+      const expiryRaw = data.membershipExpiry || data.expiryDate || '';
+
+      const pkgs = pkgRaw.split(/[\n\r,;]+/).map(p => p.trim()).filter(Boolean);
+      const expiries = expiryRaw.split(/[\n\r,;]+/).map(e => e.trim()).filter(Boolean);
+
+      const pairs: { pkg: string; expiryParsed: string }[] = [];
+      const maxLen = Math.max(pkgs.length, expiries.length);
+      for (let i = 0; i < maxLen; i++) {
+        const p = pkgs[i] || pkgs[pkgs.length - 1] || 'Monthly';
+        const eStr = expiries[i] || expiries[expiries.length - 1] || '';
+        const eParsed = parseCSVDate(eStr);
+        pairs.push({ pkg: p, expiryParsed: eParsed });
+      }
+
+      // Sort descending
+      pairs.sort((a, b) => {
+        if (!a.expiryParsed && !b.expiryParsed) return 0;
+        if (!a.expiryParsed) return 1;
+        if (!b.expiryParsed) return -1;
+        return b.expiryParsed.localeCompare(a.expiryParsed);
+      });
+
+      const latestPair = pairs[0] || { pkg: 'Monthly', expiryParsed: '' };
+
+      // Update to resolved data
+      data.membershipPackage = latestPair.pkg;
+      data.membershipExpiry = latestPair.expiryParsed;
+
       const issues: string[] = [];
       if (!data.name) issues.push('Name is required');
       if (!data.phone) issues.push('Phone is required');
-      else if (!/^\d{10}$/.test(data.phone.replace(/\s/g, ''))) issues.push('Invalid phone (10 digits required)');
+      else if (!/^\d{10}$/.test(data.phone.replace(/[^0-9]/g, ''))) issues.push('Invalid phone (10 digits required)');
       if (data.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email)) issues.push('Invalid email format');
 
       let status: ImportStatus = issues.length > 0 ? 'invalid' : 'valid';
-      if (status === 'valid' && existingPhones.has(data.phone?.replace(/\s/g, ''))) {
+      const currentPhone = data.phone ? String(data.phone).trim() : '';
+      const currentBio = data.clientId ? String(data.clientId).trim() : '';
+
+      if (status === 'valid' && (existingPhones.has(currentPhone) || (currentBio && existingBios.has(currentBio)))) {
         status = 'duplicate';
-        issues.push('Duplicate — member with this phone already exists');
+        issues.push('Duplicate — updates membership history');
       }
+
       return { idx, status, issues, data };
     });
   }, [rawRows, columnMap, members]);
@@ -138,51 +252,45 @@ export default function ImportPage() {
 
   // ── Import ─────────────────────────────────────────────────────────
   const handleImport = async () => {
-    const toImport = parsed.filter(p => p.status === 'valid');
+    const toImport = parsed.filter(p => p.status === 'valid' || p.status === 'duplicate');
     if (toImport.length === 0) { toast.error('No valid records to import'); return; }
     setStep('importing');
-    setImportProgress(0);
+    setImportProgress(10);
 
-    let success = 0, failed = 0;
-    const dupes = parsed.filter(p => p.status === 'duplicate').length;
+    try {
+      const payload = toImport.map(p => ({
+        clientId: p.data.clientId || p.data.phone || '',
+        name: p.data.name || '',
+        phone: p.data.phone || '',
+        gender: p.data.gender || 'Male',
+        registrationDate: p.data.registrationDate || '',
+        membershipPackage: p.data.membershipPackage || 'Monthly',
+        membershipExpiry: p.data.membershipExpiry || '',
+        email: p.data.email || '',
+        branch: p.data.branch || 'Mohali, Punjab',
+        age: p.data.age || '',
+        address: p.data.address || '',
+      }));
 
-    for (let i = 0; i < toImport.length; i++) {
-      const member = toImport[i];
-      try {
-        const daysMap: Record<string, number> = { Monthly: 30, Quarterly: 90, 'Semi-Annual': 180, 'Annual Premium': 365 };
-        const plan = member.data.plan || 'Monthly';
-        const days = daysMap[plan] || 30;
-        const expiry = new Date(Date.now() + days * 86400000).toISOString().split('T')[0];
+      setImportProgress(40);
+      const res = await API.post('/members/migrate', { members: payload });
+      setImportProgress(80);
 
-        await addMember({
-          name: member.data.name,
-          phone: member.data.phone,
-          email: member.data.email || '',
-          plan,
-          branch: member.data.branch || 'Mohali, Punjab',
-          gender: member.data.gender || 'Male',
-          age: Number(member.data.age) || 0,
-          address: member.data.address || '',
-          expiryDate: expiry,
-          trainer: '',
-        });
-        success++;
-      } catch (err) {
-        failed++;
-      }
-      setImportProgress(Math.round(((i + 1) / toImport.length) * 100));
-      await new Promise(r => setTimeout(r, 80)); // visual delay
+      const stats = res.data.stats;
+      setBackendSummary(stats);
+
+      // Refresh members local cache
+      await fetchMembers();
+      await fetchMigrationHistory();
+      setImportProgress(100);
+
+      setStep('done');
+      toast.success((stats.importedMembers || 0) + ' members imported successfully!');
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err.response?.data?.error || err.message || 'Import failed');
+      setStep('preview');
     }
-
-    setImportResult({ success, failed, dupes });
-    setHistory(prev => [{
-      date: new Date().toLocaleString('en-IN'),
-      file: fileName,
-      imported: success,
-      dupes,
-    }, ...prev.slice(0, 4)]);
-    setStep('done');
-    toast.success(success + ' members imported successfully!');
   };
 
   const reset = () => {
@@ -312,19 +420,46 @@ export default function ImportPage() {
               </div>
 
               {/* Import History */}
-              {history.length > 0 && (
+              {migrationHistory.length > 0 && (
                 <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm">
                   <h3 className="text-xs font-black text-black mb-3">Import History</h3>
-                  <div className="space-y-2">
-                    {history.map((h, i) => (
-                      <div key={i} className="flex items-center justify-between p-2 bg-slate-50 rounded-xl">
-                        <div>
-                          <p className="text-[9px] font-black text-black truncate max-w-[120px]">{h.file}</p>
-                          <p className="text-[8px] text-slate-400 font-bold">{h.date}</p>
+                  <div className="space-y-3 max-h-[300px] overflow-y-auto pr-1">
+                    {migrationHistory.map((m) => (
+                      <div key={m.sessionId} className="flex flex-col gap-2 p-3 bg-slate-50 rounded-xl border border-slate-100/60">
+                        <div className="flex items-start justify-between gap-1">
+                          <div className="min-w-0 flex-1">
+                            <p className="text-[9px] font-black text-black truncate" title={m.sessionId}>{m.sessionId}</p>
+                            <p className="text-[8px] text-slate-400 font-bold">{m.timestamp ? new Date(m.timestamp).toLocaleString() : 'N/A'}</p>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <p className="text-[9px] font-black text-emerald-600">+{m.importedMembers || 0}</p>
+                            {m.duplicateMembers > 0 && <p className="text-[8px] text-amber-500 font-bold">~{m.duplicateMembers} dupes</p>}
+                          </div>
                         </div>
-                        <div className="text-right">
-                          <p className="text-[9px] font-black text-emerald-600">{h.imported} imported</p>
-                          {h.dupes > 0 && <p className="text-[8px] text-amber-500 font-bold">{h.dupes} dupes skipped</p>}
+                        <div className="flex items-center justify-between border-t border-slate-200/60 pt-2 mt-1">
+                          <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-full ${m.status === 'rolled_back' ? 'bg-red-50 text-red-500 border border-red-200' : 'bg-emerald-50 text-emerald-600 border border-emerald-200'}`}>
+                            {m.status === 'rolled_back' ? 'Rolled Back' : 'Active'}
+                          </span>
+                          {m.status !== 'rolled_back' && (
+                            <button
+                              onClick={async () => {
+                                if (confirm('Are you sure you want to rollback this import? This will delete all imported members, login profiles, and billing logs from this session.')) {
+                                  try {
+                                    toast.loading('Rolling back migration...', { id: 'rollback' });
+                                    await API.post('/members/rollback-migration', { sessionId: m.sessionId });
+                                    toast.success('Migration rolled back successfully!', { id: 'rollback' });
+                                    fetchMigrationHistory();
+                                    fetchMembers();
+                                  } catch (err: any) {
+                                    toast.error(err.response?.data?.error || 'Rollback failed', { id: 'rollback' });
+                                  }
+                                }
+                              }}
+                              className="flex items-center gap-1 text-[8px] font-black uppercase text-red-500 hover:text-red-700 transition-colors"
+                            >
+                              <Trash2 size={10} /> Rollback
+                            </button>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -466,38 +601,87 @@ export default function ImportPage() {
         )}
 
         {/* ── STEP 4: Done ── */}
-        {step === 'done' && (
+        {step === 'done' && backendSummary && (
           <motion.div key="done" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
-            className="bg-white rounded-2xl p-12 border border-slate-100 shadow-sm flex flex-col items-center justify-center gap-6">
-            <div className="w-20 h-20 rounded-full bg-emerald-500 flex items-center justify-center">
-              <CheckCircle2 size={36} className="text-white" />
-            </div>
-            <div className="text-center">
-              <p className="text-2xl font-black text-black">Import Complete!</p>
-              <p className="text-[11px] text-slate-400 font-bold mt-1">{fileName}</p>
-            </div>
-            <div className="grid grid-cols-3 gap-6 text-center">
-              <div>
-                <p className="text-3xl font-black text-emerald-500">{importResult.success}</p>
-                <p className="text-[9px] font-black text-slate-400 uppercase tracking-wider mt-1">Imported</p>
+            className="bg-white rounded-3xl p-8 border border-slate-100 shadow-lg flex flex-col gap-6 text-left max-w-2xl mx-auto w-full">
+            <div className="flex items-center gap-4 border-b border-slate-100 pb-5">
+              <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 flex items-center justify-center text-emerald-500">
+                <CheckCircle2 size={32} />
               </div>
               <div>
-                <p className="text-3xl font-black text-amber-500">{importResult.dupes}</p>
-                <p className="text-[9px] font-black text-slate-400 uppercase tracking-wider mt-1">Skipped (Dupes)</p>
-              </div>
-              <div>
-                <p className="text-3xl font-black text-red-500">{importResult.failed}</p>
-                <p className="text-[9px] font-black text-slate-400 uppercase tracking-wider mt-1">Failed</p>
+                <h2 className="text-xl font-black text-black">CSV Import Finished!</h2>
+                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">{fileName}</p>
               </div>
             </div>
-            <div className="flex gap-3">
+
+            {/* Premium Stat Grid */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              {[
+                { label: 'Total Rows', value: backendSummary.totalRows || 0, color: '#3b82f6', bg: 'bg-blue-50' },
+                { label: 'Imported', value: backendSummary.importedMembers || 0, color: '#10b981', bg: 'bg-emerald-50' },
+                { label: 'Duplicates', value: backendSummary.duplicateMembers || 0, color: '#6366f1', bg: 'bg-indigo-50' },
+                { label: 'Skipped/Invalid', value: backendSummary.skippedMembers || 0, color: '#ef4444', bg: 'bg-rose-50' },
+              ].map((item, idx) => (
+                <div key={idx} className={`p-4 rounded-2xl border border-slate-100 ${item.bg}`}>
+                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-wider">{item.label}</p>
+                  <p className="text-3xl font-black mt-1" style={{ color: item.color }}>{item.value}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* Secondary stats block */}
+            <div className="bg-slate-50 rounded-2xl p-5 border border-slate-100 space-y-3">
+              <h3 className="text-xs font-black uppercase text-slate-800 tracking-wider">Database Routing Ledger</h3>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
+                <div>
+                  <span className="text-[14px] font-extrabold text-emerald-600">🟢 {backendSummary.activeMembers || 0}</span>
+                  <p className="text-[8px] text-slate-400 font-black uppercase mt-0.5">Active</p>
+                </div>
+                <div>
+                  <span className="text-[14px] font-extrabold text-rose-500">🔴 {backendSummary.expiredMembers || 0}</span>
+                  <p className="text-[8px] text-slate-400 font-black uppercase mt-0.5">Expired</p>
+                </div>
+                <div>
+                  <span className="text-[14px] font-extrabold text-purple-600">🟣 {backendSummary.ptMembers || 0}</span>
+                  <p className="text-[8px] text-slate-400 font-black uppercase mt-0.5">PT Member</p>
+                </div>
+                <div>
+                  <span className="text-[14px] font-extrabold text-amber-600">🟠 {backendSummary.enquiryMembers || 0}</span>
+                  <p className="text-[8px] text-slate-400 font-black uppercase mt-0.5">Enquiry Lead</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Warnings Alert Section */}
+            {backendSummary.warnings && backendSummary.warnings.length > 0 && (
+              <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl">
+                <h4 className="text-xs font-black text-amber-800 flex items-center gap-1.5 mb-2">
+                  <AlertTriangle size={14} /> Import Warnings ({backendSummary.warnings.length})
+                </h4>
+                <div className="max-h-24 overflow-y-auto text-[9px] text-amber-700 font-semibold space-y-1.5 pr-2">
+                  {backendSummary.warnings.map((w: string, i: number) => (
+                    <div key={i} className="flex gap-2">
+                      <span className="text-amber-500">•</span>
+                      <span>{w}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Actions */}
+            <div className="flex gap-3 mt-2">
               <button onClick={reset}
-                className="flex items-center gap-2 bg-black text-white px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-wider hover:bg-slate-800 transition-all">
-                <Upload size={13} /> Import Another File
+                className="flex-1 flex items-center justify-center gap-2 bg-black text-[#d4ff00] px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-wider hover:bg-slate-800 transition-all">
+                <Upload size={14} /> Import Another CSV
               </button>
               <a href="/dashboard/members"
-                className="flex items-center gap-2 bg-slate-100 text-slate-700 px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-wider hover:bg-slate-200 transition-all">
-                <Users size={13} /> View Members
+                className="flex-1 flex items-center justify-center gap-2 bg-slate-100 text-slate-700 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-wider hover:bg-slate-200 transition-all border border-slate-200 text-center">
+                <Users size={14} /> Active Members
+              </a>
+              <a href="/dashboard/enquiries"
+                className="flex-1 flex items-center justify-center gap-2 bg-red-500 text-white px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-wider hover:bg-red-600 transition-all text-center">
+                <HelpCircle size={14} /> Enquiries Lead Panel
               </a>
             </div>
           </motion.div>

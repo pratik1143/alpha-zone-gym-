@@ -38,6 +38,9 @@ active_threads = {}
 threads_running = True
 biometric_lock = threading.Lock()
 
+# Cooldown tracker to prevent duplicate unlocks (UserID -> last_unlock_epoch)
+last_unlock_time = {}
+
 
 def check_tcp_connection(ip, port):
     """Pings the target IP and port using a simple socket connection check."""
@@ -134,14 +137,36 @@ def run_diagnostics_read_users():
         users = conn.get_users()
         users_count = len(users)
         
-        # Format the roster first 10 for log
-        for u in users[:10]:
-            users_list.append({
-                'userId': u.user_id,
-                'name': u.name,
+        templates = []
+        try:
+            templates = conn.get_templates()
+        except Exception as te:
+            logging.warning(f"Failed to fetch templates: {te}")
+
+        # Format user details and store them in Firestore collection
+        for u in users:
+            user_templates = [t for t in templates if str(t.uid) == str(u.uid) or str(t.uid) == str(u.user_id)]
+            fg_count = len(user_templates)
+            
+            db.collection('device_users').document(str(u.user_id)).set({
+                'userId': str(u.user_id),
+                'uid': u.uid,
+                'name': u.name or f"User {u.user_id}",
                 'privilege': u.privilege,
-                'enrollmentStatus': 'Enrolled'
+                'card': u.card or "",
+                'fingerprintCount': fg_count,
+                'faceCount': 0,
+                'status': 'active',
+                'updatedAt': datetime.utcnow().isoformat() + 'Z'
             })
+            
+            if len(users_list) < 50:
+                users_list.append({
+                    'userId': str(u.user_id),
+                    'name': u.name or f"User {u.user_id}",
+                    'privilege': u.privilege,
+                    'enrollmentStatus': 'Enrolled' if fg_count > 0 else 'Card Only'
+                })
             
         msg = f"Read Users Test: SUCCESS. Found {users_count} users on device."
         logging.info(msg)
@@ -170,20 +195,67 @@ def run_diagnostics_read_attendance():
     conn = None
     att_count = 0
     att_logs = []
+    imported_count = 0
     last_error = None
     try:
         conn = zk.connect()
         attendance = conn.get_attendance()
         att_count = len(attendance)
         
-        for record in attendance[:20]:
-            att_logs.append({
-                'userId': record.user_id,
-                'timestamp': record.timestamp.strftime("%Y-%m-%d %H:%M:%S") if record.timestamp else "N/A",
-                'punchType': record.punch
-            })
+        # Get members to perform matching
+        members_ref = db.collection('members')
+        members_list = [d.to_dict() for d in members_ref.stream()]
+        members_map = {}
+        # Pre-index members by deviceUserId or biometricId
+        for m in members_list:
+            m_uid = m.get('uid') or m.get('id')
+            if m.get('deviceUserId'):
+                members_map[str(m['deviceUserId'])] = m
+            if m.get('biometricId'):
+                members_map[str(m['biometricId'])] = m
+        
+        for record in attendance:
+            user_id = str(record.user_id)
+            timestamp_iso = record.timestamp.isoformat() + 'Z' if record.timestamp else datetime.utcnow().isoformat() + 'Z'
             
-        msg = f"Read Attendance logs: SUCCESS. Found {att_count} logs."
+            # Format logs for dashboard preview (keep first 50)
+            if len(att_logs) < 50:
+                att_logs.append({
+                    'userId': record.user_id,
+                    'timestamp': record.timestamp.strftime("%Y-%m-%d %H:%M:%S") if record.timestamp else "N/A",
+                    'punchType': record.punch
+                })
+                
+            # If member matches, import log
+            if user_id in members_map:
+                member_data = members_map[user_id]
+                member_db_id = member_data.get('uid') or member_data.get('id')
+                
+                # Check for double check-in on that specific timestamp to avoid duplicates
+                att_doc_id = f"att_import_{member_db_id}_{timestamp_iso.replace(':', '-').replace('.', '-')}"
+                
+                db.collection('attendance').document(att_doc_id).set({
+                    'attendanceId': att_doc_id,
+                    'memberId': member_db_id,
+                    'biometricId': member_data.get('biometricId', ''),
+                    'deviceUserId': member_data.get('deviceUserId', ''),
+                    'memberName': member_data.get('name', 'Unknown'),
+                    'memberCode': member_data.get('memberId', 'N/A'),
+                    'avatarUrl': member_data.get('avatar', '') or member_data.get('avatarUrl', ''),
+                    'deviceId': 'dev_k90_main',
+                    'deviceName': 'Main Gate',
+                    'branch': member_data.get('branch', 'Alpha Zone Main Branch'),
+                    'timestamp': timestamp_iso,
+                    'checkIn': timestamp_iso,
+                    'checkOut': None,
+                    'status': 'granted',
+                    'method': 'biometric',
+                    'membership': member_data.get('plan', 'Monthly'),
+                    'createdAt': datetime.utcnow().isoformat() + 'Z'
+                })
+                imported_count += 1
+            
+        msg = f"Read Attendance logs: SUCCESS. Found {att_count} logs. Imported {imported_count} matched logs."
         logging.info(msg)
         push_diagnostic_log("SUCCESS", msg)
     except Exception as e:
@@ -199,6 +271,7 @@ def run_diagnostics_read_attendance():
     db.collection('device_testing').document('control').update({
         'attendanceCount': att_count,
         'attendanceLogs': att_logs,
+        'importedCount': imported_count,
         'lastError': last_error,
         'lastChecked': datetime.utcnow().isoformat() + 'Z'
     })
@@ -766,44 +839,67 @@ def make_enrollment_listener():
 
 def trigger_door_relay(conn, device_name, duration_seconds=5):
     """
-    Relay control architecture prepared for NO1, NC1, COM1.
-    As per safety guidelines, AUTO DOOR UNLOCK IS DISABLED by default.
+    Relay control - unlocks the turnstile gate relay for the given duration.
+    Triggered automatically when a valid active member punches biometric.
     """
-    logging.info(f"[Relay Control Architecture] Relay trigger request received for {device_name}. Duration: {duration_seconds}s.")
-    
-    # Check Firestore global configurations to see if auto unlock is enabled
-    config_ref = db.collection('settings').document('access_control').get()
-    auto_unlock_enabled = False
-    if config_ref.exists:
-        auto_unlock_enabled = config_ref.to_dict().get('autoUnlockEnabled', False)
+    logging.info(f"[Relay Control] Sending unlock command to {device_name}. Duration: {duration_seconds}s.")
+    try:
+        conn.unlock(duration_seconds * 10)  # ZK Protocol: duration in 100ms units (50 = 5s)
+        logging.info(f"[Relay Control] Gate unlocked successfully on {device_name} for {duration_seconds} seconds.")
         
-    if auto_unlock_enabled:
-        try:
-            logging.info(f"[Relay Control] Sending unlock command to {device_name}...")
-            # conn.unlock(duration_seconds * 10) # ZK Protocol expects duration in 100ms units (e.g. 50 = 5s)
-            conn.unlock(duration_seconds * 10)
-            logging.info(f"[Relay Control] Unlock command executed successfully on {device_name}.")
-        except Exception as e:
-            logging.error(f"[Relay Control] Failed to send unlock signal to {device_name}: {e}")
-    else:
-        logging.info(f"[Relay Control] Unlock bypassed. Auto-unlock is currently LOCKED in CRM Settings for stability testing.")
+        # Log successful unlock to Firestore
+        db.collection('deviceLogs').add({
+            'deviceId': 'dev_k90_main',
+            'deviceName': device_name,
+            'level': 'SUCCESS',
+            'message': f'[Gate Control] Auto-unlock executed on {device_name}. Gate opened for {duration_seconds}s.',
+            'timestamp': datetime.utcnow().isoformat() + 'Z'
+        })
+    except Exception as e:
+        logging.error(f"[Relay Control] Failed to send unlock signal to {device_name}: {e}")
+        db.collection('deviceLogs').add({
+            'deviceId': 'dev_k90_main',
+            'deviceName': device_name,
+            'level': 'ERROR',
+            'message': f'[Gate Control] Unlock FAILED on {device_name}: {e}',
+            'timestamp': datetime.utcnow().isoformat() + 'Z'
+        })
 
 def run_membership_validation(user_id, device_id, device_name, branch, timestamp_iso):
     """
     Validates a biometric card/fingerprint swipe and writes results directly to Firestore.
-    Bypasses membership status checks as per Phase B specifications.
+    Verifies that the member is active and hasn't expired.
     """
     try:
-        # 1. Look up the member matching the biometric ID
+        # 1. Look up the member matching the biometric ID or Device User ID
         members_ref = db.collection('members')
-        query = members_ref.where('biometricId', '==', str(user_id)).limit(1).stream()
         member_doc = None
+        
+        # Check deviceUserId (string)
+        query = members_ref.where('deviceUserId', '==', str(user_id)).limit(1).stream()
         for doc in query:
             member_doc = doc
             break
+            
+        if not member_doc:
+            # Check biometricId (string)
+            query = members_ref.where('biometricId', '==', str(user_id)).limit(1).stream()
+            for doc in query:
+                member_doc = doc
+                break
+                
+        if not member_doc:
+            # Try parsing as integer fallback for deviceUserId
+            try:
+                query_int = members_ref.where('deviceUserId', '==', int(user_id)).limit(1).stream()
+                for doc in query_int:
+                    member_doc = doc
+                    break
+            except ValueError:
+                pass
 
         if not member_doc:
-            # Try parsing as integer fallback
+            # Try parsing as integer fallback for biometricId
             try:
                 query_int = members_ref.where('biometricId', '==', int(user_id)).limit(1).stream()
                 for doc in query_int:
@@ -835,6 +931,30 @@ def run_membership_validation(user_id, device_id, device_name, branch, timestamp
                 'reason': "Unknown Biometric ID mapping",
                 'createdAt': datetime.utcnow().isoformat() + 'Z'
             })
+
+            # Also write to attendance collection so it displays on the CRM dashboard in real-time
+            att_doc_id = f"att_{device_id}_{user_id}_{timestamp_iso.replace(':', '-').replace('.', '-')}"
+            db.collection('attendance').document(att_doc_id).set({
+                'attendanceId': att_doc_id,
+                'memberId': f"unknown_biometric_{user_id}",
+                'biometricId': str(user_id),
+                'deviceUserId': str(user_id),
+                'memberName': f"Unknown User",
+                'memberCode': f"ID {user_id}",
+                'avatarUrl': f"https://api.dicebear.com/7.x/adventurer/svg?seed={user_id}",
+                'deviceId': device_id,
+                'deviceName': device_name,
+                'branch': branch,
+                'timestamp': timestamp_iso,
+                'checkIn': timestamp_iso,
+                'checkOut': None,
+                'status': 'denied',
+                'granted': False,
+                'reason': "Unknown Biometric ID mapping",
+                'membership': "No Plan",
+                'trainer': "No Coach",
+                'createdAt': datetime.utcnow().isoformat() + 'Z'
+            })
             return False
 
         member = member_doc.to_dict()
@@ -853,9 +973,28 @@ def run_membership_validation(user_id, device_id, device_name, branch, timestamp
         except Exception:
             checkin_dt = datetime.utcnow()
 
-        # Determine validation result (Bypassed membership validation for Phase B)
-        granted = True
-        reason = "Attendance Synced"
+        # Check membership validation parameters
+        status = member.get('status', 'active')
+        expiry_date_str = member.get('expiryDate', '')
+        
+        is_expired = False
+        today_str = date.today().isoformat()
+        
+        if expiry_date_str and expiry_date_str < today_str:
+            is_expired = True
+
+        if status == 'expired' or is_expired:
+            granted = False
+            reason = "Membership Expired"
+        elif status == 'frozen':
+            granted = False
+            reason = "Membership Frozen"
+        elif status == 'inactive':
+            granted = False
+            reason = "Membership Inactive"
+        else:
+            granted = True
+            reason = "Attendance Synced"
 
         # 5. Process Validation Output
         if granted:
@@ -891,7 +1030,8 @@ def run_membership_validation(user_id, device_id, device_name, branch, timestamp
                 db.collection('attendance').document(att_doc_id).set({
                     'attendanceId': att_doc_id,
                     'memberId': member_db_id,
-                    'biometricId': str(user_id),
+                    'biometricId': member.get('biometricId', ''),
+                    'deviceUserId': member.get('deviceUserId', ''),
                     'memberName': member_name,
                     'memberCode': member_code,
                     'avatarUrl': avatar_url,
@@ -930,7 +1070,8 @@ def run_membership_validation(user_id, device_id, device_name, branch, timestamp
                 db.collection('attendance').document(att_doc_id).set({
                     'attendanceId': att_doc_id,
                     'memberId': member_db_id,
-                    'biometricId': str(user_id),
+                    'biometricId': member.get('biometricId', ''),
+                    'deviceUserId': member.get('deviceUserId', ''),
                     'memberName': member_name,
                     'memberCode': member_code,
                     'avatarUrl': avatar_url,
@@ -970,22 +1111,67 @@ def run_membership_validation(user_id, device_id, device_name, branch, timestamp
             }, merge=True)
 
             return True
+        else:
+            denied_msg = f"[Membership Validation] Access Denied: Athlete {member_name} ({member_code}) rejected. Reason: {reason}."
+            logging.warning(denied_msg)
+            
+            # Write Denied Log
+            db.collection('deviceLogs').add({
+                'deviceId': device_id,
+                'deviceName': device_name,
+                'level': 'ERROR',
+                'message': denied_msg,
+                'timestamp': datetime.utcnow().isoformat() + 'Z'
+            })
+            
+            # Write denied check-in log
+            att_doc_id = f"att_{device_id}_{user_id}_{timestamp_iso.replace(':', '-').replace('.', '-')}"
+            db.collection('attendance').document(att_doc_id).set({
+                'attendanceId': att_doc_id,
+                'memberId': member_db_id,
+                'biometricId': member.get('biometricId', ''),
+                'deviceUserId': member.get('deviceUserId', ''),
+                'memberName': member_name,
+                'memberCode': member_code,
+                'avatarUrl': avatar_url,
+                'deviceId': device_id,
+                'deviceName': device_name,
+                'branch': branch,
+                'timestamp': timestamp_iso,
+                'checkIn': timestamp_iso,
+                'checkOut': None,
+                'status': 'denied',
+                'granted': False,
+                'reason': reason,
+                'membership': membership_plan,
+                'trainer': member.get('trainer', 'No PT Assigned'),
+                'createdAt': datetime.utcnow().isoformat() + 'Z'
+            })
+            
+            # Record in Access Logs
+            db.collection('accessLogs').add({
+                'memberId': member_db_id,
+                'memberName': member_name,
+                'timestamp': timestamp_iso,
+                'branch': branch,
+                'device': device_name,
+                'granted': False,
+                'reason': reason,
+                'createdAt': datetime.utcnow().isoformat() + 'Z'
+            })
+            
+            return False
 
     except Exception as err:
         logging.error(f"Error in Membership Validation: {err}")
         return False
 
-def sync_device_data(device_id, ip, port, device_name, branch):
+def sync_device_data(conn, device_id, device_name, branch):
     """
-    Connects to the ESSL device, pulls stats and user lists, then updates Firebase.
+    Pulls stats and user lists from the ESSL device using active connection, then updates Firebase.
     Stores sync audit details in the sync_logs collection.
     """
-    zk = ZK(ip, port=port, timeout=5, force_udp=False, ommit_ping=False)
-    conn = None
     try:
-        logging.info(f"Connecting to ESSL device {device_name} at {ip}:{port} for stats sync...")
-        conn = zk.connect()
-        
         # Read parameters
         firmware_version = "Unknown"
         try:
@@ -1192,21 +1378,48 @@ def device_worker_thread(device_id, ip, port, device_name, branch, sync_interval
             logging.info(f"Attached Firestore snapshot listener for manual unlock on {device_name}.")
             
             # Sync initial parameters
-            sync_device_data(device_id, ip, port, device_name, branch)
+            sync_device_data(conn, device_id, device_name, branch)
             last_sync_time = time.time()
+
+            # Sync device clock on connection
+            try:
+                logging.info(f"[Time Sync] Synchronizing ESSL device clock for {device_name}...")
+                conn.set_time(datetime.now())
+                logging.info(f"[Time Sync] Device clock synchronized to: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            except Exception as time_err:
+                logging.error(f"Failed to synchronize device clock: {time_err}")
 
             # Live capture swipes loop
             logging.info(f"Entering realtime live_capture mode for {device_name}...")
+            connection_time = time.time()
             for event in conn.live_capture():
                 if not threads_running:
                     break
                 if event is None:
                     continue
                 
+                # Hourly connection refresh to sync time and log files
+                if time.time() - connection_time > 3600:
+                    logging.info(f"Hourly connection refresh triggered for {device_name} to sync clock time and log files.")
+                    break
+                
                 logging.info(f"Realtime Swipe Detected: UserID={event.user_id}, Time={event.timestamp}")
                 
-                # Run Membership Validation Engine (no gating checks, just recording log)
-                timestamp_iso = event.timestamp.isoformat() + 'Z' if event.timestamp else datetime.utcnow().isoformat() + 'Z'
+                # Prevent processing stale/buffered events during reconnect loops
+                event_age = abs((datetime.now() - event.timestamp).total_seconds())
+                if event_age > 15:
+                    logging.info(f"Skipping stale/buffered event (Age: {event_age:.1f}s): UserID={event.user_id}, Time={event.timestamp}")
+                    continue
+                
+                # Cooldown check: prevent unlocking for the same user within 15 seconds
+                now_ts = time.time()
+                last_time = last_unlock_time.get(str(event.user_id), 0.0)
+                if now_ts - last_time < 15.0:
+                    logging.info(f"[Cooldown] Skipping repeat swipe for UserID={event.user_id} within 15s cooldown.")
+                    continue
+
+                # Run Membership Validation Engine using server-side authoritative UTC time
+                timestamp_iso = datetime.utcnow().isoformat() + 'Z'
                 success = run_membership_validation(
                     user_id=event.user_id,
                     device_id=device_id,
@@ -1214,6 +1427,11 @@ def device_worker_thread(device_id, ip, port, device_name, branch, sync_interval
                     branch=branch,
                     timestamp_iso=timestamp_iso
                 )
+                
+                # Trigger door lock relay control if active athlete validated
+                if success:
+                    last_unlock_time[str(event.user_id)] = now_ts
+                    trigger_door_relay(conn, device_name)
                 
                 # Update lastPunchDetails in diagnostics control document
                 try:

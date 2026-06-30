@@ -28,5 +28,6 @@ dist-ssr
 .env.*
 serviceAccountKey.json
 *.apk
-
-
+__pycache__
+.firebase
+build

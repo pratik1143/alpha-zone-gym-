@@ -95,6 +95,8 @@ interface GymStore {
   selectedBranch: string;
   sidebarCollapsed: boolean;
   deviceStatus: 'connected' | 'syncing' | 'offline';
+  gymPresence: any[];
+  setGymPresence: (presence: any[]) => void;
   isLoading: boolean;
   
   fetchMembers: () => Promise<void>;
@@ -104,6 +106,9 @@ interface GymStore {
   toggleFreeze: (id: string) => Promise<void>;
   resetPassword: (id: string, password: string) => Promise<void>;
   sendCredentials: (id: string) => Promise<void>;
+  enrollFingerprint: (memberId: string) => Promise<void>;
+  deleteBiometric: (memberId: string) => Promise<void>;
+  syncMemberBiometric: (memberId: string) => Promise<void>;
   
   fetchAttendance: () => Promise<void>;
   triggerCheckIn: (payload: { memberId: string; method?: string; branch?: string }) => Promise<void>;
@@ -111,20 +116,59 @@ interface GymStore {
   syncLogs: () => Promise<void>;
   triggerGateUnlock: () => Promise<void>;
 
+  dashboardAnalytics: any;
+  fetchDashboardAnalytics: () => Promise<void>;
+  attendanceSummary: Record<string, any>;
+  fetchAttendanceSummary: (memberId: string) => Promise<void>;
+
   fetchPayments: () => Promise<void>;
   addPayment: (payment: any) => Promise<void>;
   setSelectedBranch: (branch: string) => void;
   setSidebarCollapsed: (collapsed: boolean) => void;
+
+  plans: any[];
+  fetchPlans: () => Promise<void>;
+  addPlan: (plan: any) => Promise<void>;
+  updatePlan: (id: string, updates: any) => Promise<void>;
+  deletePlan: (id: string) => Promise<void>;
 }
 
 export const useGymStore = create<GymStore>((set, get) => ({
   members: [],
   attendance: [],
   payments: [],
+  gymPresence: [],
+  setGymPresence: (presence) => set({ gymPresence: presence }),
   selectedBranch: 'Mohali, Punjab',
   sidebarCollapsed: false,
   deviceStatus: 'connected',
   isLoading: false,
+
+  dashboardAnalytics: { totalMembers: 0, todayAttendance: 0, activeMembers: 0, revenue: 0 },
+  attendanceSummary: {},
+
+  fetchDashboardAnalytics: async () => {
+    try {
+      const res = await API.get('/analytics/dashboard');
+      set({ dashboardAnalytics: res.data });
+    } catch (err) {
+      console.error('Failed to fetch dashboard analytics:', err);
+    }
+  },
+
+  fetchAttendanceSummary: async (memberId: string) => {
+    try {
+      const res = await API.get(`/attendance/summary/${memberId}`);
+      set(state => ({
+        attendanceSummary: {
+          ...state.attendanceSummary,
+          [memberId]: res.data
+        }
+      }));
+    } catch (err) {
+      console.error(`Failed to fetch summary for ${memberId}:`, err);
+    }
+  },
 
   fetchMembers: async () => {
     try {
@@ -165,6 +209,15 @@ export const useGymStore = create<GymStore>((set, get) => ({
   sendCredentials: async (id) => {
     await API.post(`/members/${id}/send-credentials`);
   },
+  enrollFingerprint: async (memberId) => {
+    await API.post('/devices/biometric/enroll-fingerprint', { memberId });
+  },
+  deleteBiometric: async (memberId) => {
+    await API.post('/devices/biometric/delete', { memberId });
+  },
+  syncMemberBiometric: async (memberId) => {
+    await API.post('/devices/biometric/sync', { memberId });
+  },
 
   fetchAttendance: async () => {
     try {
@@ -177,7 +230,8 @@ export const useGymStore = create<GymStore>((set, get) => ({
   triggerCheckIn: async (payload) => {
     await API.post('/attendance/checkin', payload);
     get().fetchAttendance();
-    get().fetchMembers(); // refresh attendance counts and active streaks
+    get().fetchDashboardAnalytics();
+    get().fetchAttendanceSummary(payload.memberId);
   },
   checkoutAttendance: async (id) => {
     await API.put(`/attendance/checkout/${id}`);
@@ -209,7 +263,29 @@ export const useGymStore = create<GymStore>((set, get) => ({
     get().fetchMembers(); // refresh expiry dates
   },
   setSelectedBranch: (selectedBranch) => set({ selectedBranch }),
-  setSidebarCollapsed: (sidebarCollapsed) => set({ sidebarCollapsed })
+  setSidebarCollapsed: (sidebarCollapsed) => set({ sidebarCollapsed }),
+
+  plans: [],
+  fetchPlans: async () => {
+    try {
+      const res = await API.get('/plans');
+      set({ plans: res.data });
+    } catch (err) {
+      console.error('Failed to fetch plans:', err);
+    }
+  },
+  addPlan: async (plan) => {
+    const res = await API.post('/plans', plan);
+    set({ plans: [...get().plans, res.data] });
+  },
+  updatePlan: async (id, updates) => {
+    const res = await API.put(`/plans/${id}`, updates);
+    set({ plans: get().plans.map(p => p.id === id ? res.data : p) });
+  },
+  deletePlan: async (id) => {
+    await API.delete(`/plans/${id}`);
+    set({ plans: get().plans.filter(p => p.id !== id) });
+  }
 }));
 
 // 3. CHAT STORE

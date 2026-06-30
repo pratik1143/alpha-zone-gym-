@@ -3,8 +3,27 @@ import { db } from '../firebase';
 
 export const getAttendanceFeed = async (req: Request, res: Response) => {
   try {
-    const list = await db.getAttendance();
+    const list = await db.getAttendance(); // This now returns attendance_logs
     res.json(list);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+export const getDashboardAnalyticsFeed = async (req: Request, res: Response) => {
+  try {
+    const analytics = await db.getDashboardAnalytics();
+    res.json(analytics);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+export const getAttendanceSummaryFeed = async (req: Request, res: Response) => {
+  try {
+    const { memberId } = req.params;
+    const summary = await db.getAttendanceSummary(memberId);
+    res.json(summary || {});
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
@@ -35,11 +54,10 @@ export const createCheckIn = async (req: Request, res: Response) => {
       checkIn: new Date().toISOString(),
       checkOut: null,
       method: method || 'biometric',
-      branch: branch || member.branch || 'Mohali, Punjab'
+      branch: branch || member.branch || 'Mohali, Punjab',
+      createdAt: new Date().toISOString()
     });
-
-    // Increment attendance count
-    await db.updateMember(member.id, { attendanceCount: (member.attendanceCount || 0) + 1 });
+    // Note: The attendance summary and dashboard counters are now automatically incremented inside db.addAttendance!
 
     res.status(201).json({ success: true, log, memberName: member.name });
   } catch (error: any) {

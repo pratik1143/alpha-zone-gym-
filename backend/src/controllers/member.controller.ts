@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { db, admin, isFirebaseInitialized } from '../firebase';
+import { triggerWelcomeEmail, triggerPaymentEmail } from '../services/automation.service';
 
 export const getMembers = async (req: Request, res: Response) => {
   try {
@@ -16,7 +17,8 @@ export const createMember = async (req: Request, res: Response) => {
       name, phone, email, plan, branch, trainer, gender, age, weight, height, bmi, 
       joinDate, expiryDate, bloodGroup, emergencyContact, maritalStatus, anniversaryDate, 
       birthdayDate, medicalConditions, fitnessGoal, occupation, address, password, avatarUrl,
-      biometricId
+      biometricId,
+      paymentStatus, paymentMethod
     } = req.body;
 
     if (!name || !phone) {
@@ -83,17 +85,33 @@ export const createMember = async (req: Request, res: Response) => {
     });
 
     // Also auto-generate an invoice for new member
-    const priceMap: Record<string, number> = {
-      'Monthly': 2500, 'Quarterly': 6500, 'Semi-Annual': 11500, 'Annual Premium': 18000
-    };
-    const amt = priceMap[plan] || 2500;
-    await db.addPayment({
+    const plansList = await db.getPlans();
+    const matchedPlan = plansList.find(p => {
+      const dbName = String(p.name || '').toLowerCase();
+      const dbId = String(p.id || '').toLowerCase();
+      const reqName = String(plan || '').toLowerCase();
+      return (
+        dbName === reqName ||
+        dbId === reqName ||
+        dbName.includes(reqName) ||
+        reqName.includes(dbName)
+      );
+    });
+    const amt = matchedPlan ? matchedPlan.price : 2500;
+    const payment = await db.addPayment({
       memberId: member.id, memberName: member.name,
       amount: amt, plan: plan || 'Monthly',
-      method: 'UPI', status: 'paid'
+      method: paymentMethod || 'UPI',
+      status: paymentStatus || 'paid'
     });
 
     console.log(`[Credentials Notification] Sent credentials to ${name} (${loginEmail}) via simulated SMS & WhatsApp. Password: ${password || '1234567'}`);
+
+    // Trigger Automated Emails
+    triggerWelcomeEmail(member).catch(err => console.error('[Automation] Welcome email failed:', err));
+    if (payment.status === 'paid') {
+      triggerPaymentEmail(payment).catch(err => console.error('[Automation] Payment email failed:', err));
+    }
 
     res.status(201).json(member);
   } catch (error: any) {

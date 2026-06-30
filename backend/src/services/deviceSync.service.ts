@@ -42,7 +42,12 @@ const checkTcpConnection = (ip: string, port: number): Promise<boolean> => {
 const processDeviceAttendanceLog = async (memberId: string, device: any) => {
   try {
     const members = await db.getMembers();
-    const member = members.find(m => m.memberId === memberId || m.id === memberId);
+    const member = members.find(m => 
+      m.memberId === memberId || 
+      m.id === memberId || 
+      String(m.biometricId) === String(memberId) || 
+      String(m.deviceUserId) === String(memberId)
+    );
 
     if (!member) {
       await db.addDeviceLog({
@@ -121,7 +126,8 @@ const processDeviceAttendanceLog = async (memberId: string, device: any) => {
         checkIn: now.toISOString(),
         checkOut: null,
         method: device.deviceType || 'ESSL K90 Pro',
-        branch: device.branch || 'Alpha Zone Main Branch'
+        branch: device.branch || 'Alpha Zone Main Branch',
+        createdAt: now.toISOString()
       };
 
       await db.addAttendance(attendanceRecord);

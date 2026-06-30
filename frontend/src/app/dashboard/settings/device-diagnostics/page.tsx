@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import API from '@/services/api';
 import toast from 'react-hot-toast';
+import { useRouter } from 'next/navigation';
 
 interface UserInfo {
   userId: string;
@@ -65,6 +66,7 @@ interface TestControl {
 }
 
 export default function DeviceDiagnosticsPage() {
+  const router = useRouter();
   const [controlData, setControlData] = useState<TestControl | null>(null);
   const [loading, setLoading] = useState(true);
   const [runningAction, setRunningAction] = useState<string | null>(null);
@@ -139,7 +141,7 @@ export default function DeviceDiagnosticsPage() {
       {/* Header and Back Button */}
       <div className="border-b border-zinc-800/80 pb-5">
         <button 
-          onClick={() => window.location.href = '/dashboard/settings'}
+          onClick={() => router.push('/dashboard/settings')}
           className="flex items-center gap-2 text-xs font-bold text-zinc-400 hover:text-white transition-all mb-4 cursor-pointer"
         >
           <ArrowLeft size={14} /> Back to Settings
