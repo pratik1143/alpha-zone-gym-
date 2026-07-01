@@ -60,41 +60,22 @@ export default function CinematicHero() {
     fetchImages();
   }, []);
 
-  // Preloading images in memory
+  // Preloading images in memory - FAST LOAD (No blocking)
   useEffect(() => {
     if (images.length === 0) return;
 
-    let loadedCount = 0;
-    const preloadedImagesList: HTMLImageElement[] = [];
-
-    // Preload all frames concurrently
-    const promises = images.map((src, index) => {
-      return new Promise((resolve) => {
-        const img = new Image();
-        // ATTENTION: Register handlers before setting src to ensure cached files trigger loaded states
-        img.onload = () => {
-          preloadedImagesList[index] = img;
-          loadedCount++;
-          setLoadingProgress(Math.round((loadedCount / images.length) * 100));
-          resolve(src);
-        };
-        img.onerror = (err) => {
-          console.error('Failed to load image frame:', src, err);
-          loadedCount++;
-          setLoadingProgress(Math.round((loadedCount / images.length) * 100));
-          resolve(src); // continue even if one fails
-        };
-        img.src = src; 
-      });
+    // Immediately create image objects and set src without waiting
+    const preloadedImagesList = images.map((src) => {
+      const img = new Image();
+      img.src = src;
+      return img;
     });
 
-    Promise.all(promises).then(() => {
-      // Keep only successfully loaded images
-      imagesRef.current = preloadedImagesList.filter(Boolean);
-      setTimeout(() => {
-        setIsPreloaded(true);
-      }, 500);
-    });
+    // Set images ref to all images (loaded or not)
+    imagesRef.current = preloadedImagesList;
+    
+    // Immediately unlock the UI
+    setIsPreloaded(true);
   }, [images]);
 
   // Render a specific frame on canvas (object-fit: cover implementation)
@@ -344,48 +325,7 @@ export default function CinematicHero() {
 
   return (
     <>
-      {/* ─── Sleek Loader Screen ─── */}
-      <AnimatePresence>
-        {!isPreloaded && (
-          <motion.div
-            initial={{ opacity: 1 }}
-            exit={{ opacity: 0, transition: { duration: 0.8, ease: 'easeInOut' } }}
-            className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black select-none font-poppins"
-          >
-            <div className="absolute w-[400px] h-[400px] bg-[#d4ff00]/10 rounded-full blur-[120px] pointer-events-none" />
-            <div className="text-center space-y-6 z-10">
-              <motion.div
-                initial={{ scale: 0.9, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                className="font-rowdies text-3xl md:text-4xl font-bold tracking-widest text-[#d4ff00] drop-shadow-[0_0_15px_rgba(212,255,0,0.3)] uppercase"
-              >
-                ALPHA ZONE OS
-              </motion.div>
-              
-              <div className="relative w-24 h-24 mx-auto flex items-center justify-center">
-                <svg className="w-full h-full rotate-[-90deg]">
-                  <circle cx="48" cy="48" r="40" stroke="#1e293b" strokeWidth="4" fill="transparent" />
-                  <motion.circle
-                    cx="48"
-                    cy="48"
-                    r="40"
-                    stroke="#d4ff00"
-                    strokeWidth="4"
-                    fill="transparent"
-                    strokeDasharray="251.2"
-                    strokeDashoffset={251.2 - (251.2 * loadingProgress) / 100}
-                  />
-                </svg>
-                <span className="absolute font-mono text-sm font-bold text-white">{loadingProgress}%</span>
-              </div>
-              
-              <div className="text-xs text-slate-400 font-mono tracking-[0.25em] uppercase">
-                CACHING IMMERSIVE SEQUENCE...
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+
 
       {/* ─── Pinned Scroll container (600vh height for scroll space) ─── */}
       <div ref={containerRef} className="relative h-[650vh] bg-slate-950">

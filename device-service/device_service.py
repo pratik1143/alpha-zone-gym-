@@ -955,6 +955,19 @@ def run_membership_validation(user_id, device_id, device_name, branch, timestamp
                 'trainer': "No Coach",
                 'createdAt': datetime.utcnow().isoformat() + 'Z'
             })
+
+            # Also write unknown punch to attendance_logs for Live Feed popup
+            db.collection('attendance_logs').document(att_doc_id).set({
+                'memberId': f"unknown_biometric_{user_id}",
+                'memberName': f"Unknown User",
+                'branch': branch,
+                'checkIn': timestamp_iso,
+                'method': 'biometric',
+                'status': 'unknown',
+                'reason': "Unknown Biometric ID",
+                'createdAt': datetime.utcnow().isoformat() + 'Z'
+            })
+
             return False
 
         member = member_doc.to_dict()
@@ -1047,6 +1060,31 @@ def run_membership_validation(user_id, device_id, device_name, branch, timestamp
                     'createdAt': datetime.utcnow().isoformat() + 'Z'
                 })
 
+                # Also write to attendance_logs for the Frontend Live Feed Popup
+                db.collection('attendance_logs').document(att_doc_id).set({
+                    'memberId': member_db_id,
+                    'memberName': member_name,
+                    'branch': branch,
+                    'checkIn': timestamp_iso,
+                    'method': 'biometric',
+                    'status': 'granted',
+                    'createdAt': datetime.utcnow().isoformat() + 'Z'
+                })
+
+                # Update gym_presence for 'Members Inside'
+                expected_exit = (datetime.utcnow() + timedelta(hours=2)).isoformat() + 'Z'
+                db.collection('gym_presence').document(member_db_id).set({
+                    'memberId': member_db_id,
+                    'memberName': member_name,
+                    'branch': branch,
+                    'avatarUrl': avatar_url,
+                    'inside': True,
+                    'entryTime': timestamp_iso,
+                    'expectedExit': expected_exit,
+                    'lastPunch': timestamp_iso
+                }, merge=True)
+
+
                 # Increment attendance streak/counts on member document (matching CRM and Flutter App formats)
                 member_doc_ref = db.collection('members').document(member_db_id)
                 member_doc_ref.update({
@@ -1086,6 +1124,24 @@ def run_membership_validation(user_id, device_id, device_name, branch, timestamp
                     'membership': membership_plan,
                     'createdAt': datetime.utcnow().isoformat() + 'Z'
                 })
+
+                # Also write duplicate tap to attendance_logs
+                db.collection('attendance_logs').document(att_doc_id).set({
+                    'memberId': member_db_id,
+                    'memberName': member_name,
+                    'branch': branch,
+                    'checkIn': timestamp_iso,
+                    'method': 'biometric',
+                    'status': 'duplicate',
+                    'createdAt': datetime.utcnow().isoformat() + 'Z'
+                })
+
+                # Update gym_presence lastPunch
+                db.collection('gym_presence').document(member_db_id).set({
+                    'lastPunch': timestamp_iso,
+                    'inside': True
+                }, merge=True)
+
                 logging.info(f"[Sync Service] Member {member_name} already checked in today. Registered access tap only.")
 
             # Record in Access Logs
@@ -1147,6 +1203,19 @@ def run_membership_validation(user_id, device_id, device_name, branch, timestamp
                 'trainer': member.get('trainer', 'No PT Assigned'),
                 'createdAt': datetime.utcnow().isoformat() + 'Z'
             })
+            
+            # Also write denied punch to attendance_logs for Live Feed popup
+            db.collection('attendance_logs').document(att_doc_id).set({
+                'memberId': member_db_id,
+                'memberName': member_name,
+                'branch': branch,
+                'checkIn': timestamp_iso,
+                'method': 'biometric',
+                'status': 'denied',
+                'reason': reason,
+                'createdAt': datetime.utcnow().isoformat() + 'Z'
+            })
+
             
             # Record in Access Logs
             db.collection('accessLogs').add({

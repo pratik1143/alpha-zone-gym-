@@ -283,14 +283,22 @@ loadMockDb();
 
 // Real Firebase Init
 const serviceAccountPath = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
+const serviceAccountJsonRaw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
 let isFirebaseInitialized = false;
 
-console.log('Firebase Init Debug: FIREBASE_SERVICE_ACCOUNT_KEY =', serviceAccountPath);
-if (serviceAccountPath) {
-  console.log('Firebase Init Debug: File exists =', fs.existsSync(serviceAccountPath));
-}
-
-if (serviceAccountPath && fs.existsSync(serviceAccountPath)) {
+if (serviceAccountJsonRaw) {
+  try {
+    const serviceAccount = JSON.parse(serviceAccountJsonRaw);
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount),
+      storageBucket: process.env.FIREBASE_STORAGE_BUCKET
+    });
+    isFirebaseInitialized = true;
+    console.log('Firebase Admin SDK initialized successfully from JSON environment variable.');
+  } catch (error) {
+    console.error('Failed to initialize Firebase Admin from JSON environment variable:', error);
+  }
+} else if (serviceAccountPath && fs.existsSync(serviceAccountPath)) {
   try {
     const serviceAccount = JSON.parse(fs.readFileSync(serviceAccountPath, 'utf8'));
     admin.initializeApp({
@@ -298,12 +306,12 @@ if (serviceAccountPath && fs.existsSync(serviceAccountPath)) {
       storageBucket: process.env.FIREBASE_STORAGE_BUCKET
     });
     isFirebaseInitialized = true;
-    console.log('Firebase Admin SDK initialized successfully.');
+    console.log('Firebase Admin SDK initialized successfully from file path.');
   } catch (error) {
-    console.error('Failed to initialize Firebase Admin SDK, falling back to mock database:', error);
+    console.error('Failed to initialize Firebase Admin SDK from file path:', error);
   }
 } else {
-  console.log('No Firebase config file found. Using memory-backed Mock Database.');
+  console.log('No Firebase config file or JSON found. Using memory-backed Mock Database.');
 }
 
 export const getFirestoreDb = () => {
