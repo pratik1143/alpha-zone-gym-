@@ -910,31 +910,40 @@ def run_membership_validation(user_id, device_id, device_name, branch, timestamp
 
         if not member_doc:
             # Check in employees collection if not found in members
+            # Use a full scan + Python-side match to avoid Firestore index requirement issues
             employees_ref = db.collection('employees')
             employee_doc = None
             
-            # Check deviceUserId (string)
-            query = employees_ref.where('deviceUserId', '==', str(user_id)).limit(1).stream()
-            for doc in query:
-                employee_doc = doc
-                break
+            user_id_str = str(user_id)
+            try:
+                user_id_int = int(user_id)
+            except (ValueError, TypeError):
+                user_id_int = None
+
+            logging.info(f"[Employee Lookup] Scanning employees collection for UserID={user_id_str}")
+            all_employees = list(employees_ref.stream())
+            logging.info(f"[Employee Lookup] Total employees in collection: {len(all_employees)}")
+            
+            for doc in all_employees:
+                emp_data = doc.to_dict()
+                emp_bio = emp_data.get('biometricId')
+                emp_dev = emp_data.get('deviceUserId')
                 
-            if not employee_doc:
-                # Check biometricId (string)
-                query = employees_ref.where('biometricId', '==', str(user_id)).limit(1).stream()
-                for doc in query:
+                # Match by deviceUserId (any type)
+                if str(emp_dev) == user_id_str:
                     employee_doc = doc
+                    logging.info(f"[Employee Lookup] Matched via deviceUserId: {emp_data.get('name')} | deviceUserId={emp_dev}")
+                    break
+                # Match by biometricId (any type)
+                if str(emp_bio) == user_id_str:
+                    employee_doc = doc
+                    logging.info(f"[Employee Lookup] Matched via biometricId: {emp_data.get('name')} | biometricId={emp_bio}")
+                    break
+                if user_id_int is not None and emp_bio == user_id_int:
+                    employee_doc = doc
+                    logging.info(f"[Employee Lookup] Matched via biometricId(int): {emp_data.get('name')} | biometricId={emp_bio}")
                     break
 
-            if not employee_doc:
-                # Check biometricId (integer)
-                try:
-                    query_int = employees_ref.where('biometricId', '==', int(user_id)).limit(1).stream()
-                    for doc in query_int:
-                        employee_doc = doc
-                        break
-                except ValueError:
-                    pass
 
             if employee_doc:
                 employee = employee_doc.to_dict()
