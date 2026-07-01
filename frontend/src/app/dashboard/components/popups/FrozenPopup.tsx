@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Snowflake, User, ShieldAlert, Play } from 'lucide-react';
+import { Snowflake, ShieldAlert, Play } from 'lucide-react';
 
 export default function FrozenPopup({ data, onClose, onResume }: { data: any, onClose: () => void, onResume: () => void }) {
   const [progress, setProgress] = useState(0);
@@ -52,12 +52,18 @@ export default function FrozenPopup({ data, onClose, onResume }: { data: any, on
         <div className="w-1/3 flex flex-col gap-3">
           <div className="aspect-square rounded-2xl bg-slate-100 border-2 border-white shadow-inner overflow-hidden relative">
             {data.avatarUrl ? (
-              <img src={data.avatarUrl} alt={data.memberName} className="w-full h-full object-cover" />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center text-slate-300">
-                <User size={64} />
-              </div>
-            )}
+              <img
+                src={data.avatarUrl}
+                alt={data.memberName}
+                className="w-full h-full object-cover"
+                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden'); }}
+              />
+            ) : null}
+            <div className={`w-full h-full flex items-center justify-center bg-gradient-to-br from-purple-400 to-indigo-600 ${data.avatarUrl ? 'hidden' : ''}`}>
+              <span className="text-white font-black text-4xl tracking-tight">
+                {data.memberName ? data.memberName.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2) : '?'}
+              </span>
+            </div>
           </div>
         </div>
 

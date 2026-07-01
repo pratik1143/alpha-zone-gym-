@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { ShieldAlert, User, XOctagon } from 'lucide-react';
+import { ShieldAlert, XOctagon } from 'lucide-react';
 
 export default function BlacklistedPopup({ data, onClose }: { data: any, onClose: () => void }) {
   const [progress, setProgress] = useState(0);
@@ -52,12 +52,18 @@ export default function BlacklistedPopup({ data, onClose }: { data: any, onClose
         <div className="w-1/3 flex flex-col gap-3">
           <div className="aspect-square rounded-2xl bg-slate-800 border-2 border-slate-700 shadow-inner overflow-hidden relative">
             {data.avatarUrl ? (
-              <img src={data.avatarUrl} alt={data.memberName} className="w-full h-full object-cover grayscale opacity-75" />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center text-slate-500">
-                <User size={64} />
-              </div>
-            )}
+              <img
+                src={data.avatarUrl}
+                alt={data.memberName}
+                className="w-full h-full object-cover grayscale opacity-75"
+                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden'); }}
+              />
+            ) : null}
+            <div className={`w-full h-full flex items-center justify-center bg-gradient-to-br from-slate-700 to-slate-950 ${data.avatarUrl ? 'hidden' : ''}`}>
+              <span className="text-slate-400 font-black text-4xl tracking-tight">
+                {data.memberName ? data.memberName.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2) : '?'}
+              </span>
+            </div>
           </div>
         </div>
 

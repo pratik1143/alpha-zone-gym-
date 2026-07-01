@@ -56,12 +56,18 @@ export default function SuccessPopup({ data, onClose }: { data: any, onClose: ()
         <div className="w-1/3 flex flex-col gap-3">
           <div className="aspect-square rounded-2xl bg-slate-100 border-2 border-white shadow-inner overflow-hidden relative">
             {data.avatarUrl ? (
-              <img src={data.avatarUrl} alt={data.memberName} className="w-full h-full object-cover" />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center text-slate-300">
-                <User size={64} />
-              </div>
-            )}
+              <img
+                src={data.avatarUrl}
+                alt={data.memberName}
+                className="w-full h-full object-cover"
+                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden'); }}
+              />
+            ) : null}
+            <div className={`w-full h-full flex items-center justify-center bg-gradient-to-br from-green-400 to-emerald-600 ${data.avatarUrl ? 'hidden' : ''}`}>
+              <span className="text-white font-black text-4xl tracking-tight">
+                {data.memberName ? data.memberName.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2) : '?'}
+              </span>
+            </div>
           </div>
           <div className="bg-white/80 p-3 rounded-xl border border-white space-y-2">
              <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-wider text-slate-500">
