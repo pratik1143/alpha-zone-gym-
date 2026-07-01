@@ -319,15 +319,43 @@ export default function SmartPhotoCapture({ value, onCaptureComplete, label = 'M
         const id = Math.random().toString(36).substring(2, 9);
         const folder = label.toLowerCase() === 'employee' ? 'employees' : 'members';
         
-        // Upload Main Photo
-        const mainRef = ref(storage, `${folder}/photo_${id}.webp`);
-        await uploadBytes(mainRef, mainBlob);
-        const photoURL = await getDownloadURL(mainRef);
+        let photoURL = '';
+        let thumbnailURL = '';
 
-        // Upload Thumbnail
-        const thumbRef = ref(storage, `${folder}/thumb_${id}.webp`);
-        await uploadBytes(thumbRef, thumbBlob);
-        const thumbnailURL = await getDownloadURL(thumbRef);
+        const uploadToFirebase = async () => {
+          // Upload Main Photo
+          const mainRef = ref(storage, `${folder}/photo_${id}.webp`);
+          await uploadBytes(mainRef, mainBlob);
+          const pUrl = await getDownloadURL(mainRef);
+
+          // Upload Thumbnail
+          const thumbRef = ref(storage, `${folder}/thumb_${id}.webp`);
+          await uploadBytes(thumbRef, thumbBlob);
+          const tUrl = await getDownloadURL(thumbRef);
+          
+          return { pUrl, tUrl };
+        };
+
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Firebase upload timeout')), 2500)
+        );
+
+        try {
+          const result = await Promise.race([uploadToFirebase(), timeoutPromise]) as { pUrl: string, tUrl: string };
+          photoURL = result.pUrl;
+          thumbnailURL = result.tUrl;
+        } catch (firebaseErr) {
+          console.warn('Firebase upload failed or timed out, falling back to base64 encoding:', firebaseErr);
+          
+          // Convert mainBlob to base64 Data URL
+          const reader = new FileReader();
+          const base64Promise = new Promise<string>((resolve) => {
+            reader.onloadend = () => resolve(reader.result as string);
+            reader.readAsDataURL(mainBlob);
+          });
+          photoURL = await base64Promise;
+          thumbnailURL = photoURL;
+        }
 
         // Complete handler
         onCaptureComplete({
@@ -342,7 +370,7 @@ export default function SmartPhotoCapture({ value, onCaptureComplete, label = 'M
         toast.success(`${label} photo updated!`, { id: 'photo-upload' });
       } catch (err: any) {
         console.error('Upload failed', err);
-        toast.error('Failed to upload image: ' + err.message, { id: 'photo-upload' });
+        toast.error('Failed to save image: ' + err.message, { id: 'photo-upload' });
       }
     };
   };

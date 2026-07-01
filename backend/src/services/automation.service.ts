@@ -310,14 +310,29 @@ export const generateInvoicePdf = async (payment: any, member: any): Promise<Buf
     const borderColor = '#e2e8f0'; // Slate 200
 
     // Header Logo & Gym Info
-    doc.fillColor(accentBlue).fontSize(20).font('Helvetica-Bold').text('ALPHA ZONE GYM', 40, 40);
-    doc.fillColor(primaryColor).fontSize(8.5).font('Helvetica-Bold').text('BEYOND LIMITS', 40, 62);
+    const path = require('path');
+    const fs = require('fs');
+    const logoPath = path.join(process.cwd(), 'gym_logo.png');
+
+    if (fs.existsSync(logoPath)) {
+      try {
+        doc.image(logoPath, 40, 35, { height: 38 });
+        doc.fillColor(accentBlue).fontSize(20).font('Helvetica-Bold').text('ALPHA ZONE GYM', 92, 40);
+        doc.fillColor(primaryColor).fontSize(8.5).font('Helvetica-Bold').text('BEYOND LIMITS', 92, 62);
+      } catch (imgErr) {
+        doc.fillColor(accentBlue).fontSize(20).font('Helvetica-Bold').text('ALPHA ZONE GYM', 40, 40);
+        doc.fillColor(primaryColor).fontSize(8.5).font('Helvetica-Bold').text('BEYOND LIMITS', 40, 62);
+      }
+    } else {
+      doc.fillColor(accentBlue).fontSize(20).font('Helvetica-Bold').text('ALPHA ZONE GYM', 40, 40);
+      doc.fillColor(primaryColor).fontSize(8.5).font('Helvetica-Bold').text('BEYOND LIMITS', 40, 62);
+    }
     
     doc.fillColor(textColor).fontSize(8).font('Helvetica');
-    doc.text('SCO 14-15, Phase 5, Sector 59', 40, 78);
-    doc.text('Mohali, Punjab, India - 160059', 40, 88);
-    doc.text('GSTIN: 27AAAAA0000A1Z5', 40, 98);
-    doc.text('Phone: +91 98765 43210 | info@alphazonegym.com', 40, 108);
+    doc.text('SCO 14-15, Phase 5, Sector 59', 40, 82);
+    doc.text('Mohali, Punjab, India - 160059', 40, 92);
+    doc.text('GSTIN: 27AAAAA0000A1Z5', 40, 102);
+    doc.text('Phone: +91 98765 43210 | info@alphazonegym.com', 40, 112);
 
     // Invoice Info Panel (Right side)
     doc.fillColor(primaryColor).fontSize(14).font('Helvetica-Bold').text('TAX INVOICE', 380, 40, { align: 'right', width: 175 });
