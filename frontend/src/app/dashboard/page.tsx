@@ -22,14 +22,30 @@ export default function DashboardPage() {
   const [gateUnlocked, setGateUnlocked] = useState(false);
   const [viewMode, setViewMode] = useState<'owner' | 'reception'>('owner');
   const [employees, setEmployees] = useState<any[]>([]);
+  const [empAttendance, setEmpAttendance] = useState<any[]>([]);
+  const [memberAttendance, setMemberAttendance] = useState<any[]>([]);
 
-  // Setup real-time employees listener
+  // Setup real-time listeners
   useEffect(() => {
     if (!isFirebaseReady || !fDb) return;
-    const unsub = onSnapshot(collection(fDb, 'employees'), (snap) => {
+    
+    const unsubEmployees = onSnapshot(collection(fDb, 'employees'), (snap) => {
       setEmployees(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
-    return () => unsub();
+
+    const unsubEmpAtt = onSnapshot(collection(fDb, 'employeeAttendance'), (snap) => {
+      setEmpAttendance(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+
+    const unsubAtt = onSnapshot(collection(fDb, 'attendance'), (snap) => {
+      setMemberAttendance(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+
+    return () => {
+      unsubEmployees();
+      unsubEmpAtt();
+      unsubAtt();
+    };
   }, []);
 
   // Load real data from backend API
@@ -184,7 +200,62 @@ export default function DashboardPage() {
   const membersToCall = evaluatedMembers.filter(m => m.ai.category === 'Red' || m.ai.daysLeft <= 0).slice(0, 5);
   const membersAtRisk = evaluatedMembers.filter(m => m.ai.category === 'Orange' || m.ai.category === 'Red').slice(0, 5);
   const membersExpiringSoon = evaluatedMembers.filter(m => m.ai.daysLeft > 0 && m.ai.daysLeft <= 15).slice(0, 5);
-  const renewalOpportunities = evaluatedMembers.filter(m => m.ai.renewalChance >= 70 && m.ai.daysLeft <= 30).slice(0, 5);
+  const renewalOpportunities = evaluatedMembers.filter(m => m.ai.renewalChance > 70).slice(0, 5);
+  const getAbsenceStats = () => {
+    const SYSTEM_LIVE_DATE = new Date('2026-07-01');
+    const todayStr = new Date().toDateString();
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+
+    const activeMembers = members ? members.filter((m: any) => m.status === 'active') : [];
+
+    const getEntityStatus = (entity: any, isEmployee: boolean) => {
+      const logs = (isEmployee ? empAttendance : memberAttendance).filter(a => {
+        const checkInDate = new Date(a.checkIn || a.timestamp);
+        return (a.memberId === entity.id || a.employeeId === entity.id || String(a.biometricId) === String(entity.biometricId)) && 
+               checkInDate >= SYSTEM_LIVE_DATE;
+      });
+
+      if (logs.length === 0) {
+        return { punchedToday: false, daysAbsent: 0, hasPunched: false };
+      }
+
+      const punchedToday = logs.some(l => new Date(l.checkIn || l.timestamp).toDateString() === todayStr);
+
+      const timestamps = logs.map(l => new Date(l.checkIn || l.timestamp).getTime());
+      const latestTimestamp = Math.max(...timestamps);
+      const lastActiveDate = new Date(latestTimestamp);
+      lastActiveDate.setHours(0, 0, 0, 0);
+
+      const diffTime = todayStart.getTime() - lastActiveDate.getTime();
+      const daysAbsent = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+      return { punchedToday, daysAbsent, hasPunched: true };
+    };
+
+    const membersMissing = activeMembers.filter(m => !getEntityStatus(m, false).punchedToday).length;
+    const employeesMissing = employees.filter(e => !getEntityStatus(e, true).punchedToday).length;
+
+    const candidateAbsents = [
+      ...activeMembers.map(m => ({ ...m, isEmployee: false })),
+      ...employees.map(e => ({ ...e, isEmployee: true }))
+    ].map(item => {
+      const status = getEntityStatus(item, item.isEmployee);
+      return { ...item, ...status };
+    }).filter(item => item.hasPunched && !item.punchedToday && item.daysAbsent >= 1 && !item.onLeave);
+
+    const needsFollowUp = candidateAbsents.filter(item => item.daysAbsent === 2 || item.daysAbsent === 3).length;
+    const critical = candidateAbsents.filter(item => item.daysAbsent >= 10).length;
+
+    return {
+      membersMissing,
+      employeesMissing,
+      needsFollowUp,
+      critical
+    };
+  };
+
+  const { membersMissing, employeesMissing, needsFollowUp, critical } = getAbsenceStats();
 
   return (
     <div className="flex flex-col gap-6 w-full text-slate-800 text-left">
@@ -398,6 +469,33 @@ export default function DashboardPage() {
               <span className="text-[8px] text-slate-500 font-bold mt-1">ESSL Gate Trigger Bridge</span>
             </button>
 
+          </div>
+
+          {/* Inconsistency Alerts Row Widget */}
+          <div className="bg-white border border-slate-100 rounded-[28px] p-5 shadow-sm space-y-3.5 text-left">
+            <div className="flex justify-between items-center">
+              <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 flex items-center gap-1.5 font-display">
+                ⚠️ Attendance Inconsistency Alerts
+              </span>
+              <span className="text-[8px] bg-rose-50 text-rose-600 px-2 py-0.5 rounded-full font-black uppercase tracking-widest border border-rose-100 animate-pulse">
+                Action Required
+              </span>
+            </div>
+            
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              {[
+                { label: 'Members Missing Today', value: membersMissing, sub: 'Needs punch today', color: 'bg-slate-50 text-slate-750 border-slate-100' },
+                { label: 'Employees Missing Today', value: employeesMissing, sub: 'Staff attendance status', color: 'bg-slate-50 text-slate-750 border-slate-100' },
+                { label: 'Needs Follow-up', value: needsFollowUp, sub: '2-3 Days Absent', color: 'bg-amber-50 text-amber-750 border-amber-100' },
+                { label: 'Critical (10+ Days)', value: critical, sub: 'Inconsistent attendance', color: 'bg-rose-50 text-rose-755 border-rose-100' }
+              ].map((item, idx) => (
+                <div key={idx} className={`p-4 rounded-2xl border flex flex-col justify-between min-h-[90px] ${item.color}`}>
+                  <span className="text-[8.5px] font-black uppercase tracking-wider opacity-60 leading-none">{item.label}</span>
+                  <div className="text-xl font-black mt-1.5 leading-none font-mono">{item.value}</div>
+                  <span className="text-[8.5px] font-bold mt-1 opacity-70 leading-none">{item.sub}</span>
+                </div>
+              ))}
+            </div>
           </div>
 
           {/* Middle Row Chart: Attendance Frequency Composed Chart (Black Card) */}

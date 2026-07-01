@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useGymStore } from '@/store';
+import SmartPhotoCapture from '@/app/dashboard/components/SmartPhotoCapture';
 
 interface AddMemberModalProps {
   isOpen: boolean;
@@ -174,28 +175,13 @@ export default function AddMemberModal({ isOpen, onClose }: AddMemberModalProps)
             {step === 1 && (
               <div className="flex gap-16 animate-fade-in h-full items-start justify-center">
                 <div className="w-[280px] shrink-0 flex flex-col items-center gap-6">
-                  <div className="relative group cursor-pointer">
-                    <input type="file" accept="image/*" onChange={handlePhotoUpload} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20" />
-                    <div className="w-[160px] h-[160px] rounded-[40px] bg-white border-2 border-dashed border-[#2563EB]/30 flex items-center justify-center overflow-hidden relative shadow-lg group-hover:border-[#2563EB] transition-colors">
-                      {photoPreview ? (
-                        <img src={photoPreview} alt="Preview" className="w-full h-full object-cover" />
-                      ) : (
-                        <div className="flex flex-col items-center text-slate-400 group-hover:text-[#2563EB] transition-colors">
-                           <Camera size={36} className="mb-2" />
-                           <span className="text-[10px] font-bold uppercase tracking-wider">Upload Photo</span>
-                        </div>
-                      )}
-                      {isUploading && (
-                        <div className="absolute inset-0 bg-white/80 backdrop-blur-sm flex flex-col items-center justify-center z-10">
-                           <div className="w-6 h-6 border-2 border-[#2563EB] border-t-transparent rounded-full animate-spin mb-1"></div>
-                           <span className="text-[9px] font-bold text-[#2563EB] uppercase">Uploading...</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  <div className="text-center space-y-2">
-                    <span className="px-3 py-1 bg-slate-100 text-slate-500 rounded-lg text-[10px] font-black uppercase">Optional</span>
-                  </div>
+                  <SmartPhotoCapture 
+                    value={photoPreview || undefined}
+                    onCaptureComplete={(urls) => {
+                      setPhotoPreview(urls.photoURL);
+                    }}
+                    label="Member"
+                  />
                 </div>
 
                 <div className="flex-1 max-w-[600px] flex flex-col gap-8">

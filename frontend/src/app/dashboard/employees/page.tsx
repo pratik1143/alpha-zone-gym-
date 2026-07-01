@@ -12,6 +12,7 @@ import { collection, onSnapshot, query, orderBy, doc, addDoc, updateDoc, deleteD
 import { formatDate } from '@/lib/utils';
 import API from '@/services/api';
 import toast from 'react-hot-toast';
+import SmartPhotoCapture from '../components/SmartPhotoCapture';
 
 export default function EmployeesPage() {
   const [employees, setEmployees] = useState<any[]>([]);
@@ -393,22 +394,15 @@ function AddEmployeeWizard({ onClose }: { onClose: () => void }) {
 
           {step === 1 ? (
             <div className="space-y-4 text-xs font-semibold">
-              <div className="flex gap-4 items-center">
-                <img 
-                  src={avatarUrl || `https://api.dicebear.com/7.x/adventurer/svg?seed=${name || 'Az'}`} 
-                  className="w-14 h-14 rounded-full bg-slate-100 border" 
-                  alt="" 
+              <div className="w-full">
+                <label className="block text-[8px] font-black uppercase tracking-wider text-slate-400 mb-2">Employee Photo</label>
+                <SmartPhotoCapture 
+                  value={avatarUrl || undefined}
+                  onCaptureComplete={(urls) => {
+                    setAvatarUrl(urls.photoURL);
+                  }}
+                  label="Employee"
                 />
-                <div className="flex-1">
-                  <label className="block text-[8px] font-black uppercase tracking-wider text-slate-400 mb-1">Avatar Seed (Optional)</label>
-                  <input 
-                    type="text" 
-                    placeholder="Enter seed for avatar generator..." 
-                    value={avatarUrl}
-                    onChange={e => setAvatarUrl(e.target.value)}
-                    className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 focus:outline-none focus:border-indigo-500 focus:bg-white transition-all text-slate-700 font-medium"
-                  />
-                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
@@ -636,13 +630,14 @@ function EditEmployeeModal({ employee, onClose }: { employee: any, onClose: () =
   const [emergencyContact, setEmergencyContact] = useState(employee.emergencyContact || '');
   const [address, setAddress] = useState(employee.address || '');
   const [biometricId, setBiometricId] = useState(employee.biometricId || '');
+  const [avatarUrl, setAvatarUrl] = useState(employee.avatarUrl || '');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
     try {
       await API.put(`/employees/${employee.id}`, {
-        name, phone, email, role, branch, emergencyContact, address, biometricId
+        name, phone, email, role, branch, emergencyContact, address, biometricId, avatarUrl
       });
 
       toast.success('Employee profile updated!');
@@ -669,6 +664,17 @@ function EditEmployeeModal({ employee, onClose }: { employee: any, onClose: () =
           <h3 className="font-black text-sm text-slate-900 mb-4">Edit Staff Profile</h3>
 
           <div className="space-y-3.5 text-xs font-semibold">
+            <div className="w-full">
+              <label className="block text-[8px] font-black uppercase tracking-wider text-slate-400 mb-2">Staff Photo</label>
+              <SmartPhotoCapture 
+                value={avatarUrl || undefined}
+                onCaptureComplete={(urls) => {
+                  setAvatarUrl(urls.photoURL);
+                }}
+                label="Employee"
+              />
+            </div>
+
             <div>
               <label className="block text-[8px] font-black uppercase tracking-wider text-slate-400 mb-1">Full Name</label>
               <input type="text" value={name} onChange={e => setName(e.target.value)} required className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 focus:outline-none focus:border-indigo-500 focus:bg-white text-slate-700" />
