@@ -168,10 +168,28 @@ export default function DashboardLayout({
       useGymStore.getState().setGymPresence(presenceList);
     });
 
+    // 5. Listen for devices status in real-time
+    const devicesCollection = collection(fDb, 'devices');
+    const unsubscribeDevices = onSnapshot(devicesCollection, (snapshot) => {
+      const devices = snapshot.docs.map(doc => doc.data());
+      const hasConnected = devices.some((d: any) => d.enabled && d.status === 'connected');
+      const hasSyncing = devices.some((d: any) => d.enabled && d.status === 'syncing');
+      
+      let status: 'offline' | 'connected' | 'syncing' = 'offline';
+      if (hasSyncing) {
+        status = 'syncing';
+      } else if (hasConnected) {
+        status = 'connected';
+      }
+      
+      useGymStore.setState({ deviceStatus: status });
+    });
+
     return () => {
       unsubscribeFeed();
       unsubscribeNotif();
       unsubscribePresence();
+      unsubscribeDevices();
     };
   }, [isFirebaseReady, playDingSound]);
 

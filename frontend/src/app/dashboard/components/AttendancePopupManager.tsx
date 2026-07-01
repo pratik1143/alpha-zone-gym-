@@ -145,22 +145,26 @@ export default function AttendancePopupManager() {
     return () => unsubscribe();
   }, []);
 
-  // Queue Manager
+  // Queue Dequeue Manager
   useEffect(() => {
     if (!activePopup && queue.length > 0) {
       const nextPopup = queue[0];
       setActivePopup(nextPopup);
       setQueue(prev => prev.slice(1));
       playSound(nextPopup.type);
+    }
+  }, [queue, activePopup]);
 
-      // Auto close after 5 seconds
+  // Auto Close Manager (4 seconds)
+  useEffect(() => {
+    if (activePopup) {
       const timer = setTimeout(() => {
         setActivePopup(null);
-      }, 5000);
+      }, 4000);
 
       return () => clearTimeout(timer);
     }
-  }, [queue, activePopup]);
+  }, [activePopup]);
 
   const handleClose = () => {
     setActivePopup(null);

@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { Search, Filter, MoreHorizontal, Phone, MessageSquare, MapPin } from 'lucide-react';
-import { daysUntilExpiry, calculateRealAttendance } from '@/lib/utils';
+import { daysUntilExpiry, calculateRealAttendance, formatDaysLeft } from '@/lib/utils';
 import { useGymStore } from '@/store';
 import toast from 'react-hot-toast';
 interface MembersTableProps {
@@ -16,18 +16,38 @@ interface MembersTableProps {
 }
 
 export default function MembersTable({ members, search, setSearch, statusFilter, setStatusFilter, onSelectMember, selectedMemberId }: MembersTableProps) {
+  const getDynamicStatus = (m: any) => {
+    if (m.status === 'blocked' || m.status === 'blacklisted') return 'blocked';
+    if (m.status === 'frozen') return 'frozen';
+    const days = daysUntilExpiry(m.expiryDate);
+    if (days < 0) return 'expired';
+    if (days <= 7) return 'urgent';
+    if (days <= 30) return 'expiring_soon';
+    return 'active';
+  };
+
   const counts = {
     all: members.length,
-    active: members.filter(m => m.status === 'active').length,
-    expiring: members.filter(m => m.status === 'expiring').length,
-    expired: members.filter(m => m.status === 'expired').length,
-    frozen: members.filter(m => m.status === 'frozen').length,
+    active: members.filter(m => getDynamicStatus(m) === 'active').length,
+    expiring: members.filter(m => {
+      const ds = getDynamicStatus(m);
+      return ds === 'expiring_soon' || ds === 'urgent';
+    }).length,
+    expired: members.filter(m => getDynamicStatus(m) === 'expired').length,
+    frozen: members.filter(m => getDynamicStatus(m) === 'frozen').length,
     pt: members.filter(m => m.trainer).length,
   };
 
   const filtered = members.filter(m => {
-    const ms = m.name.toLowerCase().includes(search.toLowerCase()) || m.phone.includes(search);
-    const st = statusFilter === 'all' || m.status === statusFilter;
+    const ms = m.name.toLowerCase().includes(search.toLowerCase()) || m.phone.includes(search) || (m.memberId || m.id).toLowerCase().includes(search.toLowerCase());
+    const dynStatus = getDynamicStatus(m);
+    
+    let st = statusFilter === 'all';
+    if (statusFilter === 'active') st = dynStatus === 'active';
+    else if (statusFilter === 'expiring') st = (dynStatus === 'expiring_soon' || dynStatus === 'urgent');
+    else if (statusFilter === 'expired') st = dynStatus === 'expired';
+    else if (statusFilter === 'frozen') st = dynStatus === 'frozen';
+    
     const pt = statusFilter === 'pt' ? !!m.trainer : true;
     return ms && (statusFilter === 'pt' ? pt : st);
   });
@@ -198,32 +218,41 @@ export default function MembersTable({ members, search, setSearch, statusFilter,
                     </div>
                   </td>
                   <td className="px-4 py-4 text-center">
-                    <div className={`text-base font-bold ${days < 0 ? 'text-red-500' : days <= 7 ? 'text-orange-500' : 'text-emerald-500'}`}>
-                      {days < 0 ? days : days}
-                    </div>
-                    <div className={`text-[10px] font-medium ${days < 0 ? 'text-red-400' : 'text-slate-400'}`}>
-                      Days
-                    </div>
+                    {(() => {
+                      const ds = getDynamicStatus(member);
+                      const color = ds === 'expired' ? 'text-slate-400 font-medium' : ds === 'urgent' ? 'text-red-500 font-extrabold' : ds === 'expiring_soon' ? 'text-orange-500 font-bold' : 'text-emerald-600 font-bold';
+                      return (
+                        <div className={`text-xs ${color}`}>
+                          {formatDaysLeft(member.expiryDate)}
+                        </div>
+                      );
+                    })()}
                   </td>
                   <td className="px-4 py-4 text-center">
                     <div className={`text-xs font-bold ${risk.color}`}>{risk.label}</div>
                     <div className="text-[10px] text-slate-400 mt-0.5">{risk.value}</div>
                   </td>
                   <td className="px-4 py-4">
-                    <div className="flex items-center gap-1.5">
-                      <div className={`w-2 h-2 rounded-full ${
-                        member.status === 'active' ? 'bg-emerald-500' : 
-                        member.status === 'expiring' ? 'bg-orange-500' : 
-                        member.status === 'expired' ? 'bg-red-500' : 'bg-slate-400'
-                      }`} />
-                      <span className={`text-sm font-bold capitalize ${
-                        member.status === 'active' ? 'text-emerald-600' : 
-                        member.status === 'expiring' ? 'text-orange-600' : 
-                        member.status === 'expired' ? 'text-red-600' : 'text-slate-600'
-                      }`}>
-                        {member.status}
-                      </span>
-                    </div>
+                    {(() => {
+                      const ds = getDynamicStatus(member);
+                      const config = {
+                        active: { label: 'Healthy', dot: 'bg-emerald-500', text: 'text-emerald-600 bg-emerald-50/50 px-2 py-0.5 rounded-full border border-emerald-100' },
+                        expiring_soon: { label: 'Renew Soon', dot: 'bg-orange-500', text: 'text-orange-600 bg-orange-50/50 px-2 py-0.5 rounded-full border border-orange-100' },
+                        urgent: { label: 'Urgent', dot: 'bg-red-500', text: 'text-red-600 bg-red-50/50 px-2 py-0.5 rounded-full border border-red-100' },
+                        expired: { label: 'Expired', dot: 'bg-slate-400', text: 'text-slate-500 bg-slate-50/50 px-2 py-0.5 rounded-full border border-slate-150' },
+                        blocked: { label: 'Blocked', dot: 'bg-black', text: 'text-white bg-black px-2.5 py-1 rounded-full text-[9px] uppercase tracking-wider font-extrabold shadow-sm' },
+                        frozen: { label: 'Frozen', dot: 'bg-indigo-400', text: 'text-indigo-600 bg-indigo-50/50 px-2 py-0.5 rounded-full border border-indigo-150' },
+                      }[ds] || { label: member.status, dot: 'bg-slate-400', text: 'text-slate-600' };
+
+                      return (
+                        <div className="flex items-center gap-1.5 justify-start">
+                          {ds !== 'blocked' && <div className={`w-1.5 h-1.5 rounded-full ${config.dot}`} />}
+                          <span className={`text-[11px] font-bold ${config.text}`}>
+                            {config.label}
+                          </span>
+                        </div>
+                      );
+                    })()}
                   </td>
                   <td className="px-4 py-4">
                     {member.paymentStatus === 'pending' ? (

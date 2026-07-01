@@ -37,18 +37,25 @@ export const createInvoice = async (req: Request, res: Response) => {
     triggerPaymentEmail(invoice).catch(err => console.error('[Automation] Payment email failed:', err));
 
     // Automatically extend membership expiry if payment was successful
-    let daysToAdd = 30;
-    if (plan === 'Quarterly') daysToAdd = 90;
-    if (plan === 'Semi-Annual') daysToAdd = 180;
-    if (plan === 'Annual Premium' || plan === 'Annual') daysToAdd = 365;
+    let newExpiryString = '';
+    if (req.body.newExpiryDate) {
+      newExpiryString = req.body.newExpiryDate;
+    } else {
+      let daysToAdd = 30;
+      if (plan === 'Quarterly') daysToAdd = 90;
+      if (plan === 'Semi-Annual') daysToAdd = 180;
+      if (plan === 'Annual Premium' || plan === 'Annual') daysToAdd = 365;
 
-    const currentExpiry = new Date(m.expiryDate).getTime() > Date.now() ? new Date(m.expiryDate) : new Date();
-    const newExpiry = new Date(currentExpiry.getTime() + daysToAdd * 24 * 60 * 60 * 1000);
+      const currentExpiry = new Date(m.expiryDate).getTime() > Date.now() ? new Date(m.expiryDate) : new Date();
+      const newExpiry = new Date(currentExpiry.getTime() + daysToAdd * 24 * 60 * 60 * 1000);
+      newExpiryString = newExpiry.toISOString().split('T')[0];
+    }
     
+    const finalExpiryTime = new Date(newExpiryString).getTime();
     await db.updateMember(m.id, {
-      expiryDate: newExpiry.toISOString().split('T')[0],
+      expiryDate: newExpiryString,
       status: 'active',
-      daysLeft: Math.ceil((newExpiry.getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+      daysLeft: Math.ceil((finalExpiryTime - Date.now()) / (1000 * 60 * 60 * 24))
     });
 
     res.status(201).json(invoice);

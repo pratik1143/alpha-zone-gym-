@@ -282,8 +282,18 @@ export const loadMockDb = () => {
 loadMockDb();
 
 // Real Firebase Init
-const serviceAccountPath = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
 const serviceAccountJsonRaw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+let serviceAccountPath = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
+
+// Fallback to relative path if absolute path is not specified or doesn't exist
+const relativeFallbackPath = path.join(__dirname, '..', '..', 'serviceAccountKey.json');
+if (!serviceAccountPath || !fs.existsSync(serviceAccountPath)) {
+  if (fs.existsSync(relativeFallbackPath)) {
+    serviceAccountPath = relativeFallbackPath;
+  }
+}
+
+const storageBucket = process.env.FIREBASE_STORAGE_BUCKET || 'alphagym-2d861.firebasestorage.app';
 let isFirebaseInitialized = false;
 
 if (serviceAccountJsonRaw) {
@@ -291,7 +301,7 @@ if (serviceAccountJsonRaw) {
     const serviceAccount = JSON.parse(serviceAccountJsonRaw);
     admin.initializeApp({
       credential: admin.credential.cert(serviceAccount),
-      storageBucket: process.env.FIREBASE_STORAGE_BUCKET
+      storageBucket: storageBucket
     });
     isFirebaseInitialized = true;
     console.log('Firebase Admin SDK initialized successfully from JSON environment variable.');
@@ -303,10 +313,10 @@ if (serviceAccountJsonRaw) {
     const serviceAccount = JSON.parse(fs.readFileSync(serviceAccountPath, 'utf8'));
     admin.initializeApp({
       credential: admin.credential.cert(serviceAccount),
-      storageBucket: process.env.FIREBASE_STORAGE_BUCKET
+      storageBucket: storageBucket
     });
     isFirebaseInitialized = true;
-    console.log('Firebase Admin SDK initialized successfully from file path.');
+    console.log('Firebase Admin SDK initialized successfully from file path:', serviceAccountPath);
   } catch (error) {
     console.error('Failed to initialize Firebase Admin SDK from file path:', error);
   }

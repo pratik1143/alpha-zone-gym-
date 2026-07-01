@@ -27,10 +27,29 @@ export const formatTime = (timeString: string): string => {
 };
 
 export const daysUntilExpiry = (expiryDateString: string): number => {
+  if (!expiryDateString) return 0;
   const expiry = new Date(expiryDateString);
   const today = new Date();
-  const diffTime = expiry.getTime() - today.getTime();
-  return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  const expiryMidnight = new Date(expiry.getFullYear(), expiry.getMonth(), expiry.getDate());
+  const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const diffTime = expiryMidnight.getTime() - todayMidnight.getTime();
+  return Math.round(diffTime / (1000 * 60 * 60 * 24));
+};
+
+export const formatDaysLeft = (expiryDateString: string): string => {
+  if (!expiryDateString) return 'No Expiry';
+  const days = daysUntilExpiry(expiryDateString);
+  if (days === 0) return 'Today';
+  if (days === 1) return 'Tomorrow';
+  if (days > 1) return `${days} Days`;
+  
+  const absDays = Math.abs(days);
+  if (absDays === 1) return 'Expired Yesterday';
+  if (absDays < 30) return `Expired ${absDays} Days Ago`;
+  
+  const months = Math.round(absDays / 30);
+  if (months === 1) return 'Expired 1 Month Ago';
+  return `Expired ${months} Months Ago`;
 };
 
 export const getInitials = (name: string): string => {

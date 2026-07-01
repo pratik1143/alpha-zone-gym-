@@ -61,6 +61,8 @@ import MembersKPI from "./components/MembersKPI";
 import MembersTable from "./components/MembersTable";
 import MemberDrawer from "./components/MemberDrawer";
 import AddMemberModal from "./components/AddMemberModal";
+import RenewalCenterModal from "./components/RenewalCenterModal";
+import RenewalWizardModal from "./components/RenewalWizardModal";
 import { db as fDb, isFirebaseReady } from "@/lib/firebase";
 import API from "@/services/api";
 
@@ -131,6 +133,8 @@ export default function MembersPage() {
   const [editingMember, setEditingMember] = useState<any | null>(null);
   const [addStep, setAddStep] = useState(1);
   const [newCreatedMember, setNewCreatedMember] = useState<any | null>(null);
+  const [showRenewalCenter, setShowRenewalCenter] = useState(false);
+  const [renewWizardMember, setRenewWizardMember] = useState<any | null>(null);
 
   // Form states for new member
   const [newName, setNewName] = useState("");
@@ -804,6 +808,17 @@ export default function MembersPage() {
     toast.success("Exported " + members.length + " members to CSV!");
   };
 
+  const expiredMembers = members.filter(m => {
+    if (m.status === 'blocked' || m.status === 'blacklisted') return false;
+    return daysUntilExpiry(m.expiryDate) < 0;
+  });
+
+  const urgentMembers = members.filter(m => {
+    if (m.status === 'blocked' || m.status === 'blacklisted') return false;
+    const days = daysUntilExpiry(m.expiryDate);
+    return days >= 0 && days <= 7;
+  });
+
   return (
     <div className="space-y-6 pb-12 relative bg-[#f8fafc] min-h-screen p-6">
       {/* Header */}
@@ -832,6 +847,35 @@ export default function MembersPage() {
         </div>
       </div>
 
+      {/* Premium Attention Banner */}
+      {expiredMembers.length > 0 && (
+        <motion.div 
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-gradient-to-r from-red-500 via-orange-500 to-amber-500 p-0.5 rounded-2xl shadow-[0_10px_30px_rgba(239,68,68,0.15)] overflow-hidden"
+        >
+          <div className="bg-white/95 backdrop-blur-md px-6 py-4 rounded-[14px] flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-red-50 text-red-500 flex items-center justify-center text-lg animate-bounce">
+                🚨
+              </div>
+              <div>
+                <h3 className="text-sm font-black text-slate-900 tracking-tight">MEMBERS REQUIRE ATTENTION</h3>
+                <p className="text-xs text-slate-500 font-medium">
+                  <span className="font-extrabold text-red-500">{expiredMembers.length} memberships</span> have expired and <span className="font-extrabold text-orange-500">{urgentMembers.length} memberships</span> expire within 7 days.
+                </p>
+              </div>
+            </div>
+            <button 
+              onClick={() => setShowRenewalCenter(true)}
+              className="px-5 py-2 bg-slate-900 text-white rounded-xl text-xs font-black uppercase tracking-wider hover:bg-black transition-colors shadow-md cursor-pointer"
+            >
+              Review Now
+            </button>
+          </div>
+        </motion.div>
+      )}
+
       {/* KPI Row */}
       <MembersKPI />
 
@@ -858,6 +902,27 @@ export default function MembersPage() {
           setEditingMember(m);
           setActiveProfile(null);
         }}
+        onRenew={(m) => {
+          setRenewWizardMember(m);
+          setActiveProfile(null);
+        }}
+      />
+
+      {/* Renewal Center Modal */}
+      <RenewalCenterModal
+        isOpen={showRenewalCenter}
+        onClose={() => setShowRenewalCenter(false)}
+        onOpenRenewWizard={(m) => {
+          setRenewWizardMember(m);
+          setShowRenewalCenter(false);
+        }}
+      />
+
+      {/* Renewal Wizard Modal */}
+      <RenewalWizardModal
+        isOpen={!!renewWizardMember}
+        member={renewWizardMember}
+        onClose={() => setRenewWizardMember(null)}
       />
 
       {/* ─── Edit Member Modal ─── */}

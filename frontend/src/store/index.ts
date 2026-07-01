@@ -247,7 +247,43 @@ export const useGymStore = create<GymStore>((set, get) => ({
     }, 1200);
   },
   triggerGateUnlock: async () => {
-    await API.post('/attendance/unlock');
+    // 1. Call backend API (primary)
+    try {
+      await API.post('/attendance/unlock');
+    } catch (err) {
+      console.warn("Backend API unlock failed, trying direct Firestore write:", err);
+    }
+
+    // 2. Direct Firestore update as a fail-safe fallback (essential for Vercel/Mock mode deployment)
+    try {
+      const { db } = await import('../lib/firebase');
+      const { doc, updateDoc, collection, getDocs, limit, query } = await import('firebase/firestore');
+      
+      // Get all enabled/active devices to unlock
+      const devicesRef = collection(db, 'devices');
+      const q = query(devicesRef, limit(10));
+      const querySnapshot = await getDocs(q);
+      
+      if (!querySnapshot.empty) {
+        for (const deviceDoc of querySnapshot.docs) {
+          const deviceData = deviceDoc.data();
+          if (deviceData.enabled !== false) {
+            await updateDoc(doc(db, 'devices', deviceDoc.id), {
+              unlockPending: true
+            });
+            console.log(`Direct Firestore unlock flag set for device: ${deviceDoc.id}`);
+          }
+        }
+      } else {
+        // Fallback default ID if collection is empty
+        await updateDoc(doc(db, 'devices', 'dev_k90_main'), {
+          unlockPending: true
+        });
+        console.log('Direct Firestore unlock flag set for default device: dev_k90_main');
+      }
+    } catch (firestoreErr) {
+      console.error("Direct Firestore gate unlock failed:", firestoreErr);
+    }
   },
 
   fetchPayments: async () => {

@@ -8,24 +8,24 @@ export default function BlacklistedPopup({ data, onClose }: { data: any, onClose
   const [progress, setProgress] = useState(0);
 
   useEffect(() => {
-    const timer = setInterval(() => {
+    const interval = setInterval(() => {
       setProgress(prev => {
         if (prev >= 100) {
-          clearInterval(timer);
+          clearInterval(interval);
           return 100;
         }
-        return prev + (100 / 50); // 5 seconds at 100ms intervals
+        return prev + (100 / 40); // 4 seconds at 100ms intervals
       });
     }, 100);
 
-    return () => clearInterval(timer);
+    return () => clearInterval(interval);
   }, []);
 
   return (
     <motion.div
-      initial={{ scale: 0.9, opacity: 0, x: 50 }}
-      animate={{ scale: 1, opacity: 1, x: 0 }}
-      exit={{ scale: 0.9, opacity: 0, x: 50 }}
+      initial={{ scale: 0.9, opacity: 0, x: 50, filter: 'blur(10px)' }}
+      animate={{ scale: 1, opacity: 1, x: 0, filter: 'blur(0px)' }}
+      exit={{ scale: 0.9, opacity: 0, x: 50, filter: 'blur(10px)' }}
       transition={{ type: 'spring', damping: 25, stiffness: 300, duration: 0.45 }}
       className="w-[620px] bg-slate-900/90 backdrop-blur-3xl rounded-[28px] shadow-[0_20px_60px_rgba(0,0,0,0.5)] border border-slate-700 p-6 flex flex-col gap-6 relative overflow-hidden"
     >

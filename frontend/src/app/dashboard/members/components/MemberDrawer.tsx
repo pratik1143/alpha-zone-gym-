@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { X, Phone, MessageSquare, MapPin, MoreHorizontal, Crown, CheckSquare, Flame, Clock, Dumbbell, Shield, Fingerprint, RotateCcw, Trash2, Wifi, Download, RefreshCw, Snowflake, Play, Pause, Edit } from 'lucide-react';
+import { X, Phone, MessageSquare, MapPin, MoreHorizontal, Crown, CheckSquare, Flame, Clock, Dumbbell, Shield, Fingerprint, RotateCcw, Trash2, Wifi, Download, RefreshCw, Snowflake, Play, Pause, Edit, Activity } from 'lucide-react';
 import { daysUntilExpiry, formatDate, getInitials } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useGymStore } from '@/store';
@@ -15,12 +15,13 @@ interface MemberDrawerProps {
   onCheckIn?: (m: any) => void;
   onViewProfile?: (m: any) => void;
   onEdit?: (m: any) => void;
+  onRenew?: (m: any) => void;
 }
 
 import { createPortal } from 'react-dom';
 import { useState, useEffect } from 'react';
 
-export default function MemberDrawer({ member, onClose, onCall, onMessage, onCheckIn, onViewProfile, onEdit }: MemberDrawerProps) {
+export default function MemberDrawer({ member, onClose, onCall, onMessage, onCheckIn, onViewProfile, onEdit, onRenew }: MemberDrawerProps) {
   const { toggleFreeze, resetPassword, sendCredentials, triggerGateUnlock, enrollFingerprint, deleteBiometric, syncMemberBiometric, deleteMember } = useGymStore();
   const daysLeft = member ? daysUntilExpiry(member.expiryDate) : 0;
   const isExpiring = daysLeft <= 15 && daysLeft > 0;
@@ -308,11 +309,58 @@ export default function MemberDrawer({ member, onClose, onCall, onMessage, onChe
                 </div>
               </div>
 
+              {/* Membership Timeline */}
+              <div className="space-y-3">
+                <h4 className="text-[10px] font-bold uppercase tracking-widest text-indigo-600 flex items-center gap-1.5">
+                  <Activity size={12} className="text-indigo-600" /> Membership Timeline
+                </h4>
+                <div className="bg-slate-50 rounded-xl border border-slate-100 p-4 space-y-4 max-h-[220px] overflow-y-auto">
+                  {(() => {
+                    const timeline = member.timeline || [
+                      { type: 'Joined', date: member.joinDate || new Date().toISOString().split('T')[0], details: 'Joined Alpha Zone Gym' }
+                    ];
+                    
+                    return (
+                      <div className="relative pl-6 border-l border-slate-200 space-y-4 text-xs">
+                        {timeline.map((item: any, idx: number) => {
+                          return (
+                            <div key={idx} className="relative">
+                              {/* Timeline Dot */}
+                              <div className={`absolute -left-[29px] top-0.5 w-3.5 h-3.5 rounded-full border-2 border-white flex items-center justify-center shadow-sm ${
+                                item.type === 'Joined' ? 'bg-emerald-500' :
+                                item.type === 'Renewed' ? 'bg-indigo-600' :
+                                item.type === 'Freeze' ? 'bg-purple-500' :
+                                item.type === 'Resume' ? 'bg-blue-500' :
+                                item.type === 'Expired' ? 'bg-slate-400' : 'bg-red-500'
+                              }`}>
+                                <div className="w-1 h-1 rounded-full bg-white" />
+                              </div>
+                              
+                              <div>
+                                <div className="font-bold text-slate-800 flex items-center justify-between">
+                                  <span>{item.type}</span>
+                                  <span className="text-[9px] text-slate-400 font-mono font-semibold">
+                                    {item.date ? new Date(item.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : ''}
+                                  </span>
+                                </div>
+                                <p className="text-[10px] text-slate-500 mt-0.5">
+                                  {item.details || `${item.type} status recorded`}
+                                </p>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
+                </div>
+              </div>
+
               {/* Action Buttons */}
               <div className="space-y-2 pt-4">
                 <div className="flex gap-2">
                   <button 
-                    onClick={() => toast.success(`Contract renewal initiated for ${member.name}.`)}
+                    onClick={() => onRenew?.(member)}
                     className="flex-1 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-2"
                   >
                     <RefreshCw size={14} /> Renew Contract
