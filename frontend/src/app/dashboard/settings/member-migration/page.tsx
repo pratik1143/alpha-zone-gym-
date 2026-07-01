@@ -633,7 +633,7 @@ export default function MemberMigrationCenter() {
         <button
           onClick={() => triggerDiagnostics('connect')}
           disabled={!!diagnosticLoading}
-          className="flex items-center justify-center gap-2 px-4 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-xs font-bold text-white shadow-sm transition-all disabled:opacity-50 cursor-pointer"
+          className="flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-900/5 hover:bg-slate-900/10 border border-slate-900/10 rounded-xl text-xs font-bold text-slate-800 shadow-sm transition-all disabled:opacity-50 cursor-pointer"
         >
           {diagnosticLoading === 'connect' ? <RefreshCw size={13} className="animate-spin text-blue-400" /> : <Database size={13} className="text-blue-400" />}
           Test Connection
@@ -641,7 +641,7 @@ export default function MemberMigrationCenter() {
         <button
           onClick={() => triggerDiagnostics('read-users')}
           disabled={!!diagnosticLoading}
-          className="flex items-center justify-center gap-2 px-4 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-xs font-bold text-white shadow-sm transition-all disabled:opacity-50 cursor-pointer"
+          className="flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-900/5 hover:bg-slate-900/10 border border-slate-900/10 rounded-xl text-xs font-bold text-slate-800 shadow-sm transition-all disabled:opacity-50 cursor-pointer"
         >
           {diagnosticLoading === 'read-users' ? <RefreshCw size={13} className="animate-spin text-yellow-400" /> : <UserCheck size={13} className="text-yellow-400" />}
           Read Device Users
@@ -649,7 +649,7 @@ export default function MemberMigrationCenter() {
         <button
           onClick={() => triggerDiagnostics('read-attendance')}
           disabled={!!diagnosticLoading}
-          className="flex items-center justify-center gap-2 px-4 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-xs font-bold text-white shadow-sm transition-all disabled:opacity-50 cursor-pointer"
+          className="flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-900/5 hover:bg-slate-900/10 border border-slate-900/10 rounded-xl text-xs font-bold text-slate-800 shadow-sm transition-all disabled:opacity-50 cursor-pointer"
         >
           {diagnosticLoading === 'read-attendance' ? <RefreshCw size={13} className="animate-spin text-purple-400" /> : <Play size={13} className="text-purple-400" />}
           Read Attendance Logs
@@ -657,7 +657,7 @@ export default function MemberMigrationCenter() {
         <button
           onClick={() => triggerDiagnostics('sync-firebase')}
           disabled={!!diagnosticLoading}
-          className="flex items-center justify-center gap-2 px-4 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-xs font-bold text-white shadow-sm transition-all disabled:opacity-50 cursor-pointer"
+          className="flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-900/5 hover:bg-slate-900/10 border border-slate-900/10 rounded-xl text-xs font-bold text-slate-800 shadow-sm transition-all disabled:opacity-50 cursor-pointer"
         >
           {diagnosticLoading === 'sync-firebase' ? <RefreshCw size={13} className="animate-spin text-green-400" /> : <RefreshCw size={13} className="text-green-400" />}
           Sync Users roster

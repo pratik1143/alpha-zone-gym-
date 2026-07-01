@@ -14,7 +14,7 @@ import { db as fDb, isFirebaseReady } from '@/lib/firebase';
 export default function DashboardPage() {
   const {
     members, attendance, gymPresence, fetchMembers, fetchAttendance, fetchPayments,
-    triggerGateUnlock, dashboardAnalytics, fetchDashboardAnalytics
+    triggerGateUnlock, dashboardAnalytics, fetchDashboardAnalytics, deviceStatus
   } = useGymStore();
 
   const [isMounted, setIsMounted] = useState(false);
@@ -186,24 +186,31 @@ export default function DashboardPage() {
           </p>
         </div>
 
-        {/* View mode toggle pill */}
-        <div className="flex bg-slate-100 border border-slate-200 rounded-2xl p-0.5 self-start md:self-auto text-[9px] font-black uppercase tracking-wider shadow-sm">
-          <button
-            onClick={() => setViewMode('owner')}
-            className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer border-none outline-none ${
-              viewMode === 'owner' ? 'bg-black text-white shadow-sm font-black' : 'text-slate-400 hover:text-slate-700 bg-transparent font-extrabold'
-            }`}
-          >
-            Owner View
-          </button>
-          <button
-            onClick={() => setViewMode('reception')}
-            className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer border-none outline-none ${
-              viewMode === 'reception' ? 'bg-black text-white shadow-sm font-black' : 'text-slate-400 hover:text-slate-700 bg-transparent font-extrabold'
-            }`}
-          >
-            Reception View
-          </button>
+        {/* Device Status & View mode toggle pill */}
+        <div className="flex flex-col md:flex-row items-end md:items-center gap-3">
+          <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-100 border border-slate-200 rounded-xl shadow-sm text-[10px] font-black uppercase tracking-wider text-slate-600">
+            <span className={`w-2 h-2 rounded-full ${deviceStatus === 'connected' ? 'bg-green-500' : deviceStatus === 'syncing' ? 'bg-yellow-500 animate-pulse' : 'bg-red-500'}`} />
+            {deviceStatus === 'connected' ? 'Device Online' : deviceStatus === 'syncing' ? 'Syncing...' : 'Device Offline'}
+          </div>
+
+          <div className="flex bg-slate-100 border border-slate-200 rounded-2xl p-0.5 self-start md:self-auto text-[9px] font-black uppercase tracking-wider shadow-sm">
+            <button
+              onClick={() => setViewMode('owner')}
+              className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer border-none outline-none ${
+                viewMode === 'owner' ? 'bg-black text-white shadow-sm font-black' : 'text-slate-400 hover:text-slate-700 bg-transparent font-extrabold'
+              }`}
+            >
+              Owner View
+            </button>
+            <button
+              onClick={() => setViewMode('reception')}
+              className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer border-none outline-none ${
+                viewMode === 'reception' ? 'bg-black text-white shadow-sm font-black' : 'text-slate-400 hover:text-slate-700 bg-transparent font-extrabold'
+              }`}
+            >
+              Reception View
+            </button>
+          </div>
         </div>
       </div>
 
