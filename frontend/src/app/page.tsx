@@ -18,11 +18,7 @@ import { auth, db as fDb } from '../lib/firebase';
 import CinematicHero from '../components/CinematicHero';
 
 const demoAccounts = [
-  { role: 'gym_owner', label: 'Gym Owner / Admin', email: 'owner@alphagym.com', password: '1234567', desc: 'Full Gym Operations', icon: Crown },
-  { role: 'super_admin', label: 'Super Admin', email: 'superadmin@alphagym.com', password: 'admin123', desc: 'Global Gym Operations', icon: Shield },
-  { role: 'branch_manager', label: 'Manager', email: 'manager@alphagym.com', password: 'manager123', desc: 'Staff & Shift Controls', icon: UserCheck },
-  { role: 'trainer', label: 'Trainer', email: 'trainer@alphagym.com', password: 'trainer123', desc: 'Workout & Diet Builders', icon: Dumbbell },
-  { role: 'receptionist', label: 'Receptionist', email: 'reception@alphagym.com', password: 'recep123', desc: 'Biometric Gate Access', icon: Smartphone }
+  { role: 'gym_owner', label: 'Gym Owner / Admin', email: 'owner@alphagym.com', password: '1234567', desc: 'Full Gym Operations', icon: Crown }
 ];
 
 const roleColors: Record<string, { border: string; text: string; iconBg: string; iconColor: string; glow: string }> = {
