@@ -22,6 +22,8 @@ export default function DietManagementPage() {
 
   const [selectedClient, setSelectedClient] = useState<any | null>(null);
   const [memberSearchQuery, setMemberSearchQuery] = useState('');
+  const [isEditingMember, setIsEditingMember] = useState(false);
+  const [editedMember, setEditedMember] = useState<any>({});
 
   // Diet builder targets
   const [dietName, setDietName] = useState('Standard Balanced Plan');
@@ -44,6 +46,7 @@ export default function DietManagementPage() {
   const [uploadedFile, setUploadedFile] = useState<{ name: string; size: string; status: string } | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isParsing, setIsParsing] = useState(false);
+  const { updateMember } = useGymStore();
 
   useEffect(() => {
     fetchMembers();
@@ -100,18 +103,21 @@ export default function DietManagementPage() {
   const handleSaveDiet = async () => {
     if (!selectedClient) return;
     try {
-      await saveDiet({
-        memberId: selectedClient.id,
-        name: dietName,
-        calories,
-        protein,
-        carbs,
-        fats,
-        waterGoal,
-        meals: { breakfast, lunch, dinner, snacks },
-        status: dietPlan?.status || 'draft'
-      });
-      toast.success('Diet plan assigned & updated successfully!');
+      const targetIds = selectedClient.id === 'ALL' ? members.map(m => m.id) : [selectedClient.id];
+      for (const tId of targetIds) {
+        await saveDiet({
+          memberId: tId,
+          name: dietName,
+          calories,
+          protein,
+          carbs,
+          fats,
+          waterGoal,
+          meals: { breakfast, lunch, dinner, snacks },
+          status: dietPlan?.status || 'draft'
+        });
+      }
+      toast.success(selectedClient.id === 'ALL' ? `Diet plan assigned to ${targetIds.length} members!` : 'Diet plan assigned & updated successfully!');
     } catch (err) {
       toast.error('Failed to save diet plan');
     }
@@ -122,8 +128,11 @@ export default function DietManagementPage() {
     if (!selectedClient) return;
     setGeneratingAI(true);
     try {
-      await generateAIDiet(selectedClient.id);
-      toast.success('AI Diet targets generated! Status set to Draft.');
+      const targetIds = selectedClient.id === 'ALL' ? members.map(m => m.id) : [selectedClient.id];
+      for (const tId of targetIds) {
+         await generateAIDiet(tId);
+      }
+      toast.success(selectedClient.id === 'ALL' ? `AI Diet targets generated for ${targetIds.length} members!` : 'AI Diet targets generated! Status set to Draft.');
     } catch (err) {
       toast.error('Failed to generate AI diet');
     } finally {
@@ -286,11 +295,23 @@ export default function DietManagementPage() {
             />
           </div>
 
-          <div className="max-h-[380px] overflow-y-auto divide-y divide-slate-100 pr-1 text-left">
+          <div className="mb-2">
+            <button 
+              onClick={() => setSelectedClient({ id: 'ALL', name: 'All Members', gender: 'Mixed', age: 'N/A', weight: '-', height: '-', foodPreference: 'Mixed', allergies: 'Various', goal: 'Various' })}
+              className={`w-full py-2 px-3 rounded-xl text-left text-xs font-bold flex items-center justify-between border transition-colors ${
+                selectedClient?.id === 'ALL' ? 'bg-emerald-50 text-emerald-700 border-emerald-500' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+              }`}
+            >
+              <span>Assign to All Members</span>
+              <span className="text-[10px] bg-slate-100 px-2 py-0.5 rounded-full">{members.length}</span>
+            </button>
+          </div>
+
+          <div className="max-h-[350px] overflow-y-auto divide-y divide-slate-100 pr-1 text-left">
             {filteredMembers.map(m => (
               <button
                 key={m.id}
-                onClick={() => setSelectedClient(m)}
+                onClick={() => { setSelectedClient(m); setIsEditingMember(false); }}
                 className={`w-full py-2.5 px-2 rounded-xl text-left text-xs flex items-center justify-between hover:bg-slate-50 transition-colors ${
                   selectedClient?.id === m.id ? 'bg-emerald-50 text-emerald-700 font-bold border-l-4 border-emerald-500' : 'text-slate-750'
                 }`}
@@ -316,26 +337,78 @@ export default function DietManagementPage() {
             <div className="bg-white rounded-3xl shadow-sm border border-slate-100 p-6 space-y-6">
               
               {/* Member Summary Banner */}
-              <div className="p-4 bg-slate-50 border border-slate-100 rounded-2xl grid grid-cols-2 md:grid-cols-5 gap-4 text-left items-center">
+              <div className="p-4 bg-slate-50 border border-slate-100 rounded-2xl grid grid-cols-2 md:grid-cols-6 gap-4 text-left items-center relative">
+                {selectedClient.id !== 'ALL' && (
+                   <button 
+                     onClick={() => {
+                       if (isEditingMember) {
+                         // Save
+                         updateMember(selectedClient.id, editedMember);
+                         setSelectedClient({ ...selectedClient, ...editedMember });
+                         toast.success('Member details updated!');
+                       } else {
+                         setEditedMember({
+                           gender: selectedClient.gender,
+                           age: selectedClient.age,
+                           weight: selectedClient.weight,
+                           height: selectedClient.height,
+                           foodPreference: selectedClient.foodPreference,
+                           allergies: selectedClient.allergies,
+                           goal: selectedClient.goal
+                         });
+                       }
+                       setIsEditingMember(!isEditingMember);
+                     }}
+                     className="absolute top-3 right-3 text-[10px] bg-white border border-slate-200 px-2 py-1 rounded shadow-sm hover:bg-slate-50 text-slate-700 font-bold z-10"
+                   >
+                     {isEditingMember ? 'Save Details' : 'Edit Details'}
+                   </button>
+                )}
+
                 <div className="space-y-0.5">
                   <span className="text-[8px] font-bold text-slate-450 uppercase block">Athlete</span>
                   <span className="text-xs font-bold text-slate-800">{selectedClient.name}</span>
                 </div>
                 <div className="space-y-0.5">
                   <span className="text-[8px] font-bold text-slate-450 uppercase block">Gender & Age</span>
-                  <span className="text-xs font-semibold text-slate-600">{selectedClient.gender || 'Male'}, {selectedClient.age || 26} yrs</span>
+                  {isEditingMember ? (
+                    <div className="flex gap-1">
+                      <input type="text" className="w-12 text-xs border rounded px-1" value={editedMember.gender || ''} onChange={e => setEditedMember({...editedMember, gender: e.target.value})} placeholder="Gender" />
+                      <input type="number" className="w-10 text-xs border rounded px-1" value={editedMember.age || ''} onChange={e => setEditedMember({...editedMember, age: Number(e.target.value)})} placeholder="Age" />
+                    </div>
+                  ) : (
+                    <span className="text-xs font-semibold text-slate-600">{selectedClient.gender || 'Male'}, {selectedClient.age || 26} yrs</span>
+                  )}
                 </div>
                 <div className="space-y-0.5">
                   <span className="text-[8px] font-bold text-slate-450 uppercase block">Specs</span>
-                  <span className="text-xs font-semibold text-slate-600">{selectedClient.weight || 75} kg / {selectedClient.height || 175} cm</span>
+                  {isEditingMember ? (
+                     <div className="flex gap-1">
+                       <input type="number" className="w-12 text-xs border rounded px-1" value={editedMember.weight || ''} onChange={e => setEditedMember({...editedMember, weight: Number(e.target.value)})} placeholder="Kg" />
+                       <input type="number" className="w-12 text-xs border rounded px-1" value={editedMember.height || ''} onChange={e => setEditedMember({...editedMember, height: Number(e.target.value)})} placeholder="Cm" />
+                     </div>
+                  ) : (
+                     <span className="text-xs font-semibold text-slate-600">{selectedClient.weight || 75} kg / {selectedClient.height || 175} cm</span>
+                  )}
                 </div>
                 <div className="space-y-0.5">
                   <span className="text-[8px] font-bold text-slate-450 uppercase block">Allergies / Preference</span>
-                  <span className="text-xs font-bold text-emerald-600">{selectedClient.foodPreference || 'Veg'} ({selectedClient.allergies || 'None'})</span>
+                  {isEditingMember ? (
+                    <div className="flex flex-col gap-1">
+                       <input type="text" className="w-full text-xs border rounded px-1 py-0.5" value={editedMember.foodPreference || ''} onChange={e => setEditedMember({...editedMember, foodPreference: e.target.value})} placeholder="Pref" />
+                       <input type="text" className="w-full text-xs border rounded px-1 py-0.5" value={editedMember.allergies || ''} onChange={e => setEditedMember({...editedMember, allergies: e.target.value})} placeholder="Allergies" />
+                    </div>
+                  ) : (
+                     <span className="text-xs font-bold text-emerald-600">{selectedClient.foodPreference || 'Veg'} ({selectedClient.allergies || 'None'})</span>
+                  )}
                 </div>
                 <div className="space-y-0.5">
                   <span className="text-[8px] font-bold text-slate-450 uppercase block">Main Goal</span>
-                  <span className="text-xs font-black text-rose-500 uppercase">{selectedClient.goal || 'Fat Loss'}</span>
+                  {isEditingMember ? (
+                    <input type="text" className="w-full text-xs border rounded px-1 py-0.5" value={editedMember.goal || ''} onChange={e => setEditedMember({...editedMember, goal: e.target.value})} placeholder="Goal" />
+                  ) : (
+                    <span className="text-xs font-black text-rose-500 uppercase">{selectedClient.goal || 'Fat Loss'}</span>
+                  )}
                 </div>
               </div>
 
