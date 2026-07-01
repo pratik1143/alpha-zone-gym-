@@ -3,6 +3,8 @@
 import React, { useState } from 'react';
 import { Search, Filter, MoreHorizontal, Phone, MessageSquare, MapPin } from 'lucide-react';
 import { daysUntilExpiry, calculateRealAttendance } from '@/lib/utils';
+import { useGymStore } from '@/store';
+import toast from 'react-hot-toast';
 interface MembersTableProps {
   members: any[];
   search: string;
