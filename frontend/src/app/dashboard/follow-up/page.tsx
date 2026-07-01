@@ -390,7 +390,7 @@ export default function FollowUpPage() {
   }
 
   return (
-    <div className="space-y-6 pb-12 relative bg-[#f8fafc] min-h-screen p-6 text-slate-800 text-left">
+    <div className="space-y-6 pb-12 w-full text-slate-800 text-left">
       
       {/* Top Title & Command Actions Header */}
       <div className="flex justify-between items-center">

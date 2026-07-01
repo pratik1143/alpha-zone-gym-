@@ -76,7 +76,7 @@ export default function ExpiredPage() {
   };
 
   return (
-    <div className="space-y-6 pb-12 relative bg-[#f8fafc] min-h-screen p-6">
+    <div className="space-y-6 pb-12 w-full text-slate-800 text-left">
       
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3 mb-2">

@@ -240,7 +240,7 @@ export default function InconsistentPage() {
   const uniqueBranches = Array.from(new Set(members.map((m: any) => m.branch).filter(Boolean)));
 
   return (
-    <div className="space-y-6 pb-12 relative bg-[#f8fafc] min-h-screen p-6 text-slate-800 text-left">
+    <div className="space-y-6 pb-12 w-full text-slate-800 text-left">
       
       {/* Page Title Header */}
       <div className="flex justify-between items-center">
