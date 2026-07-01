@@ -780,7 +780,7 @@ export const db = {
       const snapshot = await firestore.collection('payments').orderBy('date', 'desc').get();
       return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     }
-    return mockPayments;
+    return [];
   },
 
   addPayment: async (payment: any): Promise<any> => {
@@ -796,10 +796,6 @@ export const db = {
       const docRef = await firestore.collection('payments').add(newPayment);
       return { id: docRef.id, ...newPayment };
     }
-
-    newPayment.id = 'p' + (mockPayments.length + 1);
-    newPayment.invoice = 'INV-00' + (mockPayments.length + 1);
-    mockPayments.unshift(newPayment);
     return newPayment;
   },
 

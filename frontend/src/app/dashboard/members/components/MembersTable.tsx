@@ -111,6 +111,7 @@ export default function MembersTable({ members, search, setSearch, statusFilter,
               <th className="px-4 py-4 text-center">Days Left</th>
               <th className="px-4 py-4 text-center">Renewal Risk</th>
               <th className="px-4 py-4">Status</th>
+              <th className="px-4 py-4">Payment</th>
               <th className="px-4 py-4 text-right">Actions</th>
             </tr>
           </thead>
@@ -221,6 +222,27 @@ export default function MembersTable({ members, search, setSearch, statusFilter,
                         {member.status}
                       </span>
                     </div>
+                  </td>
+                  <td className="px-4 py-4">
+                    {member.paymentStatus === 'pending' ? (
+                      <div className="flex flex-col items-start gap-1">
+                        <span className="badge-yellow text-[9px] uppercase font-black px-2 py-0.5">Pending</span>
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if(window.confirm('Mark payment as paid and send invoice to client?')) {
+                               useGymStore.getState().markPaymentPaid(member.id);
+                               toast.success('Payment marked as paid!');
+                            }
+                          }}
+                          className="text-[10px] bg-indigo-50 text-indigo-600 hover:bg-indigo-100 font-bold px-2 py-1 rounded cursor-pointer transition-colors"
+                        >
+                          Mark Paid
+                        </button>
+                      </div>
+                    ) : (
+                      <span className="badge-green text-[9px] uppercase font-black px-2 py-0.5">Paid</span>
+                    )}
                   </td>
                   <td className="px-4 py-4 text-right">
                     <button className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors" onClick={(e) => { e.stopPropagation(); }}>

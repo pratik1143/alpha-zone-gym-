@@ -123,6 +123,7 @@ interface GymStore {
 
   fetchPayments: () => Promise<void>;
   addPayment: (payment: any) => Promise<void>;
+  markPaymentPaid: (memberId: string) => Promise<void>;
   setSelectedBranch: (branch: string) => void;
   setSidebarCollapsed: (collapsed: boolean) => void;
 
@@ -261,6 +262,11 @@ export const useGymStore = create<GymStore>((set, get) => ({
     const res = await API.post('/billing', payment);
     set({ payments: [res.data, ...get().payments] });
     get().fetchMembers(); // refresh expiry dates
+  },
+  markPaymentPaid: async (memberId) => {
+    const res = await API.post(`/billing/pay/${memberId}`);
+    set({ payments: [res.data.invoice, ...get().payments] });
+    get().fetchMembers(); // refresh member payment status
   },
   setSelectedBranch: (selectedBranch) => set({ selectedBranch }),
   setSidebarCollapsed: (sidebarCollapsed) => set({ sidebarCollapsed }),

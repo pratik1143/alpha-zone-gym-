@@ -56,3 +56,40 @@ export const createInvoice = async (req: Request, res: Response) => {
     res.status(500).json({ error: error.message });
   }
 };
+
+export const markPaymentPaid = async (req: Request, res: Response) => {
+  try {
+    const { memberId } = req.params;
+    const members = await db.getMembers();
+    const m = members.find(item => item.id === memberId);
+    if (!m) {
+      return res.status(404).json({ error: 'Member not found' });
+    }
+
+    // Update member payment status
+    await db.updateMember(memberId, { paymentStatus: 'paid' });
+
+    // Find plan price
+    const plansList = await db.getPlans();
+    const matchedPlan = plansList.find(p => p.name?.toLowerCase() === (m.plan || '').toLowerCase());
+    const amount = matchedPlan ? matchedPlan.price : 2500;
+
+    // Generate Invoice
+    const invoice = await db.addPayment({
+      memberId: m.id,
+      memberName: m.name,
+      amount: Number(amount),
+      plan: m.plan || 'Monthly',
+      method: 'UPI', // Default method for fast checkout
+      status: 'paid'
+    });
+
+    // Trigger Email
+    triggerPaymentEmail(invoice).catch(err => console.error('[Automation] Payment email failed:', err));
+
+    res.json({ message: 'Payment marked as paid and invoice sent', invoice });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+};
+

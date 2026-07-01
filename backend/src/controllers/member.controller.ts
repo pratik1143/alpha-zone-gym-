@@ -81,7 +81,8 @@ export const createMember = async (req: Request, res: Response) => {
       occupation: occupation || '',
       address: address || '',
       avatarUrl: avatarUrl || '',
-      biometricId: biometricId || ''
+      biometricId: biometricId || '',
+      paymentStatus: paymentStatus || 'paid'
     });
 
     // Also auto-generate an invoice for new member

@@ -989,11 +989,12 @@ export default function AlphaZoneLandingPage() {
                 <div className="absolute -right-12 -top-12 w-32 h-32 bg-blue-400/20 rounded-full blur-2xl pointer-events-none" />
 
                 <div className="relative w-full h-full min-h-[250px] md:min-h-[460px] rounded-3xl overflow-hidden shadow-sm flex items-center justify-center">
-                  <img 
-                    src="/login_3d.png" 
-                    alt="Alpha Gym 3D Render" 
-                    className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 hover:scale-105" 
-                  />
+                  <div className="absolute inset-0 w-full h-full bg-gradient-to-br from-[#d4ff00] to-teal-400 p-8 flex flex-col justify-end transition-transform duration-700 hover:scale-105">
+                    <div className="space-y-2 mb-8 text-black z-10 relative">
+                      <h3 className="font-rowdies text-3xl uppercase tracking-tight leading-none">Alpha<br/>Operations</h3>
+                      <p className="text-black/80 text-[11px] font-bold font-poppins pr-4">Secure cloud infrastructure for global gym management.</p>
+                    </div>
+                  </div>
                   {/* Subtle glassmorphic overlay for branding */}
                   <div className="absolute bottom-5 left-5 right-5 bg-white/25 backdrop-blur-md border border-white/30 p-4 rounded-2xl text-left">
                     <span className="text-[10px] font-black tracking-widest text-[#d4ff00] uppercase block">BEYOND STRENGTH</span>
