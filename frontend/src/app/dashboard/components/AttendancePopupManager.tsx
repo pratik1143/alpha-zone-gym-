@@ -67,80 +67,96 @@ export default function AttendancePopupManager() {
   useEffect(() => {
     if (!isFirebaseReady || !fDb) return;
 
+    // Use a cutoff timestamp so we only receive NEW docs from this point forward.
+    // This avoids orderBy+limit which requires a Firestore composite index (missing = silent failure).
+    const startTime = new Date().toISOString();
     const attCollection = collection(fDb, 'attendance_logs');
-    const qPop = query(attCollection, orderBy('createdAt', 'desc'), limit(1));
+    const qPop = query(attCollection, orderBy('createdAt', 'asc'), limit(50));
     let isInitialLoad = true;
 
-    const unsubscribe = onSnapshot(qPop, (snapshot) => {
-      if (isInitialLoad) {
-        isInitialLoad = false;
-        return;
-      }
-      
-      snapshot.docChanges().forEach((change) => {
-        if (change.type === 'added') {
+    const unsubscribe = onSnapshot(
+      qPop,
+      (snapshot) => {
+        if (isInitialLoad) {
+          // Skip all docs that existed before we started listening
+          isInitialLoad = false;
+          return;
+        }
+
+        snapshot.docChanges().forEach((change) => {
+          if (change.type !== 'added') return;
+
           const data = change.doc.data();
           const docId = change.doc.id;
-          
-          if (docId !== lastDocId.current && data.status !== 'auto_checkout') {
-            lastDocId.current = docId;
-            
-            const members = useGymStore.getState().members;
-            const match = members.find((m: any) => 
-              m.id === data.memberId || m.memberId === data.memberCode || 
-              (m.name && data.memberName && m.name.toLowerCase() === data.memberName.toLowerCase())
-            );
 
-            let type: PopupData['type'] = 'success';
-            
-            if (data.status === 'duplicate') type = 'duplicate';
-            else if (data.status === 'denied') {
-              if (data.reason?.toLowerCase().includes('blacklisted')) type = 'blacklisted';
-              else if (data.reason?.toLowerCase().includes('frozen')) type = 'frozen';
-              else type = 'expired';
-            } else if (!match && data.status !== 'granted') {
-              type = 'unknown'; // if we can't map it properly in a real scenario
-            }
+          // Skip docs older than our session start (could arrive due to index lag)
+          const createdAt = data.createdAt || '';
+          if (createdAt && createdAt < startTime) return;
 
-            // Check days remaining
-            const days = match?.expiryDate 
-              ? Math.ceil((new Date(match.expiryDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)) 
-              : 0;
+          if (docId === lastDocId.current) return;
+          if (data.status === 'auto_checkout') return;
 
-            if (type === 'success' && days <= 0 && match) {
-               type = 'expired';
-            }
+          lastDocId.current = docId;
 
-            const toJsDate = (val: any) => {
-               if (!val) return new Date();
-               if (typeof val.toDate === 'function') return val.toDate();
-               return new Date(val);
-            };
+          const members = useGymStore.getState().members;
+          const match = members.find((m: any) =>
+            m.id === data.memberId ||
+            m.memberId === data.memberCode ||
+            (m.name && data.memberName && m.name.toLowerCase() === data.memberName.toLowerCase())
+          );
 
-            const popupData: PopupData = {
-              id: docId,
-              type,
-              data: {
-                 memberName: match?.name || data.memberName || 'Unknown Athlete',
-                 memberCode: match?.memberId || data.memberCode || data.memberId || 'UNKNOWN-ID',
-                 timestamp: toJsDate(data.createdAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
-                 deviceName: data.deviceName || 'Biometric Terminal',
-                 branch: match?.branch || data.branch || 'Mohali, Punjab',
-                 avatarUrl: match?.avatarUrl || data.avatarUrl || '',
-                 plan: match?.plan || 'Unknown Plan',
-                 trainer: match?.trainer || 'No PT Coach',
-                 remainingDays: days > 0 ? days : 0,
-                 expiredDays: days < 0 ? Math.abs(days) : 0,
-                 workout: 'Push Day', // Mocked or fetched from API
-                 reason: data.reason
-              }
-            };
+          let type: PopupData['type'] = 'success';
 
-            setQueue(prev => [...prev, popupData]);
+          if (data.status === 'duplicate') type = 'duplicate';
+          else if (data.status === 'unknown') type = 'unknown';
+          else if (data.status === 'denied') {
+            if (data.reason?.toLowerCase().includes('blacklisted')) type = 'blacklisted';
+            else if (data.reason?.toLowerCase().includes('frozen')) type = 'frozen';
+            else type = 'expired';
           }
-        }
-      });
-    });
+
+          // Check days remaining
+          const days = match?.expiryDate
+            ? Math.ceil((new Date(match.expiryDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+            : 0;
+
+          if (type === 'success' && days <= 0 && match) {
+            type = 'expired';
+          }
+
+          const toJsDate = (val: any) => {
+            if (!val) return new Date();
+            if (typeof val.toDate === 'function') return val.toDate();
+            return new Date(val);
+          };
+
+          const popupData: PopupData = {
+            id: docId,
+            type,
+            data: {
+              memberName: match?.name || data.memberName || 'Unknown Athlete',
+              memberCode: match?.memberId || data.memberCode || data.memberId || 'UNKNOWN-ID',
+              timestamp: toJsDate(data.createdAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
+              deviceName: data.deviceName || 'Biometric Terminal',
+              branch: match?.branch || data.branch || 'Mohali, Punjab',
+              avatarUrl: match?.avatarUrl || data.avatarUrl || '',
+              plan: match?.plan || 'Unknown Plan',
+              trainer: match?.trainer || 'No PT Coach',
+              remainingDays: days > 0 ? days : 0,
+              expiredDays: days < 0 ? Math.abs(days) : 0,
+              workout: 'Push Day',
+              reason: data.reason
+            }
+          };
+
+          setQueue(prev => [...prev, popupData]);
+        });
+      },
+      (error) => {
+        // Log Firestore listener errors so they are visible in browser console
+        console.error('[AttendancePopupManager] Firestore listener error:', error);
+      }
+    );
 
     return () => unsubscribe();
   }, []);
