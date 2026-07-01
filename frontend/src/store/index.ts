@@ -310,22 +310,22 @@ export const useGymStore = create<GymStore>((set, get) => ({
   plans: [],
   fetchPlans: async () => {
     try {
-      const res = await API.get('/plans');
+      const res = await API.get('/memberships');
       set({ plans: res.data });
     } catch (err) {
       console.error('Failed to fetch plans:', err);
     }
   },
   addPlan: async (plan) => {
-    const res = await API.post('/plans', plan);
+    const res = await API.post('/memberships', plan);
     set({ plans: [...get().plans, res.data] });
   },
   updatePlan: async (id, updates) => {
-    const res = await API.put(`/plans/${id}`, updates);
+    const res = await API.put(`/memberships/${id}`, updates);
     set({ plans: get().plans.map(p => p.id === id ? res.data : p) });
   },
   deletePlan: async (id) => {
-    await API.delete(`/plans/${id}`);
+    await API.delete(`/memberships/${id}`);
     set({ plans: get().plans.filter(p => p.id !== id) });
   }
 }));

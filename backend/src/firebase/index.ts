@@ -1315,7 +1315,8 @@ export const db = {
   updatePlan: async (id: string, updates: any): Promise<any> => {
     const firestore = getFirestoreDb();
     if (firestore) {
-      await firestore.collection('plans').doc(id).update(updates);
+      // Use set with merge to avoid NOT_FOUND errors when document fields differ
+      await firestore.collection('plans').doc(id).set(updates, { merge: true });
       const doc = await firestore.collection('plans').doc(id).get();
       return { id: doc.id, ...doc.data() };
     }
