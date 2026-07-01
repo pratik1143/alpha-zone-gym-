@@ -64,6 +64,7 @@ import MemberDrawer from "./components/MemberDrawer";
 import AddMemberModal from "./components/AddMemberModal";
 import RenewalCenterModal from "./components/RenewalCenterModal";
 import RenewalWizardModal from "./components/RenewalWizardModal";
+import SmartPhotoCapture from "../components/SmartPhotoCapture";
 import { db as fDb, isFirebaseReady } from "@/lib/firebase";
 import API from "@/services/api";
 
@@ -956,6 +957,17 @@ export default function MembersPage() {
             </div>
             
             <form onSubmit={handleEditSave} className="space-y-5">
+              <div className="w-full">
+                <label className="block text-[8px] font-black uppercase tracking-wider text-slate-400 mb-2">Member Photo</label>
+                <SmartPhotoCapture 
+                  value={editingMember.avatar || undefined}
+                  onCaptureComplete={(urls) => {
+                    setEditingMember({ ...editingMember, avatar: urls.photoURL });
+                  }}
+                  label="Member"
+                />
+              </div>
+
               {/* Personal Details */}
               <div className="space-y-3">
                 <h3 className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest">Personal Details</h3>
