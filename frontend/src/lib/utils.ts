@@ -94,3 +94,16 @@ export const calculateRealAttendance = (joinDateString: string, attendanceCount:
   const percentage = Math.round((attendanceCount / elapsedDays) * 100);
   return Math.min(100, percentage);
 };
+
+export const getMembershipName = (planName: string): string => {
+  const plan = (planName || '').toLowerCase();
+  if (plan.includes('trial')) return 'Trial';
+  if (plan.includes('1 month') || plan.includes('monthly') || plan.includes('30 day')) return '1 Month';
+  if (plan.includes('3 month') || plan.includes('quarterly') || plan.includes('90 day') || plan.includes('2+1')) return '3 Months (Quarterly)';
+  if (plan.includes('6 month') || plan.includes('semi') || plan.includes('180 day')) return '6 Months (Semi-Annual)';
+  if (plan.includes('12 month') || plan.includes('annual') || plan.includes('365 day') || plan.includes('year')) return '12 Months (Annual)';
+  if (plan.includes('lifetime')) return 'Lifetime Membership';
+  if (plan.includes('pt') || plan.includes('personal training')) return 'Personal Training';
+  if (plan.includes('premium')) return 'Premium Membership';
+  return 'Custom Plan';
+};

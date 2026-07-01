@@ -288,7 +288,7 @@ export default function DietManagementPage() {
             <Search className="absolute left-3 top-2.5 text-slate-400" size={14} />
             <input
               type="text"
-              placeholder="Search athlete..."
+              placeholder="Search member..."
               value={memberSearchQuery}
               onChange={e => setMemberSearchQuery(e.target.value)}
               className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-4 py-2 text-slate-700 focus:outline-none focus:border-emerald-500 focus:bg-white transition-all"
@@ -326,7 +326,7 @@ export default function DietManagementPage() {
               </button>
             ))}
             {filteredMembers.length === 0 && (
-              <div className="text-center py-6 text-xs text-slate-400 italic">No athletes found</div>
+              <div className="text-center py-6 text-xs text-slate-400 italic">No members found</div>
             )}
           </div>
         </div>
@@ -366,7 +366,7 @@ export default function DietManagementPage() {
                 )}
 
                 <div className="space-y-0.5">
-                  <span className="text-[8px] font-bold text-slate-450 uppercase block">Athlete</span>
+                  <span className="text-[8px] font-bold text-slate-450 uppercase block">Member</span>
                   <span className="text-xs font-bold text-slate-800">{selectedClient.name}</span>
                 </div>
                 <div className="space-y-0.5">
@@ -770,7 +770,7 @@ export default function DietManagementPage() {
           ) : (
             <div className="bg-white rounded-3xl shadow-sm border border-slate-100 p-16 text-center text-xs text-slate-400">
               <Apple size={30} className="mx-auto mb-3 text-slate-350 animate-pulse" />
-              Select an athlete from the roster list on the left to open the Diet Builder workspace.
+              Select a member from the roster list on the left to open the Diet Builder workspace.
             </div>
           )}
         </div>

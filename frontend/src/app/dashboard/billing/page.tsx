@@ -1,11 +1,12 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { CreditCard, DollarSign, Receipt, AlertCircle, Plus, Download, Search, TrendingUp, X, RefreshCw } from 'lucide-react';
+import { CreditCard, DollarSign, Receipt, AlertCircle, Plus, Download, Search, TrendingUp, X, RefreshCw, Printer, Mail, MessageSquare, Share2 } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { db } from '@/lib/firebase';
 import { collection, onSnapshot, orderBy, query } from 'firebase/firestore';
-import { formatCurrency, formatDate, getInitials } from '@/lib/utils';
+import { formatCurrency, formatDate, getInitials, getMembershipName } from '@/lib/utils';
+import { useGymStore } from '@/store';
 import toast from 'react-hot-toast';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -35,6 +36,7 @@ function StatCard({ label, value, icon: Icon, color, sub }: any) {
 }
 
 export default function BillingPage() {
+  const { members } = useGymStore();
   const [payments, setPayments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -296,83 +298,244 @@ export default function BillingPage() {
       </div>
 
       {/* Invoice Modal */}
-      {selectedInvoice && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setSelectedInvoice(null)} />
-          <div className="relative w-full max-w-md bg-white rounded-[28px] p-7 z-10 shadow-[0_30px_80px_rgba(0,0,0,0.15)]">
-            <div className="absolute top-0 left-0 right-0 h-1.5 rounded-t-[28px] bg-gradient-to-r from-[#d4ff00] via-emerald-400 to-[#d4ff00]" />
+      {selectedInvoice && (() => {
+        const memberObj = members.find(m => m.id === selectedInvoice.memberId || m.name === selectedInvoice.memberName) || {};
+        const subtotal = selectedInvoice.amount - (selectedInvoice.gst || 0);
+        const cgst = Math.floor((selectedInvoice.gst || 0) / 2);
+        const sgst = Math.floor((selectedInvoice.gst || 0) / 2);
 
-            <div className="flex items-center justify-between mb-5">
-              <div>
-                <div className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-400 mb-0.5">Alpha Zone Gym</div>
-                <h3 className="font-black text-lg text-slate-900">Tax Invoice</h3>
-              </div>
-              <button onClick={() => setSelectedInvoice(null)}
-                className="w-8 h-8 flex items-center justify-center rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-500 transition-all cursor-pointer border-none">
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            {/* Backdrop */}
+            <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md animate-fade-in" onClick={() => setSelectedInvoice(null)} />
+            
+            {/* Premium Stripe/Apple White A4 Card */}
+            <div className="relative w-full max-w-3xl bg-white rounded-3xl z-10 shadow-[0_30px_70px_rgba(0,0,0,0.12)] overflow-hidden border border-slate-100 max-h-[90vh] flex flex-col justify-between text-slate-800 text-left animate-scale-up">
+              
+              {/* Top Accent bar (Blue + Lime gradient) */}
+              <div className="h-1.5 w-full bg-gradient-to-r from-blue-600 via-indigo-500 to-[#d4ff00]" />
+
+              {/* Close Button Top Right */}
+              <button 
+                onClick={() => setSelectedInvoice(null)}
+                className="absolute top-4 right-4 w-8 h-8 rounded-full flex items-center justify-center bg-slate-100 hover:bg-slate-200 text-slate-500 transition-all border border-slate-200 cursor-pointer z-20"
+              >
                 <X size={14} />
               </button>
-            </div>
 
-            <div className="bg-slate-50 rounded-2xl p-4 mb-4 space-y-2">
-              <div className="flex justify-between text-xs">
-                <span className="text-slate-400 font-semibold">Invoice No.</span>
-                <span className="font-black text-slate-900 font-mono">{selectedInvoice.invoice || '—'}</span>
-              </div>
-              <div className="flex justify-between text-xs">
-                <span className="text-slate-400 font-semibold">Date</span>
-                <span className="font-bold text-slate-700">{formatDate(selectedInvoice.date)}</span>
-              </div>
-              <div className="flex justify-between text-xs">
-                <span className="text-slate-400 font-semibold">Member</span>
-                <span className="font-bold text-slate-700">{selectedInvoice.memberName}</span>
-              </div>
-              <div className="flex justify-between text-xs">
-                <span className="text-slate-400 font-semibold">Method</span>
-                <span className="font-bold text-slate-700">
-                  {payMethods[selectedInvoice.method]?.icon} {selectedInvoice.method}
-                </span>
-              </div>
-            </div>
+              {/* Scrollable Printable Area */}
+              <div className="flex-1 overflow-y-auto p-8 space-y-6" id="printable-invoice">
+                {/* Header */}
+                <div className="flex justify-between items-start pr-8">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-white font-black text-xs shadow-sm">
+                        AZ
+                      </div>
+                      <h2 className="text-xl font-black tracking-tight text-slate-900 font-display">ALPHA ZONE GYM</h2>
+                    </div>
+                    <p className="text-[10px] text-slate-500 mt-1 max-w-xs leading-relaxed">
+                      SCO 14-15, Phase 5, Sector 59, Mohali, Punjab - 160059<br />
+                      GSTIN: 27AAAAA0000A1Z5 | Phone: +91 98765 43210<br />
+                      Email: info@alphazonegym.com | Web: www.alphazonegym.com
+                    </p>
+                  </div>
+                  <div className="text-right flex items-start gap-4">
+                    <div>
+                      <span className="text-[9px] bg-emerald-50 text-emerald-600 border border-emerald-100 px-2.5 py-1 rounded-full font-black uppercase tracking-wider shadow-sm">
+                        Paid Receipt
+                      </span>
+                      <div className="text-xs font-black text-slate-900 font-mono mt-3">No. {selectedInvoice.invoice || 'INV-00000'}</div>
+                      <div className="text-[10px] text-slate-400 font-bold mt-1">Date: {formatDate(selectedInvoice.date)}</div>
+                    </div>
+                    
+                    {/* QR Code Placeholder */}
+                    <svg width="60" height="60" className="border border-slate-200 p-1 bg-white rounded-lg shrink-0">
+                      <rect x="0" y="0" width="16" height="16" fill="#0f172a"/>
+                      <rect x="2" y="2" width="12" height="12" fill="#fff"/>
+                      <rect x="4" y="4" width="8" height="8" fill="#0f172a"/>
+                      <rect x="44" y="0" width="16" height="16" fill="#0f172a"/>
+                      <rect x="46" y="2" width="12" height="12" fill="#fff"/>
+                      <rect x="48" y="4" width="8" height="8" fill="#0f172a"/>
+                      <rect x="0" y="44" width="16" height="16" fill="#0f172a"/>
+                      <rect x="2" y="46" width="12" height="12" fill="#fff"/>
+                      <rect x="4" y="48" width="8" height="8" fill="#0f172a"/>
+                      <rect x="22" y="22" width="16" height="16" fill="#0f172a"/>
+                      <rect x="24" y="24" width="12" height="12" fill="#fff"/>
+                      <rect x="26" y="26" width="8" height="8" fill="#0f172a"/>
+                      <rect x="20" y="4" width="4" height="4" fill="#0f172a" />
+                      <rect x="28" y="8" width="4" height="4" fill="#0f172a" />
+                      <rect x="36" y="12" width="4" height="4" fill="#0f172a" />
+                      <rect x="4" y="20" width="4" height="4" fill="#0f172a" />
+                      <rect x="12" y="28" width="4" height="4" fill="#0f172a" />
+                    </svg>
+                  </div>
+                </div>
 
-            <div className="border-t border-b border-slate-100 py-4 mb-4 space-y-2.5">
-              <div className="flex justify-between text-xs">
-                <span className="text-slate-500">Membership ({selectedInvoice.plan})</span>
-                <span className="font-semibold text-slate-800">{formatCurrency(Number(selectedInvoice.amount) || 0)}</span>
-              </div>
-              <div className="flex justify-between text-xs">
-                <span className="text-slate-500">CGST (9%)</span>
-                <span className="font-semibold text-violet-600">{formatCurrency((Number(selectedInvoice.gst) || 0) / 2)}</span>
-              </div>
-              <div className="flex justify-between text-xs">
-                <span className="text-slate-500">SGST (9%)</span>
-                <span className="font-semibold text-violet-600">{formatCurrency((Number(selectedInvoice.gst) || 0) / 2)}</span>
-              </div>
-              <div className="flex justify-between text-sm font-black pt-2 border-t border-slate-100">
-                <span className="text-slate-900">Total Paid</span>
-                <span className="text-emerald-600">
-                  {formatCurrency((Number(selectedInvoice.amount) || 0) + (Number(selectedInvoice.gst) || 0))}
-                </span>
-              </div>
-            </div>
+                {/* Billed To / Billed By Details */}
+                <div className="grid grid-cols-2 gap-8 border-t border-b border-slate-100 py-6">
+                  <div>
+                    <h4 className="text-[9px] font-extrabold text-blue-600 uppercase tracking-wider mb-2">Billed To (Member Details)</h4>
+                    <div className="space-y-1 text-xs">
+                      <div className="font-extrabold text-slate-900">{selectedInvoice.memberName}</div>
+                      <div className="text-slate-500 font-mono">Member ID: {memberObj.memberId || selectedInvoice.memberId || 'N/A'}</div>
+                      <div className="text-slate-500 font-mono">Phone: +91 {memberObj.phone || 'N/A'}</div>
+                      <div className="text-slate-500">Email: {memberObj.email || 'N/A'}</div>
+                    </div>
+                  </div>
+                  <div>
+                    <h4 className="text-[9px] font-extrabold text-blue-600 uppercase tracking-wider mb-2">Gym Workspace</h4>
+                    <div className="space-y-1 text-xs">
+                      <div><span className="text-slate-500">Branch:</span> <span className="font-extrabold text-slate-800">{memberObj.branch || 'Mohali, Punjab'}</span></div>
+                      <div><span className="text-slate-500">Coach Assignment:</span> <span className="font-extrabold text-slate-800">{memberObj.trainer || 'Strength Coach'}</span></div>
+                      <div><span className="text-slate-500">Status:</span> <span className="font-extrabold text-emerald-600">Active Member</span></div>
+                    </div>
+                  </div>
+                </div>
 
-            <p className="text-center text-[10px] text-slate-400 mb-5">
-              Thank you for training with Alpha Zone!<br />
-              <span className="font-bold">Beyond Strength · Beyond Limits</span>
-            </p>
+                {/* Membership timeline */}
+                <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 flex justify-between items-center text-center">
+                  <div className="flex-1">
+                    <div className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">Purchased</div>
+                    <div className="text-xs font-black text-slate-800 mt-1">{formatDate(selectedInvoice.date)}</div>
+                  </div>
+                  <div className="text-slate-350 font-bold font-mono">&rarr;</div>
+                  <div className="flex-1">
+                    <div className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">Activated</div>
+                    <div className="text-xs font-black text-slate-800 mt-1">{formatDate(selectedInvoice.date)}</div>
+                  </div>
+                  <div className="text-slate-355 font-bold font-mono">&rarr;</div>
+                  <div className="flex-1">
+                    <div className="text-[8px] font-extrabold text-blue-600 uppercase tracking-widest">Expires On</div>
+                    <div className="text-xs font-black text-blue-600 mt-1">
+                      {memberObj.expiryDate ? new Date(memberObj.expiryDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A'}
+                    </div>
+                  </div>
+                </div>
 
-            <div className="flex gap-2.5">
-              <button onClick={() => { toast.success('Printing...'); setSelectedInvoice(null); }}
-                className="flex-1 py-3 rounded-xl text-xs font-black cursor-pointer border-none btn-cyber-cyan">
-                Print Receipt
-              </button>
-              <button onClick={() => { toast.success('PDF downloaded!'); setSelectedInvoice(null); }}
-                className="flex-1 py-3 rounded-xl text-xs font-black cursor-pointer btn-cyber-outline">
-                Download PDF
-              </button>
+                {/* Billing Table */}
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs whitespace-nowrap">
+                    <thead>
+                      <tr className="border-b border-slate-200 text-slate-400 font-bold uppercase tracking-wider text-[9px]">
+                        <th className="py-2.5">Description</th>
+                        <th className="py-2.5">Membership Duration</th>
+                        <th className="py-2.5 text-center">Qty</th>
+                        <th className="py-2.5 text-right">Price</th>
+                        <th className="py-2.5 text-right">Discount</th>
+                        <th className="py-2.5 text-right">GST</th>
+                        <th className="py-2.5 text-right">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 font-medium">
+                      <tr>
+                        <td className="py-4">
+                          <div className="font-extrabold text-slate-900">{getMembershipName(selectedInvoice.plan)} Gym Access</div>
+                          <div className="text-[9px] text-slate-400 mt-0.5">Cardio, strength & biometric lock access sync</div>
+                        </td>
+                        <td className="py-4 text-slate-700 font-semibold">
+                          {selectedInvoice.plan?.includes('Custom') ? 'Custom Plan' : getMembershipName(selectedInvoice.plan)}
+                        </td>
+                        <td className="py-4 text-center">1</td>
+                        <td className="py-4 text-right">{formatCurrency(subtotal)}</td>
+                        <td className="py-4 text-right text-red-500">-{formatCurrency(0)}</td>
+                        <td className="py-4 text-right">{formatCurrency(selectedInvoice.gst || 0)}</td>
+                        <td className="py-4 text-right font-black text-slate-900">{formatCurrency(selectedInvoice.amount)}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Bottom details block */}
+                <div className="flex justify-between items-start pt-4 border-t border-slate-100">
+                  <div className="space-y-1.5 text-[11px] text-slate-500">
+                    <div><span className="font-bold text-slate-450">Payment Status:</span> <span className="text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded font-black text-[9px] uppercase tracking-wider border border-emerald-100">Paid</span></div>
+                    <div><span className="font-bold text-slate-455">Payment Method:</span> <span className="text-slate-800 font-semibold">{selectedInvoice.method}</span></div>
+                    <div><span className="font-bold text-slate-460">Transaction ID:</span> <span className="text-slate-850 font-mono font-semibold">{selectedInvoice.id}</span></div>
+                    <div><span className="font-bold text-slate-465">Collected By:</span> <span className="text-slate-800 font-semibold">Staff Desk</span></div>
+                  </div>
+
+                  <div className="w-64 bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-2 text-xs shadow-sm">
+                    <div className="flex justify-between">
+                      <span className="text-slate-400 font-semibold">Subtotal</span>
+                      <span className="font-bold text-slate-800">{formatCurrency(subtotal)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-400 font-semibold">CGST (9%)</span>
+                      <span className="font-bold text-slate-800">{formatCurrency(cgst)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-400 font-semibold">SGST (9%)</span>
+                      <span className="font-bold text-slate-800">{formatCurrency(sgst)}</span>
+                    </div>
+                    <div className="flex justify-between pt-2 border-t border-slate-200 text-sm font-black">
+                      <span className="text-slate-900">Grand Total</span>
+                      <span className="text-blue-600">{formatCurrency(selectedInvoice.amount)}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Footer Notes */}
+                <div className="text-center pt-8 border-t border-slate-100 text-[10px] text-slate-400 space-y-1 font-medium leading-relaxed">
+                  <p>Thank you for choosing Alpha Zone Gym.</p>
+                  <p className="font-bold text-slate-700">Stay consistent. Stay healthy.</p>
+                  <p>Powered by Alpha Zone CRM.</p>
+                </div>
+              </div>
+
+              {/* Action Buttons Row */}
+              <div className="p-6 bg-slate-50 border-t border-slate-150 flex items-center justify-between gap-3">
+                <button 
+                  onClick={() => {
+                    toast.success('Triggering print dialog...');
+                    window.print();
+                  }}
+                  className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl text-xs font-bold transition-all border border-slate-300 flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Printer size={13} /> Print Invoice
+                </button>
+
+                <div className="flex gap-2">
+                  <button 
+                    onClick={() => {
+                      toast.success('Downloading Invoice PDF...');
+                    }}
+                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all border-none flex items-center gap-1.5 cursor-pointer shadow-sm"
+                  >
+                    <Download size={13} /> Download PDF
+                  </button>
+                  <button 
+                    onClick={() => {
+                      toast.success('Email Invoice queued!');
+                    }}
+                    className="px-4 py-2 bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Mail size={13} /> Send Email
+                  </button>
+                  <button 
+                    onClick={() => {
+                      toast.success('WhatsApp Receipt queued!');
+                    }}
+                    className="px-4 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 border border-emerald-250 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <MessageSquare size={13} /> Send WhatsApp
+                  </button>
+                  <button 
+                    onClick={() => {
+                      toast.success('Receipt link copied to clipboard!');
+                      navigator.clipboard.writeText(window.location.origin + `/receipt/${selectedInvoice.id}`);
+                    }}
+                    className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-500 border border-slate-200 rounded-xl transition-all flex items-center justify-center cursor-pointer"
+                  >
+                    <Share2 size={13} />
+                  </button>
+                </div>
+              </div>
+
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
     </div>
   );

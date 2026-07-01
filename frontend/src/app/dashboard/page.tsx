@@ -8,7 +8,7 @@ import { ComposedChart, Bar, Line, XAxis, ResponsiveContainer } from 'recharts';
 import { useGymStore } from '@/store';
 import { getInitials, daysUntilExpiry } from '@/lib/utils';
 import toast from 'react-hot-toast';
-import { collection, addDoc } from 'firebase/firestore';
+import { collection, addDoc, onSnapshot } from 'firebase/firestore';
 import { db as fDb, isFirebaseReady } from '@/lib/firebase';
 
 export default function DashboardPage() {
@@ -21,6 +21,16 @@ export default function DashboardPage() {
   const [liveCount, setLiveCount] = useState(0);
   const [gateUnlocked, setGateUnlocked] = useState(false);
   const [viewMode, setViewMode] = useState<'owner' | 'reception'>('owner');
+  const [employees, setEmployees] = useState<any[]>([]);
+
+  // Setup real-time employees listener
+  useEffect(() => {
+    if (!isFirebaseReady || !fDb) return;
+    const unsub = onSnapshot(collection(fDb, 'employees'), (snap) => {
+      setEmployees(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+    return () => unsub();
+  }, []);
 
   // Load real data from backend API
   useEffect(() => {
@@ -274,7 +284,7 @@ export default function DashboardPage() {
           </div>
 
           {/* Top Row Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
             
             {/* Card 1: Today Inside (Tasks Card) */}
             <div className="bg-white border border-slate-100 p-5 rounded-[26px] shadow-sm flex flex-col justify-between min-h-[140px] relative overflow-hidden group hover:border-black/10 transition-colors">
@@ -312,15 +322,15 @@ export default function DashboardPage() {
                 <div className="flex items-center gap-1.5 mt-3">
                   <div className="flex -space-x-2.5 overflow-hidden">
                     {members ? members.slice(0, 3).map((m, idx) => {
-                      const colors = ['bg-amber-400', 'bg-violet-400', 'bg-rose-400'];
-                      return (
-                        <div 
-                          key={idx} 
-                          className={`w-6 h-6 rounded-full border-2 border-[#d4ff00] ${colors[idx % 3]} text-black text-[8px] font-black flex items-center justify-center`}
-                        >
-                          {getInitials(m.name)}
-                        </div>
-                      );
+                       const colors = ['bg-amber-400', 'bg-violet-400', 'bg-rose-400'];
+                       return (
+                         <div 
+                           key={idx} 
+                           className={`w-6 h-6 rounded-full border-2 border-[#d4ff00] ${colors[idx % 3]} text-black text-[8px] font-black flex items-center justify-center`}
+                         >
+                           {getInitials(m.name)}
+                         </div>
+                       );
                     }) : null}
                   </div>
                   {members && members.length > 3 && (
@@ -332,7 +342,48 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            {/* Card 3: Unlock Turnstile (Add New Board Card) */}
+            {/* Card 3: Staff Live Widget */}
+            <div className="bg-white border border-slate-100 p-4 rounded-[26px] shadow-sm flex flex-col justify-between min-h-[140px] text-xs font-semibold">
+              <div className="flex justify-between items-center text-slate-400">
+                <span className="text-[10px] font-black uppercase tracking-wider flex items-center gap-1">
+                  👨‍💼 Staff Live
+                </span>
+                <span className="text-[8px] bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded-full font-black uppercase tracking-widest border border-emerald-100 animate-pulse">
+                  Live
+                </span>
+              </div>
+              
+              <div className="mt-2 space-y-1 text-[9.5px]">
+                {[
+                  { label: 'Trainers', inside: employees.filter(e => e.role === 'Trainer' && e.currentStatus === 'Inside').length, total: employees.filter(e => e.role === 'Trainer').length, iconColor: 'bg-emerald-500' },
+                  { label: 'Reception', inside: employees.filter(e => e.role === 'Reception' && e.currentStatus === 'Inside').length, total: employees.filter(e => e.role === 'Reception').length, iconColor: 'bg-blue-500' },
+                  { label: 'Manager', inside: employees.filter(e => e.role === 'Manager' && e.currentStatus === 'Inside').length, total: employees.filter(e => e.role === 'Manager').length, iconColor: 'bg-purple-500' },
+                  { label: 'Cleaner', inside: employees.filter(e => e.role === 'Cleaner' && e.currentStatus === 'Inside').length, total: employees.filter(e => e.role === 'Cleaner').length, iconColor: 'bg-orange-500' }
+                ].map((item, idx) => {
+                  const isAvailable = item.inside > 0;
+                  return (
+                    <div key={idx} className="flex justify-between items-center">
+                      <span className="flex items-center gap-1 text-slate-500 font-bold">
+                        <span className={`w-1.5 h-1.5 rounded-full ${isAvailable ? item.iconColor : 'bg-slate-300'}`} />
+                        {item.label}
+                      </span>
+                      <span className="text-slate-800 font-black font-mono">
+                        {item.inside}/{item.total}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="mt-2 pt-2 border-t border-slate-100 flex justify-between items-center text-[9px]">
+                <span className="text-slate-400 font-bold">Total Staff Inside</span>
+                <span className="font-black text-slate-900 font-mono">
+                  {employees.filter(e => e.currentStatus === 'Inside').length}
+                </span>
+              </div>
+            </div>
+
+            {/* Card 4: Unlock Turnstile (Add New Board Card) */}
             <button 
               onClick={handleManualUnlock}
               disabled={gateUnlocked}

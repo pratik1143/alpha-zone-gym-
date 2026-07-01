@@ -10,7 +10,7 @@ import {
   ChevronLeft, ChevronRight, Shield, Trophy, Smartphone, ArrowUpRight, Plus,
   Home as HomeIcon, Award, Play, Pause, Square, Sun, Moon, RefreshCw,
   Upload, Mail, BarChart2, AlertTriangle, UserPlus, UserX, Apple as AppleIcon,
-  Wifi, UserCheck, Sparkles, Cpu, Phone, MessageSquare, ShieldAlert, Gift
+  Wifi, UserCheck, Sparkles, Cpu, Phone, MessageSquare, ShieldAlert, Gift, Briefcase
 } from 'lucide-react';
 import { useAuthStore, useGymStore } from '@/store';
 import { getInitials } from '@/lib/utils';
@@ -19,6 +19,7 @@ import { collection, query, orderBy, limit, onSnapshot } from 'firebase/firestor
 import { db as fDb, isFirebaseReady } from '@/lib/firebase';
 import { useCallback } from 'react';
 import AttendancePopupManager from './components/AttendancePopupManager';
+import EmployeePopupManager from './components/EmployeePopupManager';
 
 export default function DashboardLayout({
   children,
@@ -276,6 +277,7 @@ export default function DashboardLayout({
               {[
                 { to: '/dashboard', label: 'Home', icon: HomeIcon },
                 { to: '/dashboard/members', label: 'Members', icon: Users },
+                { to: '/dashboard/employees', label: 'Employees', icon: Briefcase, badge: 'NEW' },
                 { to: '/dashboard/enquiries', label: 'Enquiries', icon: ClipboardList },
                 { to: '/dashboard/expired', label: 'Expired', icon: UserX },
                 { to: '/dashboard/trainers', label: 'Trainers', icon: UserCheck },
@@ -302,14 +304,21 @@ export default function DashboardLayout({
                   <Link
                     key={idx}
                     href={item.to}
-                    className={`flex items-center gap-3.5 px-4.5 py-3 rounded-2xl text-[11px] font-black uppercase tracking-wider transition-all ${
+                    className={`flex items-center justify-between px-4.5 py-3 rounded-2xl text-[11px] font-black uppercase tracking-wider transition-all ${
                       isActive 
                         ? 'bg-black text-white shadow-md' 
                         : 'text-slate-500 hover:text-black hover:bg-slate-50'
                     }`}
                   >
-                    <item.icon size={15} />
-                    <span>{item.label}</span>
+                    <div className="flex items-center gap-3.5">
+                      <item.icon size={15} />
+                      <span>{item.label}</span>
+                    </div>
+                    {item.badge && (
+                      <span className="bg-[#d4ff00] text-black text-[8px] font-black px-1.5 py-0.5 rounded-full scale-90 border border-black/10 animate-pulse">
+                        {item.badge}
+                      </span>
+                    )}
                   </Link>
                 );
               })}
@@ -358,7 +367,8 @@ export default function DashboardLayout({
         </main>
 
         {/* ─── Column 3: Right Content Panel ─── */}
-        <aside className="w-full lg:w-[330px] flex-shrink-0 flex flex-col gap-6 text-left overflow-y-auto h-full pt-4 pb-4 pr-2">
+        {pathname === '/dashboard' && (
+          <aside className="w-full lg:w-[330px] flex-shrink-0 flex flex-col gap-6 text-left overflow-y-auto h-full pt-4 pb-4 pr-2">
           
           {/* Top header row: Profile card, toggles */}
           <div className="flex justify-between items-center bg-white/60 p-2.5 rounded-2xl border border-white/45 shadow-sm gap-2">
@@ -548,9 +558,11 @@ export default function DashboardLayout({
           </div>
 
         </aside>
+        )}
 
       {/* Top Right Live Attendance Popups - Redesigned Signature Manager */}
       <AttendancePopupManager />
+      <EmployeePopupManager />
 
       {/* AI Gym Copilot Helper */}
       {(() => {

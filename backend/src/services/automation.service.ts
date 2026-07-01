@@ -280,6 +280,19 @@ const parseTemplate = (html: string, variables: Record<string, string>): string 
 };
 
 export const generateInvoicePdf = async (payment: any, member: any): Promise<Buffer> => {
+  const getMembershipName = (planName: string): string => {
+    const plan = (planName || '').toLowerCase();
+    if (plan.includes('trial')) return 'Trial';
+    if (plan.includes('1 month') || plan.includes('monthly') || plan.includes('30 day')) return '1 Month';
+    if (plan.includes('3 month') || plan.includes('quarterly') || plan.includes('90 day') || plan.includes('2+1')) return '3 Months (Quarterly)';
+    if (plan.includes('6 month') || plan.includes('semi') || plan.includes('180 day')) return '6 Months (Semi-Annual)';
+    if (plan.includes('12 month') || plan.includes('annual') || plan.includes('365 day') || plan.includes('year')) return '12 Months (Annual)';
+    if (plan.includes('lifetime')) return 'Lifetime Membership';
+    if (plan.includes('pt') || plan.includes('personal training')) return 'Personal Training';
+    if (plan.includes('premium')) return 'Premium Membership';
+    return 'Custom Plan';
+  };
+
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ size: 'A4', margin: 40 });
     const chunks: Buffer[] = [];
@@ -288,135 +301,142 @@ export const generateInvoicePdf = async (payment: any, member: any): Promise<Buf
     doc.on('end', () => resolve(Buffer.concat(chunks)));
     doc.on('error', (err) => reject(err));
 
-    // Logo image or Title
-    const logoPath = path.resolve(__dirname, '../../../frontend/public/gym_logo.png');
-    if (fs.existsSync(logoPath)) {
-      try {
-        doc.image(logoPath, 40, 40, { width: 110 });
-      } catch (err) {
-        // Fallback text if logo fails to render
-        doc.fillColor('#0f172a').fontSize(24).font('Helvetica-Bold').text('ALPHA ZONE', 40, 40);
-        doc.fillColor('#d4ff00').fontSize(10).text('GYM CENTER', 40, 68);
-      }
-    } else {
-      doc.fillColor('#0f172a').fontSize(24).font('Helvetica-Bold').text('ALPHA ZONE', 40, 40);
-      doc.fillColor('#d4ff00').fontSize(10).text('GYM CENTER', 40, 68);
-    }
+    // Theme Colors
+    const primaryColor = '#0f172a'; // Deep Slate
+    const accentBlue = '#0052FF'; // Stripe Blue
+    const accentLime = '#d4ff00'; // Lime Accent
+    const textColor = '#334155'; // Slate 700
+    const lightBg = '#f8fafc'; // Slate 50
+    const borderColor = '#e2e8f0'; // Slate 200
+
+    // Header Logo & Gym Info
+    doc.fillColor(accentBlue).fontSize(20).font('Helvetica-Bold').text('ALPHA ZONE GYM', 40, 40);
+    doc.fillColor(primaryColor).fontSize(8.5).font('Helvetica-Bold').text('BEYOND LIMITS', 40, 62);
+    
+    doc.fillColor(textColor).fontSize(8).font('Helvetica');
+    doc.text('SCO 14-15, Phase 5, Sector 59', 40, 78);
+    doc.text('Mohali, Punjab, India - 160059', 40, 88);
+    doc.text('GSTIN: 27AAAAA0000A1Z5', 40, 98);
+    doc.text('Phone: +91 98765 43210 | info@alphazonegym.com', 40, 108);
 
     // Invoice Info Panel (Right side)
-    doc.roundedRect(360, 40, 195, 80, 8).fill('#f8fafc');
-    doc.roundedRect(360, 40, 195, 80, 8).lineWidth(1).strokeColor('#e2e8f0').stroke();
+    doc.fillColor(primaryColor).fontSize(14).font('Helvetica-Bold').text('TAX INVOICE', 380, 40, { align: 'right', width: 175 });
     
-    doc.fillColor('#0f172a').fontSize(16).font('Helvetica-Bold').text('INVOICE', 375, 52);
-    doc.fontSize(8.5).font('Helvetica-Bold').fillColor('#64748b').text('INVOICE NO:', 375, 75);
-    doc.font('Helvetica').fillColor('#0f172a').text(payment.invoice || 'INV-00000', 450, 75, { align: 'right', width: 90 });
+    doc.fillColor(textColor).fontSize(8).font('Helvetica-Bold').text('INVOICE NO:', 380, 62);
+    doc.font('Helvetica').text(payment.invoice || 'INV-00000', 450, 62, { align: 'right', width: 105 });
     
-    doc.font('Helvetica-Bold').fillColor('#64748b').text('DATE:', 375, 90);
-    doc.font('Helvetica').fillColor('#0f172a').text(payment.date || new Date().toISOString().split('T')[0], 450, 90, { align: 'right', width: 90 });
+    doc.font('Helvetica-Bold').text('DATE:', 380, 74);
+    doc.font('Helvetica').text(payment.date || new Date().toISOString().split('T')[0], 450, 74, { align: 'right', width: 105 });
     
-    doc.font('Helvetica-Bold').fillColor('#64748b').text('STATUS:', 375, 105);
-    doc.font('Helvetica-Bold').fillColor('#10b981').text('PAID', 450, 105, { align: 'right', width: 90 });
+    doc.font('Helvetica-Bold').text('METHOD:', 380, 86);
+    doc.font('Helvetica').text(payment.method || 'UPI', 450, 86, { align: 'right', width: 105 });
 
-    // Neon Accent Line (shifted down to y=155 to clear the logo)
-    doc.strokeColor('#d4ff00').lineWidth(3).moveTo(40, 155).lineTo(555, 155).stroke();
+    doc.font('Helvetica-Bold').text('STATUS:', 380, 98);
+    doc.fillColor('#10b981').text('PAID', 450, 98, { align: 'right', width: 105 });
 
-    // Bill Details columns (structured side-by-side cards, shifted down to y=170)
+    // Minimal Blue Accent Line
+    doc.strokeColor(accentBlue).lineWidth(1.5).moveTo(40, 130).lineTo(555, 130).stroke();
+
+    // Client & Billing Info Columns
     // Left: Billed To
-    doc.roundedRect(40, 170, 245, 95, 8).fill('#f8fafc');
-    doc.roundedRect(40, 170, 245, 95, 8).lineWidth(1).strokeColor('#e2e8f0').stroke();
-    doc.rect(40, 170, 4, 95).fill('#d4ff00');
-    
-    doc.fillColor('#64748b').fontSize(8.5).font('Helvetica-Bold').text('BILLED TO', 55, 180);
-    doc.fillColor('#0f172a').fontSize(11).font('Helvetica-Bold').text(member.name || payment.memberName || 'Athlete', 55, 195);
-    doc.font('Helvetica').fontSize(8.5).fillColor('#475569');
-    doc.text(`Client ID: ${member.memberId || member.clientId || 'N/A'}`, 55, 212);
-    doc.text(`Phone: +91 ${member.phone || 'N/A'}`, 55, 226);
-    doc.text(`Email: ${member.email || 'N/A'}`, 55, 240);
+    doc.fillColor(accentBlue).fontSize(9).font('Helvetica-Bold').text('BILLED TO', 40, 150);
+    doc.fillColor(primaryColor).fontSize(11).font('Helvetica-Bold').text(member.name || payment.memberName || 'Member', 40, 164);
+    doc.fillColor(textColor).fontSize(8.5).font('Helvetica');
+    doc.text(`Member ID: ${member.memberId || member.id || 'N/A'}`, 40, 180);
+    doc.text(`Phone: +91 ${member.phone || 'N/A'}`, 40, 192);
+    doc.text(`Email: ${member.email || 'N/A'}`, 40, 204);
 
-    // Right: Billed By
-    doc.roundedRect(310, 170, 245, 95, 8).fill('#f8fafc');
-    doc.roundedRect(310, 170, 245, 95, 8).lineWidth(1).strokeColor('#e2e8f0').stroke();
-    doc.rect(310, 170, 4, 95).fill('#0f172a');
-    
-    doc.fillColor('#64748b').fontSize(8.5).font('Helvetica-Bold').text('BILLED BY', 325, 180);
-    doc.fillColor('#0f172a').fontSize(11).font('Helvetica-Bold').text('Alpha Zone Gym & Fitness', 325, 195);
-    doc.font('Helvetica').fontSize(8.5).fillColor('#475569');
-    doc.text('SCO 14-15, Phase 5, Sector 59', 325, 212);
-    doc.text('Mohali, Punjab, India - 160059', 325, 226);
-    doc.text('GSTIN: 27AAAAA0000A1Z5', 325, 240);
+    // Right: Branch & Coach Info
+    doc.fillColor(accentBlue).fontSize(9).font('Helvetica-Bold').text('GYM WORKSPACE', 310, 150);
+    doc.fillColor(primaryColor).fontSize(10).font('Helvetica-Bold').text(`Branch: ${member.branch || 'Mohali, Punjab'}`, 310, 164);
+    doc.fillColor(textColor).fontSize(8.5).font('Helvetica');
+    doc.text(`Assigned Trainer: ${member.trainer || 'Unassigned'}`, 310, 180);
+    doc.text(`Status: Active Member`, 310, 192);
 
-    // Items table header (shifted down to y=285)
-    doc.roundedRect(40, 285, 515, 24, 6).fill('#0f172a');
-    doc.fillColor('#ffffff').fontSize(8.5).font('Helvetica-Bold');
-    doc.text('DESCRIPTION', 55, 293);
-    doc.text('VALIDITY PERIOD', 260, 293, { width: 140, align: 'center' });
-    doc.text('AMOUNT (INR)', 450, 293, { width: 90, align: 'right' });
+    // Stripe-like Membership Card / Timeline
+    doc.roundedRect(40, 230, 515, 52, 10).fill(lightBg);
+    doc.roundedRect(40, 230, 515, 52, 10).lineWidth(1).strokeColor(borderColor).stroke();
 
-    // Table Item (shifted down to y=325)
-    doc.fillColor('#0f172a').font('Helvetica-Bold').fontSize(10).text(`${payment.plan || 'Monthly'} Gym Membership Access`, 55, 325);
-    doc.font('Helvetica').fontSize(8).fillColor('#64748b').text('Full access to cardio, strength area, CrossFit & biometric lockers.', 55, 340);
-    doc.fillColor('#0f172a').font('Helvetica').fontSize(9).text(`${member.joinDate || 'N/A'} to ${member.expiryDate || 'N/A'}`, 260, 325, { width: 140, align: 'center' });
+    doc.fillColor(textColor).fontSize(8).font('Helvetica-Bold').text('MEMBERSHIP PERIOD', 55, 242);
+    doc.fillColor(primaryColor).fontSize(10).font('Helvetica-Bold').text(`${getMembershipName(payment.plan || member.plan)}`, 55, 256);
     
+    // Timeline steps
+    doc.fillColor(textColor).fontSize(7.5).font('Helvetica-Bold').text('PURCHASED', 240, 242);
+    doc.font('Helvetica').text(payment.date || new Date().toISOString().split('T')[0], 240, 256);
+
+    doc.font('Helvetica-Bold').text('ACTIVATED', 340, 242);
+    doc.font('Helvetica').text(payment.date || new Date().toISOString().split('T')[0], 340, 256);
+
+    doc.fillColor(accentBlue).font('Helvetica-Bold').text('EXPIRES ON', 450, 242);
+    doc.font('Helvetica-Bold').text(member.expiryDate || 'N/A', 450, 256);
+
+    // Billing Table Headers
+    doc.fillColor(textColor).fontSize(8).font('Helvetica-Bold');
+    doc.text('DESCRIPTION', 40, 310);
+    doc.text('DURATION', 280, 310, { width: 80, align: 'center' });
+    doc.text('QTY', 370, 310, { width: 30, align: 'center' });
+    doc.text('PRICE (INR)', 410, 310, { width: 60, align: 'right' });
+    doc.text('TOTAL (INR)', 485, 310, { width: 70, align: 'right' });
+
+    doc.strokeColor(borderColor).lineWidth(1).moveTo(40, 322).lineTo(555, 322).stroke();
+
+    // Billing Row
     const subtotal = payment.amount - (payment.gst || 0);
-    doc.font('Helvetica-Bold').fontSize(10).text(`₹${subtotal.toLocaleString('en-IN')}`, 450, 325, { width: 90, align: 'right' });
-
-    // Table separator
-    doc.strokeColor('#e2e8f0').lineWidth(1).moveTo(40, 365).lineTo(555, 365).stroke();
-
-    // Summary calculations block (Right bottom side, shifted down to y=380)
-    doc.roundedRect(310, 380, 245, 115, 8).fill('#f8fafc');
-    doc.roundedRect(310, 380, 245, 115, 8).lineWidth(1).strokeColor('#e2e8f0').stroke();
+    doc.fillColor(primaryColor).fontSize(9.5).font('Helvetica-Bold').text(`${getMembershipName(payment.plan || member.plan)} Gym Access`, 40, 335);
+    doc.fillColor(textColor).fontSize(8.5).font('Helvetica').text('Full access to gym workspace & biometric gate sync.', 40, 348);
     
-    doc.font('Helvetica').fontSize(9).fillColor('#64748b').text('Subtotal:', 325, 392, { width: 100, align: 'left' });
-    doc.fillColor('#0f172a').font('Helvetica-Bold').text(`₹${subtotal.toLocaleString('en-IN')}`, 440, 392, { width: 100, align: 'right' });
+    doc.fillColor(primaryColor).fontSize(9).font('Helvetica').text(`${payment.plan?.includes('Custom') ? 'Custom' : getMembershipName(payment.plan || member.plan)}`, 280, 335, { width: 80, align: 'center' });
+    doc.text('1', 370, 335, { width: 30, align: 'center' });
+    doc.text(`₹${subtotal.toLocaleString('en-IN')}`, 410, 335, { width: 60, align: 'right' });
+    doc.font('Helvetica-Bold').text(`₹${subtotal.toLocaleString('en-IN')}`, 485, 335, { width: 70, align: 'right' });
+
+    doc.strokeColor(borderColor).lineWidth(1).moveTo(40, 370).lineTo(555, 370).stroke();
+
+    // Summary calculations block (Right bottom side)
+    doc.roundedRect(320, 390, 235, 110, 10).fill(lightBg);
+    doc.roundedRect(320, 390, 235, 110, 10).lineWidth(1).strokeColor(borderColor).stroke();
+
+    doc.fillColor(textColor).fontSize(8.5).font('Helvetica').text('Subtotal:', 335, 404);
+    doc.fillColor(primaryColor).font('Helvetica-Bold').text(`₹${subtotal.toLocaleString('en-IN')}`, 440, 404, { width: 100, align: 'right' });
 
     const cgst = Math.floor((payment.gst || 0) / 2);
     const sgst = Math.floor((payment.gst || 0) / 2);
-    doc.font('Helvetica').fontSize(9).fillColor('#64748b').text('CGST (9%):', 325, 408, { width: 100, align: 'left' });
-    doc.fillColor('#0f172a').font('Helvetica').text(`₹${cgst.toLocaleString('en-IN')}`, 440, 408, { width: 100, align: 'right' });
+    doc.font('Helvetica').fillColor(textColor).text('CGST (9%):', 335, 420);
+    doc.fillColor(primaryColor).text(`₹${cgst.toLocaleString('en-IN')}`, 440, 420, { width: 100, align: 'right' });
 
-    doc.font('Helvetica').fontSize(9).fillColor('#64748b').text('SGST (9%):', 325, 424, { width: 100, align: 'left' });
-    doc.fillColor('#0f172a').font('Helvetica').text(`₹${sgst.toLocaleString('en-IN')}`, 440, 424, { width: 100, align: 'right' });
+    doc.font('Helvetica').fillColor(textColor).text('SGST (9%):', 335, 436);
+    doc.fillColor(primaryColor).text(`₹${sgst.toLocaleString('en-IN')}`, 440, 436, { width: 100, align: 'right' });
 
-    // Thin separator inside summary card
-    doc.strokeColor('#cbd5e1').lineWidth(0.5).moveTo(325, 442).lineTo(540, 442).stroke();
+    doc.strokeColor(borderColor).lineWidth(0.5).moveTo(335, 454).lineTo(540, 454).stroke();
 
-    // Total box
-    doc.roundedRect(320, 452, 225, 30, 4).fill('#0f172a');
-    doc.fillColor('#d4ff00').fontSize(10).font('Helvetica-Bold').text('Total Paid (Incl. GST):', 330, 461);
-    doc.fontSize(11).text(`₹${payment.amount.toLocaleString('en-IN')}`, 430, 461, { width: 105, align: 'right' });
+    doc.fillColor(accentBlue).fontSize(10).font('Helvetica-Bold').text('Total Paid:', 335, 468);
+    doc.fontSize(11).text(`₹${payment.amount.toLocaleString('en-IN')}`, 440, 468, { width: 100, align: 'right' });
 
-    // PAID digital stamp (tilted -10 deg on left side, shifted down to y=410)
+    // Paid Digital Stamp (Minimal Apple style)
     doc.save();
-    doc.translate(85, 410);
-    doc.rotate(-10);
-    
-    // Stamp double border
-    doc.roundedRect(0, 0, 110, 42, 6).lineWidth(2).strokeColor('#10b981').stroke();
-    doc.roundedRect(3, 3, 104, 36, 4).lineWidth(1).strokeColor('#10b981').stroke();
-    
-    // Stamp text
-    doc.fillColor('#10b981').font('Helvetica-Bold').fontSize(14).text('PAID', 0, 14, { width: 110, align: 'center' });
+    doc.translate(80, 400);
+    doc.roundedRect(0, 0, 120, 38, 6).lineWidth(1.5).strokeColor('#10b981').stroke();
+    doc.fillColor('#10b981').font('Helvetica-Bold').fontSize(11).text('PAYMENT RECEIVED', 0, 14, { width: 120, align: 'center' });
     doc.restore();
 
-    // Terms & Conditions block (shifted down to y=515)
-    doc.roundedRect(40, 515, 515, 80, 8).fill('#f8fafc');
-    doc.roundedRect(40, 515, 515, 80, 8).lineWidth(1).strokeColor('#e2e8f0').stroke();
+    // Terms & Conditions block
+    doc.roundedRect(40, 520, 515, 80, 10).fill(lightBg);
+    doc.roundedRect(40, 520, 515, 80, 10).lineWidth(1).strokeColor(borderColor).stroke();
     
-    doc.fillColor('#0f172a').fontSize(8.5).font('Helvetica-Bold').text('TERMS & CONDITIONS', 55, 527);
-    doc.fillColor('#64748b').fontSize(7.5).font('Helvetica');
-    doc.text('1. Membership fees are strictly non-refundable and non-transferable.', 55, 542);
-    doc.text('2. Biometric registration is mandatory for facility entry at the access control gates.', 55, 554);
-    doc.text('3. Members must strictly follow gym rules, protocols, and safety measures at all times.', 55, 566);
-    doc.text('4. Loss or damage to gym property due to negligence will be charged to the member.', 55, 578);
+    doc.fillColor(primaryColor).fontSize(8.5).font('Helvetica-Bold').text('TERMS & CONDITIONS', 55, 532);
+    doc.fillColor(textColor).fontSize(7.5).font('Helvetica');
+    doc.text('1. Membership fees are strictly non-refundable and non-transferable.', 55, 547);
+    doc.text('2. Biometric registration is mandatory for facility entry at the access control gates.', 55, 559);
+    doc.text('3. Members must strictly follow gym rules, protocols, and safety measures at all times.', 55, 571);
+    doc.text('4. Loss or damage to gym property due to negligence will be charged to the member.', 55, 583);
 
-    // Neon Accent Line above footer
-    doc.strokeColor('#d4ff00').lineWidth(2).moveTo(40, 735).lineTo(555, 735).stroke();
+    // Lime accent line above footer
+    doc.strokeColor(accentLime).lineWidth(2.5).moveTo(40, 735).lineTo(555, 735).stroke();
 
-    // Decorative bottom block
-    doc.roundedRect(40, 745, 515, 35, 6).fill('#0f172a');
-    doc.fillColor('#ffffff').fontSize(8.5).font('Helvetica-Bold').text('ALPHA ZONE OS', 55, 758);
-    doc.fillColor('#d4ff00').fontSize(8.5).font('Helvetica-Bold').text('GET ACTIVE. GET STRONGER.', 350, 758, { align: 'right', width: 190 });
+    // Footer Block
+    doc.fillColor(textColor).fontSize(8).font('Helvetica-Bold').text('Thank you for choosing Alpha Zone Gym.', 40, 750);
+    doc.font('Helvetica').text('Stay consistent. Stay healthy.', 40, 762);
+    doc.fillColor(textColor).fontSize(8).font('Helvetica-Bold').text('Powered by Alpha Zone CRM.', 380, 750, { align: 'right', width: 175 });
 
     doc.end();
   });
@@ -535,5 +555,46 @@ export const runDailyAutomationChecks = async () => {
     }
   } catch (error) {
     console.error('[Automation Scheduler] Daily checks failed:', error);
+  }
+};
+
+export const triggerPtWelcomeEmail = async (member: any) => {
+  try {
+    const subject = 'Welcome to Personal Training at Alpha Zone Gym! 🏋️';
+    const html = `<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8" /><style>
+  body { font-family: 'Segoe UI', sans-serif; background: #f8fafc; margin: 0; padding: 0; }
+  .wrapper { max-width: 560px; margin: 40px auto; background: #fff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 32px rgba(0,0,0,0.08); }
+  .hero { background: #000; padding: 40px 32px; text-align: center; }
+  .hero h1 { color: #d4ff00; font-size: 28px; font-weight: 900; margin: 0; letter-spacing: -0.5px; }
+  .hero p { color: rgba(255,255,255,0.6); font-size: 13px; margin: 8px 0 0; }
+  .body { padding: 32px; }
+  .body h2 { font-size: 20px; font-weight: 800; color: #0f172a; }
+  .body p { color: #64748b; font-size: 14px; line-height: 1.7; }
+  .footer { background: #f8fafc; padding: 20px 32px; text-align: center; color: #94a3b8; font-size: 11px; }
+</style></head>
+<body>
+  <div class="wrapper">
+    <div class="hero">
+      <h1>⚡ ALPHA ZONE Personal Training</h1>
+      <p>Unlocking your highest potential</p>
+    </div>
+    <div class="body">
+      <h2>Hello, ${member.name}! 👋</h2>
+      <p>Congratulations! You are now a **Personal Training (PT) member** at Alpha Zone Gym.</p>
+      <p>Your dedicated personal coach will connect with you shortly to build your customized diet plans and strength programs.</p>
+      <p>Let's crush your fitness goals together!</p>
+    </div>
+    <div class="footer">Alpha Zone Gym · Mohali, Punjab · +91 98765 43210</div>
+  </div>
+</body>
+</html>`;
+
+    if (member.email) {
+      await sendEmail(member.email, subject, html);
+    }
+  } catch (error) {
+    console.error('[Automation] PT Welcome Email failed:', error);
   }
 };

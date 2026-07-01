@@ -203,7 +203,7 @@ export default function RiskRadarPage() {
           assignedTo: m.trainer || 'Receptionist Desk',
           status: 'pending',
           dueDate: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-          notes: `AUTO TRIGGER: Critical Risk Score ${m.ai.score}% detected due to: ${m.ai.triggers.join(', ')}. Contact athlete immediately.`,
+          notes: `AUTO TRIGGER: Critical Risk Score ${m.ai.score}% detected due to: ${m.ai.triggers.join(', ')}. Contact member immediately.`,
           createdAt: new Date().toISOString()
         });
 
@@ -424,7 +424,7 @@ export default function RiskRadarPage() {
               >
                 <div className="text-[9px] font-black uppercase tracking-wider">{cell.label}</div>
                 <div className="text-3xl font-black mt-2 leading-none">{cell.count}</div>
-                <div className="text-[8px] font-bold uppercase tracking-widest mt-1.5 opacity-60">Athletes</div>
+                <div className="text-[8px] font-bold uppercase tracking-widest mt-1.5 opacity-60">Members</div>
               </button>
             ))}
           </div>
@@ -829,7 +829,7 @@ export default function RiskRadarPage() {
                     <div className="grid grid-cols-2 gap-4 border-t border-slate-200 pt-3 text-[10px]">
                       <div className="bg-white border border-slate-100 p-3 rounded-xl">
                         <span className="text-slate-400 uppercase tracking-widest block font-bold text-[8px]">Projected Churn Count</span>
-                        <span className="text-xl font-black text-rose-500 mt-1 block">{(totalAtRiskCount * 0.45).toFixed(0)} Athletes</span>
+                        <span className="text-xl font-black text-rose-500 mt-1 block">{(totalAtRiskCount * 0.45).toFixed(0)} Members</span>
                       </div>
                       <div className="bg-white border border-slate-100 p-3 rounded-xl">
                         <span className="text-slate-400 uppercase tracking-widest block font-bold text-[8px]">Weekly Revenue Risk</span>

@@ -37,6 +37,7 @@ import {
   Sparkles,
   Star,
   Trophy,
+  Dumbbell,
 } from "lucide-react";
 import { useGymStore } from "@/store";
 import {
@@ -642,6 +643,14 @@ export default function MembersPage() {
         plan: editingMember.plan,
         branch: editingMember.branch,
         trainer: editingMember.trainer,
+        age: editingMember.age ? Number(editingMember.age) : null,
+        gender: editingMember.gender || "Male",
+        weight: editingMember.weight ? Number(editingMember.weight) : null,
+        height: editingMember.height ? Number(editingMember.height) : null,
+        address: editingMember.address || "",
+        bloodGroup: editingMember.bloodGroup || "",
+        emergencyContact: editingMember.emergencyContact || "",
+        isPt: editingMember.isPt === true,
       });
       toast.success("Member updated successfully!");
       setEditingMember(null);
@@ -929,87 +938,211 @@ export default function MembersPage() {
       {editingMember && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
           <div
-            className="absolute inset-0 bg-black/85 backdrop-blur-lg"
+            className="absolute inset-0 bg-black/80 backdrop-blur-md"
             onClick={() => setEditingMember(null)}
           />
-          <div className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl z-10 p-6">
-            <h2 className="text-xl font-bold mb-4">Edit Member</h2>
-            <form onSubmit={handleEditSave} className="space-y-4">
+          <div className="relative w-full max-w-2xl bg-white rounded-3xl shadow-2xl z-10 p-6 max-h-[90vh] overflow-y-auto border border-slate-100 flex flex-col gap-4 text-slate-800 text-left">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase">
-                  Name
-                </label>
-                <input
-                  type="text"
-                  className="w-full mt-1 p-2 border border-slate-200 rounded-lg"
-                  value={editingMember.name || ""}
-                  onChange={(e) =>
-                    setEditingMember({ ...editingMember, name: e.target.value })
-                  }
-                  required
+                <h2 className="text-xl font-black text-slate-900 tracking-tight font-display animate-fade-in">Edit Member Profile</h2>
+                <p className="text-xs text-slate-500 mt-0.5">Modify member details, physical metrics, and trainer status.</p>
+              </div>
+              <button 
+                onClick={() => setEditingMember(null)}
+                className="w-8 h-8 rounded-full flex items-center justify-center bg-slate-50 hover:bg-slate-100 text-slate-400 hover:text-slate-600 border border-slate-200 cursor-pointer"
+              >
+                <X size={14} />
+              </button>
+            </div>
+            
+            <form onSubmit={handleEditSave} className="space-y-5">
+              {/* Personal Details */}
+              <div className="space-y-3">
+                <h3 className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest">Personal Details</h3>
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase">Name</label>
+                    <input
+                      type="text"
+                      className="w-full mt-1 p-2 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-indigo-500 font-bold bg-white"
+                      value={editingMember.name || ""}
+                      onChange={(e) => setEditingMember({ ...editingMember, name: e.target.value })}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase">Phone</label>
+                    <input
+                      type="text"
+                      className="w-full mt-1 p-2 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-indigo-500 font-bold bg-white"
+                      value={editingMember.phone || ""}
+                      onChange={(e) => setEditingMember({ ...editingMember, phone: e.target.value })}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase">Email</label>
+                    <input
+                      type="email"
+                      className="w-full mt-1 p-2 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-indigo-500 font-bold bg-white"
+                      value={editingMember.email || ""}
+                      onChange={(e) => setEditingMember({ ...editingMember, email: e.target.value })}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Membership & Branch */}
+              <div className="space-y-3">
+                <h3 className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest">Membership & Trainer</h3>
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase">Plan</label>
+                    <select
+                      className="w-full mt-1 p-2 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-indigo-500 bg-white font-bold"
+                      value={editingMember.plan || ""}
+                      onChange={(e) => setEditingMember({ ...editingMember, plan: e.target.value })}
+                    >
+                      <option value="Monthly">Monthly</option>
+                      <option value="Quarterly">Quarterly</option>
+                      <option value="Semi-Annual">Semi-Annual</option>
+                      <option value="Annual Premium">Annual Premium</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase">Branch</label>
+                    <input
+                      type="text"
+                      className="w-full mt-1 p-2 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-indigo-500 font-bold bg-white"
+                      value={editingMember.branch || "Mohali, Punjab"}
+                      onChange={(e) => setEditingMember({ ...editingMember, branch: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase">Trainer</label>
+                    <select
+                      className="w-full mt-1 p-2 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-indigo-500 bg-white font-bold text-slate-700"
+                      value={editingMember.trainer || ""}
+                      onChange={(e) => setEditingMember({ ...editingMember, trainer: e.target.value })}
+                    >
+                      <option value="">No Trainer / Unassigned</option>
+                      {trainers.map(t => (
+                        <option key={t.id} value={t.name}>{t.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Physical Parameters */}
+              <div className="space-y-3">
+                <h3 className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest">Physical & Health Metrics</h3>
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase">Age</label>
+                    <input
+                      type="number"
+                      className="w-full mt-1 p-2 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-indigo-500 font-bold bg-white"
+                      value={editingMember.age || ""}
+                      onChange={(e) => setEditingMember({ ...editingMember, age: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase">Gender</label>
+                    <select
+                      className="w-full mt-1 p-2 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-indigo-500 bg-white font-bold text-slate-700"
+                      value={editingMember.gender || "Male"}
+                      onChange={(e) => setEditingMember({ ...editingMember, gender: e.target.value })}
+                    >
+                      <option value="Male">Male</option>
+                      <option value="Female">Female</option>
+                      <option value="Other">Other</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase">Blood Group</label>
+                    <input
+                      type="text"
+                      className="w-full mt-1 p-2 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-indigo-500 font-bold bg-white"
+                      value={editingMember.bloodGroup || ""}
+                      onChange={(e) => setEditingMember({ ...editingMember, bloodGroup: e.target.value })}
+                      placeholder="e.g. O+"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase">Weight (kg)</label>
+                    <input
+                      type="number"
+                      className="w-full mt-1 p-2 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-indigo-500 font-bold bg-white"
+                      value={editingMember.weight || ""}
+                      onChange={(e) => setEditingMember({ ...editingMember, weight: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase">Height (cm)</label>
+                    <input
+                      type="number"
+                      className="w-full mt-1 p-2 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-indigo-500 font-bold bg-white"
+                      value={editingMember.height || ""}
+                      onChange={(e) => setEditingMember({ ...editingMember, height: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase">Emergency Contact</label>
+                    <input
+                      type="text"
+                      className="w-full mt-1 p-2 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-indigo-500 font-bold bg-white"
+                      value={editingMember.emergencyContact || ""}
+                      onChange={(e) => setEditingMember({ ...editingMember, emergencyContact: e.target.value })}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Address */}
+              <div>
+                <label className="block text-[10px] font-bold text-slate-500 uppercase">Address</label>
+                <textarea
+                  className="w-full mt-1 p-2 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-indigo-500 font-bold bg-white animate-fade-in"
+                  value={editingMember.address || ""}
+                  onChange={(e) => setEditingMember({ ...editingMember, address: e.target.value })}
+                  rows={2}
                 />
               </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase">
-                  Phone
+
+              {/* PT Toggle */}
+              <div className="p-3.5 bg-indigo-50/50 border border-indigo-100 rounded-2xl flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-600 flex items-center justify-center">
+                    <Dumbbell size={16} />
+                  </div>
+                  <div>
+                    <span className="text-xs font-black text-slate-900 block">Personal Training (PT) Member</span>
+                    <span className="text-[10px] text-slate-500">Enable personal training services & assignments for this client.</span>
+                  </div>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input 
+                    type="checkbox" 
+                    checked={editingMember.isPt === true}
+                    onChange={(e) => setEditingMember({ ...editingMember, isPt: e.target.checked })}
+                    className="sr-only peer" 
+                  />
+                  <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
                 </label>
-                <input
-                  type="text"
-                  className="w-full mt-1 p-2 border border-slate-200 rounded-lg"
-                  value={editingMember.phone || ""}
-                  onChange={(e) =>
-                    setEditingMember({
-                      ...editingMember,
-                      phone: e.target.value,
-                    })
-                  }
-                  required
-                />
               </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase">
-                  Email
-                </label>
-                <input
-                  type="email"
-                  className="w-full mt-1 p-2 border border-slate-200 rounded-lg"
-                  value={editingMember.email || ""}
-                  onChange={(e) =>
-                    setEditingMember({
-                      ...editingMember,
-                      email: e.target.value,
-                    })
-                  }
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase">
-                  Plan
-                </label>
-                <select
-                  className="w-full mt-1 p-2 border border-slate-200 rounded-lg"
-                  value={editingMember.plan || ""}
-                  onChange={(e) =>
-                    setEditingMember({ ...editingMember, plan: e.target.value })
-                  }
-                >
-                  <option value="Monthly">Monthly</option>
-                  <option value="Quarterly">Quarterly</option>
-                  <option value="Semi-Annual">Semi-Annual</option>
-                  <option value="Annual Premium">Annual Premium</option>
-                </select>
-              </div>
-              <div className="flex justify-end gap-2 mt-6">
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => setEditingMember(null)}
-                  className="px-4 py-2 text-slate-500 bg-slate-100 rounded-lg font-bold"
+                  className="px-4 py-2 text-slate-500 bg-slate-100 rounded-xl text-xs font-bold transition-all border border-slate-200 cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 text-white bg-indigo-600 rounded-lg font-bold hover:bg-indigo-700"
+                  className="px-4 py-2 text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer border-none"
                 >
                   Save Changes
                 </button>

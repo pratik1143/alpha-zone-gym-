@@ -909,6 +909,129 @@ def run_membership_validation(user_id, device_id, device_name, branch, timestamp
                 pass
 
         if not member_doc:
+            # Check in employees collection if not found in members
+            employees_ref = db.collection('employees')
+            employee_doc = None
+            
+            # Check deviceUserId (string)
+            query = employees_ref.where('deviceUserId', '==', str(user_id)).limit(1).stream()
+            for doc in query:
+                employee_doc = doc
+                break
+                
+            if not employee_doc:
+                # Check biometricId (string)
+                query = employees_ref.where('biometricId', '==', str(user_id)).limit(1).stream()
+                for doc in query:
+                    employee_doc = doc
+                    break
+
+            if not employee_doc:
+                # Check biometricId (integer)
+                try:
+                    query_int = employees_ref.where('biometricId', '==', int(user_id)).limit(1).stream()
+                    for doc in query_int:
+                        employee_doc = doc
+                        break
+                except ValueError:
+                    pass
+
+            if employee_doc:
+                employee = employee_doc.to_dict()
+                emp_id = employee_doc.id
+                emp_name = employee.get('name', 'Employee')
+                emp_role = employee.get('role', 'Staff')
+                emp_branch = employee.get('branch', branch)
+                emp_biometric_id = employee.get('biometricId', user_id)
+                avatar_url = employee.get('avatarUrl', f"https://api.dicebear.com/7.x/adventurer/svg?seed={emp_name.replace(' ', '')}")
+
+                # Check if already punched today
+                now_date = date.today()
+                today_str = now_date.isoformat()
+                emp_att_ref = db.collection('employeeAttendance')
+                
+                # Look for today's checkin
+                today_punches = list(emp_att_ref.where('employeeId', '==', emp_id).stream())
+                
+                # Filter punches from today
+                today_checkin_doc = None
+                for doc in today_punches:
+                    chk_in = doc.to_dict().get('checkIn', '')
+                    if chk_in.startswith(today_str):
+                        today_checkin_doc = doc
+                        break
+                
+                punch_type = 'checkin'
+                worked_today = None
+                att_doc_id = f"emp_att_{device_id}_{user_id}_{timestamp_iso.replace(':', '-').replace('.', '-')}"
+                
+                if today_checkin_doc:
+                    punch_type = 'checkout'
+                    checkin_time_str = today_checkin_doc.to_dict().get('checkIn', '')
+                    
+                    try:
+                        in_dt = datetime.fromisoformat(checkin_time_str.rstrip('Z'))
+                        out_dt = datetime.fromisoformat(timestamp_iso.rstrip('Z'))
+                        delta = out_dt - in_dt
+                        hours = delta.total_seconds() / 3600
+                        worked_today = f"{hours:.1f} hrs"
+                    except Exception:
+                        worked_today = "8.0 hrs"
+                    
+                    today_checkin_doc.reference.update({
+                        'checkOut': timestamp_iso,
+                        'workedToday': worked_today,
+                        'status': 'Present',
+                        'currentStatus': 'Outside'
+                    })
+                    
+                    employee_doc.reference.update({
+                        'currentStatus': 'Outside',
+                        'lastPunch': timestamp_iso,
+                        'todayStatus': 'Present'
+                    })
+                else:
+                    db.collection('employeeAttendance').document(att_doc_id).set({
+                        'attendanceId': att_doc_id,
+                        'employeeId': emp_id,
+                        'biometricId': str(emp_biometric_id),
+                        'employeeName': emp_name,
+                        'role': emp_role,
+                        'branch': emp_branch,
+                        'avatarUrl': avatar_url,
+                        'deviceId': device_id,
+                        'deviceName': device_name,
+                        'timestamp': timestamp_iso,
+                        'checkIn': timestamp_iso,
+                        'checkOut': None,
+                        'status': 'Present',
+                        'currentStatus': 'Inside'
+                    })
+                    
+                    employee_doc.reference.update({
+                        'currentStatus': 'Inside',
+                        'lastPunch': timestamp_iso,
+                        'todayStatus': 'Present'
+                    })
+
+                db.collection('employeeNotifications').add({
+                    'employeeId': emp_id,
+                    'employeeName': emp_name,
+                    'role': emp_role,
+                    'biometricId': str(emp_biometric_id),
+                    'deviceName': device_name,
+                    'punchTime': datetime.now().strftime('%I:%M %p'),
+                    'branch': emp_branch,
+                    'type': punch_type,
+                    'workedToday': worked_today,
+                    'avatarUrl': avatar_url,
+                    'createdAt': datetime.utcnow().isoformat() + 'Z'
+                })
+                
+                trigger_gate_unlock_relay(device_name, 3)
+                return True
+
+        if not member_doc:
             # Unknown user on device - Access Denied!
             msg = f"[Membership Validation] Rejected access for unknown biometric ID: {user_id} at {device_name}."
             logging.warning(msg)

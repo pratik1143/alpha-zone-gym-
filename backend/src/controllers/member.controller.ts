@@ -124,10 +124,25 @@ export const createMember = async (req: Request, res: Response) => {
 export const updateMember = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
+    
+    // Fetch old member details to check previous state
+    const members = await db.getMembers();
+    const oldMember = members.find(item => item.id === id);
+
     const updated = await db.updateMember(id, req.body);
     if (!updated) {
       return res.status(404).json({ error: 'Member not found' });
     }
+
+    // Trigger email if PT status switched from falsy/false to true
+    const wasPt = oldMember?.isPt === true;
+    const isNowPt = req.body.isPt === true;
+
+    if (isNowPt && !wasPt) {
+      const { triggerPtWelcomeEmail } = require('../services/automation.service');
+      triggerPtWelcomeEmail(updated).catch((err: any) => console.error('[Automation] PT welcome email trigger failed:', err));
+    }
+
     res.json(updated);
   } catch (error: any) {
     res.status(500).json({ error: error.message });

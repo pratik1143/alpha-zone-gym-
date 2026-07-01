@@ -17,6 +17,7 @@ import { getProgressTimeline, addProgressRecord, getReferralsByMember, createRef
 import { nextBiometricId, migrateMembers, rollbackMigration, mapBiometricUser, getDeviceUsers, getMigrations, seedDeviceUsers, purgeCRMData } from '../controllers/migration.controller';
 import { getSmtpConfig, saveSmtpConfig, getTemplates, saveTemplatesController, sendTestEmail, getInvoicePreview } from '../controllers/automation.controller';
 import { getPlansController, createPlanController, updatePlanController, deletePlanController } from '../controllers/plan.controller';
+import { getEmployees, createEmployee, updateEmployee, deleteEmployee, getEmployeeAttendance } from '../controllers/employee.controller';
 import { authenticateToken } from '../middleware/auth';
 
 
@@ -129,10 +130,17 @@ router.post('/automation/templates', saveTemplatesController);
 router.post('/automation/smtp/test', sendTestEmail);
 router.get('/automation/invoice/preview', getInvoicePreview);
 
-// Membership Packages / Plans
-router.get('/plans', getPlansController);
-router.post('/plans', createPlanController);
-router.put('/plans/:id', updatePlanController);
-router.delete('/plans/:id', deletePlanController);
+// Gym Memberships config
+router.get('/memberships', getPlansController);
+router.post('/memberships', createPlanController);
+router.put('/memberships/:id', updatePlanController);
+router.delete('/memberships/:id', deletePlanController);
+
+// Employee Management
+router.get('/employees', getEmployees);
+router.post('/employees', createEmployee);
+router.put('/employees/:id', updateEmployee);
+router.delete('/employees/:id', deleteEmployee);
+router.get('/employee-attendance', getEmployeeAttendance);
 
 export default router;
