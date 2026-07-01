@@ -60,26 +60,8 @@ export default function CinematicHero() {
     fetchImages();
   }, []);
 
-  // Preloading images in memory - FAST LOAD (No blocking)
-  useEffect(() => {
-    if (images.length === 0) return;
-
-    // Immediately create image objects and set src without waiting
-    const preloadedImagesList = images.map((src) => {
-      const img = new Image();
-      img.src = src;
-      return img;
-    });
-
-    // Set images ref to all images (loaded or not)
-    imagesRef.current = preloadedImagesList;
-    
-    // Immediately unlock the UI
-    setIsPreloaded(true);
-  }, [images]);
-
   // Render a specific frame on canvas (object-fit: cover implementation)
-  const drawFrame = (index: number) => {
+  const drawFrame = React.useCallback((index: number) => {
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext('2d');
     const img = imagesRef.current[index];
@@ -90,8 +72,8 @@ export default function CinematicHero() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     // Compute dimensions to fill viewport
-    const imgWidth = img.width;
-    const imgHeight = img.height;
+    const imgWidth = img.width || 1920;
+    const imgHeight = img.height || 1080;
     const canvasWidth = canvas.width;
     const canvasHeight = canvas.height;
 
@@ -112,7 +94,31 @@ export default function CinematicHero() {
     }
 
     ctx.drawImage(img, drawX, drawY, drawWidth, drawHeight);
-  };
+  }, []);
+
+  // Preloading images in memory - FAST LOAD (No blocking)
+  useEffect(() => {
+    if (images.length === 0) return;
+
+    // Immediately create image objects and set src without waiting
+    const preloadedImagesList = images.map((src, index) => {
+      const img = new Image();
+      img.onload = () => {
+        // Redraw if this frame is currently active
+        if (currentFrameIdx.current === index) {
+          drawFrame(index);
+        }
+      };
+      img.src = src;
+      return img;
+    });
+
+    // Set images ref to all images (loaded or not)
+    imagesRef.current = preloadedImagesList;
+    
+    // Immediately unlock the UI
+    setIsPreloaded(true);
+  }, [images, drawFrame]);
 
   // Resize handler
   useEffect(() => {

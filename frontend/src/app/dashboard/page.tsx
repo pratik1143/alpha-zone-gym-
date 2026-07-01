@@ -34,7 +34,13 @@ export default function DashboardPage() {
   // Derive live occupancy count from real gymPresence
   useEffect(() => {
     if (!gymPresence) return;
-    const activeNow = gymPresence.filter((p: any) => p.inside === true).length;
+    const now = new Date().getTime();
+    const activeNow = gymPresence.filter((p: any) => {
+      if (!p.inside) return false;
+      // Auto checkout after 1 hour (3600000 ms)
+      const checkInTime = new Date(p.checkIn || p.timestamp || new Date()).getTime();
+      return (now - checkInTime) <= 3600000;
+    }).length;
     setLiveCount(activeNow);
   }, [gymPresence]);
 
