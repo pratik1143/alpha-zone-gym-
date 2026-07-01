@@ -139,7 +139,7 @@ export default function AttendancePopupManager() {
               timestamp: toJsDate(data.createdAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
               deviceName: data.deviceName || 'Biometric Terminal',
               branch: match?.branch || data.branch || 'Mohali, Punjab',
-              avatarUrl: match?.avatarUrl || data.avatarUrl || '',
+              avatarUrl: match?.avatarUrl || match?.avatar || data.avatarUrl || data.avatar || '',
               plan: match?.plan || 'Unknown Plan',
               trainer: match?.trainer || 'No PT Coach',
               remainingDays: days > 0 ? days : 0,

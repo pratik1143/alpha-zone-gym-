@@ -653,6 +653,7 @@ export default function MembersPage() {
         emergencyContact: editingMember.emergencyContact || "",
         isPt: editingMember.isPt === true,
         avatar: editingMember.avatar || null,
+        avatarUrl: editingMember.avatar || null,
       });
       toast.success("Member updated successfully!");
       setEditingMember(null);
