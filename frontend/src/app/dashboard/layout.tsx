@@ -20,6 +20,7 @@ import { db as fDb, isFirebaseReady } from '@/lib/firebase';
 import { useCallback } from 'react';
 import AttendancePopupManager from './components/AttendancePopupManager';
 import EmployeePopupManager from './components/EmployeePopupManager';
+import NotificationCenter from './components/NotificationCenter';
 
 export default function DashboardLayout({
   children,
@@ -112,6 +113,8 @@ export default function DashboardLayout({
     const unsubscribeFeed = onSnapshot(qFeed, (snapshot) => {
       const logs = snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as any) }));
       setRealtimeFeed(logs);
+    }, (err) => {
+      console.warn("Firestore dashboard feed listener error:", err);
     });
 
     // 3. Listen for push notifications from device service (checkin, alert, enrollment)
@@ -160,6 +163,8 @@ export default function DashboardLayout({
           });
         }
       });
+    }, (err) => {
+      console.warn("Firestore dashboard notifications listener error:", err);
     });
 
     // 4. Listen for gym_presence for Live Members Engine
@@ -167,6 +172,8 @@ export default function DashboardLayout({
     const unsubscribePresence = onSnapshot(presenceCollection, (snapshot) => {
       const presenceList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       useGymStore.getState().setGymPresence(presenceList);
+    }, (err) => {
+      console.warn("Firestore dashboard presence listener error:", err);
     });
 
     // 5. Listen for devices status in real-time
@@ -184,6 +191,8 @@ export default function DashboardLayout({
       }
       
       useGymStore.setState({ deviceStatus: status });
+    }, (err) => {
+      console.warn("Firestore dashboard devices listener error:", err);
     });
 
     return () => {
@@ -202,7 +211,7 @@ export default function DashboardLayout({
       fetchAttendance();
       fetchMembers();
     }
-  }, [isAuthenticated, fetchAttendance, fetchMembers]);
+  }, [isAuthenticated]);
 
   // Live real-time clock
   useEffect(() => {
@@ -242,40 +251,47 @@ export default function DashboardLayout({
 
   return (
     <div 
-      className="min-h-screen h-screen w-full bg-cover bg-center bg-fixed relative flex p-6 font-poppins text-slate-800 overflow-hidden"
-      style={{ backgroundImage: "url('https://images.unsplash.com/photo-1509316975850-ff9c5deb0cd9?q=80&w=1974')" }}
+      className="min-h-screen h-screen w-full relative flex p-6 font-poppins text-slate-800 overflow-hidden"
+      style={{
+        backgroundImage: "linear-gradient(to bottom right, rgba(20, 20, 25, 0.4), rgba(10, 10, 12, 0.55)), url('/custom_gym_bg.png')",
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        backgroundRepeat: 'no-repeat'
+      }}
     >
-      {/* Background desaturate color filter */}
-      <div className="absolute inset-0 bg-[#060608]/20 backdrop-brightness-95 pointer-events-none z-0" />
+      {/* Background glow effects */}
+      <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] rounded-full bg-[#d4ff00]/5 blur-[120px] pointer-events-none z-0" />
+      <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] rounded-full bg-orange-200/20 blur-[120px] pointer-events-none z-0" />
 
       {/* Back to Site pinterest-style circle button */}
       <div className="absolute top-8 left-8 z-30">
         <Link 
           href="/" 
-          className="w-12 h-12 bg-white rounded-full flex items-center justify-center shadow-lg hover:scale-105 transition-transform text-black border border-slate-100"
+          className="w-12 h-12 bg-white/90 rounded-full flex items-center justify-center shadow-md hover:scale-105 transition-transform text-black border border-[#EBE3D5] backdrop-blur-sm"
         >
           <ArrowLeftIcon size={20} />
         </Link>
       </div>
 
       {/* ─── Main Floating Glass Dashboard Panel ─── */}
-      <div className="w-full h-full rounded-[28px] bg-white/10 backdrop-blur-3xl border border-white/20 shadow-2xl p-6 flex flex-col lg:flex-row gap-6 relative z-10 overflow-hidden">
+      <div className="w-full h-full rounded-[30px] bg-white/60 backdrop-blur-xl border border-white/80 shadow-2xl p-5 flex flex-col lg:flex-row gap-5 relative z-10 overflow-hidden">
         
         {/* ─── Column 1: Left Floating Sidebar Panel ─── */}
-        <aside className="w-full lg:w-[250px] flex-shrink-0 bg-white/95 rounded-[24px] shadow-lg p-5 flex flex-col justify-between h-full overflow-y-auto">
+        <aside className="w-full lg:w-[240px] flex-shrink-0 bg-white/95 rounded-[22px] shadow-sm border border-[#EBE3D5] p-4 flex flex-col justify-between h-full overflow-y-auto">
           
-          <div className="space-y-8">
+          <div className="space-y-6">
             {/* Branding Logo - Large & Visible */}
-            <div className="px-2 flex items-center justify-start">
+            <div className="px-2 flex items-center justify-start border-b border-slate-100 pb-4">
               <Link href="/">
-                <img src="/gym_logo.png" alt="Alpha Zone Logo" className="h-16 w-auto object-contain" />
+                <img src="/gym_logo.png" alt="Alpha Zone Logo" className="h-12 w-auto object-contain" />
               </Link>
             </div>
 
             {/* Sidebar Navigation */}
-            <nav className="space-y-1">
+            <nav className="space-y-1 pr-1">
               {[
                 { to: '/dashboard', label: 'Home', icon: HomeIcon },
+                { to: '/dashboard/overview', label: 'Overview', icon: LayoutDashboard, badge: 'PRO' },
                 { to: '/dashboard/members', label: 'Members', icon: Users },
                 { to: '/dashboard/employees', label: 'Employees', icon: Briefcase, badge: 'NEW' },
                 { to: '/dashboard/enquiries', label: 'Enquiries', icon: ClipboardList },
@@ -293,7 +309,8 @@ export default function DashboardLayout({
                 { to: '/dashboard/billing', label: 'Billing', icon: CreditCard },
                 { to: '/dashboard/settings/member-migration', label: 'CSV Import', icon: Upload },
                 { to: '/dashboard/settings/enquiry-form', label: 'Enquiry Form', icon: ClipboardList },
-                { to: '/dashboard/automation', label: 'Automation', icon: Mail },
+                { to: '/dashboard/automation', label: 'Email Automation', icon: Mail },
+                { to: '/dashboard/automation/whatsapp', label: 'WhatsApp Automation', icon: MessageSquare },
                 { to: '/dashboard/analytics', label: 'Analytics', icon: BarChart2 },
                 { to: '/dashboard/memberships', label: 'Memberships', icon: Award },
                 { to: '/dashboard/member-app', label: 'Member App', icon: Smartphone },
@@ -304,18 +321,18 @@ export default function DashboardLayout({
                   <Link
                     key={idx}
                     href={item.to}
-                    className={`flex items-center justify-between px-4.5 py-3 rounded-2xl text-[11px] font-black uppercase tracking-wider transition-all ${
+                    className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl text-[10px] font-extrabold uppercase tracking-wider transition-all ${
                       isActive 
-                        ? 'bg-black text-white shadow-md' 
+                        ? 'bg-[#d4ff00]/15 text-[#4a5f00] border border-[#d4ff00]/30 shadow-sm' 
                         : 'text-slate-500 hover:text-black hover:bg-slate-50'
                     }`}
                   >
-                    <div className="flex items-center gap-3.5">
-                      <item.icon size={15} />
+                    <div className="flex items-center gap-3">
+                      <item.icon size={14} className={isActive ? 'text-[#4a5f00]' : 'text-slate-400'} />
                       <span>{item.label}</span>
                     </div>
                     {item.badge && (
-                      <span className="bg-[#d4ff00] text-black text-[8px] font-black px-1.5 py-0.5 rounded-full scale-90 border border-black/10 animate-pulse">
+                      <span className="bg-[#d4ff00]/80 text-[#303a00] text-[8px] font-black px-1.5 py-0.5 rounded-full scale-90 border border-[#d4ff00]/20 animate-pulse">
                         {item.badge}
                       </span>
                     )}
@@ -326,13 +343,13 @@ export default function DashboardLayout({
           </div>
 
           {/* Sidebar Chat Widget */}
-          <div className="mt-8 bg-slate-50 border border-slate-100 rounded-2xl p-3 text-left space-y-3 shadow-inner">
+          <div className="mt-6 bg-[#FAF7F2] border border-[#EBE3D5] rounded-xl p-3 text-left space-y-3">
             <div className="flex justify-between items-center">
-              <span className="text-[10px] font-black text-slate-800 flex items-center gap-1.5">
+              <span className="text-[9px] font-black text-slate-800 flex items-center gap-1.5">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                 Live Chat Support
               </span>
-              <span className="text-[8px] bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded-full font-bold">48</span>
+              <span className="text-[8px] bg-slate-200/60 text-slate-600 px-1.5 py-0.5 rounded-full font-bold">48</span>
             </div>
             
             <p className="text-[9px] text-slate-400 font-bold leading-none">Lukas is typing...</p>
@@ -348,12 +365,12 @@ export default function DashboardLayout({
                 <span className="text-[7px] text-slate-400 font-mono">0:12</span>
               </div>
 
-              <div className="bg-[#d4ff00] text-black border border-black/5 p-2 rounded-xl text-[9px] font-bold leading-snug w-[85%] ml-auto text-left shadow-sm">
+              <div className="bg-[#d4ff00]/20 text-[#4a5f00] border border-[#d4ff00]/10 p-2 rounded-xl text-[9px] font-bold leading-snug w-[85%] ml-auto text-left shadow-sm">
                 Great job, team! Real-time checkins synced.
               </div>
             </div>
 
-            <div className="flex items-center bg-white border border-slate-200 rounded-lg p-1.5 text-[8.5px] text-slate-400 justify-between shadow-sm">
+            <div className="flex items-center bg-white border border-slate-250 rounded-lg p-1.5 text-[8.5px] text-slate-400 justify-between shadow-sm">
               <span>Message...</span>
               <SendIcon size={9} className="text-slate-400" />
             </div>
@@ -362,12 +379,12 @@ export default function DashboardLayout({
         </aside>
 
         {/* ─── Column 2: Middle Content Panel ─── */}
-        <main className="flex-grow min-w-0 flex flex-col gap-6 text-left overflow-y-auto h-full pt-4 pb-4 pr-2">
+        <main className="flex-grow min-w-0 flex flex-col gap-6 text-left overflow-y-auto h-full pt-2 pb-2 pr-1">
           {children}
         </main>
 
         {/* ─── Column 3: Right Content Panel ─── */}
-        {pathname === '/dashboard' && (
+        {pathname === '/dashboard' && false && (
           <aside className="w-full lg:w-[330px] flex-shrink-0 flex flex-col gap-6 text-left overflow-y-auto h-full pt-4 pb-4 pr-2">
           
           {/* Top header row: Profile card, toggles */}
@@ -376,6 +393,8 @@ export default function DashboardLayout({
               <button className="w-10 h-10 rounded-xl bg-black text-[#d4ff00] flex items-center justify-center shadow-sm cursor-pointer border-none">
                 <Sun size={15} />
               </button>
+
+              <NotificationCenter />
 
               <button 
                 onClick={toggleSound}
@@ -915,6 +934,7 @@ export default function DashboardLayout({
         )}
       </AnimatePresence>
 
+    {pathname !== '/dashboard' && <NotificationCenter hideIcon={true} />}
     </div>
   </div>
   );

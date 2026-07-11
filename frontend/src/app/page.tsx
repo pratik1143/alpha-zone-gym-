@@ -7,7 +7,10 @@ import {
   Dumbbell, Shield, Crown, UserCheck, 
   Eye, EyeOff, Zap, ArrowRight, Check, X, Trophy,
   Users, Flame, Target, Droplet, CheckCircle2,
-  Home as HomeIcon, QrCode, BarChart2, Smartphone
+  Home as HomeIcon, QrCode, BarChart2,
+  Clock, Calendar, Award, Phone, Mail, MessageSquare,
+  Menu, ChevronLeft, ChevronRight, Play, ExternalLink,
+  Heart
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer } from 'recharts';
 import { useAuthStore } from '../store';
@@ -20,14 +23,6 @@ import CinematicHero from '../components/CinematicHero';
 const demoAccounts = [
   { role: 'gym_owner', label: 'Gym Owner / Admin', email: 'owner@alphagym.com', password: '1234567', desc: 'Full Gym Operations', icon: Crown }
 ];
-
-const roleColors: Record<string, { border: string; text: string; iconBg: string; iconColor: string; glow: string }> = {
-  super_admin: { border: 'border-violet-500/30', text: 'text-violet-600', iconBg: 'bg-violet-500/10', iconColor: 'text-violet-600', glow: 'shadow-md border-violet-500 bg-violet-50/10' },
-  gym_owner: { border: 'border-amber-500/30', text: 'text-amber-600', iconBg: 'bg-amber-500/10', iconColor: 'text-amber-600', glow: 'shadow-md border-amber-500 bg-amber-50/10' },
-  branch_manager: { border: 'border-blue-500/30', text: 'text-blue-600', iconBg: 'bg-blue-500/10', iconColor: 'text-blue-600', glow: 'shadow-md border-blue-500 bg-blue-50/10' },
-  trainer: { border: 'border-emerald-500/30', text: 'text-emerald-600', iconBg: 'bg-emerald-500/10', iconColor: 'text-emerald-600', glow: 'shadow-md border-emerald-500 bg-emerald-50/10' },
-  receptionist: { border: 'border-rose-500/30', text: 'text-rose-600', iconBg: 'bg-rose-500/10', iconColor: 'text-rose-600', glow: 'shadow-md border-rose-500 bg-rose-50/10' }
-};
 
 const mobileProgressData = [
   { day: 'M', value: 45 },
@@ -45,40 +40,14 @@ const exerciseList = [
   { id: 3, name: 'Shoulder Press', sets: '3×10', muscle: 'Shoulders' },
 ];
 
-interface RainbowButtonProps {
-  text: string;
-  onClick?: () => void;
-  href?: string;
-  className?: string;
-}
-
-const RainbowButton: React.FC<RainbowButtonProps> = ({ text, onClick, href, className = '' }) => {
-  const content = (
-    <span className="relative group inline-block overflow-hidden border border-black/25 px-8 py-3.5 bg-transparent text-black font-rowdies text-xs tracking-[0.2em] text-center cursor-pointer transition-colors duration-300 hover:text-black uppercase min-w-[170px] rounded-sm">
-      <span className="relative z-10 font-bold">{text}</span>
-      {/* Staggered rainbow slide overlays */}
-      <span className="absolute top-0 left-0 w-0 h-[20%] bg-[#fbe044] transition-all duration-300 ease-out group-hover:w-full" />
-      <span className="absolute top-[20%] left-0 w-0 h-[20%] bg-[#4495fb] transition-all duration-300 ease-out group-hover:w-full delay-[50ms]" />
-      <span className="absolute top-[40%] left-0 w-0 h-[20%] bg-[#44fb57] transition-all duration-300 ease-out group-hover:w-full delay-[100ms]" />
-      <span className="absolute top-[60%] left-0 w-0 h-[20%] bg-[#fb4495] transition-all duration-300 ease-out group-hover:w-full delay-[150ms]" />
-      <span className="absolute top-[80%] left-0 w-0 h-[20%] bg-[#b044fb] transition-all duration-300 ease-out group-hover:w-full delay-[200ms]" />
-    </span>
-  );
-
-  if (href) {
-    return (
-      <a href={href} className={`inline-block ${className}`}>
-        {content}
-      </a>
-    );
-  }
-
-  return (
-    <button onClick={onClick} className={`inline-block border-none bg-transparent p-0 ${className}`}>
-      {content}
-    </button>
-  );
-};
+const galleryImages = [
+  { url: 'https://images.unsplash.com/photo-1540497077202-7c8a3999166f?q=80&w=800&auto=format&fit=crop', caption: 'Premium Imported Strength Racks' },
+  { url: 'https://images.unsplash.com/photo-1517838277536-f5f99be501cd?q=80&w=800&auto=format&fit=crop', caption: 'Elite Olympic Lifting Area' },
+  { url: 'https://images.unsplash.com/photo-1581009146145-b5ef050c2e1e?q=80&w=800&auto=format&fit=crop', caption: 'Custom Barbell & Dumbbell Racks' },
+  { url: 'https://images.unsplash.com/photo-1571731956622-f27c02742a69?q=80&w=800&auto=format&fit=crop', caption: 'HIIT & Battle Ropes Circuit' },
+  { url: 'https://images.unsplash.com/photo-1593079831268-3381b0db4a77?q=80&w=800&auto=format&fit=crop', caption: 'Sleek Cardio Rowers & Treadmills' },
+  { url: 'https://images.unsplash.com/photo-1605296867304-46d5465a25f1?q=80&w=800&auto=format&fit=crop', caption: 'Personal Training Consultation Desk' }
+];
 
 export default function AlphaZoneLandingPage() {
   const { login, setUser, isAuthenticated } = useAuthStore();
@@ -86,22 +55,37 @@ export default function AlphaZoneLandingPage() {
 
   const [isMounted, setIsMounted] = useState(false);
   const [showLoginModal, setShowLoginModal] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  
+  // Login Form States
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
   const [activeRole, setActiveRole] = useState('');
   
-  // Signup State
+  // Signup Form States
   const [signupPlan, setSignupPlan] = useState('');
   const [signupEmail, setSignupEmail] = useState('');
   const [signupUsername, setSignupUsername] = useState('');
   const [signupPassword, setSignupPassword] = useState('');
 
-  // Mobile simulator state
+  // Mobile simulator states
   const [waterIntake, setWaterIntake] = useState(1.5);
   const [completedExs, setCompletedExs] = useState<Record<number, boolean>>({});
   const [simTab, setSimTab] = useState<'home' | 'workouts' | 'progress'>('home');
+
+  // Lightbox Modal state
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [lightboxIndex, setLightboxIndex] = useState(0);
+
+  // Testimonials state
+  const [currentTestimonial, setCurrentTestimonial] = useState(0);
+  const testimonials = [
+    { name: "Karan V.", role: "Powerlifter", review: "The strength equipment at Alpha Zone is incredible. Rogue bars, calibrated plates, and coaches who know how to program for performance. Transformed my squat from 140kg to 210kg in 10 months.", rating: 5 },
+    { name: "Sneha R.", role: "Athletic Conditioning", review: "Reception staff are super friendly, and the AI mobile app simulator is amazing for tracking workouts and hydration streak inside. Everything feels clean, premium, and extremely motivating.", rating: 5 },
+    { name: "Vikram K.", role: "CrossFit enthusiast", review: "Best gym environment in Sohana! The weekly CrossFit and group conditioning classes push you beyond limits. Plus, no locked contracts makes it completely pressure-free.", rating: 5 }
+  ];
 
   useEffect(() => {
     setIsMounted(true);
@@ -111,9 +95,8 @@ export default function AlphaZoneLandingPage() {
   }, [isAuthenticated, router]);
 
   const handleRoleSelect = (acc: typeof demoAccounts[0]) => {
-    // Only highlight the role card — do NOT auto-fill password
     setEmail(acc.email);
-    setPassword('');
+    setPassword(acc.password);
     setActiveRole(acc.role);
   };
 
@@ -125,12 +108,10 @@ export default function AlphaZoneLandingPage() {
     }
     setLoading(true);
     try {
-      // Only Firebase Auth — no mock fallback allowed
       const user = await login({ email, password });
       toast.success(`Welcome back, ${user.name || user.email}!`);
       router.push('/dashboard');
     } catch (error: any) {
-      // Always show a clear invalid credentials message
       toast.error('Invalid Email or Password. Please try again.');
     } finally {
       setLoading(false);
@@ -169,261 +150,727 @@ export default function AlphaZoneLandingPage() {
     }
   };
 
+  const selectPricingPlan = (plan: string) => {
+    setSignupPlan(plan);
+    const signupSection = document.getElementById('signup');
+    if (signupSection) {
+      signupSection.scrollIntoView({ behavior: 'smooth' });
+    }
+    toast.success(`Selected ${plan.toUpperCase()} Plan! Please complete signup below.`);
+  };
+
+  const openLightbox = (index: number) => {
+    setLightboxIndex(index);
+    setLightboxOpen(true);
+  };
+
+  const prevLightbox = () => {
+    setLightboxIndex(prev => (prev === 0 ? galleryImages.length - 1 : prev - 1));
+  };
+
+  const nextLightbox = () => {
+    setLightboxIndex(prev => (prev === galleryImages.length - 1 ? 0 : prev + 1));
+  };
+
   return (
-    <div className="min-h-screen bg-[#fafafc] text-[#0f172a] flex flex-col font-poppins overflow-x-hidden selection:bg-[#d4ff00] selection:text-black">      {/* Sticky Header */}
-      <header className="fixed top-0 left-0 right-0 z-45 bg-white/80 backdrop-blur-md border-b border-slate-100 transition-all text-slate-900 shadow-sm">
-        <div className="max-w-6xl mx-auto px-6 h-24 flex items-center justify-between">
+    <div className="min-h-screen bg-[#08080a] text-white flex flex-col font-poppins overflow-x-hidden selection:bg-[#d4ff00] selection:text-black">
+      
+      {/* Self-contained CSS Marquee & Custom Styles */}
+      <style>{`
+        @keyframes marquee {
+          0% { transform: translateX(0%); }
+          100% { transform: translateX(-50%); }
+        }
+        .animate-marquee {
+          animation: marquee 25s linear infinite;
+        }
+        .text-neon-glow {
+          text-shadow: 0 0 12px rgba(212,255,0,0.3);
+        }
+        .card-neon-hover {
+          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .card-neon-hover:hover {
+          border-color: rgba(212, 255, 0, 0.4);
+          box-shadow: 0 0 25px rgba(212, 255, 0, 0.15);
+          transform: translateY(-4px);
+        }
+      `}</style>
+
+      {/* Sticky Header Nav */}
+      <header className="fixed top-0 left-0 right-0 z-50 bg-[#08080a]/80 backdrop-blur-md border-b border-white/10 transition-all text-white shadow-lg">
+        <div className="max-w-7xl mx-auto px-6 h-24 flex items-center justify-between">
           
-          {/* Logo - Loaded from /gym_logo.png */}
+          {/* Logo */}
           <a href="#" className="flex items-center gap-2 cursor-pointer hover:opacity-90 transition-opacity">
-            <img src="/gym_logo.png" alt="Alpha Zone Logo" className="h-20 w-auto object-contain" />
+            <img src="/gym_logo.png" alt="Alpha Zone Logo" className="h-16 w-auto object-contain" />
           </a>
 
-          {/* Navigation Links */}
-          <nav className="hidden md:flex items-center gap-8 text-xs font-bold uppercase tracking-wider text-slate-600">
-            <a href="#" className="hover:text-black transition-colors">Home</a>
-            <a href="#about" className="hover:text-black transition-colors">About</a>
-            <a href="#programs" className="hover:text-black transition-colors">Programs</a>
-            <a href="#features" className="hover:text-black transition-colors">Features</a>
-            <a href="#app" className="hover:text-black transition-colors">App Sim</a>
-            <a href="#download-app" className="hover:opacity-90 transition-all font-extrabold !text-black bg-[#d4ff00] px-3.5 py-1.5 rounded-full text-[10px] uppercase tracking-wider shadow-sm border border-[#d4ff00]/30 hover:bg-black hover:text-[#d4ff00]">Download APK</a>
-            <a href="#signup" className="hover:text-black transition-colors">Sign Up</a>
+          {/* Desktop Navigation Links */}
+          <nav className="hidden lg:flex items-center gap-8 text-xs font-bold uppercase tracking-wider text-slate-400">
+            <a href="#" className="hover:text-[#d4ff00] hover:text-neon-glow transition-colors">Home</a>
+            <a href="#about" className="hover:text-[#d4ff00] hover:text-neon-glow transition-colors">About</a>
+            <a href="#services" className="hover:text-[#d4ff00] hover:text-neon-glow transition-colors">Services</a>
+            <a href="#plans" className="hover:text-[#d4ff00] hover:text-neon-glow transition-colors">Plans</a>
+            <a href="#trainers" className="hover:text-[#d4ff00] hover:text-neon-glow transition-colors">Trainers</a>
+            <a href="#gallery" className="hover:text-[#d4ff00] hover:text-neon-glow transition-colors">Inside Gallery</a>
+            <a href="#app" className="hover:text-[#d4ff00] hover:text-neon-glow transition-colors">App Sim</a>
+            <a href="#contact" className="hover:text-[#d4ff00] hover:text-neon-glow transition-colors">Contact</a>
           </nav>
 
-          {/* Actions */}
-          <div className="flex items-center gap-6">
+          {/* Action buttons */}
+          <div className="hidden sm:flex items-center gap-4">
             <button 
               onClick={() => setShowLoginModal(true)} 
-              className="text-slate-600 hover:text-black font-bold text-sm tracking-wider uppercase transition-colors cursor-pointer bg-transparent border-none p-0"
+              className="text-slate-350 hover:text-[#d4ff00] font-bold text-xs tracking-wider uppercase transition-all bg-transparent border-none py-2 px-4 cursor-pointer"
             >
-              Login
+              Client Login
             </button>
             <a 
               href="#signup" 
-              className="hidden sm:inline-block bg-[#d4ff00] text-black font-bold text-xs px-6 py-2.5 rounded-full hover:bg-black hover:text-[#d4ff00] hover:scale-105 transition-all cursor-pointer shadow-[0_0_15px_rgba(212,255,0,0.25)]"
+              className="bg-[#d4ff00] text-black font-extrabold text-xs px-6 py-3 rounded-full hover:bg-white transition-all cursor-pointer shadow-[0_0_15px_rgba(212,255,0,0.25)] hover:scale-105"
             >
-              SIGN UP
+              JOIN NOW
             </a>
           </div>
+
+          {/* Mobile Menu Toggle */}
+          <button 
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            className="lg:hidden text-white hover:text-[#d4ff00] transition-colors p-2 bg-transparent border-none cursor-pointer"
+          >
+            <Menu size={24} />
+          </button>
         </div>
+
+        {/* Mobile Navigation Drawer */}
+        <AnimatePresence>
+          {mobileMenuOpen && (
+            <motion.div 
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="lg:hidden bg-[#0c0c0e] border-t border-white/10 px-6 py-6 space-y-4 flex flex-col"
+            >
+              <a href="#" onClick={() => setMobileMenuOpen(false)} className="text-slate-300 hover:text-[#d4ff00] font-bold text-sm tracking-wide uppercase">Home</a>
+              <a href="#about" onClick={() => setMobileMenuOpen(false)} className="text-slate-300 hover:text-[#d4ff00] font-bold text-sm tracking-wide uppercase">About</a>
+              <a href="#services" onClick={() => setMobileMenuOpen(false)} className="text-slate-300 hover:text-[#d4ff00] font-bold text-sm tracking-wide uppercase">Services</a>
+              <a href="#plans" onClick={() => setMobileMenuOpen(false)} className="text-slate-300 hover:text-[#d4ff00] font-bold text-sm tracking-wide uppercase">Plans</a>
+              <a href="#trainers" onClick={() => setMobileMenuOpen(false)} className="text-slate-300 hover:text-[#d4ff00] font-bold text-sm tracking-wide uppercase">Trainers</a>
+              <a href="#gallery" onClick={() => setMobileMenuOpen(false)} className="text-slate-300 hover:text-[#d4ff00] font-bold text-sm tracking-wide uppercase">Inside Gallery</a>
+              <a href="#app" onClick={() => setMobileMenuOpen(false)} className="text-slate-300 hover:text-[#d4ff00] font-bold text-sm tracking-wide uppercase">App Sim</a>
+              <a href="#contact" onClick={() => setMobileMenuOpen(false)} className="text-slate-300 hover:text-[#d4ff00] font-bold text-sm tracking-wide uppercase">Contact</a>
+              <div className="pt-4 border-t border-white/5 flex gap-4">
+                <button onClick={() => { setMobileMenuOpen(false); setShowLoginModal(true); }} className="w-1/2 bg-slate-900 text-white font-bold py-3 rounded-full text-xs uppercase text-center cursor-pointer border-none">Login</button>
+                <a href="#signup" onClick={() => setMobileMenuOpen(false)} className="w-1/2 bg-[#d4ff00] text-black font-extrabold py-3 rounded-full text-xs uppercase text-center shadow-[0_0_15px_rgba(212,255,0,0.1)]">Join Now</a>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </header>
 
       {/* ─── Premium Cinematic Hero Section ─── */}
       <CinematicHero />
 
-      {/* ─── About Section / Take A Step Toward Fitness ─── */}
-      <section id="about" className="py-24 bg-white text-slate-900 relative overflow-hidden">
-        <div className="max-w-6xl mx-auto px-6 grid md:grid-cols-2 gap-12 items-center">
+      {/* ─── Specialty Infinite Ticker Banner ─── */}
+      <div className="relative w-full overflow-hidden bg-[#d4ff00] text-black py-4 select-none border-y border-[#d4ff00]/10 shadow-[0_0_30px_rgba(212,255,0,0.15)] z-20">
+        <div className="flex whitespace-nowrap animate-marquee">
+          <span className="text-sm font-black uppercase tracking-[0.2em] mx-6">STRENGTH ★ CROSSFIT ★ MOBILITY ★ ATHLETIC CONDITIONING ★ CARDIO ★ PERSONAL TRAINING ★ NUTRITION PROGRAMMING ★ MUSCLE BUILD ★</span>
+          <span className="text-sm font-black uppercase tracking-[0.2em] mx-6">STRENGTH ★ CROSSFIT ★ MOBILITY ★ ATHLETIC CONDITIONING ★ CARDIO ★ PERSONAL TRAINING ★ NUTRITION PROGRAMMING ★ MUSCLE BUILD ★</span>
+        </div>
+      </div>
+
+      {/* ─── Metrics Stats Section ─── */}
+      <section className="py-12 bg-[#08080a] relative z-20">
+        <div className="max-w-7xl mx-auto px-6">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            {[
+              { val: "10K+", title: "Members Trained", desc: "Forging absolute results", icon: Users, color: "text-[#d4ff00]" },
+              { val: "25+", title: "Expert Coaches", desc: "Certified elite trainers", icon: Trophy, color: "text-[#d4ff00]" },
+              { val: "50+", title: "Weekly Classes", desc: "From HIIT to Strength Build", icon: Clock, color: "text-[#d4ff00]" },
+              { val: "12yr", title: "Of Excellence", desc: "Building physical limits", icon: Award, color: "text-[#d4ff00]" }
+            ].map((stat, idx) => (
+              <div key={idx} className="bg-slate-900/50 border border-white/5 backdrop-blur-md p-6 rounded-2xl text-center space-y-2 card-neon-hover">
+                <div className="w-10 h-10 bg-slate-800/80 rounded-xl mx-auto flex items-center justify-center border border-white/10">
+                  <stat.icon className={`w-5 h-5 ${stat.color}`} />
+                </div>
+                <div className="text-2xl md:text-3xl font-black text-white tracking-tight">{stat.val}</div>
+                <div className="text-[11px] font-bold text-slate-300 uppercase tracking-wider">{stat.title}</div>
+                <div className="text-[9px] text-slate-500 font-medium">{stat.desc}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ─── About Section / Performance Lab ─── */}
+      <section id="about" className="py-24 bg-[#0a0a0c] text-white relative overflow-hidden z-20 border-t border-white/5">
+        <div className="absolute top-1/2 left-1/4 -translate-y-1/2 w-[500px] h-[500px] bg-[#d4ff00]/5 rounded-full blur-3xl pointer-events-none" />
+        
+        <div className="max-w-7xl mx-auto px-6 grid md:grid-cols-2 gap-12 items-center">
           
-          {/* Image - Frame Entrance */}
+          {/* Left Side: Heavy Styling Image Frame */}
           <motion.div 
             initial={{ opacity: 0, x: -60 }}
             whileInView={{ opacity: 1, x: 0 }}
             viewport={{ once: true, margin: "-100px" }}
-            transition={{ duration: 0.8, ease: "easeOut" }}
-            className="flex justify-center relative"
+            transition={{ duration: 0.8 }}
+            className="relative group justify-self-center md:justify-self-start"
           >
-            <div className="relative w-full max-w-[420px] rounded-3xl overflow-hidden border border-slate-100 shadow-xl bg-slate-50">
+            <div className="relative w-full max-w-[460px] rounded-[32px] overflow-hidden border border-white/10 shadow-2xl bg-slate-900">
+              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent z-10" />
               <img 
-                className="w-full h-auto object-contain hover:scale-105 transition-transform duration-700"
-                src="https://assets.website-files.com/6214787aae0f89e8420f3841/62147f82e4fe2fc26b9812cb_Image%2013.png" 
-                alt="Take a step" 
+                className="w-full h-auto object-cover hover:scale-105 transition-transform duration-700"
+                src="https://images.unsplash.com/photo-1540497077202-7c8a3999166f?q=80&w=600&auto=format&fit=crop" 
+                alt="Gym Interior Performance Lab" 
               />
+              {/* Corner Float Badge */}
+              <div className="absolute bottom-6 left-6 z-25 bg-[#d4ff00] text-black font-extrabold text-[10px] uppercase tracking-widest px-4 py-2 rounded-xl shadow-lg border border-[#d4ff00]/20 flex items-center gap-1.5">
+                <Crown size={12} />
+                12+ Years Building Champions
+              </div>
             </div>
+            {/* Outline Glow Decorator */}
+            <div className="absolute -inset-1 border-2 border-dashed border-[#d4ff00]/30 rounded-[34px] -z-10 group-hover:border-[#d4ff00]/60 transition-all pointer-events-none" />
           </motion.div>
 
-          {/* Text Content */}
+          {/* Right Side: Copywriting Checklist */}
           <motion.div 
             initial={{ opacity: 0, x: 60 }}
             whileInView={{ opacity: 1, x: 0 }}
             viewport={{ once: true, margin: "-100px" }}
-            transition={{ duration: 0.8, ease: "easeOut", delay: 0.2 }}
+            transition={{ duration: 0.8, delay: 0.15 }}
             className="flex flex-col items-start text-left space-y-6"
           >
-            <h2 className="font-rowdies text-4xl md:text-5xl font-bold text-slate-900 uppercase leading-tight">
-              Take A Step<br />Toward Fitness
+            <span className="text-xs font-black text-[#d4ff00] tracking-widest uppercase text-neon-glow">ABOUT ALPHA ZONE</span>
+            <h2 className="text-3xl md:text-5xl font-black tracking-tighter text-white uppercase leading-tight">
+              MORE THAN A GYM.<br />A PERFORMANCE LAB.
             </h2>
             <div className="w-16 h-1 bg-[#d4ff00]" />
-            <p className="text-slate-600 text-sm md:text-base leading-relaxed">
-              Getting into shape doesn’t have to be intimidating. Start putting your best fitness foot forward with an online training program that makes you the all star. Get guided workouts for your level of fitness, that you can do anywhere, and at your own pace.
+            <p className="text-slate-400 text-sm md:text-base leading-relaxed font-poppins">
+              Alpha Zone is designed for those who refuse the status quo. We provide an uncompromising training culture, featuring fully imported state-of-the-art weights, elite customized bio-mechanical programming, and biometrically secured facilities. Start building your strongest self.
             </p>
-            <RainbowButton text="JOIN NOW" href="#signup" className="pt-2" />
+
+            {/* Checklist */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 w-full font-poppins">
+              {[
+                "Premium imported equipment",
+                "Certified expert coaches",
+                "Personalised programming",
+                "Open 7 days a week"
+              ].map((feat, i) => (
+                <div key={i} className="flex items-center gap-3 text-xs md:text-sm font-semibold text-slate-200">
+                  <div className="w-5 h-5 rounded-full bg-[#d4ff00]/15 flex items-center justify-center border border-[#d4ff00]/40 shrink-0 text-[#d4ff00]">
+                    <Check size={11} strokeWidth={3} />
+                  </div>
+                  <span>{feat}</span>
+                </div>
+              ))}
+            </div>
+
+            <div className="pt-4 flex gap-4">
+              <a href="#signup" className="bg-[#d4ff00] text-black font-extrabold text-xs tracking-wider px-8 py-3.5 rounded-full hover:bg-white transition-all shadow-[0_0_15px_rgba(212,255,0,0.2)]">START TRAINING →</a>
+              <a href="#gallery" className="border border-white/10 hover:border-[#d4ff00] text-white font-bold text-xs tracking-wider px-8 py-3.5 rounded-full transition-all">TAKE THE TOUR</a>
+            </div>
           </motion.div>
 
         </div>
       </section>
-      {/* ─── Programs Section ─── */}
-      <section id="programs" className="py-24 bg-slate-50 text-slate-900 overflow-hidden">
-        <div className="max-w-6xl mx-auto px-6 text-center space-y-12">
+
+      {/* ─── Why Choose Us Section ─── */}
+      <section className="py-24 bg-[#08080a] relative z-20 border-t border-white/5">
+        <div className="max-w-7xl mx-auto px-6 text-center space-y-16">
           
-          {/* Header */}
-          <motion.div 
-            initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, margin: "-100px" }}
-            transition={{ duration: 0.7 }}
-            className="space-y-4 max-w-2xl mx-auto"
-          >
-            <h2 className="font-rowdies text-4xl md:text-5xl font-bold text-slate-900 uppercase">
-              Programs for Every Goal
+          <div className="space-y-4 max-w-2xl mx-auto">
+            <span className="text-xs font-black text-[#d4ff00] tracking-widest uppercase text-neon-glow">WHY CHOOSE US</span>
+            <h2 className="text-3xl md:text-5xl font-black text-white uppercase tracking-tighter">
+              BUILT FOR THOSE WHO SHOW UP.
             </h2>
             <div className="w-20 h-1 bg-[#d4ff00] mx-auto" />
-            <p className="text-slate-600 text-sm md:text-base leading-relaxed">
-              Get a workout program that works for your body. Use one of our preset programs or customize your own set of workouts to get the results you want. We have exercises for every body type and every body goal.
+            <p className="text-slate-400 text-sm md:text-base font-poppins leading-relaxed">
+              We provide the tools, coaching, and environment you need to build consistency, strength, and confidence.
             </p>
-          </motion.div>
+          </div>
 
-          {/* Grid of Programs */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 font-poppins">
             {[
-              { title: 'Muscle Gain', img: 'https://assets.website-files.com/6214787aae0f89e8420f3841/62147f82ed158809ac2663a4_Group%2042.png' },
-              { title: 'Weight Loss', img: 'https://assets.website-files.com/6214787aae0f89e8420f3841/62147f82af41fb90c238dfd3_Group%2043.png' },
-              { title: 'Strength Build', img: 'https://assets.website-files.com/6214787aae0f89e8420f3841/62147f82430894195e756a8e_Group%2044.png' },
-              { title: 'Body Toning', img: 'https://assets.website-files.com/6214787aae0f89e8420f3841/62147f82fdb3518be588d4fa_Group%2045.png' }
-            ].map((prog, idx) => (
-              <motion.div 
-                key={idx}
-                initial={{ opacity: 0, y: 40 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, margin: "-50px" }}
-                transition={{ duration: 0.6, delay: idx * 0.12 }}
-                whileHover={{ y: -8, borderColor: '#d4ff00', boxShadow: '0 15px 30px rgba(212,255,0,0.1)' }}
-                className="bg-white border border-slate-100 rounded-2xl p-6 text-center space-y-4 transition-all duration-300 shadow-sm"
-              >
-                <div className="w-20 h-20 bg-slate-50 border border-slate-100 rounded-2xl mx-auto flex items-center justify-center p-3">
-                  <img src={prog.img} alt={prog.title} className="w-full h-full object-contain" />
+              { title: "Elite Equipment", desc: "Train with the best. Fully imported professional strength and cardio machinery optimized for safety and mechanical efficiency.", icon: Dumbbell },
+              { title: "Expert Coaches", desc: "Get trained by the best. Certified specialist coaches who structure programming, track progress, and drive consistency.", icon: UserCheck },
+              { title: "Smart Programming", desc: "No random workouts. Custom periodized plans personalized to your goals, history, and physical profile.", icon: Target },
+              { title: "Proven Results", desc: "Thousands of members transformed. Read real progress metrics powered by our internal dashboard algorithms.", icon: Flame },
+              { title: "Safe & Hygienic", desc: "Spotless facilities. Hand sanitizing stations, daily heavy cleaning, and air filtration for optimal training comfort.", icon: Shield },
+              { title: "Open 7 Days", desc: "Early mornings to late nights. Flexible timing that fits into your active lifestyle without any friction.", icon: Calendar }
+            ].map((item, idx) => (
+              <div key={idx} className="bg-slate-900/40 border border-white/5 p-6 rounded-2xl text-left space-y-4 card-neon-hover">
+                <div className="w-12 h-12 bg-[#d4ff00]/10 border border-[#d4ff00]/30 rounded-xl flex items-center justify-center text-[#d4ff00]">
+                  <item.icon className="w-6 h-6" />
                 </div>
-                <h3 className="font-rowdies font-bold text-lg text-slate-900 uppercase tracking-wide">
-                  {prog.title}
-                </h3>
-              </motion.div>
+                <h3 className="text-base font-bold text-white uppercase tracking-wide">{item.title}</h3>
+                <p className="text-slate-400 text-xs leading-relaxed">{item.desc}</p>
+              </div>
             ))}
           </div>
 
-          {/* Center Button */}
-          <motion.div 
-            initial={{ opacity: 0, scale: 0.95 }}
-            whileInView={{ opacity: 1, scale: 1 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.5, delay: 0.4 }}
-            className="pt-4"
-          >
-            <RainbowButton text="MORE PROGRAMS" href="#signup" />
-          </motion.div>
-
         </div>
       </section>
 
-      {/* ─── Motivation Section / Break Out of Old Habits ─── */}
-      <section className="py-24 bg-white text-slate-900 overflow-hidden">
-        <div className="max-w-6xl mx-auto px-6 grid md:grid-cols-2 gap-12 items-center">
+      {/* ─── Services Section ─── */}
+      <section id="services" className="py-24 bg-[#0a0a0c] text-white relative z-20 border-t border-white/5">
+        <div className="max-w-7xl mx-auto px-6 text-center space-y-16">
           
-          {/* Text Content */}
-          <motion.div 
-            initial={{ opacity: 0, x: -60 }}
-            whileInView={{ opacity: 1, x: 0 }}
-            viewport={{ once: true, margin: "-100px" }}
-            transition={{ duration: 0.8, ease: "easeOut" }}
-            className="flex flex-col items-start text-left space-y-6 order-2 md:order-1"
-          >
-            <h2 className="font-rowdies text-4xl md:text-5xl font-bold text-slate-900 uppercase leading-tight">
-              Break Out of<br />Old Habits
-            </h2>
-            <div className="w-16 h-1 bg-[#d4ff00]" />
-            <p className="text-slate-600 text-sm md:text-base leading-relaxed">
-              It’s never too late to start focusing on your health. It’s just a matter of getting started. With our no-obligation, contract-free memberships, it’s easy to get your healthy habits going without the pressure. Feel the best you ever have. It all starts here.
-            </p>
-            <RainbowButton text="JOIN NOW" href="#signup" className="pt-2" />
-          </motion.div>
-
-          {/* Image - Fixed Crop */}
-          <motion.div 
-            initial={{ opacity: 0, x: 60 }}
-            whileInView={{ opacity: 1, x: 0 }}
-            viewport={{ once: true, margin: "-100px" }}
-            transition={{ duration: 0.8, ease: "easeOut", delay: 0.2 }}
-            className="flex justify-center relative order-1 md:order-2"
-          >
-            <div className="relative w-full max-w-[420px] rounded-3xl overflow-hidden border border-slate-100 shadow-xl bg-slate-50">
-              <img 
-                className="w-full h-auto object-contain hover:scale-105 transition-transform duration-700"
-                src="https://assets.website-files.com/6214787aae0f89e8420f3841/62147f826237bf1df2431153_Image%2015.png" 
-                alt="Break old habits" 
-              />
-            </div>
-          </motion.div>
-
-        </div>
-      </section>
-
-      {/* ─── Features Section ─── */}
-      <section id="features" className="py-24 bg-slate-50 text-slate-900 overflow-hidden">
-        <div className="max-w-6xl mx-auto px-6 text-center space-y-16">
-          
-          {/* Header */}
-          <motion.div 
-            initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, margin: "-100px" }}
-            transition={{ duration: 0.7 }}
-            className="space-y-4 max-w-2xl mx-auto"
-          >
-            <h2 className="font-rowdies text-4xl md:text-5xl font-bold text-slate-900 uppercase">
-              Core Membership Benefits
+          <div className="space-y-4 max-w-2xl mx-auto">
+            <span className="text-xs font-black text-[#d4ff00] tracking-widest uppercase text-neon-glow">OUR SERVICES</span>
+            <h2 className="text-3xl md:text-5xl font-black text-white uppercase tracking-tighter">
+              TRAIN EVERY WAY THAT MATTERS.
             </h2>
             <div className="w-20 h-1 bg-[#d4ff00] mx-auto" />
-            <p className="text-slate-600 text-sm md:text-base leading-relaxed">
-              Experience a premium workout culture built around flexibility, personalization, and 24/7 client portal accessibility.
+            <p className="text-slate-400 text-sm md:text-base font-poppins leading-relaxed">
+              Unlock your peak potential with diverse premium training categories programmed for functional performance.
             </p>
-          </motion.div>
+          </div>
 
-          {/* Features Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 font-poppins">
             {[
-              { title: 'Cancel Anytime', desc: 'No locked contracts. Upgrade, downgrade, or cancel your gym pass at any point with zero fees.', img: 'https://assets.website-files.com/6214787aae0f89e8420f3841/62147f6bd027c4e5b580ada3_Group%2046.svg' },
-              { title: 'Customizable Programs', desc: 'Adjust workouts, sets, reps, and nutrition guides dynamically to hit your personal targets.', img: 'https://assets.website-files.com/6214787aae0f89e8420f3841/62147f6be5b62828f63018c2_Group%2047.svg' },
-              { title: '24/7 Customer Support', desc: 'Direct chat lines to support agents and fitness coaches whenever you need assistance.', img: 'https://assets.website-files.com/6214787aae0f89e8420f3841/62147f6b31bc34d773241886_Group%2048.svg' },
-              { title: 'Get On Any Device', desc: 'Access workouts, hydration rings, and check-in QR codes on phone, tablet, or desktop.', img: 'https://assets.website-files.com/6214787aae0f89e8420f3841/62147f6ba7395608254d708b_Group%2049.svg' }
-            ].map((feat, idx) => (
-              <motion.div 
-                key={idx}
-                initial={{ opacity: 0, y: 40 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, margin: "-50px" }}
-                transition={{ duration: 0.6, delay: idx * 0.15 }}
-                className="bg-white border border-slate-100 rounded-2xl p-6 text-left space-y-4 hover:border-[#d4ff00]/40 hover:shadow-lg transition-all duration-300 group"
-              >
-                <div className="w-12 h-12 bg-slate-100 border border-slate-200 rounded-xl flex items-center justify-center p-2 group-hover:bg-[#d4ff00]/20 transition-colors">
-                  <img src={feat.img} alt={feat.title} className="w-full h-full object-contain" />
+              { num: "01", title: "Weight Training", desc: "Barbells, dumbbells, power cages, and specialized pin machines for muscle isolation and hypertrophic development.", icon: Dumbbell },
+              { num: "02", title: "Cardio Zone", desc: "Top-tier rowers, assault bikes, curved motorless treadmills, and stairmasters optimized for metabolic conditioning.", icon: Heart },
+              { num: "03", title: "Personal Training", desc: "One-on-one customized training blocks, biometric goal charting, structural correction, and direct coaching access.", icon: UserCheck },
+              { num: "04", title: "CrossFit", desc: "High-intensity functional conditioning including Olympic lifts, plyometrics, gymnastic rings, and engine builders.", icon: Flame },
+              { num: "05", title: "Functional Training", desc: "Kettlebell flows, medicine ball slams, core stabilization, and real-world athletic movement optimization.", icon: Trophy },
+              { num: "06", title: "Group Classes", desc: "Energetic community sessions from HIIT classes and strength challenges to focus, form, and yoga modules.", icon: Users }
+            ].map((srv, idx) => (
+              <div key={idx} className="relative bg-slate-900/60 border border-white/5 p-8 rounded-2xl text-left card-neon-hover group overflow-hidden">
+                {/* Floating Glow number in background */}
+                <div className="absolute top-4 right-6 text-5xl font-black text-slate-800/40 select-none group-hover:text-[#d4ff00]/10 transition-colors">{srv.num}</div>
+                <div className="space-y-4">
+                  <div className="w-10 h-10 bg-slate-800/90 rounded-xl flex items-center justify-center text-[#d4ff00] border border-white/10">
+                    <srv.icon className="w-5 h-5" />
+                  </div>
+                  <h3 className="text-lg font-bold text-white uppercase tracking-wide">{srv.title}</h3>
+                  <p className="text-slate-400 text-xs leading-relaxed">{srv.desc}</p>
                 </div>
-                <h3 className="font-rowdies font-bold text-lg text-slate-900 uppercase">
-                  {feat.title}
-                </h3>
-                <p className="text-slate-600 text-xs leading-relaxed">
-                  {feat.desc}
-                </p>
-              </motion.div>
+              </div>
             ))}
+          </div>
+
+        </div>
+      </section>
+
+      {/* Cardio icon managed via Lucide Heart */}
+
+      {/* ─── Membership Pricing Plans ─── */}
+      <section id="plans" className="py-24 bg-[#08080a] relative z-20 border-t border-white/5">
+        <div className="max-w-7xl mx-auto px-6 text-center space-y-16">
+          
+          <div className="space-y-4 max-w-2xl mx-auto">
+            <span className="text-xs font-black text-[#d4ff00] tracking-widest uppercase text-neon-glow">MEMBERSHIP PLANS</span>
+            <h2 className="text-3xl md:text-5xl font-black text-white uppercase tracking-tighter">
+              CHOOSE YOUR COMMITMENT.
+            </h2>
+            <div className="w-20 h-1 bg-[#d4ff00] mx-auto" />
+            <p className="text-slate-400 text-sm md:text-base font-poppins leading-relaxed">
+              Flexible options tailored to your schedule. Choose a contract-free plan and unlock premium access.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-stretch font-poppins max-w-5xl mx-auto">
+            
+            {/* Monthly Plan */}
+            <div className="bg-slate-900/40 border border-white/5 rounded-3xl p-8 flex flex-col justify-between text-left card-neon-hover relative">
+              <div className="space-y-6">
+                <div>
+                  <h3 className="text-lg font-bold text-white uppercase tracking-wide">Monthly Access</h3>
+                  <p className="text-slate-400 text-xs mt-1">Perfect for trial and short-term routines</p>
+                </div>
+                
+                <div className="flex items-baseline gap-1">
+                  <span className="text-4xl font-black text-white">₹ 2,499</span>
+                  <span className="text-slate-400 text-xs">/ month</span>
+                </div>
+
+                <div className="h-[1px] bg-white/10" />
+
+                <ul className="space-y-3.5 text-xs text-slate-300">
+                  <li className="flex items-center gap-2.5">
+                    <Check size={14} className="text-[#d4ff00]" />
+                    <span>Full Gym weights access</span>
+                  </li>
+                  <li className="flex items-center gap-2.5">
+                    <Check size={14} className="text-[#d4ff00]" />
+                    <span>Cardio & treadmill zones</span>
+                  </li>
+                  <li className="flex items-center gap-2.5">
+                    <Check size={14} className="text-[#d4ff00]" />
+                    <span>Locker room & shower access</span>
+                  </li>
+                  <li className="flex items-center gap-2.5">
+                    <Check size={14} className="text-[#d4ff00]" />
+                    <span>1 Free Fitness Assessment</span>
+                  </li>
+                </ul>
+              </div>
+
+              <button 
+                onClick={() => selectPricingPlan('monthly')}
+                className="w-full mt-8 border border-white/10 hover:border-[#d4ff00] text-white hover:text-black hover:bg-[#d4ff00] font-bold py-3.5 rounded-xl text-xs uppercase text-center transition-all cursor-pointer bg-transparent"
+              >
+                SELECT MONTHLY
+              </button>
+            </div>
+
+            {/* Quarterly Plan (Highlighted) */}
+            <div className="bg-slate-950 border-[2px] border-[#d4ff00] rounded-3xl p-8 flex flex-col justify-between text-left relative shadow-[0_0_35px_rgba(212,255,0,0.18)]">
+              {/* Popularity Badge */}
+              <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-[#d4ff00] text-black font-black text-[9px] uppercase tracking-widest px-4 py-1.5 rounded-full shadow-md z-10">
+                MOST POPULAR
+              </div>
+              
+              <div className="space-y-6">
+                <div>
+                  <h3 className="text-lg font-bold text-white uppercase tracking-wide flex items-center gap-2">
+                    Quarterly Pass
+                    <span className="w-2 h-2 rounded-full bg-[#d4ff00] animate-ping" />
+                  </h3>
+                  <p className="text-slate-400 text-xs mt-1">Our best value option for sustained results</p>
+                </div>
+                
+                <div className="flex items-baseline gap-1">
+                  <span className="text-4xl font-black text-white">₹ 6,499</span>
+                  <span className="text-slate-400 text-xs">/ 3 months</span>
+                </div>
+
+                <div className="h-[1px] bg-white/10" />
+
+                <ul className="space-y-3.5 text-xs text-slate-200">
+                  <li className="flex items-center gap-2.5">
+                    <Check size={14} className="text-[#d4ff00]" />
+                    <span>Full Gym weights & cardio zones</span>
+                  </li>
+                  <li className="flex items-center gap-2.5">
+                    <Check size={14} className="text-[#d4ff00]" />
+                    <span className="font-bold text-white">2 Free Personal Training Sessions</span>
+                  </li>
+                  <li className="flex items-center gap-2.5">
+                    <Check size={14} className="text-[#d4ff00]" />
+                    <span>Locker, shower, & priority steam</span>
+                  </li>
+                  <li className="flex items-center gap-2.5">
+                    <Check size={14} className="text-[#d4ff00]" />
+                    <span>Weekly CrossFit & group class access</span>
+                  </li>
+                  <li className="flex items-center gap-2.5">
+                    <Check size={14} className="text-[#d4ff00]" />
+                    <span>Diet consultation & tracking logs</span>
+                  </li>
+                </ul>
+              </div>
+
+              <button 
+                onClick={() => selectPricingPlan('quarterly')}
+                className="w-full mt-8 bg-[#d4ff00] text-black font-black py-3.5 rounded-xl text-xs uppercase text-center transition-all cursor-pointer border-none shadow-[0_0_15px_rgba(212,255,0,0.3)] hover:bg-white hover:scale-[1.01]"
+              >
+                SELECT QUARTERLY
+              </button>
+            </div>
+
+            {/* Annual VIP Plan */}
+            <div className="bg-slate-900/40 border border-white/5 rounded-3xl p-8 flex flex-col justify-between text-left card-neon-hover relative">
+              <div className="space-y-6">
+                <div>
+                  <h3 className="text-lg font-bold text-white uppercase tracking-wide">Annual VIP Pass</h3>
+                  <p className="text-slate-400 text-xs mt-1">For athletes fully committed to their transformation</p>
+                </div>
+                
+                <div className="flex items-baseline gap-1">
+                  <span className="text-4xl font-black text-white">₹ 19,999</span>
+                  <span className="text-slate-400 text-xs">/ year</span>
+                </div>
+
+                <div className="h-[1px] bg-white/10" />
+
+                <ul className="space-y-3.5 text-xs text-slate-300">
+                  <li className="flex items-center gap-2.5">
+                    <Check size={14} className="text-[#d4ff00]" />
+                    <span>All access to weights, CrossFit, & steam</span>
+                  </li>
+                  <li className="flex items-center gap-2.5">
+                    <Check size={14} className="text-[#d4ff00]" />
+                    <span className="font-bold text-white">8 Free Personal Training Sessions</span>
+                  </li>
+                  <li className="flex items-center gap-2.5">
+                    <Check size={14} className="text-[#d4ff00]" />
+                    <span>Priority locker reservation</span>
+                  </li>
+                  <li className="flex items-center gap-2.5">
+                    <Check size={14} className="text-[#d4ff00]" />
+                    <span>Monthly structural checkups & assessments</span>
+                  </li>
+                  <li className="flex items-center gap-2.5">
+                    <Check size={14} className="text-[#d4ff00]" />
+                    <span>5 Guest Passes per year</span>
+                  </li>
+                </ul>
+              </div>
+
+              <button 
+                onClick={() => selectPricingPlan('annual')}
+                className="w-full mt-8 border border-white/10 hover:border-[#d4ff00] text-white hover:text-black hover:bg-[#d4ff00] font-bold py-3.5 rounded-xl text-xs uppercase text-center transition-all cursor-pointer bg-transparent"
+              >
+                SELECT ANNUAL
+              </button>
+            </div>
+
+          </div>
+        </div>
+      </section>
+
+      {/* ─── Meet the Coaches Section ─── */}
+      <section id="trainers" className="py-24 bg-[#0a0a0c] text-white relative z-20 border-t border-white/5">
+        <div className="max-w-7xl mx-auto px-6 text-center space-y-16">
+          
+          <div className="space-y-4 max-w-2xl mx-auto">
+            <span className="text-xs font-black text-[#d4ff00] tracking-widest uppercase text-neon-glow">MEET THE COACHES</span>
+            <h2 className="text-3xl md:text-5xl font-black text-white uppercase tracking-tighter">
+              TRAINED BY THE BEST.
+            </h2>
+            <div className="w-20 h-1 bg-[#d4ff00] mx-auto" />
+            <p className="text-slate-400 text-sm md:text-base font-poppins leading-relaxed">
+              Our expert coaches are certified performance specialists committed to guiding your lifting form, metrics, and nutrition.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 font-poppins max-w-5xl mx-auto">
+            {[
+              { 
+                name: "Rohan Singh", 
+                role: "Head Strength Coach", 
+                desc: "8+ years in powerlifting and athletic strength programming. Focused on biomechanics and heavy compound lifts.",
+                cert: "IPF Certified Coach",
+                img: "https://images.unsplash.com/photo-1568602471122-7832951cc4c5?q=80&w=400&auto=format&fit=crop"
+              },
+              { 
+                name: "Priya Sharma", 
+                role: "Performance Coach", 
+                desc: "Functional fitness specialist and women's strength coach. Focuses on kettlebell flow, stability, and high intensity engine builds.",
+                cert: "ACE Certified Specialist",
+                img: "https://images.unsplash.com/photo-1548690312-e3b507d8c110?q=80&w=400&auto=format&fit=crop"
+              },
+              { 
+                name: "Arjun Mehta", 
+                role: "CrossFit Coach", 
+                desc: "Certified conditioning specialist with 6+ years coaching metabolic routines, engine pacing, and Olympic lifting.",
+                cert: "CF-L2 Certified Coach",
+                img: "https://images.unsplash.com/photo-1534438327276-14e5300c3a48?q=80&w=400&auto=format&fit=crop"
+              }
+            ].map((coach, idx) => (
+              <div key={idx} className="bg-slate-900/50 border border-white/5 rounded-3xl p-6 text-center space-y-4 card-neon-hover flex flex-col items-center justify-between">
+                <div className="space-y-4">
+                  {/* Circular Portrait Image */}
+                  <div className="relative w-36 h-36 rounded-full overflow-hidden border-2 border-white/10 group-hover:border-[#d4ff00] transition-colors mx-auto">
+                    <img src={coach.img} alt={coach.name} className="w-full h-full object-cover" />
+                  </div>
+                  
+                  <div>
+                    <h3 className="text-lg font-bold text-white">{coach.name}</h3>
+                    <div className="text-[10px] font-black text-[#d4ff00] tracking-widest uppercase mt-0.5">{coach.role}</div>
+                  </div>
+
+                  <p className="text-slate-400 text-xs leading-relaxed max-w-sm">{coach.desc}</p>
+                </div>
+
+                <div className="w-full pt-4 border-t border-white/5 mt-4 flex items-center justify-between">
+                  <span className="text-[9px] font-bold uppercase text-slate-500 bg-white/5 border border-white/10 px-3 py-1 rounded-full">{coach.cert}</span>
+                  <div className="flex gap-2">
+                    <button onClick={() => toast.success(`Contacting ${coach.name.split(" ")[0]}...`)} className="p-1.5 rounded-lg bg-slate-800 hover:bg-[#d4ff00] hover:text-black text-slate-400 transition-colors border-none cursor-pointer">
+                      <MessageSquare size={13} />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+        </div>
+      </section>
+
+      {/* ─── Gallery Section with Full Lightbox Modal ─── */}
+      <section id="gallery" className="py-24 bg-[#08080a] relative z-20 border-t border-white/5">
+        <div className="max-w-7xl mx-auto px-6 text-center space-y-16">
+          
+          <div className="space-y-4 max-w-2xl mx-auto">
+            <span className="text-xs font-black text-[#d4ff00] tracking-widest uppercase text-neon-glow">GALLERY</span>
+            <h2 className="text-3xl md:text-5xl font-black text-white uppercase tracking-tighter">
+              INSIDE THE ZONE.
+            </h2>
+            <div className="w-20 h-1 bg-[#d4ff00] mx-auto" />
+            <p className="text-slate-400 text-sm md:text-base font-poppins leading-relaxed">
+              Take a virtual walkthrough of our state-of-the-art strength zones, functional setups, and cardio suites.
+            </p>
+          </div>
+
+          {/* Interactive Masonry Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 font-poppins max-w-6xl mx-auto">
+            {galleryImages.map((img, idx) => (
+              <div 
+                key={idx} 
+                onClick={() => openLightbox(idx)}
+                className="relative group rounded-3xl overflow-hidden border border-white/5 cursor-pointer shadow-md bg-slate-900 h-64"
+              >
+                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-10 flex flex-col justify-end p-6 text-left" />
+                <img 
+                  src={img.url} 
+                  alt={img.caption} 
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
+                />
+                
+                {/* Floating zoom indicator */}
+                <div className="absolute top-4 right-4 z-20 w-8 h-8 rounded-full bg-black/50 border border-white/10 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                  <Play size={10} className="text-white fill-white ml-0.5" />
+                </div>
+                
+                {/* Description details */}
+                <div className="absolute bottom-6 left-6 right-6 z-20 text-left opacity-0 group-hover:opacity-100 translate-y-2 group-hover:translate-y-0 transition-all duration-300">
+                  <span className="text-[9px] font-black text-[#d4ff00] uppercase tracking-widest">Alpha Zone Spaces</span>
+                  <h4 className="text-sm font-bold text-white mt-1 leading-snug">{img.caption}</h4>
+                </div>
+              </div>
+            ))}
+          </div>
+
+        </div>
+
+        {/* Gallery Lightbox Modal */}
+        <AnimatePresence>
+          {lightboxOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+              <motion.div 
+                initial={{ opacity: 0 }} 
+                animate={{ opacity: 0.9 }} 
+                exit={{ opacity: 0 }} 
+                onClick={() => setLightboxOpen(false)}
+                className="fixed inset-0 bg-black" 
+              />
+              
+              <motion.div 
+                initial={{ scale: 0.95, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.95, opacity: 0 }}
+                className="relative max-w-4xl w-full z-10 flex flex-col items-center gap-4"
+              >
+                {/* Image Display */}
+                <div className="relative aspect-video w-full rounded-2xl overflow-hidden border border-white/15 bg-black">
+                  <img 
+                    src={galleryImages[lightboxIndex].url} 
+                    alt={galleryImages[lightboxIndex].caption} 
+                    className="w-full h-full object-contain" 
+                  />
+                  
+                  {/* Previous Button */}
+                  <button 
+                    onClick={(e) => { e.stopPropagation(); prevLightbox(); }}
+                    className="absolute left-4 top-1/2 -translate-y-1/2 p-3 rounded-full bg-black/70 hover:bg-black border border-white/10 text-white hover:text-[#d4ff00] transition-colors cursor-pointer border-none flex items-center justify-center"
+                  >
+                    <ChevronLeft size={20} />
+                  </button>
+
+                  {/* Next Button */}
+                  <button 
+                    onClick={(e) => { e.stopPropagation(); nextLightbox(); }}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 p-3 rounded-full bg-black/70 hover:bg-black border border-white/10 text-white hover:text-[#d4ff00] transition-colors cursor-pointer border-none flex items-center justify-center"
+                  >
+                    <ChevronRight size={20} />
+                  </button>
+                </div>
+
+                {/* Caption Description */}
+                <div className="text-center font-poppins space-y-1">
+                  <h4 className="text-white text-base font-bold">{galleryImages[lightboxIndex].caption}</h4>
+                  <p className="text-slate-400 text-xs">Image {lightboxIndex + 1} of {galleryImages.length}</p>
+                </div>
+
+                {/* Close Button */}
+                <button 
+                  onClick={() => setLightboxOpen(false)}
+                  className="absolute top-[-3rem] right-0 p-2 text-slate-400 hover:text-white bg-transparent border-none cursor-pointer text-sm font-bold uppercase tracking-widest flex items-center gap-1"
+                >
+                  <X size={16} /> Close
+                </button>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+      </section>
+
+      {/* ─── Testimonials Section ─── */}
+      <section className="py-24 bg-[#0a0a0c] relative z-20 border-t border-white/5 font-poppins">
+        <div className="max-w-4xl mx-auto px-6 text-center space-y-12">
+          
+          <div className="space-y-4">
+            <span className="text-xs font-black text-[#d4ff00] tracking-widest uppercase text-neon-glow">TESTIMONIALS</span>
+            <h2 className="text-3xl md:text-5xl font-black text-white uppercase tracking-tighter">
+              RESULTS SPEAK LOUDEST.
+            </h2>
+            <div className="w-16 h-1 bg-[#d4ff00] mx-auto" />
+          </div>
+
+          {/* Review Card */}
+          <div className="relative bg-slate-900/40 border border-white/5 rounded-3xl p-8 md:p-12 shadow-md min-h-[220px] flex flex-col justify-between">
+            <div className="absolute top-4 left-6 text-7xl font-black text-slate-800/20 select-none">&ldquo;</div>
+            
+            <p className="text-slate-200 text-sm md:text-base leading-relaxed italic z-10 relative">
+              {testimonials[currentTestimonial].review}
+            </p>
+
+            <div className="pt-6 border-t border-white/5 mt-6 flex flex-col sm:flex-row justify-between items-center gap-4">
+              <div className="text-left">
+                <div className="text-xs font-bold text-white uppercase tracking-wider">{testimonials[currentTestimonial].name}</div>
+                <div className="text-[10px] text-[#d4ff00] font-bold mt-0.5">{testimonials[currentTestimonial].role}</div>
+              </div>
+              
+              {/* Star rating rendering */}
+              <div className="flex gap-1">
+                {Array.from({ length: testimonials[currentTestimonial].rating }).map((_, i) => (
+                  <span key={i} className="text-[#d4ff00] text-sm">★</span>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Navigation Controls */}
+          <div className="flex items-center justify-center gap-4">
+            <button 
+              onClick={() => setCurrentTestimonial(prev => (prev === 0 ? testimonials.length - 1 : prev - 1))}
+              className="p-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white transition-colors border-none cursor-pointer"
+            >
+              <ChevronLeft size={16} />
+            </button>
+            <span className="text-xs text-slate-500">{currentTestimonial + 1} / {testimonials.length}</span>
+            <button 
+              onClick={() => setCurrentTestimonial(prev => (prev === testimonials.length - 1 ? 0 : prev + 1))}
+              className="p-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white transition-colors border-none cursor-pointer"
+            >
+              <ChevronRight size={16} />
+            </button>
           </div>
 
         </div>
       </section>
 
       {/* ─── Premium Mobile App Simulator Section ─── */}
-      <section id="app" className="py-24 bg-white text-slate-900 overflow-hidden">
-        <div className="max-w-6xl mx-auto px-6">
+      <section id="app" className="py-24 bg-[#08080a] text-white overflow-hidden relative z-20 border-t border-white/5">
+        <div className="max-w-7xl mx-auto px-6">
+          
           <div className="text-center max-w-xl mx-auto space-y-4 mb-16">
-            <span className="text-xs font-bold text-slate-500 tracking-widest uppercase">ALPHA ZONE MEMBER APP</span>
-            <h2 className="font-rowdies text-4xl md:text-5xl font-bold text-slate-900 uppercase leading-none">
+            <span className="text-xs font-black text-slate-500 tracking-widest uppercase">ALPHA ZONE MEMBER APP</span>
+            <h2 className="text-3xl md:text-5xl font-black text-white uppercase leading-none tracking-tighter">
               Your Gym In Your Pocket
             </h2>
             <div className="w-20 h-1 bg-[#d4ff00] mx-auto" />
-            <p className="text-slate-600 text-sm">
-              Interact with the live simulator below. Tap navigation tabs in the phone to preview dashboards.
+            <p className="text-slate-400 text-sm font-poppins">
+              Interact with the live simulator below. Tap tabs in the phone mock to test work logs.
             </p>
           </div>
 
-          <div className="flex flex-col lg:flex-row items-center justify-center gap-12 lg:gap-20">
+          <div className="flex flex-col lg:flex-row items-center justify-center gap-12 lg:gap-20 font-poppins">
             
             {/* Left Features List */}
             <motion.div 
@@ -431,66 +878,66 @@ export default function AlphaZoneLandingPage() {
               whileInView={{ opacity: 1, x: 0 }}
               viewport={{ once: true }}
               transition={{ duration: 0.8 }}
-              className="hidden lg:flex flex-col gap-8 text-right max-w-[240px]"
+              className="hidden lg:flex flex-col gap-8 text-right max-w-[280px]"
             >
               {[
-                { title: 'Interactive Dashboard', desc: 'Live membership validation countdown, active streak, and coach tags.' },
-                { title: 'Water Intake Ring', desc: 'Click the + icon in the Home view to log glasses of water in real-time.' },
-                { title: 'Calorie Ring Tracker', desc: 'Animated ring displaying a visual breakdown of active calorie targets.' }
+                { title: 'Interactive Dashboard', desc: 'Live gold membership countdown, active streak tracking, and biometrically assigned coach widgets.' },
+                { title: 'Water Intake Ring', desc: 'Tap the + icon in the mock home tab to log glasses of water in real-time.' },
+                { title: 'Calorie Ring Tracker', desc: 'Custom progress rings mapping active calorie targets.' }
               ].map((f, i) => (
                 <div key={i} className="space-y-2">
-                  <div className="text-sm font-bold text-slate-900 flex items-center justify-end gap-2">
+                  <div className="text-sm font-bold text-white flex items-center justify-end gap-2">
                     {f.title}
-                    <span className="w-2 h-2 rounded-full bg-[#d4ff00] border border-slate-100" />
+                    <span className="w-2 h-2 rounded-full bg-[#d4ff00]" />
                   </div>
-                  <div className="text-xs text-slate-600 leading-relaxed">{f.desc}</div>
+                  <div className="text-xs text-slate-450 leading-relaxed">{f.desc}</div>
                 </div>
               ))}
             </motion.div>
 
             {/* Simulated Phone Device */}
             <motion.div 
-              initial={{ opacity: 0, scale: 0.85, y: 30 }}
+              initial={{ opacity: 0, scale: 0.88, y: 30 }}
               whileInView={{ opacity: 1, scale: 1, y: 0 }}
               viewport={{ once: true }}
               transition={{ duration: 0.8, type: "spring", bounce: 0.15 }}
               className="flex flex-col items-center gap-4"
             >
-              <div className="w-[280px] h-[570px] rounded-[42px] border-[10px] border-slate-800 bg-slate-950 shadow-2xl relative overflow-hidden flex flex-col">
+              <div className="w-[300px] h-[610px] rounded-[48px] border-[12px] border-slate-800 bg-[#060608] shadow-2xl relative overflow-hidden flex flex-col">
                 {/* Speaker Notch */}
-                <div className="absolute top-0 left-1/2 -translate-x-1/2 w-28 h-5 bg-slate-800 rounded-b-xl z-30 flex items-center justify-center">
-                  <div className="w-8 h-1 bg-white/20 rounded-full" />
+                <div className="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-6 bg-slate-800 rounded-b-2xl z-30 flex items-center justify-center">
+                  <div className="w-10 h-1 bg-white/20 rounded-full" />
                 </div>
 
                 {/* Live Screen Content */}
-                <div className="flex-1 overflow-hidden bg-slate-950 flex flex-col pt-6 relative">
+                <div className="flex-1 overflow-hidden bg-[#060608] flex flex-col pt-7 relative">
                   {isMounted ? (
                     <div className="flex-1 flex flex-col overflow-hidden">
                       {simTab === 'home' && (
-                        <div className="flex-1 overflow-y-auto px-3.5 pt-4 pb-2 space-y-4">
+                        <div className="flex-1 overflow-y-auto px-4 pt-4 pb-2 space-y-4">
                           {/* Member Header */}
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
-                              <div className="w-8 h-8 rounded-lg bg-[#d4ff00] text-black flex items-center justify-center font-rowdies text-[10px] font-bold">
+                              <div className="w-8 h-8 rounded-lg bg-[#d4ff00] text-black flex items-center justify-center font-black text-[10px]">
                                 AZ
                               </div>
                               <div className="text-left">
-                                <div className="text-[10px] font-bold text-white">Guest Member</div>
-                                <div className="text-[7px] text-slate-400 font-black tracking-wider uppercase">GOLD ACCESS</div>
+                                <div className="text-[10px] font-bold text-white leading-none">Guest Member</div>
+                                <div className="text-[7px] text-[#d4ff00] font-black tracking-wider uppercase mt-1">GOLD ACCESS</div>
                               </div>
                             </div>
                             <div className="p-1.5 rounded-lg bg-slate-900 border border-white/10 text-white cursor-pointer hover:bg-slate-800">
-                              <QrCode size={11} />
+                              <QrCode size={12} />
                             </div>
                           </div>
 
                           {/* Membership Progress */}
-                          <div className="p-3.5 rounded-2xl bg-slate-900 border border-white/5 space-y-2.5 text-left shadow-sm">
+                          <div className="p-3.5 rounded-2xl bg-slate-900/80 border border-white/5 space-y-2.5 text-left shadow-sm">
                             <div className="flex justify-between items-center text-[8px] text-slate-400">
                               <span>Membership Validity</span>
-                              <span className="font-bold text-black bg-[#d4ff00] px-1.5 py-0.5 rounded text-[7px]">97 Days Left</span>
+                              <span className="font-bold text-black bg-[#d4ff00] px-1.5 py-0.5 rounded-[5px] text-[7px]">97 Days Left</span>
                             </div>
-                            <div className="h-1.5 bg-slate-850 rounded-full overflow-hidden">
+                            <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
                               <div className="h-full bg-gradient-to-r from-[#d4ff00] to-teal-400 rounded-full" style={{ width: '74%' }} />
                             </div>
                             <div className="grid grid-cols-2 gap-2 pt-0.5">
@@ -498,14 +945,14 @@ export default function AlphaZoneLandingPage() {
                                 <Flame size={10} className="text-amber-500" />
                                 <div>
                                   <div className="text-[9px] font-bold text-white">8 Days</div>
-                                  <div className="text-[6px] text-slate-400 font-bold uppercase">Streak</div>
+                                  <div className="text-[6px] text-slate-450 font-bold uppercase">Streak</div>
                                 </div>
                               </div>
                               <div className="flex items-center gap-1.5">
                                 <Target size={10} className="text-blue-500" />
                                 <div>
-                                  <div className="text-[9px] font-bold text-white">Assigned</div>
-                                  <div className="text-[6px] text-slate-400 font-bold uppercase">Coach</div>
+                                  <div className="text-[9px] font-bold text-white">Rohan S.</div>
+                                  <div className="text-[6px] text-slate-450 font-bold uppercase">Assigned Coach</div>
                                 </div>
                               </div>
                             </div>
@@ -514,29 +961,29 @@ export default function AlphaZoneLandingPage() {
                           {/* Hydro & Calorie widgets */}
                           <div className="grid grid-cols-2 gap-2.5">
                             {/* Calorie Ring */}
-                            <div className="p-3 rounded-2xl bg-slate-900 border border-white/5 flex flex-col items-center text-center shadow-sm">
-                              <div className="relative w-11 h-11 flex items-center justify-center">
+                            <div className="p-3 rounded-2xl bg-slate-900/80 border border-white/5 flex flex-col items-center text-center shadow-sm">
+                              <div className="relative w-12 h-12 flex items-center justify-center">
                                 <svg className="absolute w-full h-full -rotate-90" viewBox="0 0 36 36">
                                   <path className="text-slate-800" strokeWidth="4" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
                                   <path className="text-amber-500" strokeDasharray="68, 100" strokeWidth="4" strokeLinecap="round" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
                                 </svg>
                                 <span className="text-[8px] font-bold text-white">68%</span>
                               </div>
-                              <div className="text-[8.5px] font-bold text-white mt-2">1,220 kcal</div>
-                              <div className="text-[6px] text-slate-400">of 1,800</div>
+                              <div className="text-[9px] font-bold text-white mt-2">1,220 kcal</div>
+                              <div className="text-[6px] text-slate-500">of 1,800</div>
                             </div>
 
                             {/* Water Intake */}
-                            <div className="p-3 rounded-2xl bg-slate-900 border border-white/5 flex flex-col items-center text-center relative shadow-sm">
-                              <div className="relative w-11 h-11 flex items-center justify-center">
+                            <div className="p-3 rounded-2xl bg-slate-900/80 border border-white/5 flex flex-col items-center text-center relative shadow-sm">
+                              <div className="relative w-12 h-12 flex items-center justify-center">
                                 <svg className="absolute w-full h-full -rotate-90" viewBox="0 0 36 36">
                                   <path className="text-slate-800" strokeWidth="4" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
                                   <path className="text-blue-500" strokeDasharray={`${Math.round((waterIntake / 3.5) * 100)}, 100`} strokeWidth="4" strokeLinecap="round" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
                                 </svg>
-                                <Droplet size={10} className="text-blue-500" />
+                                <Droplet size={11} className="text-blue-500" />
                               </div>
-                              <div className="text-[8.5px] font-bold text-white mt-2">{waterIntake.toFixed(1)}L</div>
-                              <div className="text-[6px] text-slate-400">of 3.5L</div>
+                              <div className="text-[9px] font-bold text-white mt-2">{waterIntake.toFixed(2)}L</div>
+                              <div className="text-[6px] text-slate-500 font-medium">of 3.5L</div>
                               
                               <button 
                                 onClick={() => setWaterIntake(w => parseFloat(Math.min(3.5, w + 0.25).toFixed(2)))} 
@@ -548,22 +995,22 @@ export default function AlphaZoneLandingPage() {
                           </div>
 
                           {/* Routine Banner */}
-                          <div className="p-3 rounded-2xl bg-slate-900 border border-white/5 text-left shadow-sm">
+                          <div className="p-3 rounded-2xl bg-slate-900/80 border border-white/5 text-left shadow-sm">
                             <div className="flex justify-between items-center mb-1">
-                              <span className="text-[7px] text-slate-300 font-bold uppercase tracking-wider">Today&apos;s Workout</span>
-                              <Dumbbell size={9} className="text-white" />
+                              <span className="text-[7px] text-slate-350 font-bold uppercase tracking-wider">Today&apos;s Workout</span>
+                              <Dumbbell size={10} className="text-white" />
                             </div>
                             <div className="text-[9px] font-bold text-white">Strength & Conditioning</div>
-                            <div className="text-[7px] text-slate-400">Duration · 45 mins</div>
+                            <div className="text-[7px] text-slate-500">Duration · 45 mins</div>
                           </div>
                         </div>
                       )}
 
                       {simTab === 'workouts' && (
-                        <div className="flex-1 overflow-y-auto px-3.5 pt-4 pb-2 space-y-3 animate-fade-in">
+                        <div className="flex-1 overflow-y-auto px-4 pt-4 pb-2 space-y-3 animate-fade-in">
                           <div className="text-left">
                             <h3 className="text-[10px] font-bold text-white uppercase tracking-wider">TODAY&apos;S ROUTINE</h3>
-                            <p className="text-[6.5px] text-slate-400 mt-0.5">Click items to mark sets as completed</p>
+                            <p className="text-[6.5px] text-slate-400 mt-0.5">Tap checkmarks to record sets</p>
                           </div>
 
                           <div className="space-y-1.5">
@@ -579,8 +1026,8 @@ export default function AlphaZoneLandingPage() {
                                     {done && <Check size={8} className="text-black" strokeWidth={3} />}
                                   </div>
                                   <div className="flex-1 min-w-0">
-                                    <div className={`text-[8.5px] font-bold truncate ${done ? 'text-slate-500 line-through' : 'text-white'}`}>{ex.name}</div>
-                                    <div className="text-[6.5px] text-slate-400">{ex.muscle} · {ex.sets}</div>
+                                    <div className={`text-[8.5px] font-bold truncate ${done ? 'text-slate-550 line-through' : 'text-white'}`}>{ex.name}</div>
+                                    <div className="text-[6.5px] text-slate-450">{ex.muscle} · {ex.sets}</div>
                                   </div>
                                   {done && <CheckCircle2 size={10} className="text-[#d4ff00] shrink-0" />}
                                 </button>
@@ -592,7 +1039,7 @@ export default function AlphaZoneLandingPage() {
                           <div className="p-2.5 bg-slate-900 border border-white/5 rounded-2xl flex items-center justify-between shadow-sm">
                             <div className="text-left">
                               <div className="text-[8px] font-bold text-white">{Object.values(completedExs).filter(Boolean).length}/{exerciseList.length} Done</div>
-                              <div className="text-[6.5px] text-slate-450">Keep going!</div>
+                              <div className="text-[6.5px] text-slate-500 font-bold">Keep burning!</div>
                             </div>
                             <div className="w-14 h-1.5 bg-slate-800 rounded-full overflow-hidden">
                               <div 
@@ -605,12 +1052,12 @@ export default function AlphaZoneLandingPage() {
                       )}
 
                       {simTab === 'progress' && (
-                        <div className="flex-1 overflow-y-auto px-3.5 pt-4 pb-2 space-y-3 animate-fade-in">
+                        <div className="flex-1 overflow-y-auto px-4 pt-4 pb-2 space-y-3 animate-fade-in">
                           <div className="text-left">
                             <h3 className="text-[10px] font-bold text-white uppercase tracking-wider">WEEKLY SUMMARY</h3>
                             <p className="text-[6.5px] text-slate-400 mt-0.5">Live analytics visualization</p>
                           </div>
-                          <div className="p-3 bg-slate-900 border border-white/5 rounded-2xl text-left shadow-sm">
+                          <div className="p-3 bg-slate-900/80 border border-white/5 rounded-2xl text-left shadow-sm">
                             <div className="text-[16px] font-bold text-white leading-none">75%</div>
                             <div className="text-[6.5px] text-[#d4ff00] uppercase font-bold tracking-wider mt-0.5">Weekly Target Reached</div>
                             <div className="h-16 w-full mt-2">
@@ -627,7 +1074,7 @@ export default function AlphaZoneLandingPage() {
                             {[{ v: '12', l: 'Workouts' }, { v: '3,450', l: 'Calories' }, { v: '8h 20m', l: 'Duration' }].map((s, i) => (
                               <div key={i} className="p-2 bg-slate-900 border border-white/5 rounded-xl shadow-sm">
                                 <div className="text-[9px] font-bold text-white">{s.v}</div>
-                                <div className="text-[5.5px] text-slate-400 mt-0.5">{s.l}</div>
+                                <div className="text-[5.5px] text-slate-500 mt-0.5">{s.l}</div>
                               </div>
                             ))}
                           </div>
@@ -642,35 +1089,35 @@ export default function AlphaZoneLandingPage() {
                 </div>
 
                 {/* Tabbar Navigation */}
-                <div className="h-12 border-t border-white/5 bg-slate-900 flex items-center justify-around shrink-0 z-10">
+                <div className="h-14 border-t border-white/5 bg-slate-900 flex items-center justify-around shrink-0 z-10">
                   <button 
                     onClick={() => setSimTab('home')} 
                     className={`flex flex-col items-center gap-0.5 cursor-pointer bg-transparent border-none p-0 transition-all ${simTab === 'home' ? 'text-white font-bold' : 'text-slate-500'}`}
                   >
-                    <HomeIcon size={12} />
+                    <HomeIcon size={13} />
                     <span className="text-[5px] font-bold uppercase tracking-wider">Home</span>
                   </button>
                   <button 
                     onClick={() => setSimTab('workouts')} 
                     className={`flex flex-col items-center gap-0.5 cursor-pointer bg-transparent border-none p-0 transition-all ${simTab === 'workouts' ? 'text-white font-bold' : 'text-slate-500'}`}
                   >
-                    <Dumbbell size={12} />
+                    <Dumbbell size={13} />
                     <span className="text-[5px] font-bold uppercase tracking-wider">Workouts</span>
                   </button>
                   <button 
                     onClick={() => setSimTab('progress')} 
                     className={`flex flex-col items-center gap-0.5 cursor-pointer bg-transparent border-none p-0 transition-all ${simTab === 'progress' ? 'text-white font-bold' : 'text-slate-500'}`}
                   >
-                    <BarChart2 size={12} />
+                    <BarChart2 size={13} />
                     <span className="text-[5px] font-bold uppercase tracking-wider">Progress</span>
                   </button>
                   <button className="flex flex-col items-center gap-0.5 text-slate-500 bg-transparent border-none p-0">
-                    <Trophy size={12} />
+                    <Trophy size={13} />
                     <span className="text-[5px] font-bold uppercase tracking-wider">Awards</span>
                   </button>
                 </div>
               </div>
-              <p className="text-[9px] text-slate-500 font-mono">↑ Switch tabs or tap hydration buttons to test</p>
+              <p className="text-[9px] text-slate-500 font-mono">↑ Switch tabs or tap + hydration to test</p>
             </motion.div>
 
             {/* Right Features List */}
@@ -679,16 +1126,16 @@ export default function AlphaZoneLandingPage() {
               whileInView={{ opacity: 1, x: 0 }}
               viewport={{ once: true }}
               transition={{ duration: 0.8 }}
-              className="hidden lg:flex flex-col gap-8 text-left max-w-[240px]"
+              className="hidden lg:flex flex-col gap-8 text-left max-w-[280px]"
             >
               {[
-                { title: 'Interactive Workout Tasks', desc: 'Tap checkboxes inside Workouts tab to mark reps and update progress bars.' },
-                { title: 'Weekly Progress Analytics', desc: 'Line charts mapping weekly progress metrics including durations & burn counts.' },
-                { title: 'Award & QR Integrations', desc: 'Check awards tabs and check-in QR interfaces configured for turnstile APIs.' }
+                { title: 'Interactive Workout Tasks', desc: 'Tap checkboxes inside Workouts tab to mark routines completed and update progress bars.' },
+                { title: 'Weekly Progress Analytics', desc: 'Recharts line charts plotting active progress metrics dynamically.' },
+                { title: 'Gamified QR Check-in', desc: 'Sleek biometric triggers mapped to scanner check-ins for gold members.' }
               ].map((f, i) => (
                 <div key={i} className="space-y-2">
                   <div className="text-sm font-bold text-white flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-[#d4ff00] border border-white/10" />
+                    <span className="w-2 h-2 rounded-full bg-[#d4ff00]" />
                     {f.title}
                   </div>
                   <div className="text-xs text-slate-400 leading-relaxed">{f.desc}</div>
@@ -700,11 +1147,123 @@ export default function AlphaZoneLandingPage() {
         </div>
       </section>
 
-      {/* ─── Signup Section ─── */}
-      <section id="signup" className="py-24 border-t border-white/5 bg-black text-white relative overflow-hidden">
-        <div className="max-w-6xl mx-auto px-6 grid md:grid-cols-2 gap-12 items-center">
+      {/* ─── Contact & Map Section ─── */}
+      <section id="contact" className="py-24 bg-[#0a0a0c] text-white relative z-20 border-t border-white/5 font-poppins">
+        <div className="max-w-7xl mx-auto px-6 grid md:grid-cols-2 gap-12 items-stretch">
           
-          {/* Image - Slide In */}
+          {/* Left: Contact Card */}
+          <motion.div 
+            initial={{ opacity: 0, x: -60 }}
+            whileInView={{ opacity: 1, x: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.8 }}
+            className="bg-slate-900/50 border border-white/5 p-8 rounded-3xl flex flex-col justify-between"
+          >
+            <div className="space-y-6">
+              <div>
+                <span className="text-xs font-black text-[#d4ff00] tracking-widest uppercase text-neon-glow">CONTACT DETAILS</span>
+                <h3 className="text-2xl md:text-3xl font-black text-white uppercase tracking-tight mt-2">RECEPTION DESK</h3>
+                <div className="w-12 h-[2px] bg-[#d4ff00] mt-3" />
+              </div>
+
+              <p className="text-slate-400 text-xs leading-relaxed max-w-sm">
+                Have questions about our memberships, facilities, or corporate discount packages? Contact our reception desk directly below.
+              </p>
+
+              <div className="space-y-4 text-xs">
+                <div className="flex items-start gap-3">
+                  <div className="p-2 rounded-xl bg-slate-800 text-[#d4ff00] border border-white/10 shrink-0">
+                    <HomeIcon size={14} />
+                  </div>
+                  <div>
+                    <div className="font-bold text-white">Alpha Zone Gym Location</div>
+                    <div className="text-slate-450 mt-0.5">SCO 16-17, Landran Rd, Sohana, Mohali, Punjab 140307, India</div>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-3">
+                  <div className="p-2 rounded-xl bg-slate-800 text-[#d4ff00] border border-white/10 shrink-0">
+                    <Clock size={14} />
+                  </div>
+                  <div>
+                    <div className="font-bold text-white">Opening Hours</div>
+                    <div className="text-slate-450 mt-0.5">Monday – Saturday: 05:00 AM – 10:00 PM <br />Sunday: 06:00 AM – 01:00 PM</div>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-3">
+                  <div className="p-2 rounded-xl bg-slate-800 text-[#d4ff00] border border-white/10 shrink-0">
+                    <Phone size={14} />
+                  </div>
+                  <div>
+                    <div className="font-bold text-white">Direct Phone</div>
+                    <div className="text-slate-450 mt-0.5">+91 99999 99999</div>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-3">
+                  <div className="p-2 rounded-xl bg-slate-800 text-[#d4ff00] border border-white/10 shrink-0">
+                    <Mail size={14} />
+                  </div>
+                  <div>
+                    <div className="font-bold text-white">Direct Email</div>
+                    <div className="text-slate-450 mt-0.5">hello@alphazonegym.in</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Instant Actions (Tel Dial / WhatsApp Prefilled Message) */}
+            <div className="grid grid-cols-2 gap-4 pt-8 border-t border-white/5 mt-8">
+              <a 
+                href="tel:+919999999999" 
+                className="bg-[#d4ff00] text-black font-extrabold text-xs py-3.5 rounded-xl uppercase tracking-widest text-center shadow-[0_0_10px_rgba(212,255,0,0.1)] hover:bg-white transition-all"
+              >
+                CALL DESK
+              </a>
+              <a 
+                href="https://wa.me/919999999999?text=Hello%20Alpha%20Zone%20Gym%20Reception%2C%20I%20want%20to%20inquire%20about%20your%20membership%20plans%20and%20avail%20a%20free%20gym%20trial." 
+                target="_blank" 
+                rel="noopener noreferrer" 
+                className="border border-white/10 hover:border-[#d4ff00] text-white hover:text-black hover:bg-[#d4ff00] font-bold text-xs py-3.5 rounded-xl uppercase tracking-widest text-center transition-all flex items-center justify-center gap-1.5"
+              >
+                WHATSAPP
+                <ExternalLink size={11} />
+              </a>
+            </div>
+          </motion.div>
+
+          {/* Right: Iframe Google Maps */}
+          <motion.div 
+            initial={{ opacity: 0, x: 60 }}
+            whileInView={{ opacity: 1, x: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.8 }}
+            className="rounded-3xl overflow-hidden border border-white/10 shadow-2xl bg-slate-900 h-[380px] md:h-auto min-h-[300px]"
+          >
+            <iframe 
+              src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3430.730386629088!2d76.68334467554907!3d30.697880974600127!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1m3!1d0!3d0!2zMzDCsDQxJzUyLjQiTiA3NsKwNDEnMDkuMyJF!5e0!3m2!1sen!2sin!4v1715420000000!5m2!1sen!2sin" 
+              width="100%" 
+              height="100%" 
+              style={{ border: 0 }} 
+              allowFullScreen={true}
+              loading="lazy" 
+              referrerPolicy="no-referrer-when-downgrade"
+            />
+          </motion.div>
+
+        </div>
+      </section>
+
+      {/* ─── Signup Section ─── */}
+      <section id="signup" className="py-24 border-t border-white/5 bg-black text-white relative overflow-hidden z-20 font-poppins">
+        {/* Background decorative spot glows */}
+        <div className="absolute top-1/2 left-1/4 -translate-y-1/2 w-96 h-96 bg-[#d4ff00]/5 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute top-1/2 right-1/4 -translate-y-1/2 w-96 h-96 bg-teal-500/5 rounded-full blur-3xl pointer-events-none" />
+        
+        <div className="max-w-7xl mx-auto px-6 grid md:grid-cols-2 gap-12 items-center">
+          
+          {/* Image */}
           <motion.div 
             initial={{ opacity: 0, x: -60 }}
             whileInView={{ opacity: 1, x: 0 }}
@@ -714,11 +1273,13 @@ export default function AlphaZoneLandingPage() {
           >
             <div className="relative w-full max-w-[440px] rounded-3xl overflow-hidden border border-white/10 shadow-2xl bg-slate-900">
               <img 
-                className="w-full h-auto object-contain"
-                src="https://assets.website-files.com/6214787aae0f89e8420f3841/62147f82c621803b42206469_Image%2016.png" 
-                alt="Signup Motivation" 
+                className="w-full h-auto object-cover"
+                src="https://images.unsplash.com/photo-1517838277536-f5f99be501cd?q=80&w=600&auto=format&fit=crop" 
+                alt="Signup Motivation Gym Workout" 
               />
             </div>
+            {/* Outline Glow Decorator */}
+            <div className="absolute -inset-2 border border-dashed border-[#d4ff00]/20 rounded-[36px] -z-10 pointer-events-none" />
           </motion.div>
 
           {/* Signup Form Container */}
@@ -726,84 +1287,84 @@ export default function AlphaZoneLandingPage() {
             initial={{ opacity: 0, x: 60 }}
             whileInView={{ opacity: 1, x: 0 }}
             viewport={{ once: true }}
-            transition={{ duration: 0.8, delay: 0.2 }}
+            transition={{ duration: 0.8, delay: 0.15 }}
             className="bg-slate-900/60 border border-white/10 p-8 rounded-3xl shadow-lg flex flex-col items-stretch text-left"
           >
-            <h2 className="font-rowdies text-3xl font-bold text-white uppercase mb-2">
+            <h2 className="text-2xl md:text-3xl font-black text-white uppercase mb-1">
               Jumpstart Your Health
             </h2>
-            <p className="text-slate-450 text-xs mb-6 font-poppins">
-              Start your journey today with our membership options. Select your trial and customize.
+            <p className="text-slate-400 text-xs mb-6">
+              Create your account on Firebase CRM and activate your gym member profile today.
             </p>
 
             <form onSubmit={handleSignupSubmit} className="space-y-4 font-poppins">
               {/* Option Selection */}
               <div>
-                <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1.5 tracking-wider font-sans">Select Option</label>
+                <label className="block text-[10px] font-black text-slate-450 uppercase mb-1.5 tracking-wider">Select Membership Plan</label>
                 <select 
                   value={signupPlan} 
                   onChange={e => setSignupPlan(e.target.value)}
-                  className="w-full bg-slate-950 border border-white/10 rounded-xl px-4 py-3 text-xs text-white outline-none focus:border-[#d4ff00] transition-colors"
+                  className="w-full bg-[#060608] border border-white/10 rounded-xl px-4 py-3.5 text-xs text-white outline-none focus:border-[#d4ff00] transition-colors"
                   required
                 >
                   <option value="">Select Plan...</option>
-                  <option value="monthly">Monthly Access - $45.95/mo</option>
-                  <option value="quarterly">Quarterly Plan - $120.00</option>
-                  <option value="annual">Annual VIP Pass - $399.00</option>
+                  <option value="monthly">Monthly Access - ₹ 2,499/mo</option>
+                  <option value="quarterly">Quarterly Plan - ₹ 6,499/3mo</option>
+                  <option value="annual">Annual VIP Pass - ₹ 19,999/yr</option>
                 </select>
               </div>
 
               {/* Email */}
               <div>
-                <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1.5 tracking-wider font-sans">Email Address</label>
+                <label className="block text-[10px] font-black text-slate-450 uppercase mb-1.5 tracking-wider">Email Address</label>
                 <input 
                   type="email" 
                   value={signupEmail}
                   onChange={e => setSignupEmail(e.target.value)}
                   placeholder="Enter email address"
-                  className="w-full bg-slate-950 border border-white/10 rounded-xl px-4 py-3 text-xs text-white placeholder-slate-500 outline-none focus:border-[#d4ff00] transition-colors"
+                  className="w-full bg-[#060608] border border-white/10 rounded-xl px-4 py-3.5 text-xs text-white placeholder-slate-500 outline-none focus:border-[#d4ff00] transition-colors"
                   required
                 />
               </div>
 
               {/* Username */}
               <div>
-                <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1.5 tracking-wider font-sans">Choose a Username</label>
+                <label className="block text-[10px] font-black text-slate-450 uppercase mb-1.5 tracking-wider">Choose a Username</label>
                 <input 
                   type="text" 
                   value={signupUsername}
                   onChange={e => setSignupUsername(e.target.value)}
-                  placeholder="Choose a Username"
-                  className="w-full bg-slate-950 border border-white/10 rounded-xl px-4 py-3 text-xs text-white placeholder-slate-500 outline-none focus:border-[#d4ff00] transition-colors"
+                  placeholder="Choose username"
+                  className="w-full bg-[#060608] border border-white/10 rounded-xl px-4 py-3.5 text-xs text-white placeholder-slate-500 outline-none focus:border-[#d4ff00] transition-colors"
                   required
                 />
               </div>
 
               {/* Password */}
               <div>
-                <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1.5 tracking-wider font-sans">Choose a Password</label>
+                <label className="block text-[10px] font-black text-slate-450 uppercase mb-1.5 tracking-wider">Choose a Password</label>
                 <input 
                   type="password" 
                   value={signupPassword}
                   onChange={e => setSignupPassword(e.target.value)}
-                  placeholder="Choose a Password"
-                  className="w-full bg-slate-950 border border-white/10 rounded-xl px-4 py-3 text-xs text-white placeholder-slate-500 outline-none focus:border-[#d4ff00] transition-colors"
+                  placeholder="Choose password (min. 6 chars)"
+                  className="w-full bg-[#060608] border border-white/10 rounded-xl px-4 py-3.5 text-xs text-white placeholder-slate-500 outline-none focus:border-[#d4ff00] transition-colors"
                   required
                 />
               </div>
 
-              {/* Submit wrapper */}
+              {/* Submit */}
               <div className="pt-2">
                 <button 
                   type="submit" 
-                  className="w-full bg-[#d4ff00] text-black font-rowdies font-bold text-xs py-3.5 rounded-xl uppercase tracking-widest hover:bg-white hover:scale-[1.01] transition-all cursor-pointer border-none shadow-[0_0_15px_rgba(212,255,0,0.2)]"
+                  className="w-full bg-[#d4ff00] text-black font-extrabold text-xs py-3.5 rounded-xl uppercase tracking-widest hover:bg-white hover:scale-[1.01] transition-all cursor-pointer border-none shadow-[0_0_15px_rgba(212,255,0,0.2)]"
                 >
                   JOIN NOW
                 </button>
               </div>
 
               {/* Toggle Login Link */}
-              <div className="text-center text-xs text-slate-400 pt-2 font-poppins">
+              <div className="text-center text-xs text-slate-400 pt-2">
                 Already have an account?{' '}
                 <button 
                   type="button" 
@@ -814,12 +1375,9 @@ export default function AlphaZoneLandingPage() {
                 </button>
               </div>
 
-              {/* Form Legal */}
-              <p className="text-[9px] text-slate-500 leading-relaxed pt-3 border-t border-white/5 font-poppins">
-                Trial and monthly membership plans automatically renew monthly for $45.95 per month until{' '}
-                <a href="#" className="text-slate-400 hover:text-white transition-colors">canceled</a>. Free cancellation anytime. By joining, you agree to the{' '}
-                <a href="#" className="text-slate-400 hover:text-white transition-colors">Terms & Conditions</a> and{' '}
-                <a href="#" className="text-slate-400 hover:text-white transition-colors">Privacy Policy</a>.
+              {/* Legal info */}
+              <p className="text-[9px] text-slate-500 leading-relaxed pt-3 border-t border-white/5">
+                Trial and monthly membership plans automatically renew monthly until canceled. By joining, you agree to the Terms & Conditions and Privacy Policy.
               </p>
             </form>
           </motion.div>
@@ -827,15 +1385,15 @@ export default function AlphaZoneLandingPage() {
       </section>
 
       {/* ─── Mobile App Download Banner ─── */}
-      <section id="download-app" className="py-20 bg-[#d4ff00] text-black relative overflow-hidden">
+      <section id="download-app" className="py-20 bg-[#d4ff00] text-black relative z-20 overflow-hidden">
         {/* Background decorative elements */}
         <div className="absolute inset-0 pointer-events-none opacity-10">
           <div className="absolute top-1/2 left-1/4 -translate-y-1/2 w-96 h-96 bg-white/20 rounded-full blur-3xl" />
           <div className="absolute top-1/2 right-1/4 -translate-y-1/2 w-96 h-96 bg-black/10 rounded-full blur-3xl" />
         </div>
 
-        <div className="max-w-6xl mx-auto px-6 relative z-10">
-          <div className="bg-black text-white rounded-[32px] p-8 md:p-12 flex flex-col md:flex-row items-center justify-between gap-8 md:gap-12 shadow-2xl">
+        <div className="max-w-7xl mx-auto px-6 relative z-10">
+          <div className="bg-[#0c0c0e] text-white rounded-[32px] p-8 md:p-12 flex flex-col md:flex-row items-center justify-between gap-8 md:gap-12 shadow-2xl">
             
             {/* Left Content */}
             <div className="flex-1 text-left space-y-6">
@@ -843,33 +1401,32 @@ export default function AlphaZoneLandingPage() {
                 <span className="w-1.5 h-1.5 rounded-full bg-[#d4ff00] animate-pulse" />
                 Direct APK Installer (No Play Store Required)
               </span>
-              <h2 className="font-rowdies text-3xl md:text-5xl font-bold uppercase tracking-tight leading-tight text-white">
+              <h2 className="text-3xl md:text-5xl font-black uppercase tracking-tight leading-tight text-white">
                 Alpha Zone <br className="hidden md:inline" /> Member Super App
               </h2>
-              <p className="text-slate-400 text-sm md:text-base leading-relaxed max-w-lg">
+              <p className="text-slate-400 text-sm md:text-base leading-relaxed max-w-lg font-poppins">
                 Gain direct access to workouts, daily diet plans, live attendance tracking, and real-time support from your coaches. Download the Android app installer directly on your mobile device.
               </p>
               
               {/* Instructions */}
-              <div className="space-y-3 pt-2">
+              <div className="space-y-3 pt-2 font-poppins">
                 <h4 className="text-xs font-bold uppercase tracking-widest text-[#d4ff00]">Installation Guide:</h4>
-                <ol className="list-decimal list-inside text-xs text-slate-400 space-y-1.5 bg-black/20 p-4 rounded-xl border border-white/5 font-poppins">
+                <ol className="list-decimal list-inside text-xs text-slate-400 space-y-1.5 bg-black/20 p-4 rounded-xl border border-white/5">
                   <li>Click <span className="text-white font-semibold">Download Android App</span> on your mobile device.</li>
                   <li>Open the downloaded <code className="text-[#d4ff00] font-mono">AlphaZone.apk</code> file.</li>
-                  <li>Enable <span className="text-white font-semibold">&ldquo;Install from Unknown Sources&rdquo;</span> if prompted by your browser or settings.</li>
+                  <li>Enable <span className="text-white font-semibold">&ldquo;Install from Unknown Sources&rdquo;</span> if prompted.</li>
                   <li>Tap <span className="text-white font-semibold">Install</span>, open the app, and login with your CRM account!</li>
                 </ol>
               </div>
             </div>
 
-            {/* Right Action & Phone Mockup Visual */}
+            {/* Right Action & APK Visual */}
             <div className="w-full md:w-auto flex flex-col items-center justify-center shrink-0 space-y-4">
-              {/* Styled APK Icon / Button */}
               <div className="relative group p-1 bg-gradient-to-br from-[#d4ff00] to-teal-400 rounded-3xl transition-transform duration-300 hover:scale-105">
                 <a 
                   href="/AlphaZone.apk" 
                   download="AlphaZone.apk"
-                  className="flex flex-col items-center justify-center bg-slate-950 text-white px-8 py-10 rounded-[22px] min-w-[280px] text-center space-y-4 transition-colors"
+                  className="flex flex-col items-center justify-center bg-[#0c0c0e] text-white px-8 py-10 rounded-[22px] min-w-[280px] text-center space-y-4 transition-colors"
                 >
                   <div className="w-16 h-16 bg-[#d4ff00]/10 rounded-2xl flex items-center justify-center text-[#d4ff00] border border-[#d4ff00]/20">
                     <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -877,13 +1434,13 @@ export default function AlphaZoneLandingPage() {
                     </svg>
                   </div>
                   <div>
-                    <span className="block font-rowdies text-lg uppercase tracking-wider text-[#d4ff00]">Download Android App</span>
-                    <span className="block text-[10px] text-slate-400 mt-1 font-mono">v1.0.0 (Direct APK) • 37.3 MB</span>
+                    <span className="block font-black text-lg uppercase tracking-wider text-[#d4ff00]">Download Android App</span>
+                    <span className="block text-[10px] text-slate-500 mt-1 font-mono">v1.0.0 (Direct APK) • 37.3 MB</span>
                   </div>
                 </a>
               </div>
               
-              <span className="text-[10px] text-slate-400 font-mono flex items-center gap-1.5">
+              <span className="text-[10px] text-slate-500 font-mono flex items-center gap-1.5">
                 <svg className="w-3.5 h-3.5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                 </svg>
@@ -896,56 +1453,67 @@ export default function AlphaZoneLandingPage() {
       </section>
 
       {/* ─── Footer Section ─── */}
-      <footer className="bg-slate-900 border-t border-slate-800 relative z-10">
-        <div className="max-w-6xl mx-auto px-6 py-16 text-slate-400">
-          <div className="grid md:grid-cols-3 gap-8 items-start text-left">
+      <footer className="bg-[#0a0a0c] border-t border-white/10 relative z-20">
+        <div className="max-w-7xl mx-auto px-6 py-16 text-slate-400 font-poppins">
+          <div className="grid md:grid-cols-4 gap-8 items-start text-left">
             
-            {/* Branding Column - Loaded from /gym_logo.png */}
+            {/* Branding Column */}
             <div className="space-y-4">
               <a href="#" className="flex items-center gap-2 cursor-pointer hover:opacity-90 transition-opacity">
-                <img src="/gym_logo.png" alt="Alpha Zone Logo" className="h-10 w-auto object-contain" />
+                <img src="/gym_logo.png" alt="Alpha Zone Logo" className="h-12 w-auto object-contain" />
               </a>
-              <p className="text-xs text-slate-500 leading-relaxed font-poppins">
-                Beyond Strength. Beyond Limits. Elevate operations and workouts using biometric turnstile triggers and artificial intelligence workout guides.
+              <p className="text-xs text-slate-500 leading-relaxed">
+                Beyond Strength. Beyond Limits. Elevate operations and fitness tracking using biometric turnstiles, real-time client databases, and interactive progress tools.
               </p>
+            </div>
+
+            {/* Quick Links */}
+            <div className="space-y-3">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-white">Quick Navigation</h3>
+              <div className="w-8 h-[2px] bg-[#d4ff00]" />
+              <div className="flex flex-col gap-2 text-xs text-slate-500">
+                <a href="#" className="hover:text-white transition-colors">Home</a>
+                <a href="#about" className="hover:text-white transition-colors">About Us</a>
+                <a href="#services" className="hover:text-white transition-colors">Gym Services</a>
+                <a href="#plans" className="hover:text-white transition-colors">Membership Plans</a>
+              </div>
             </div>
 
             {/* Contact Support Column */}
-            <div className="space-y-3 font-poppins">
+            <div className="space-y-3">
               <h3 className="text-xs font-bold uppercase tracking-wider text-white">For Support</h3>
-              <div className="w-8 h-0.5 bg-[#d4ff00]" />
+              <div className="w-8 h-[2px] bg-[#d4ff00]" />
               <p className="text-xs text-slate-500 leading-relaxed">
-                Call Us: <span className="text-white font-semibold">800-000-0000</span><br />
-                Email Us: <span className="text-white font-semibold">support@alphagymzone.com</span>
+                Phone: <span className="text-white font-semibold">+91 99999 99999</span><br />
+                Support Email: <span className="text-white font-semibold">support@alphazonegym.in</span><br />
+                Hours: <span className="text-white font-semibold">05:00 AM – 10:00 PM</span>
               </p>
             </div>
 
-            {/* Address / Headquarters */}
-            <div className="space-y-3 font-poppins">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-white">Headquarters</h3>
-              <div className="w-8 h-0.5 bg-[#d4ff00]" />
+            {/* Headquarters / Locations */}
+            <div className="space-y-3">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-white">Branch Location</h3>
+              <div className="w-8 h-[2px] bg-[#d4ff00]" />
               <p className="text-xs text-slate-500 leading-relaxed">
-                Alpha Zone Gym HQ<br />
-                100 Alpha Boulevard, Suite 500<br />
-                Miami, FL 33101, United States
+                Alpha Zone Gym Mohali<br />
+                SCO 16-17, Landran Rd, Sohana<br />
+                SAS Nagar, Punjab 140307, India
               </p>
             </div>
 
           </div>
 
           {/* Bottom Copyright bar */}
-          <div className="mt-12 pt-8 border-t border-slate-800 flex flex-col sm:flex-row justify-between items-center gap-4 text-[11px] text-gray-500 font-poppins">
+          <div className="mt-12 pt-8 border-t border-white/5 flex flex-col sm:flex-row justify-between items-center gap-4 text-[11px] text-slate-600">
             <div>
               Copyright © 2026 Alpha Zone Gym. All rights reserved.
             </div>
             <div className="flex items-center gap-4">
-              <a href="/AlphaZone.apk" download="AlphaZone.apk" className="hover:opacity-90 text-black bg-[#d4ff00] px-3.5 py-1 rounded-full font-extrabold tracking-wide uppercase transition-all scale-105 shadow-[0_0_15px_rgba(212,255,0,0.15)]">Download App (APK)</a>
+              <a href="/AlphaZone.apk" download="AlphaZone.apk" className="hover:opacity-90 text-black bg-[#d4ff00] px-3.5 py-1 rounded-full font-extrabold tracking-wide uppercase transition-all scale-105 shadow-[0_0_15px_rgba(212,255,0,0.15)]">Download APK App</a>
               <span>|</span>
               <a href="#" className="hover:text-white transition-colors">Privacy Policy</a>
               <span>|</span>
               <a href="#" className="hover:text-white transition-colors">Terms & Conditions</a>
-              <span>|</span>
-              <a href="#" className="hover:text-white transition-colors">Support</a>
             </div>
           </div>
         </div>
@@ -959,73 +1527,85 @@ export default function AlphaZoneLandingPage() {
             {/* Modal overlay backdrop */}
             <motion.div 
               initial={{ opacity: 0 }} 
-              animate={{ opacity: 0.5 }} 
+              animate={{ opacity: 0.7 }} 
               exit={{ opacity: 0 }} 
               onClick={() => setShowLoginModal(false)} 
-              className="fixed inset-0 bg-black/60 backdrop-blur-sm" 
+              className="fixed inset-0 bg-black/85 backdrop-blur-md" 
             />
             
-            {/* Modal body container (Split Card) */}
+            {/* Modal body container */}
             <motion.div
-              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              initial={{ scale: 0.95, opacity: 0, y: 30 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
-              exit={{ scale: 0.9, opacity: 0, y: 20 }}
-              transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-              className="relative w-full max-w-[840px] bg-white text-slate-800 rounded-[32px] shadow-[0_30px_80px_rgba(0,0,0,0.4)] z-10 flex flex-col md:flex-row overflow-hidden font-poppins min-h-[520px]"
+              exit={{ scale: 0.95, opacity: 0, y: 30 }}
+              transition={{ type: 'spring', stiffness: 320, damping: 26 }}
+              className="relative w-full max-w-[860px] bg-[#09090b] text-white rounded-[32px] shadow-[0_30px_90px_rgba(0,0,0,0.8)] border border-white/10 z-10 flex flex-col md:flex-row overflow-hidden font-poppins min-h-[540px]"
             >
               
-              {/* Close Button (Absolute) */}
+              {/* Close Button */}
               <button 
                 onClick={() => setShowLoginModal(false)} 
-                className="absolute top-5 right-5 z-20 p-2 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-black transition-colors cursor-pointer border-none flex items-center justify-center"
+                className="absolute top-5 right-5 z-30 p-2 rounded-full bg-slate-900/90 hover:bg-slate-800 text-slate-400 hover:text-white transition-all cursor-pointer border border-white/10 flex items-center justify-center shadow-lg"
               >
                 <X size={16} />
               </button>
 
-              {/* Left Side: 3D Illustration Panel (50% width) */}
-              <div className="w-full md:w-1/2 p-5 bg-[#F4F6FB] flex items-center justify-center relative overflow-hidden">
-                {/* Background decorative soft shapes */}
-                <div className="absolute -left-12 -bottom-12 w-32 h-32 bg-yellow-400/20 rounded-full blur-2xl pointer-events-none" />
-                <div className="absolute -right-12 -top-12 w-32 h-32 bg-blue-400/20 rounded-full blur-2xl pointer-events-none" />
+              {/* Left Side: Premium Image Panel */}
+              <div className="w-full md:w-1/2 p-5 bg-slate-950 flex items-center justify-center relative overflow-hidden">
+                <div className="absolute -left-12 -bottom-12 w-32 h-32 bg-[#d4ff00]/10 rounded-full blur-2xl pointer-events-none" />
+                <div className="absolute -right-12 -top-12 w-32 h-32 bg-[#d4ff00]/5 rounded-full blur-2xl pointer-events-none" />
 
-                <div className="relative w-full h-full min-h-[250px] md:min-h-[460px] rounded-3xl overflow-hidden shadow-sm flex items-center justify-center">
-                  <div className="absolute inset-0 w-full h-full bg-gradient-to-br from-[#d4ff00] to-teal-400 p-8 flex flex-col justify-end transition-transform duration-700 hover:scale-105">
-                    <div className="space-y-2 mb-8 text-black z-10 relative">
-                      <h3 className="font-rowdies text-3xl uppercase tracking-tight leading-none">Alpha<br/>Operations</h3>
-                      <p className="text-black/80 text-[11px] font-bold font-poppins pr-4">Secure cloud infrastructure for global gym management.</p>
+                <div className="relative w-full h-full min-h-[240px] md:min-h-[480px] rounded-3xl overflow-hidden shadow-2xl flex items-center justify-center group">
+                  {/* Background Image with Zoom */}
+                  <img 
+                    src="https://images.unsplash.com/photo-1534438327276-14e5300c3a48?q=80&w=800&auto=format&fit=crop" 
+                    alt="Trainer lifting weights in premium gym" 
+                    className="absolute inset-0 w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110"
+                  />
+                  {/* Gradient & Vignette Overlay */}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/40 to-black/80 z-10 pointer-events-none" />
+                  
+                  {/* Glowing Neon Ring in background */}
+                  <div className="absolute w-[280px] h-[280px] rounded-full border border-[#d4ff00]/25 blur-sm z-0 pointer-events-none animate-pulse" />
+
+                  {/* Header HUD overlay */}
+                  <div className="absolute top-6 left-6 right-6 z-20 flex justify-between items-start text-left pointer-events-none font-mono">
+                    <div>
+                      <div className="text-[9px] font-black text-[#d4ff00] uppercase tracking-[0.25em]">OPERATIONS HUB</div>
+                      <div className="text-white text-xs font-bold mt-0.5">SYS.LOC_01 // ACTIVE</div>
                     </div>
+                    <div className="w-2 h-2 rounded-full bg-[#d4ff00] animate-pulse" />
                   </div>
-                  {/* Subtle glassmorphic overlay for branding */}
-                  <div className="absolute bottom-5 left-5 right-5 bg-white/25 backdrop-blur-md border border-white/30 p-4 rounded-2xl text-left">
+
+                  {/* Content details overlay */}
+                  <div className="absolute bottom-5 left-5 right-5 bg-black/75 backdrop-blur-xl border border-white/10 p-5 rounded-2xl text-left z-20 transition-all duration-300 group-hover:border-[#d4ff00]/30 shadow-[0_20px_50px_rgba(0,0,0,0.5)]">
                     <span className="text-[10px] font-black tracking-widest text-[#d4ff00] uppercase block">BEYOND STRENGTH</span>
-                    <h4 className="text-sm font-black text-white mt-0.5 leading-snug">ALPHA ZONE CRM OS</h4>
-                    <p className="text-[9px] text-white/80 font-medium mt-1 leading-normal">Interactive client databases, real-time biometric turnstile monitoring, and automatic scheduling.</p>
+                    <h4 className="text-sm font-black text-white mt-1 leading-snug tracking-wide uppercase">ALPHA ZONE CRM OS</h4>
+                    <p className="text-[9.5px] text-slate-400 font-medium mt-2 leading-normal">Interactive client databases, real-time biometric turnstile monitoring, and automatic scheduling.</p>
                   </div>
                 </div>
               </div>
 
-              {/* Right Side: Clean Modern Form (50% width) */}
-              <div className="w-full md:w-1/2 p-8 md:p-10 flex flex-col justify-between">
+              {/* Right Side: Clean Form */}
+              <div className="w-full md:w-1/2 p-8 md:p-10 flex flex-col justify-between text-left">
                 
-                {/* Header Branding */}
-                <div className="space-y-4 text-left">
+                <div className="space-y-4">
                   <div className="flex items-center gap-2">
                     <img src="/gym_logo.png" alt="Alpha Zone Logo" className="h-10 w-auto object-contain" />
-                    <span className="text-xs font-black uppercase tracking-widest text-slate-400 font-sans">Alpha OS</span>
+                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 font-sans">Alpha OS</span>
                   </div>
 
                   <div>
-                    <h2 className="text-2xl font-extrabold text-slate-900 tracking-tight leading-none">Welcome Back!</h2>
-                    <p className="text-[11px] text-slate-400 font-bold uppercase tracking-wider mt-1.5">Enter Your Details Below</p>
+                    <h2 className="text-3xl font-extrabold text-white tracking-tight leading-none">Welcome Back</h2>
+                    <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider mt-2">Enter credentials or select quick-access below</p>
                   </div>
                 </div>
 
-                {/* Quick Access Demo Profiles (Compact layout) */}
-                <div className="space-y-2 my-5 text-left">
-                  <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest block font-sans">Quick Access Demo Profiles</span>
+                {/* Quick Access Demo Profiles */}
+                <div className="space-y-2.5 my-6">
+                  <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block font-sans">Quick Access Demo Profiles</span>
                   
-                  {/* Grid selector for demo accounts */}
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-2 gap-1.5">
+                  <div className="grid grid-cols-1 gap-2">
                     {demoAccounts.map(acc => {
                       const isSelected = activeRole === acc.role;
                       return (
@@ -1033,95 +1613,74 @@ export default function AlphaZoneLandingPage() {
                           key={acc.role}
                           type="button"
                           onClick={() => handleRoleSelect(acc)}
-                          className={`px-3 py-2 rounded-xl text-left border cursor-pointer transition-all flex flex-col justify-center border-none ${
+                          className={`px-4 py-3 rounded-xl text-left border cursor-pointer transition-all flex flex-col justify-center border-none ${
                             isSelected 
-                              ? 'bg-slate-950 text-white shadow-sm ring-1 ring-slate-950 scale-[1.01]' 
-                              : 'bg-slate-50 border-slate-200 text-slate-650 hover:bg-slate-100'
+                              ? 'bg-[#d4ff00] text-black shadow-md scale-[1.02] ring-1 ring-[#d4ff00]/40' 
+                              : 'bg-slate-900 border border-white/5 text-slate-350 hover:bg-slate-800 hover:border-white/10'
                           }`}
                         >
-                          <span className={`text-[9.5px] font-extrabold tracking-tight ${isSelected ? 'text-[#d4ff00]' : 'text-slate-800'}`}>
+                          <span className={`text-[10px] font-extrabold tracking-tight ${isSelected ? 'text-black font-black' : 'text-white'}`}>
                             {acc.label.split(' / ')[0]}
                           </span>
-                          <span className="text-[7.5px] text-slate-400 truncate block mt-0.5">{acc.desc}</span>
+                          <span className={`text-[8px] truncate block mt-0.5 ${isSelected ? 'text-black/75' : 'text-slate-500'}`}>{acc.desc}</span>
                         </button>
                       );
                     })}
                   </div>
                 </div>
 
-                {/* Credentials Form */}
+                {/* Form */}
                 <form onSubmit={handleLogin} className="space-y-5 text-left font-poppins">
-                  {/* Email Input */}
-                  <div className="relative border-b border-slate-250 focus-within:border-slate-800 transition-colors py-1">
-                    <label className="block text-[8.5px] font-black text-slate-400 uppercase tracking-wider font-sans">Email Address</label>
+                  <div className="space-y-1">
+                    <label className="block text-[9px] font-black text-slate-450 uppercase tracking-widest font-sans">Email Address</label>
                     <input 
                       type="email" 
                       value={email} 
                       onChange={e => { setEmail(e.target.value); setActiveRole(''); }} 
-                      className="w-full bg-transparent outline-none border-none py-1.5 text-xs text-slate-800 placeholder-slate-350 focus:ring-0 font-medium" 
+                      className="w-full bg-[#060608] border border-white/10 focus:border-[#d4ff00] rounded-xl px-4 py-3.5 text-xs text-white placeholder-slate-600 outline-none transition-all focus:shadow-[0_0_15px_rgba(212,255,0,0.1)]" 
                       placeholder="hello.alex@gmail.com"
                       required 
                     />
                   </div>
 
-                  {/* Password Input */}
-                  <div className="relative border-b border-slate-250 focus-within:border-slate-800 transition-colors py-1">
-                    <label className="block text-[8.5px] font-black text-slate-400 uppercase tracking-wider font-sans">Password</label>
-                    <div className="flex items-center">
+                  <div className="space-y-1">
+                    <label className="block text-[9px] font-black text-slate-450 uppercase tracking-widest font-sans">Password</label>
+                    <div className="relative flex items-center">
                       <input 
                         type={showPass ? 'text' : 'password'} 
                         value={password} 
                         onChange={e => { setPassword(e.target.value); setActiveRole(''); }} 
-                        className="w-full bg-transparent outline-none border-none py-1.5 text-xs text-slate-800 placeholder-slate-350 focus:ring-0 font-medium" 
+                        className="w-full bg-[#060608] border border-white/10 focus:border-[#d4ff00] rounded-xl px-4 py-3.5 text-xs text-white placeholder-slate-600 outline-none transition-all focus:shadow-[0_0_15px_rgba(212,255,0,0.1)] pr-10" 
                         placeholder="••••••••••••"
                         required 
                       />
                       <button 
                         type="button" 
                         onClick={() => setShowPass(!showPass)} 
-                        className="pr-2 text-slate-400 hover:text-slate-900 bg-transparent border-none cursor-pointer"
+                        className="absolute right-3 text-slate-400 hover:text-white bg-transparent border-none cursor-pointer flex items-center justify-center p-1"
                       >
                         {showPass ? <EyeOff size={14} /> : <Eye size={14} />}
                       </button>
                     </div>
                   </div>
 
-                  {/* Remember Me / Forgot Row */}
-                  <div className="flex items-center justify-between text-[10px] pt-1">
-                    <label className="flex items-center gap-1.5 text-slate-500 cursor-pointer select-none font-bold">
-                      <input 
-                        type="checkbox" 
-                        className="rounded border-slate-300 text-slate-950 focus:ring-slate-950 cursor-pointer"
-                        defaultChecked
-                      />
-                      <span>Remember me</span>
-                    </label>
-                    <button 
-                      type="button"
-                      onClick={() => toast.success("Password recovery link sent to your registered email.")}
-                      className="text-slate-500 hover:text-black font-bold bg-transparent border-none cursor-pointer p-0"
-                    >
-                      Forgot password?
-                    </button>
-                  </div>
-
-                  {/* Login Button */}
+                  {/* Submit */}
                   <div className="pt-2">
                     <motion.button
                       type="submit"
                       disabled={loading}
                       whileHover={{ scale: loading ? 1 : 1.01 }}
                       whileTap={{ scale: loading ? 1 : 0.99 }}
-                      className="w-full bg-slate-950 hover:bg-black text-white py-3 flex items-center justify-center gap-2 text-xs font-black uppercase tracking-widest cursor-pointer rounded-2xl border-none shadow-sm"
+                      className="w-full bg-[#d4ff00] text-black py-3.5 flex items-center justify-center gap-2 text-xs font-black uppercase tracking-widest cursor-pointer rounded-2xl border-none shadow-sm hover:bg-white transition-colors"
                     >
                       {loading ? (
                         <>
-                          <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                          <div className="w-3.5 h-3.5 border-2 border-black border-t-transparent rounded-full animate-spin" />
                           <span>Authenticating...</span>
                         </>
                       ) : (
                         <>
-                          <Zap size={12} className="fill-[#d4ff00] text-[#d4ff00]" />
+                          <Zap size={12} className="fill-black text-black" />
                           <span>Log in</span>
                           <ArrowRight size={12} />
                         </>
@@ -1130,13 +1689,12 @@ export default function AlphaZoneLandingPage() {
                   </div>
                 </form>
 
-                {/* Bottom navigation links */}
-                <div className="text-center text-[10px] text-slate-450 mt-5 pt-3 border-t border-slate-100 font-bold">
+                <div className="text-center text-[10px] text-slate-500 mt-6 pt-4 border-t border-white/5 font-bold">
                   Don't have an account?{' '}
                   <button 
                     type="button" 
                     onClick={() => { setShowLoginModal(false); router.push('#signup'); }} 
-                    className="text-slate-950 hover:text-[#d4ff00] hover:underline font-black bg-transparent border-none cursor-pointer p-0"
+                    className="text-white hover:text-[#d4ff00] hover:underline font-black bg-transparent border-none cursor-pointer p-0"
                   >
                     Sign Up
                   </button>

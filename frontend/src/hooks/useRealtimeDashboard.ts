@@ -208,18 +208,24 @@ export function useRealtimeDashboard() {
     unsubs.push(onSnapshot(attQ, snap => {
       attendance = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       recalculate();
+    }, err => {
+      console.warn("Firestore realtime dashboard attendance query error:", err);
     }));
 
     // onSnapshot: payments
     unsubs.push(onSnapshot(collection(db, 'payments'), snap => {
       payments = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       recalculate();
+    }, err => {
+      console.warn("Firestore realtime dashboard payments query error:", err);
     }));
 
     // onSnapshot: members
     unsubs.push(onSnapshot(collection(db, 'members'), snap => {
       members = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       recalculate();
+    }, err => {
+      console.warn("Firestore realtime dashboard members query error:", err);
     }));
 
     // onSnapshot: notifications — show toast for new checkin/alert events
@@ -271,6 +277,8 @@ export function useRealtimeDashboard() {
           });
         }
       });
+    }, err => {
+      console.warn("Firestore realtime dashboard notifications query error:", err);
     }));
 
     return () => unsubs.forEach(u => u());

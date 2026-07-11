@@ -12,6 +12,8 @@ import { useAuthStore } from '@/store';
 import toast from 'react-hot-toast';
 import API from '@/services/api';
 import { useRouter } from 'next/navigation';
+import { db as fDb, isFirebaseReady } from '@/lib/firebase';
+import { doc, setDoc, getDoc } from 'firebase/firestore';
 
 interface Device {
   id: string;
@@ -54,6 +56,41 @@ export default function SettingsPage() {
   const [operatorName, setOperatorName] = useState(user?.name || '');
   const [contactEmail, setContactEmail] = useState(user?.email || 'admin@alphazone.com');
   const [contactPhone, setContactPhone] = useState('+91 98765 43210');
+  const [savingBranch, setSavingBranch] = useState(false);
+
+  // Load saved branch settings on mount
+  useEffect(() => {
+    const loadBranchSettings = async () => {
+      // Try Firestore first
+      if (isFirebaseReady && fDb) {
+        try {
+          const snap = await getDoc(doc(fDb, 'gymSettings', 'branch'));
+          if (snap.exists()) {
+            const data = snap.data();
+            if (data.gymName) setGymName(data.gymName);
+            if (data.operatorName) setOperatorName(data.operatorName);
+            if (data.contactEmail) setContactEmail(data.contactEmail);
+            if (data.contactPhone) setContactPhone(data.contactPhone);
+            return;
+          }
+        } catch (e) {
+          console.warn('Could not load branch settings from Firestore:', e);
+        }
+      }
+      // Fallback: localStorage
+      try {
+        const saved = localStorage.getItem('alphezone_branch_settings');
+        if (saved) {
+          const data = JSON.parse(saved);
+          if (data.gymName) setGymName(data.gymName);
+          if (data.operatorName) setOperatorName(data.operatorName);
+          if (data.contactEmail) setContactEmail(data.contactEmail);
+          if (data.contactPhone) setContactPhone(data.contactPhone);
+        }
+      } catch (e) {}
+    };
+    loadBranchSettings();
+  }, []);
   
   // Real database states
   const [devices, setDevices] = useState<Device[]>([]);
@@ -136,14 +173,37 @@ export default function SettingsPage() {
 
   const handleSaveGym = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user) return;
+    setSavingBranch(true);
+    const payload = { gymName, operatorName, contactEmail, contactPhone, updatedAt: new Date().toISOString() };
+    let savedToCloud = false;
+
+    // Try saving to Firestore
+    if (isFirebaseReady && fDb) {
+      try {
+        await setDoc(doc(fDb, 'gymSettings', 'branch'), payload, { merge: true });
+        savedToCloud = true;
+      } catch (err: any) {
+        console.warn('Firestore save failed, falling back to localStorage:', err);
+      }
+    }
+
+    // Always save to localStorage as fallback/cache
     try {
-      // In a real database we could update users/branches. Since profile is in users:
-      await API.put(`/members/${user.uid}`, { name: operatorName });
-      toast.success('Operator display name saved successfully!');
-    } catch (err: any) {
-      console.error(err);
-      toast.error('Failed to update operator: ' + err.message);
+      localStorage.setItem('alphezone_branch_settings', JSON.stringify(payload));
+    } catch (e) {}
+
+    // ✅ Update the auth store user name so it reflects everywhere instantly
+    // (greeting, sidebar, header — all read from useAuthStore)
+    if (user) {
+      const updatedUser = { ...user, name: operatorName, email: contactEmail };
+      setUser(updatedUser);
+    }
+
+    setSavingBranch(false);
+    if (savedToCloud) {
+      toast.success(`Name updated to "${operatorName}" — changes live everywhere! ☁️`);
+    } else {
+      toast.success(`Name updated to "${operatorName}" successfully!`);
     }
   };
 
@@ -585,7 +645,9 @@ export default function SettingsPage() {
             </div>
           </div>
           <div className="flex justify-end pt-2">
-            <button type="submit" className="btn-cyber-cyan text-xs font-bold text-slate-950 cursor-pointer px-6">Save Branch Info</button>
+            <button type="submit" disabled={savingBranch} className="btn-cyber-cyan text-xs font-bold text-slate-950 cursor-pointer px-6 flex items-center gap-2 disabled:opacity-60">
+              {savingBranch ? <><RefreshCw size={12} className="animate-spin" /> Saving...</> : 'Save Branch Info'}
+            </button>
           </div>
         </form>
       </motion.div>

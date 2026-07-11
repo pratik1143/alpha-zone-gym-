@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Search,
@@ -42,11 +42,11 @@ import {
 import { useGymStore } from "@/store";
 import {
   formatDate,
-  daysUntilExpiry,
   getInitials,
   getRandomColor,
   formatCurrency,
 } from "@/lib/utils";
+import { membershipEngine } from '@/lib/engines/membershipEngine';
 import toast from "react-hot-toast";
 import {
   collection,
@@ -116,7 +116,7 @@ const getPlanTheme = (planName: string) => {
 
 export default function MembersPage() {
   const {
-    members,
+    members: rawMembers,
     fetchMembers,
     addMember,
     updateMember,
@@ -126,6 +126,22 @@ export default function MembersPage() {
     resetPassword,
     sendCredentials,
   } = useGymStore();
+
+  const members = useMemo(() => {
+    return rawMembers.map((m: any) => {
+      const daysLeft = membershipEngine.calculateDaysLeft(m.expiryDate);
+      let derivedStatus = membershipEngine.calculateMembershipStatus(daysLeft, m.status).toLowerCase();
+      // Merge expiring into active per user request
+      if (derivedStatus === 'expiring soon' || derivedStatus === 'expiring') {
+        derivedStatus = 'active';
+      }
+      return {
+        ...m,
+        daysLeft,
+        status: derivedStatus
+      };
+    });
+  }, [rawMembers]);
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -210,6 +226,8 @@ export default function MembersPage() {
     const profRef = doc(fDb, "biometric_profiles", targetId);
     const unsub = onSnapshot(profRef, (snap) => {
       setBiometricProfile(snap.exists() ? snap.data() : null);
+    }, (error) => {
+      console.warn("Biometric profiles snapshot error:", error.message);
     });
     return () => unsub();
   }, [activeProfile?.id, newCreatedMember?.id, addStep, isFirebaseReady]);
@@ -229,6 +247,8 @@ export default function MembersPage() {
         totalScans: d.totalScans || 3,
         biometricId: d.biometricId,
       });
+    }, (error) => {
+      console.warn("Biometric enrollment snapshot error:", error.message);
     });
     enrollUnsubRef.current = unsub;
     return () => unsub();
@@ -509,18 +529,41 @@ export default function MembersPage() {
       return;
     }
 
-    // Auto calculate expiry based on plan
-    const daysMap: Record<string, number> = {
-      Monthly: 30,
-      Quarterly: 90,
-      "Semi-Annual": 180,
-      "Annual Premium": 365,
+    // ── PLAN DURATION MAP (Single Source of Truth) ──────────────────────
+    // Maps plan name keywords to days. Covers all naming conventions.
+    const PLAN_DURATION_MAP: Record<string, number> = {
+      '1 month':   30,  'monthly':    30,  '1month':    30,
+      '2 month':   60,  '2 months':   60,
+      '3 month':   90,  '3 months':   90,  'quarterly': 90,
+      '4 month':  120,  '4 months':  120,
+      '5 month':  150,  '5 months':  150,
+      '6 month':  180,  '6 months':  180,  'semi':      180,  'half year': 180,
+      '8 month':  240,  '8 months':  240,
+      '9 month':  270,  '9 months':  270,
+      '10 month': 300,  '10 months': 300,
+      '11 month': 330,  '11 months': 330,
+      '12 month': 365,  '12 months': 365,  'annual':    365,  'yearly':    365,  '1 year': 365,
+      'lifetime': 3650,
     };
-    const expiry = new Date(
-      Date.now() + (daysMap[newPlan] || 30) * 24 * 60 * 60 * 1000,
-    )
+
+    // Match plan name (case-insensitive) against the map
+    const planLower = (newPlan || '').toLowerCase();
+    let durationDays = 30; // safe default
+    for (const [key, days] of Object.entries(PLAN_DURATION_MAP)) {
+      if (planLower.includes(key)) {
+        durationDays = days;
+        break;
+      }
+    }
+    // Also try matching from Firestore plans (in case gym has custom durations)
+    const currentPlans = useGymStore.getState().plans || [];
+    const matchedPlan = currentPlans.find((p: any) => p.name === newPlan || p.id === newPlan);
+    if (matchedPlan?.durationDays) durationDays = matchedPlan.durationDays;
+
+    const startDate = newJoiningDate ? new Date(newJoiningDate) : new Date();
+    const expiry = new Date(startDate.getTime() + durationDays * 24 * 60 * 60 * 1000)
       .toISOString()
-      .split("T")[0];
+      .split('T')[0];
 
     try {
       await addMember({
@@ -652,6 +695,7 @@ export default function MembersPage() {
         bloodGroup: editingMember.bloodGroup || "",
         emergencyContact: editingMember.emergencyContact || "",
         isPt: editingMember.isPt === true,
+        expiryDate: editingMember.expiryDate || "",
         avatar: editingMember.avatar || null,
         avatarUrl: editingMember.avatar || null,
       });
@@ -822,12 +866,12 @@ export default function MembersPage() {
 
   const expiredMembers = members.filter(m => {
     if (m.status === 'blocked' || m.status === 'blacklisted') return false;
-    return daysUntilExpiry(m.expiryDate) < 0;
+    return membershipEngine.calculateDaysLeft(m.expiryDate) < 0;
   });
 
   const urgentMembers = members.filter(m => {
     if (m.status === 'blocked' || m.status === 'blacklisted') return false;
-    const days = daysUntilExpiry(m.expiryDate);
+    const days = membershipEngine.calculateDaysLeft(m.expiryDate);
     return days >= 0 && days <= 7;
   });
 
@@ -1044,6 +1088,41 @@ export default function MembersPage() {
                         <option key={t.id} value={t.name}>{t.name}</option>
                       ))}
                     </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase">Expiry Date</label>
+                    <input
+                      type="date"
+                      className="w-full mt-1 p-2 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-indigo-500 font-bold bg-white"
+                      value={editingMember.expiryDate || ""}
+                      onChange={(e) => setEditingMember({ ...editingMember, expiryDate: e.target.value })}
+                    />
+                    {/* \u2500\u2500 Auto-fix Expiry from Plan \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const PLAN_DURATION_MAP: Record<string, number> = {
+                          '1 month': 30, 'monthly': 30,
+                          '2 month': 60, '2 months': 60,
+                          '3 month': 90, '3 months': 90, 'quarterly': 90,
+                          '6 month': 180, '6 months': 180, 'semi': 180,
+                          '12 month': 365, '12 months': 365, 'annual': 365, 'yearly': 365, '1 year': 365,
+                          'lifetime': 3650,
+                        };
+                        const planLower = (editingMember.plan || '').toLowerCase();
+                        let days = 30;
+                        for (const [key, d] of Object.entries(PLAN_DURATION_MAP)) {
+                          if (planLower.includes(key)) { days = d; break; }
+                        }
+                        const start = editingMember.joinDate ? new Date(editingMember.joinDate) : new Date();
+                        const newExpiry = new Date(start.getTime() + days * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+                        setEditingMember({ ...editingMember, expiryDate: newExpiry });
+                        toast.success(`\u2705 Auto-fixed: ${editingMember.plan} = ${days} days from join date`);
+                      }}
+                      className="mt-1.5 w-full text-[9px] font-black text-indigo-600 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-lg py-1.5 transition-all"
+                    >
+                      \u26a1 Auto-fix from Plan + Join Date
+                    </button>
                   </div>
                 </div>
               </div>

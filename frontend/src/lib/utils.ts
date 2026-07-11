@@ -26,14 +26,15 @@ export const formatTime = (timeString: string): string => {
   });
 };
 
+// ────────────────────────────────────────────────────────────────
+// SINGLE SOURCE OF TRUTH: delegates to membershipEngine
+// Every page that calls daysUntilExpiry() automatically gets the
+// canonical value — no duplicate logic anywhere.
+// ────────────────────────────────────────────────────────────────
+import { membershipEngine } from '@/lib/engines/membershipEngine';
+
 export const daysUntilExpiry = (expiryDateString: string): number => {
-  if (!expiryDateString) return 0;
-  const expiry = new Date(expiryDateString);
-  const today = new Date();
-  const expiryMidnight = new Date(expiry.getFullYear(), expiry.getMonth(), expiry.getDate());
-  const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-  const diffTime = expiryMidnight.getTime() - todayMidnight.getTime();
-  return Math.round(diffTime / (1000 * 60 * 60 * 24));
+  return membershipEngine.calculateDaysLeft(expiryDateString);
 };
 
 export const formatDaysLeft = (expiryDateString: string): string => {

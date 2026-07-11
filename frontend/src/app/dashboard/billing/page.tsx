@@ -4,10 +4,12 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { CreditCard, DollarSign, Receipt, AlertCircle, Plus, Download, Search, TrendingUp, X, RefreshCw, Printer, Mail, MessageSquare, Share2 } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { db } from '@/lib/firebase';
-import { collection, onSnapshot, orderBy, query } from 'firebase/firestore';
+import { collection, onSnapshot, orderBy, query, updateDoc, doc } from 'firebase/firestore';
+import { paymentEngine } from '@/lib/engines/paymentEngine';
 import { formatCurrency, formatDate, getInitials, getMembershipName } from '@/lib/utils';
 import { useGymStore } from '@/store';
 import toast from 'react-hot-toast';
+import InvoiceBuilderModal from './components/InvoiceBuilderModal';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -41,6 +43,10 @@ export default function BillingPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [selectedInvoice, setSelectedInvoice] = useState<any | null>(null);
+  const [showBillingDropdown, setShowBillingDropdown] = useState(false);
+  const [showInvoiceModal, setShowInvoiceModal] = useState<string | null>(null);
+
+  const [markingPaid, setMarkingPaid] = useState<string | null>(null);
 
   // Real-time Firestore listener
   useEffect(() => {
@@ -56,6 +62,54 @@ export default function BillingPage() {
     });
     return () => unsub();
   }, []);
+
+  // Mark a payment as fully paid using paymentEngine
+  const handleMarkPaid = async (p: any) => {
+    if (!window.confirm(`Mark ₹${(Number(p.amount)||0).toLocaleString('en-IN')} invoice as PAID for ${p.memberName}?`)) return;
+    setMarkingPaid(p.id);
+    try {
+      const total = Number(p.amount) || 0;
+      await updateDoc(doc(db, 'payments', p.id), {
+        status: 'paid',
+        paid: total,
+        pendingAmount: 0,
+      });
+      // Also update invoices collection if it exists
+      try {
+        await updateDoc(doc(db, 'invoices', p.id), { status: 'paid', paid: total, pendingAmount: 0 });
+      } catch (_) {}
+      
+      if (p.memberId) {
+        await updateDoc(doc(db, 'members', p.memberId), {
+          paymentStatus: 'paid',
+          paidAmount: total,
+          pendingAmount: 0,
+        });
+      }
+
+      toast.success(`✅ ${p.memberName} — Payment marked as PAID!`);
+    } catch (err: any) {
+      toast.error('Failed to update: ' + err.message);
+    } finally {
+      setMarkingPaid(null);
+    }
+  };
+
+  // Share invoice via WhatsApp
+  const handleShareWhatsApp = (p: any) => {
+    const member = members.find((m: any) => m.id === p.memberId);
+    const phone = (member?.phone || p.memberPhone || '').replace(/\D/g, '');
+    if (!phone || phone.length < 10) {
+      toast.error('No valid phone number found for this member.');
+      return;
+    }
+    const total = (Number(p.amount) || 0) + (Number(p.gst) || 0);
+    const outstanding = paymentEngine.calculateOutstandingAmount(total, Number(p.paid) || 0);
+    const msg = encodeURIComponent(
+      `🏋️ Alpha Zone Gym — Invoice\n\nInvoice No: ${p.invoice || 'N/A'}\nPlan: ${p.plan || 'Membership'}\nAmount: ₹${total.toLocaleString('en-IN')}\nStatus: ${(p.status || 'pending').toUpperCase()}\n${outstanding > 0 ? `Outstanding: ₹${outstanding.toLocaleString('en-IN')}` : 'Fully Paid ✅'}\n\nThank you for being part of Alpha Zone! 💪`
+    );
+    window.open(`https://wa.me/91${phone}?text=${msg}`, '_blank');
+  };
 
   // Derived stats — fully computed from Firestore payments
   const paidPayments  = payments.filter(p => p.status === 'paid');
@@ -103,21 +157,57 @@ export default function BillingPage() {
             Live · GST Invoices · UPI · Cards · Cash ledger
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 relative">
           <button
             onClick={() => toast.success('GST Report feature coming soon!')}
             className="btn-cyber-outline text-xs py-2"
           >
             <Download size={13} /> GST Report
           </button>
-          <button
-            className="btn-cyber-cyan text-xs py-2 px-5 cursor-pointer"
-            onClick={() => toast.success('Go to Members → click "Mark Paid" to record a payment')}
-          >
-            <Plus size={14} /> New Payment
-          </button>
+          
+          <div className="relative">
+            <button
+              onClick={() => setShowBillingDropdown(!showBillingDropdown)}
+              className="bg-pink-500 hover:bg-pink-600 text-white text-xs font-black px-4 py-2 rounded-xl border-2 border-pink-600 transition-all shadow-sm flex items-center gap-1.5 uppercase tracking-wider"
+              style={{ boxShadow: '0 4px 14px rgba(236, 72, 153, 0.3)' }}
+            >
+              BILLING & PAYMENTS
+            </button>
+            
+            {showBillingDropdown && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setShowBillingDropdown(false)} />
+                <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-xl shadow-lg border border-slate-100 z-50 overflow-hidden py-1 transform origin-top-right">
+                  {[
+                    { label: 'Gym membership bill', type: 'Gym' },
+                    { label: 'Personal training bill', type: 'PT' },
+                    { label: 'Group class bill', type: 'Group' },
+                    { label: 'POS', type: 'POS' }
+                  ].map((item, i) => (
+                    <button
+                      key={i}
+                      onClick={() => {
+                        setShowInvoiceModal(item.type);
+                        setShowBillingDropdown(false);
+                      }}
+                      className="w-full text-left px-4 py-3 text-xs font-bold text-slate-700 hover:bg-slate-50 hover:text-pink-600 transition-colors border-b border-slate-50 last:border-0"
+                    >
+                      {item.label}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </div>
+
+      <InvoiceBuilderModal 
+        isOpen={!!showInvoiceModal}
+        type={showInvoiceModal}
+        onClose={() => setShowInvoiceModal(null)}
+        members={members}
+      />
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -277,18 +367,46 @@ export default function BillingPage() {
                   </td>
                   <td className="text-[11px] text-slate-400">{formatDate(p.date)}</td>
                   <td>
-                    <span className={p.status === 'paid' ? 'badge-green' : p.status === 'overdue' ? 'badge-red' : 'badge-yellow'}>
-                      {p.status || 'pending'}
+                    <span className={p.status === 'paid' ? 'badge-green' : p.status === 'partial' ? 'badge-yellow' : p.status === 'overdue' ? 'badge-red' : 'badge-yellow'}>
+                      {(p.status || 'pending').toUpperCase()}
                     </span>
+                    {(p.status !== 'paid') && (() => {
+                      const total = (Number(p.amount)||0) + (Number(p.gst)||0);
+                      const outstanding = paymentEngine.calculateOutstandingAmount(total, Number(p.paid) || 0);
+                      return outstanding > 0 ? (
+                        <div className="text-[9px] text-amber-600 font-black mt-0.5">₹{outstanding.toLocaleString('en-IN')} due</div>
+                      ) : null;
+                    })()}
                   </td>
                   <td>
-                    <button
-                      onClick={() => setSelectedInvoice(p)}
-                      className="px-3 py-1.5 rounded-lg text-[10px] font-black cursor-pointer border-none transition-all"
-                      style={{ background: 'rgba(212,255,0,0.12)', color: '#6b7c00', border: '1px solid rgba(212,255,0,0.3)' }}
-                    >
-                      View Invoice
-                    </button>
+                    <div className="flex items-center gap-1.5">
+                      {/* Mark Paid */}
+                      {p.status !== 'paid' && (
+                        <button
+                          onClick={() => handleMarkPaid(p)}
+                          disabled={markingPaid === p.id}
+                          className="px-2.5 py-1 rounded-lg text-[10px] font-black text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition-all disabled:opacity-50 cursor-pointer"
+                        >
+                          {markingPaid === p.id ? '...' : '✓ Paid'}
+                        </button>
+                      )}
+                      {/* WhatsApp */}
+                      <button
+                        onClick={() => handleShareWhatsApp(p)}
+                        className="w-7 h-7 rounded-lg flex items-center justify-center bg-green-50 hover:bg-green-100 text-green-600 border border-green-200 transition-all cursor-pointer"
+                        title="Send via WhatsApp"
+                      >
+                        <MessageSquare size={12} />
+                      </button>
+                      {/* View Invoice */}
+                      <button
+                        onClick={() => setSelectedInvoice(p)}
+                        className="w-7 h-7 rounded-lg flex items-center justify-center bg-slate-50 hover:bg-slate-100 text-slate-600 border border-slate-200 transition-all cursor-pointer"
+                        title="View Invoice"
+                      >
+                        <Receipt size={12} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}

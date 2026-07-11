@@ -13,6 +13,8 @@ import { formatDate } from '@/lib/utils';
 import API from '@/services/api';
 import toast from 'react-hot-toast';
 import SmartPhotoCapture from '../components/SmartPhotoCapture';
+import SendWhatsAppModal from '../components/SendWhatsAppModal';
+import { MessageSquare } from 'lucide-react';
 
 export default function EmployeesPage() {
   const [employees, setEmployees] = useState<any[]>([]);
@@ -29,6 +31,7 @@ export default function EmployeesPage() {
   const [showAddWizard, setShowAddWizard] = useState(false);
   const [activeProfile, setActiveProfile] = useState<any | null>(null);
   const [editingEmployee, setEditingEmployee] = useState<any | null>(null);
+  const [whatsAppModalEmployee, setWhatsAppModalEmployee] = useState<any | null>(null);
 
   // Realtime Firestore listeners
   useEffect(() => {
@@ -289,9 +292,23 @@ export default function EmployeesPage() {
             employee={activeProfile} 
             attendance={attendance.filter(a => a.employeeId === activeProfile.id)}
             onClose={() => setActiveProfile(null)} 
+            onWhatsApp={(emp) => {
+              setWhatsAppModalEmployee(emp);
+              setActiveProfile(null);
+            }}
           />
         )}
       </AnimatePresence>
+
+      <SendWhatsAppModal
+        isOpen={!!whatsAppModalEmployee}
+        onClose={() => setWhatsAppModalEmployee(null)}
+        phone={whatsAppModalEmployee?.phone || ''}
+        memberName={whatsAppModalEmployee?.name || ''}
+        plan="Staff"
+        expiryDate="N/A"
+        trainer="N/A"
+      />
 
     </div>
   );
@@ -740,7 +757,7 @@ function EditEmployeeModal({ employee, onClose }: { employee: any, onClose: () =
 }
 
 // ─── EMPLOYEE PROFILE DRAWER COMPONENT ───
-function EmployeeProfileDrawer({ employee, attendance, onClose }: { employee: any, attendance: any[], onClose: () => void }) {
+function EmployeeProfileDrawer({ employee, attendance, onClose, onWhatsApp }: { employee: any, attendance: any[], onClose: () => void, onWhatsApp?: (emp: any) => void }) {
   const avatar = employee.avatarUrl || `https://api.dicebear.com/7.x/adventurer/svg?seed=${employee.name?.replace(/ /g, '')}`;
 
   return (
@@ -786,7 +803,16 @@ function EmployeeProfileDrawer({ employee, attendance, onClose }: { employee: an
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <span className="text-slate-400 font-semibold block text-[9.5px]">Phone Number</span>
-                <span className="text-slate-800 font-bold">{employee.phone}</span>
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <span className="text-slate-800 font-bold">{employee.phone}</span>
+                  <button 
+                    onClick={() => onWhatsApp?.(employee)}
+                    className="p-1 text-emerald-600 hover:bg-emerald-50 rounded-lg border border-slate-100 cursor-pointer"
+                    title="Send WhatsApp"
+                  >
+                    <MessageSquare size={12} />
+                  </button>
+                </div>
               </div>
               <div>
                 <span className="text-slate-400 font-semibold block text-[9.5px]">Email ID</span>

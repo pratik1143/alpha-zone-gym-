@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import enquiryRoutes from './enquiry.routes';
+import whatsappRoutes from './whatsapp.routes';
 import { loginUser } from '../controllers/auth.controller';
 import { getMembers, createMember, updateMember, deleteMember, toggleFreezeMember, resetMemberPassword, sendMemberCredentials } from '../controllers/member.controller';
 import { getAttendanceFeed, createCheckIn, checkoutLog, triggerGateUnlock, getAccessLogs, getDoorStatus, getDashboardAnalyticsFeed, getAttendanceSummaryFeed } from '../controllers/attendance.controller';
@@ -30,6 +31,7 @@ router.post('/auth/login', loginUser);
 router.use(authenticateToken);
 
 router.use('/enquiries', enquiryRoutes);
+router.use('/whatsapp', whatsappRoutes);
 
 // Member CRUD & Actions
 router.get('/members', getMembers);

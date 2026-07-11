@@ -38,6 +38,8 @@ export default function ReferralsAdminPage() {
       const unsubRef = onSnapshot(refQuery, (snap) => {
         const list = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         setReferrals(list);
+      }, (error) => {
+        console.warn("Referrals list snapshot error:", error.message);
       });
 
       // 2. Subscribe to referral_rewards
@@ -45,6 +47,8 @@ export default function ReferralsAdminPage() {
       const unsubRew = onSnapshot(rewQuery, (snap) => {
         const list = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         setRewards(list);
+      }, (error) => {
+        console.warn("Referral rewards list snapshot error:", error.message);
       });
 
       return () => {

@@ -24,6 +24,14 @@ export default function DashboardPage() {
   const [employees, setEmployees] = useState<any[]>([]);
   const [empAttendance, setEmpAttendance] = useState<any[]>([]);
   const [memberAttendance, setMemberAttendance] = useState<any[]>([]);
+  const [realtimeMembers, setRealtimeMembers] = useState<any[]>([]);
+
+  // Fallback sync with store
+  useEffect(() => {
+    if (members && members.length > 0 && realtimeMembers.length === 0) {
+      setRealtimeMembers(members);
+    }
+  }, [members]);
 
   // Setup real-time listeners
   useEffect(() => {
@@ -31,20 +39,33 @@ export default function DashboardPage() {
     
     const unsubEmployees = onSnapshot(collection(fDb, 'employees'), (snap) => {
       setEmployees(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (err) => {
+      console.warn("Firestore employees listener error:", err);
     });
 
     const unsubEmpAtt = onSnapshot(collection(fDb, 'employeeAttendance'), (snap) => {
       setEmpAttendance(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (err) => {
+      console.warn("Firestore employeeAttendance listener error:", err);
     });
 
     const unsubAtt = onSnapshot(collection(fDb, 'attendance'), (snap) => {
       setMemberAttendance(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (err) => {
+      console.warn("Firestore attendance listener error:", err);
+    });
+
+    const unsubMembers = onSnapshot(collection(fDb, 'members'), (snap) => {
+      setRealtimeMembers(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (err) => {
+      console.warn("Firestore members listener error:", err);
     });
 
     return () => {
       unsubEmployees();
       unsubEmpAtt();
       unsubAtt();
+      unsubMembers();
     };
   }, []);
 
@@ -184,11 +205,11 @@ export default function DashboardPage() {
   };
 
   // Evaluate members risk
-  const evaluatedMembers = members.map(m => ({ ...m, ai: getMemberRisk(m) }));
+  const evaluatedMembers = realtimeMembers.map(m => ({ ...m, ai: getMemberRisk(m) }));
   
   // Owner metrics
   const totalAtRiskCount = evaluatedMembers.filter(m => m.ai.category === 'Red' || m.ai.category === 'Orange').length;
-  const retentionRate = members.length > 0 ? Math.round(((members.length - totalAtRiskCount) / members.length) * 100) : 92;
+  const retentionRate = realtimeMembers.length > 0 ? Math.round(((realtimeMembers.length - totalAtRiskCount) / realtimeMembers.length) * 100) : 92;
   const churnRate = 100 - retentionRate;
   const expectedRevenueLoss = evaluatedMembers.reduce((sum, m) => {
     const price = planPrices[m.plan] || 2500;
@@ -207,7 +228,7 @@ export default function DashboardPage() {
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
 
-    const activeMembers = members ? members.filter((m: any) => m.status === 'active') : [];
+    const activeMembers = realtimeMembers ? realtimeMembers.filter((m: any) => m.status === 'active') : [];
 
     const getEntityStatus = (entity: any, isEmployee: boolean) => {
       const logs = (isEmployee ? empAttendance : memberAttendance).filter(a => {
@@ -387,12 +408,12 @@ export default function DashboardPage() {
               </div>
               <div className="mt-2 text-left">
                 <h3 className="text-xl font-black text-black leading-none">
-                  {members ? members.filter(m => m.status === 'active').length : 0} Members
+                  {realtimeMembers ? realtimeMembers.filter(m => m.status === 'active').length : 0} Members
                 </h3>
                 
                 <div className="flex items-center gap-1.5 mt-3">
                   <div className="flex -space-x-2.5 overflow-hidden">
-                    {members ? members.slice(0, 3).map((m, idx) => {
+                    {realtimeMembers ? realtimeMembers.slice(0, 3).map((m, idx) => {
                        const colors = ['bg-amber-400', 'bg-violet-400', 'bg-rose-400'];
                        return (
                          <div 
@@ -404,9 +425,9 @@ export default function DashboardPage() {
                        );
                     }) : null}
                   </div>
-                  {members && members.length > 3 && (
+                  {realtimeMembers && realtimeMembers.length > 3 && (
                     <span className="text-[9px] bg-black text-white px-2 py-0.5 rounded-full font-black">
-                      +{members.length - 3}
+                      +{realtimeMembers.length - 3}
                     </span>
                   )}
                 </div>
@@ -498,56 +519,135 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* Middle Row Chart: Attendance Frequency Composed Chart (Black Card) */}
-          <div className="bg-black text-white p-5 rounded-[28px] shadow-lg flex flex-col md:flex-row gap-6 justify-between min-h-[260px] relative overflow-hidden">
-            <div className="absolute right-0 top-0 w-24 h-24 rounded-full bg-white/5 blur-xl pointer-events-none" />
+          {/* Middle Row: Composed Chart & Live Activity Hub */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            
+            {/* Chart Card */}
+            <div className="lg:col-span-2 bg-black text-white p-5 rounded-[28px] shadow-lg flex flex-col md:flex-row gap-6 justify-between min-h-[260px] relative overflow-hidden">
+              <div className="absolute right-0 top-0 w-24 h-24 rounded-full bg-white/5 blur-xl pointer-events-none" />
 
-            <div className="flex-1 flex flex-col justify-between">
-              <div>
-                <span className="text-[9px] font-black uppercase tracking-wider text-slate-400">Attendance Intensity</span>
-                <h4 className="text-sm font-extrabold text-white mt-1 leading-none">Weekly Check-in Distribution</h4>
+              <div className="flex-1 flex flex-col justify-between">
+                <div>
+                  <span className="text-[9px] font-black uppercase tracking-wider text-slate-400">Attendance Intensity</span>
+                  <h4 className="text-sm font-extrabold text-white mt-1 leading-none">Weekly Check-in Distribution</h4>
+                </div>
+
+                <div className="h-[140px] w-full mt-4">
+                  {isMounted && hasChartData ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <ComposedChart data={chartData} margin={{ top: 10, right: 0, bottom: 0, left: -40 }}>
+                        <XAxis dataKey="name" stroke="transparent" tick={{ fill: '#64748B', fontSize: 9, fontWeight: 700 }} axisLine={false} tickLine={false} />
+                        <Bar dataKey="checkins" fill="#FFFFFF" radius={[4, 4, 0, 0]} barSize={16} />
+                        <Line type="monotone" dataKey="intensity" stroke="#d4ff00" strokeWidth={2} dot={false} />
+                      </ComposedChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="h-full w-full flex flex-col items-center justify-center text-center gap-2">
+                      <Activity size={18} className="text-slate-700" />
+                      <span className="text-[10px] text-slate-500 font-bold">No biometric data recorded this year</span>
+                    </div>
+                  )}
+                </div>
               </div>
 
-              <div className="h-[140px] w-full mt-4">
-                {isMounted && hasChartData ? (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <ComposedChart data={chartData} margin={{ top: 10, right: 0, bottom: 0, left: -40 }}>
-                      <XAxis dataKey="name" stroke="transparent" tick={{ fill: '#64748B', fontSize: 9, fontWeight: 700 }} axisLine={false} tickLine={false} />
-                      <Bar dataKey="checkins" fill="#FFFFFF" radius={[4, 4, 0, 0]} barSize={16} />
-                      <Line type="monotone" dataKey="intensity" stroke="#d4ff00" strokeWidth={2} dot={false} />
-                    </ComposedChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <div className="h-full w-full flex flex-col items-center justify-center text-center gap-2">
-                    <Activity size={18} className="text-slate-700" />
-                    <span className="text-[10px] text-slate-500 font-bold">No biometric data recorded this year</span>
+              <div className="w-full md:w-[170px] border-t md:border-t-0 md:border-l border-white/10 pt-4 md:pt-0 md:pl-5 flex flex-col justify-between text-left">
+                <div>
+                  <span className="text-[8.5px] font-black uppercase tracking-wider text-slate-400 block">Weekly Syncs</span>
+                  <div className="flex items-center gap-2 mt-2">
+                    <div className="text-2xl font-black text-white">{totalCheckinsThisWeek}</div>
+                    <span className="text-[9px] bg-red-900/50 text-red-400 px-1.5 py-0.5 rounded font-black">-7%</span>
                   </div>
-                )}
+                  <p className="text-[7.5px] text-slate-500 font-bold mt-1">Checkins since last week</p>
+                </div>
+
+                <div className="mt-4 border-t border-white/5 pt-3">
+                  <span className="text-[8.5px] font-black uppercase tracking-wider text-slate-400 block">Monthly Syncs</span>
+                  <div className="flex items-center gap-2 mt-2">
+                    <div className="text-2xl font-black text-white">{attendance ? attendance.length : 0}</div>
+                    <span className="text-[9px] bg-emerald-950 text-[#d4ff00] px-1.5 py-0.5 rounded font-black">+13%</span>
+                  </div>
+                  <p className="text-[7.5px] text-slate-500 font-bold mt-1">Checkins this month</p>
+                </div>
+
+                <div className="mt-4 flex items-center gap-3 text-[7.5px] text-slate-500 font-black uppercase">
+                  <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-[#d4ff00]" /> This Year</span>
+                  <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-slate-500" /> Last Year</span>
+                </div>
               </div>
             </div>
 
-            <div className="w-full md:w-[170px] border-t md:border-t-0 md:border-l border-white/10 pt-4 md:pt-0 md:pl-5 flex flex-col justify-between text-left">
-              <div>
-                <span className="text-[8.5px] font-black uppercase tracking-wider text-slate-400 block">Weekly Syncs</span>
-                <div className="flex items-center gap-2 mt-2">
-                  <div className="text-2xl font-black text-white">{totalCheckinsThisWeek}</div>
-                  <span className="text-[9px] bg-red-900/50 text-red-400 px-1.5 py-0.5 rounded font-black">-7%</span>
+            {/* Live Activity Hub Column */}
+            <div className="bg-white border border-slate-100 p-5 rounded-[28px] shadow-sm flex flex-col justify-between min-h-[260px] text-left">
+              <div className="flex justify-between items-center border-b border-slate-50 pb-3">
+                <div>
+                  <h3 className="font-extrabold text-slate-800 text-sm flex items-center gap-1.5">
+                    Live Activity Hub
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+                    </span>
+                  </h3>
+                  <p className="text-[9px] text-slate-400 font-bold mt-0.5">Real-time biometric attendance feed</p>
                 </div>
-                <p className="text-[7.5px] text-slate-500 font-bold mt-1">Checkins since last week</p>
+                <span className="text-[8px] bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded-full font-black uppercase tracking-wider border border-emerald-100 animate-pulse">
+                  Live
+                </span>
               </div>
+              
+              <div className="mt-3 space-y-2.5 flex-1 overflow-y-auto max-h-[180px] pr-1 custom-scrollbar">
+                {(() => {
+                  const recentAttendance = [...memberAttendance]
+                    .sort((a, b) => {
+                      const tA = new Date(a.checkIn || a.createdAt || 0).getTime();
+                      const tB = new Date(b.checkIn || b.createdAt || 0).getTime();
+                      return tB - tA;
+                    })
+                    .slice(0, 4);
 
-              <div className="mt-4 border-t border-white/5 pt-3">
-                <span className="text-[8.5px] font-black uppercase tracking-wider text-slate-400 block">Monthly Syncs</span>
-                <div className="flex items-center gap-2 mt-2">
-                  <div className="text-2xl font-black text-white">{attendance ? attendance.length : 0}</div>
-                  <span className="text-[9px] bg-emerald-950 text-[#d4ff00] px-1.5 py-0.5 rounded font-black">+13%</span>
-                </div>
-                <p className="text-[7.5px] text-slate-500 font-bold mt-1">Checkins this month</p>
-              </div>
+                  if (recentAttendance.length === 0) {
+                    return (
+                      <div className="h-full flex flex-col items-center justify-center text-center gap-2 py-8">
+                        <Activity size={16} className="text-slate-350 animate-pulse" />
+                        <span className="text-[10px] text-slate-400 font-bold">Waiting for live sync...</span>
+                      </div>
+                    );
+                  }
 
-              <div className="mt-4 flex items-center gap-3 text-[7.5px] text-slate-500 font-black uppercase">
-                <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-[#d4ff00]" /> This Year</span>
-                <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-slate-500" /> Last Year</span>
+                  return recentAttendance.map((item, idx) => {
+                    const checkInTime = new Date(item.checkIn || item.createdAt || new Date());
+                    const timeStr = checkInTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+                    const isCheckOut = !!item.checkOut;
+                    const avatar = item.avatarUrl || item.avatar || `https://api.dicebear.com/7.x/adventurer/svg?seed=${(item.memberName || item.name || 'User').replace(/ /g, '')}`;
+                    
+                    return (
+                      <div key={item.id || idx} className="flex items-center justify-between bg-slate-50 border border-slate-100 p-2 rounded-2xl hover:bg-slate-100/50 transition-all">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <img 
+                            src={avatar}
+                            className="w-8 h-8 rounded-full bg-white border border-slate-100 shadow-sm shrink-0 object-cover"
+                            alt=""
+                            onError={(e) => { (e.target as HTMLImageElement).src = `https://api.dicebear.com/7.x/adventurer/svg?seed=${idx}` }}
+                          />
+                          <div className="truncate">
+                            <div className="text-[11px] font-black text-slate-800 truncate">{item.memberName || item.name || 'Unknown Athlete'}</div>
+                            <div className="text-[8.5px] text-slate-400 font-bold flex items-center gap-1 font-mono">
+                              <span>{timeStr}</span>
+                              <span>•</span>
+                              <span className="text-[8px] font-sans font-semibold uppercase">{item.method || 'Biometric'}</span>
+                            </div>
+                          </div>
+                        </div>
+                        <span className={`px-2 py-0.5 rounded-full text-[7.5px] font-black uppercase tracking-wider shrink-0 ${
+                          isCheckOut 
+                            ? 'bg-rose-50 text-rose-600 border border-rose-100' 
+                            : 'bg-emerald-50 text-emerald-600 border border-emerald-100'
+                        }`}>
+                          {isCheckOut ? 'Exit' : 'In'}
+                        </span>
+                      </div>
+                    );
+                  });
+                })()}
               </div>
             </div>
 

@@ -4,7 +4,8 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, ArrowRight, ArrowLeft, Check, Sparkles, CreditCard, User, Dumbbell, Receipt, Mail, MessageSquare, Bell, Calendar } from 'lucide-react';
 import { useGymStore } from '@/store';
-import { formatCurrency, daysUntilExpiry } from '@/lib/utils';
+import { formatCurrency } from '@/lib/utils';
+import { membershipEngine } from '@/lib/engines/membershipEngine';
 import API from '@/services/api';
 import toast from 'react-hot-toast';
 

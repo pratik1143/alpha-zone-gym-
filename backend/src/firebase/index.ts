@@ -340,9 +340,7 @@ export const db = {
   },
 
   getMembers: async (): Promise<any[]> => {
-    if (membersCache) {
-      return membersCache;
-    }
+    // Cache removed to ensure real-time single-source-of-truth from Firestore
     const firestore = getFirestoreDb();
     if (firestore) {
       try {

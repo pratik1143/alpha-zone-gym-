@@ -27,109 +27,114 @@ class AuthService extends ChangeNotifier {
       _memberSubscription = null;
       _currentMember = null;
     } else {
-      await _loadMemberProfile(user.uid, user.email ?? '');
+      await _loadMemberProfile(user.uid, user.email ?? '', user.phoneNumber ?? '');
     }
     notifyListeners();
   }
 
-  Future<void> _loadMemberProfile(String uid, String email) async {
+  /// Subscribe to member document — whenever it changes, update _currentMember.
+  void _subscribeToDoc(DocumentReference ref, {String? fallbackRole, Map<String, dynamic>? fallbackUserData}) {
+    _memberSubscription?.cancel();
+    _memberSubscription = ref.snapshots().listen((doc) async {
+      if (!doc.exists) return;
+
+      final fetched = MemberModel.fromFirestore(doc);
+
+      // Force logout if flag is set
+      if (fetched.forceLogout == true) {
+        await ref.update({'forceLogout': false}).catchError((_) {});
+        logout();
+        return;
+      }
+
+      // Block if app access disabled
+      if (fetched.appAccessEnabled == false) {
+        logout();
+        return;
+      }
+
+      _currentMember = fetched;
+      notifyListeners();
+    }, onError: (err) {
+      _error = err.toString();
+      notifyListeners();
+    });
+  }
+
+  Future<void> _loadMemberProfile(String uid, String email, String phone) async {
     try {
       _memberSubscription?.cancel();
-      
-      String? role;
-      
-      // Get role details from users collection first
-      var userDoc = await _db.collection('users').doc(uid).get();
-      if (!userDoc.exists) {
-        final query = await _db
-            .collection('users')
+
+      // ── Step 1: Try by Firebase Auth UID (fastest, most reliable) ──
+      final uidDoc = await _db.collection('members').doc(uid).get();
+      if (uidDoc.exists) {
+        _subscribeToDoc(uidDoc.reference);
+        return;
+      }
+
+      // ── Step 2: Try by email match ──
+      if (email.isNotEmpty) {
+        final byEmail = await _db
+            .collection('members')
             .where('email', isEqualTo: email)
             .limit(1)
             .get();
-        if (query.docs.isNotEmpty) {
-          userDoc = query.docs.first;
+        if (byEmail.docs.isNotEmpty) {
+          _subscribeToDoc(byEmail.docs.first.reference);
+          return;
         }
       }
-      if (userDoc.exists) {
-        role = userDoc.data()?['role'];
+
+      // ── Step 3: Try by phone number ──
+      final normalizedPhone = _normalizePhone(phone);
+      if (normalizedPhone.isNotEmpty) {
+        final byPhone = await _db
+            .collection('members')
+            .where('phone', isEqualTo: normalizedPhone)
+            .limit(1)
+            .get();
+        if (byPhone.docs.isNotEmpty) {
+          _subscribeToDoc(byPhone.docs.first.reference);
+          return;
+        }
       }
 
-      // Check if member document exists, then subscribe to updates
-      _memberSubscription = _db.collection('members').doc(uid).snapshots().listen((doc) async {
-        if (doc.exists) {
-          final fetchedMember = MemberModel.fromFirestore(doc);
-          
-          // Check for force logout
-          if (fetchedMember.forceLogout == true) {
-            // Reset the flag in Firestore to prevent infinite loop
-            await _db.collection('members').doc(uid).update({'forceLogout': false}).catchError((_) {});
-            logout();
-            return;
-          }
+      // ── Step 4: Try by memberId field (for username-based logins) ──
+      // memberId is stored in Firestore as e.g. "AZ-2026-0001"
+      // username login resolves email first, so this is a final safety net
 
-          // Check if app access is disabled
-          if (fetchedMember.appAccessEnabled == false) {
-            logout();
-            return;
-          }
+      // ── Fallback: create a minimal guest profile from auth user data ──
+      final userDoc = await _db.collection('users').doc(uid).get();
+      final data = userDoc.exists ? userDoc.data() : null;
 
-          _currentMember = fetchedMember;
-          notifyListeners();
-        } else {
-          // Check members collection query fallback (in case doc ID is different from UID)
-          final query = await _db
-              .collection('members')
-              .where('email', isEqualTo: email)
-              .limit(1)
-              .get();
-          if (query.docs.isNotEmpty) {
-            final fallbackDoc = query.docs.first;
-            // Subscribe to that fallback document instead
-            _memberSubscription?.cancel();
-            _memberSubscription = fallbackDoc.reference.snapshots().listen((fDoc) async {
-              if (fDoc.exists) {
-                final fMember = MemberModel.fromFirestore(fDoc);
-                if (fMember.forceLogout == true) {
-                  await fDoc.reference.update({'forceLogout': false}).catchError((_) {});
-                  logout();
-                  return;
-                }
-                if (fMember.appAccessEnabled == false) {
-                  logout();
-                  return;
-                }
-                _currentMember = fMember;
-                notifyListeners();
-              }
-            });
-            return;
-          }
-
-          // Fallback to staff / defaults if no member document exists
-          final data = userDoc.exists ? userDoc.data() : null;
-          _currentMember = MemberModel(
-            id: uid,
-            name: data?['name'] ?? email.split('@')[0],
-            email: email,
-            phone: data?['phone'] ?? '',
-            plan: 'Gold Member (Staff)',
-            branch: data?['branch'] ?? 'Mohali, Punjab',
-            status: 'active',
-            joinDate: DateTime.now(),
-            expiryDate: DateTime.now().add(const Duration(days: 365)),
-            role: role ?? data?['role'] ?? 'member',
-            appAccessEnabled: true,
-          );
-          notifyListeners();
-        }
-      }, onError: (err) {
-        _error = err.toString();
-        notifyListeners();
-      });
+      _currentMember = MemberModel(
+        id: uid,
+        name: data?['name'] ?? (email.isNotEmpty ? email.split('@')[0] : 'Member'),
+        email: email,
+        phone: data?['phone'] ?? phone,
+        plan: 'Gold Member (Staff)',
+        branch: data?['branch'] ?? 'Mohali, Punjab',
+        status: 'active',
+        joinDate: DateTime.now(),
+        expiryDate: DateTime.now().add(const Duration(days: 365)),
+        role: data?['role'] ?? 'member',
+        appAccessEnabled: true,
+      );
+      notifyListeners();
     } catch (e) {
       _error = e.toString();
       notifyListeners();
     }
+  }
+
+  /// Normalize Indian phone numbers to +91XXXXXXXXXX format for Firestore matching.
+  String _normalizePhone(String raw) {
+    final digits = raw.replaceAll(RegExp(r'\D'), '');
+    if (digits.isEmpty) return '';
+    if (digits.length == 10) return '+91$digits';
+    if (digits.length == 12 && digits.startsWith('91')) return '+$digits';
+    if (digits.startsWith('+')) return raw;
+    return digits;
   }
 
   Future<String?> login(String usernameOrEmail, String password) async {
@@ -139,38 +144,62 @@ class AuthService extends ChangeNotifier {
     try {
       String email = usernameOrEmail.trim();
 
-      // If username does not look like an email, treat as Member ID
+      // ── Resolve Member ID to email ──
       if (!email.contains('@')) {
-        final query = await _db
+        final input = email.toUpperCase();
+
+        // Try by memberId field
+        final byMemberId = await _db
             .collection('members')
-            .where('memberId', isEqualTo: email)
+            .where('memberId', isEqualTo: input)
             .limit(1)
             .get();
-        
-        if (query.docs.isEmpty) {
+
+        if (byMemberId.docs.isNotEmpty) {
+          final resolvedEmail = byMemberId.docs.first.data()['email'] as String?;
+          if (resolvedEmail != null && resolvedEmail.isNotEmpty) {
+            email = resolvedEmail;
+          } else {
+            _isLoading = false;
+            _error = 'Member account does not have a registered email. Contact the gym desk.';
+            notifyListeners();
+            return _error;
+          }
+        } else {
           _isLoading = false;
           _error = 'No member found with this Member ID.';
           notifyListeners();
           return _error;
         }
-        
-        final resolvedEmail = query.docs.first.data()['email'] as String?;
-        if (resolvedEmail == null || resolvedEmail.isEmpty) {
-          _isLoading = false;
-          _error = 'Member account does not have a registered email.';
-          notifyListeners();
-          return _error;
-        }
-        email = resolvedEmail;
       }
 
-      final credential = await _auth.signInWithEmailAndPassword(email: email, password: password);
+      final credential = await _auth.signInWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
       final uid = credential.user?.uid;
 
       if (uid != null) {
-        // Double check appAccessEnabled before fully letting them in
+        // Check if app access is enabled before letting them in
         final doc = await _db.collection('members').doc(uid).get();
-        if (doc.exists) {
+        if (!doc.exists) {
+          // Try email fallback too
+          final emailDoc = await _db
+              .collection('members')
+              .where('email', isEqualTo: email)
+              .limit(1)
+              .get();
+          if (emailDoc.docs.isNotEmpty) {
+            final fetched = MemberModel.fromFirestore(emailDoc.docs.first);
+            if (fetched.appAccessEnabled == false) {
+              await _auth.signOut();
+              _isLoading = false;
+              _error = 'App access is disabled for this account.';
+              notifyListeners();
+              return _error;
+            }
+          }
+        } else {
           final fetched = MemberModel.fromFirestore(doc);
           if (fetched.appAccessEnabled == false) {
             await _auth.signOut();
@@ -181,10 +210,12 @@ class AuthService extends ChangeNotifier {
           }
         }
 
-        // Update lastLogin
+        // Update lastLogin timestamp
         await _db.collection('members').doc(uid).update({
           'lastLogin': FieldValue.serverTimestamp(),
-        }).catchError((_) {});
+        }).catchError((_) {
+          // Ignore if doc not found by UID — email-based member
+        });
       }
 
       _isLoading = false;
@@ -193,11 +224,12 @@ class AuthService extends ChangeNotifier {
     } on FirebaseAuthException catch (e) {
       _isLoading = false;
       _error = switch (e.code) {
-        'user-not-found'  => 'No member found with this email.',
-        'wrong-password'  => 'Invalid email or password.',
-        'invalid-email'   => 'Please enter a valid email address.',
-        'user-disabled'   => 'This account has been disabled.',
-        _                 => 'Invalid Email or Password.',
+        'user-not-found'      => 'No account found with this email.',
+        'wrong-password'      => 'Invalid email or password.',
+        'invalid-credential'  => 'Invalid email or password.',
+        'invalid-email'       => 'Please enter a valid email address.',
+        'user-disabled'       => 'This account has been disabled.',
+        _                     => 'Login failed. Please check your credentials.',
       };
       notifyListeners();
       return _error;

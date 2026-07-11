@@ -3,7 +3,8 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Search, Phone, MessageSquare, Mail, RefreshCw, Ban, User, AlertCircle } from 'lucide-react';
-import { daysUntilExpiry, formatDaysLeft, getInitials, formatCurrency } from '@/lib/utils';
+import { formatDaysLeft, getInitials, formatCurrency } from '@/lib/utils';
+import { membershipEngine } from '@/lib/engines/membershipEngine';
 import { useGymStore } from '@/store';
 import toast from 'react-hot-toast';
 
@@ -20,7 +21,7 @@ export default function RenewalCenterModal({ isOpen, onClose, onOpenRenewWizard 
   // Filter for expired members
   const expiredMembers = members.filter(m => {
     if (m.status === 'blocked' || m.status === 'blacklisted') return false;
-    const days = daysUntilExpiry(m.expiryDate);
+    const days = membershipEngine.calculateDaysLeft(m.expiryDate);
     return days < 0;
   });
 
@@ -139,7 +140,7 @@ export default function RenewalCenterModal({ isOpen, onClose, onOpenRenewWizard 
                   </thead>
                   <tbody className="divide-y divide-slate-100/50">
                     {filteredExpired.map(m => {
-                      const days = daysUntilExpiry(m.expiryDate);
+                      const days = membershipEngine.calculateDaysLeft(m.expiryDate);
                       const absDays = Math.abs(days);
                       
                       return (

@@ -5,10 +5,21 @@ import { Search, Phone, MessageSquare, Trash2, ArrowRight, RefreshCw, HelpCircle
 import { useGymStore } from '@/store';
 import { formatDate, getInitials, daysUntilExpiry } from '@/lib/utils';
 import toast from 'react-hot-toast';
+import { db } from '@/lib/firebase';
+import { addDoc, collection } from 'firebase/firestore';
 
 export default function ExpiredPage() {
   const { members, fetchMembers, updateMember, deleteMember } = useGymStore() as any;
   const [search, setSearch] = useState('');
+  
+  // Follow-up modal state
+  const [showFollowupModal, setShowFollowupModal] = useState(false);
+  const [selectedMember, setSelectedMember] = useState<any>(null);
+  const [followupDate, setFollowupDate] = useState('');
+  const [followupTime, setFollowupTime] = useState('');
+  const [followupRemarks, setFollowupRemarks] = useState('');
+  const [followupAssignedTo, setFollowupAssignedTo] = useState('Admin');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   
   useEffect(() => {
     fetchMembers();
@@ -72,6 +83,51 @@ export default function ExpiredPage() {
       fetchMembers();
     } catch (err: any) {
       toast.error(err.message || 'Failed to delete record');
+    }
+  };
+
+  const handleOpenFollowup = (member: any) => {
+    setSelectedMember(member);
+    setFollowupDate('');
+    setFollowupTime('');
+    setFollowupRemarks('');
+    setShowFollowupModal(true);
+  };
+
+  const handleScheduleFollowup = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!followupDate || !followupTime || !selectedMember) {
+      toast.error('Please select date and time');
+      return;
+    }
+    
+    setIsSubmitting(true);
+    try {
+      const scheduledDateTime = new Date(`${followupDate}T${followupTime}`);
+      
+      await addDoc(collection(db, 'followups'), {
+        enquiryId: null,
+        memberId: selectedMember.id,
+        employeeId: null,
+        type: 'Renewal',
+        priority: 'High',
+        title: `Renewal Follow-up: ${selectedMember.name}`,
+        description: followupRemarks || `Follow-up scheduled for expired member ${selectedMember.name}`,
+        assignedTo: followupAssignedTo,
+        scheduledDate: followupDate,
+        scheduledTime: followupTime,
+        scheduledTimestamp: scheduledDateTime.getTime(),
+        status: 'Pending',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      });
+      
+      toast.success('Follow-up scheduled successfully!');
+      setShowFollowupModal(false);
+    } catch (err: any) {
+      toast.error('Failed to schedule follow-up: ' + err.message);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -198,6 +254,9 @@ export default function ExpiredPage() {
                           <button onClick={() => window.open(`tel:${member.phone}`)} className="p-2 text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors" title="Call">
                             <Phone size={16} />
                           </button>
+                          <button onClick={() => handleOpenFollowup(member)} className="flex items-center gap-1 px-3 py-2 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-lg text-xs transition-colors">
+                            Follow-up
+                          </button>
                           <button onClick={() => handleRenew(member)} className="flex items-center gap-1 px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg text-xs transition-colors">
                             <RefreshCw size={14} /> Renew
                           </button>
@@ -214,6 +273,62 @@ export default function ExpiredPage() {
           </table>
         </div>
       </div>
+
+      {/* Follow-up Modal */}
+      {showFollowupModal && selectedMember && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="bg-amber-500 px-6 py-4 flex items-center justify-between">
+              <h3 className="font-bold text-white text-lg flex items-center gap-2">
+                Schedule Follow-up
+              </h3>
+              <button onClick={() => setShowFollowupModal(false)} className="text-amber-100 hover:text-white transition-colors">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+              </button>
+            </div>
+            <form onSubmit={handleScheduleFollowup} className="p-6 flex flex-col gap-4">
+              <div>
+                <p className="text-sm font-semibold text-slate-500 mb-1">Member</p>
+                <p className="text-base font-bold text-slate-900">{selectedMember.name} <span className="text-slate-400 font-medium text-sm">({selectedMember.phone})</span></p>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Date<span className="text-red-500">*</span></label>
+                  <input type="date" required value={followupDate} onChange={e => setFollowupDate(e.target.value)} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none focus:border-amber-500 transition-colors cursor-pointer font-bold text-slate-700" />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Time<span className="text-red-500">*</span></label>
+                  <input type="time" required value={followupTime} onChange={e => setFollowupTime(e.target.value)} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none focus:border-amber-500 transition-colors cursor-pointer font-bold text-slate-700" />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Assigned To</label>
+                <select value={followupAssignedTo} onChange={e => setFollowupAssignedTo(e.target.value)} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none focus:border-amber-500 transition-colors cursor-pointer font-semibold text-slate-700">
+                  <option>Admin</option>
+                  <option>Manager</option>
+                  <option>Receptionist</option>
+                </select>
+              </div>
+              
+              <div className="space-y-1">
+                <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Remarks</label>
+                <textarea rows={3} value={followupRemarks} onChange={e => setFollowupRemarks(e.target.value)} placeholder="E.g. Called and said will renew tomorrow..." className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none focus:border-amber-500 transition-colors resize-none placeholder-slate-400 font-medium"></textarea>
+              </div>
+
+              <div className="mt-2 flex justify-end gap-2">
+                <button type="button" onClick={() => setShowFollowupModal(false)} className="px-4 py-2 text-slate-500 hover:text-slate-700 hover:bg-slate-50 rounded-lg text-sm font-bold transition-colors">
+                  Cancel
+                </button>
+                <button type="submit" disabled={isSubmitting} className="px-6 py-2 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white rounded-lg text-sm font-bold shadow-sm transition-colors uppercase tracking-wide">
+                  {isSubmitting ? 'Scheduling...' : 'Schedule'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

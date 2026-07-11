@@ -40,6 +40,8 @@ export default function RiskRadarPage() {
       const unsub = onSnapshot(q, (snap) => {
         const list = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         setActionsHistory(list);
+      }, (error) => {
+        console.warn("Retention actions snapshot error:", error.message);
       });
       return () => unsub();
     }
@@ -181,20 +183,18 @@ export default function RiskRadarPage() {
     return matchesSearch && matchesCategory;
   });
 
-  // Auto trigger check: If score > 80 (Red / Critical)
-  // In a production app, this runs on the server. Here, we run a check when the component mounts or evaluate members
-  // to ensure critical members have follow-up tasks registered in Firestore.
+  // Auto trigger check: disabled to prevent cluttering the follow-ups queue with auto-triggered tasks.
   useEffect(() => {
+    // Disabled auto-generation of follow-up tasks in Firestore
+    /*
     if (!isFirebaseReady || !fDb || evaluatedMembers.length === 0) return;
 
     const criticalMembers = evaluatedMembers.filter(m => m.ai.category === 'Red');
     criticalMembers.forEach(async (m) => {
-      // Check if a task already exists locally to prevent infinite alert spam
       const alertKey = `alert_triggered_${m.id}`;
       if (localStorage.getItem(alertKey)) return;
 
       try {
-        // 1. Create Follow Up task in Firestore
         await addDoc(collection(fDb, 'followups'), {
           memberId: m.id,
           memberName: m.name,
@@ -207,7 +207,6 @@ export default function RiskRadarPage() {
           createdAt: new Date().toISOString()
         });
 
-        // 2. Log in risk_scores history
         await setDoc(doc(fDb, 'risk_scores', m.id), {
           memberId: m.id,
           memberName: m.name,
@@ -217,14 +216,15 @@ export default function RiskRadarPage() {
           triggers: m.ai.triggers
         });
 
-        // Mark as triggered
         localStorage.setItem(alertKey, 'true');
         console.log(`Auto Actions triggered for ${m.name}`);
       } catch (err) {
         console.error("Auto trigger error:", err);
       }
     });
+    */
   }, [members]);
+
 
   // Handle retention action (Call, WhatsApp, push notification, offer discount, PT session, etc.)
   const handleRetentionAction = async (member: any, actionType: string) => {

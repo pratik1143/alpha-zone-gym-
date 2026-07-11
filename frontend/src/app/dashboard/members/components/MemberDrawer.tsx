@@ -2,7 +2,8 @@
 
 import React from 'react';
 import { X, Phone, MessageSquare, MapPin, MoreHorizontal, Crown, CheckSquare, Flame, Clock, Dumbbell, Shield, Fingerprint, RotateCcw, Trash2, Wifi, Download, RefreshCw, Snowflake, Play, Pause, Edit, Activity } from 'lucide-react';
-import { daysUntilExpiry, formatDate, getInitials } from '@/lib/utils';
+import { formatDate, getInitials } from '@/lib/utils';
+import { membershipEngine } from '@/lib/engines/membershipEngine';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useGymStore } from '@/store';
 import toast from 'react-hot-toast';
@@ -23,7 +24,7 @@ import { useState, useEffect } from 'react';
 
 export default function MemberDrawer({ member, onClose, onCall, onMessage, onCheckIn, onViewProfile, onEdit, onRenew }: MemberDrawerProps) {
   const { toggleFreeze, resetPassword, sendCredentials, triggerGateUnlock, enrollFingerprint, deleteBiometric, syncMemberBiometric, deleteMember } = useGymStore();
-  const daysLeft = member ? daysUntilExpiry(member.expiryDate) : 0;
+  const daysLeft = member ? membershipEngine.calculateDaysLeft(member.expiryDate) : 0;
   const isExpiring = daysLeft <= 15 && daysLeft > 0;
   const isExpired = daysLeft <= 0;
   const [mounted, setMounted] = useState(false);

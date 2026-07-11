@@ -152,6 +152,8 @@ export default function TrainerDeskPage() {
       if (data.status === 'success' && data.biometricId) {
         loadTrainersList();
       }
+    }, (error) => {
+      console.warn("Trainer biometric enrollment snapshot error:", error.message);
     });
     enrollUnsubRef.current = unsub;
     return () => {
@@ -169,6 +171,8 @@ export default function TrainerDeskPage() {
       const unsub = onSnapshot(q, (snap) => {
         const list = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         setFollowups(list);
+      }, (error) => {
+        console.warn("Followups list snapshot error:", error.message);
       });
       return () => unsub();
     }

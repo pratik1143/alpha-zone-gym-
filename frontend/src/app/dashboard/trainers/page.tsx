@@ -140,6 +140,8 @@ export default function TrainersPage() {
         // Update local state and reload
         loadData();
       }
+    }, (error) => {
+      console.warn("Trainer biometric enrollment snapshot error:", error.message);
     });
     enrollUnsubRef.current = unsub;
     return () => {

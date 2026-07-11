@@ -6,6 +6,7 @@ import { provisionAdminAccounts } from './firebase';
 import { initDeviceSyncService } from './services/deviceSync.service';
 import { startCleanupJob } from './jobs/cleanup';
 import { startPresenceJob } from './jobs/presence';
+import { initQueueJob } from './jobs/whatsappQueue.job';
 
 // Trigger reload after Firestore activation by user
 dotenv.config();
@@ -68,6 +69,9 @@ if (process.env.VERCEL) {
 
     // Start the LIVE MEMBERS INSIDE ENGINE cron job
     startPresenceJob();
+
+    // Start the WhatsApp Queue worker
+    initQueueJob();
 
     // Start daily automated emails scheduler (runs every 12 hours)
     try {

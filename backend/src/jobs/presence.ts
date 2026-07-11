@@ -17,14 +17,17 @@ export const runPresenceCheckoutCheck = async () => {
     const now = new Date();
     const nowIso = now.toISOString();
 
-    // Find all members who are currently marked inside
-    // and whose expectedExit time has passed.
+    // Query all active inside members and filter expired expectedExits in memory to avoid Firestore composite index requirement
     const snapshot = await firestore.collection('gym_presence')
       .where('inside', '==', true)
-      .where('expectedExit', '<=', nowIso)
       .get();
 
-    if (snapshot.empty) {
+    const matchingDocs = snapshot.docs.filter(doc => {
+      const data = doc.data();
+      return data.expectedExit && data.expectedExit <= nowIso;
+    });
+
+    if (matchingDocs.length === 0) {
       isRunning = false;
       return;
     }
@@ -33,7 +36,7 @@ export const runPresenceCheckoutCheck = async () => {
     const batch = firestore.batch();
     const checkedOutLogs: any[] = [];
 
-    snapshot.docs.forEach(doc => {
+    matchingDocs.forEach(doc => {
       const data = doc.data();
       const exitTime = nowIso;
       const entryTimeDate = new Date(data.entryTime);
@@ -65,7 +68,7 @@ export const runPresenceCheckoutCheck = async () => {
 
     await batch.commit();
 
-    console.log(`[Auto Checkout] Automatically checked out ${snapshot.size} members.`);
+    console.log(`[Auto Checkout] Automatically checked out ${matchingDocs.length} members.`);
   } catch (error) {
     console.error('[Auto Checkout Error]', error);
   } finally {

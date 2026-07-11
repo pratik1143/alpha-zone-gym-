@@ -2,9 +2,12 @@
 
 import React, { useState } from 'react';
 import { Search, Filter, MoreHorizontal, Phone, MessageSquare, MapPin } from 'lucide-react';
-import { daysUntilExpiry, calculateRealAttendance, formatDaysLeft } from '@/lib/utils';
+import { membershipEngine } from '@/lib/engines/membershipEngine';
+import { paymentEngine } from '@/lib/engines/paymentEngine';
+import { calculateRealAttendance, formatDaysLeft } from '@/lib/utils';
 import { useGymStore } from '@/store';
 import toast from 'react-hot-toast';
+import { useRouter } from 'next/navigation';
 interface MembersTableProps {
   members: any[];
   search: string;
@@ -16,10 +19,13 @@ interface MembersTableProps {
 }
 
 export default function MembersTable({ members, search, setSearch, statusFilter, setStatusFilter, onSelectMember, selectedMemberId }: MembersTableProps) {
+  const router = useRouter();
+
   const getDynamicStatus = (m: any) => {
     if (m.status === 'blocked' || m.status === 'blacklisted') return 'blocked';
     if (m.status === 'frozen') return 'frozen';
-    const days = daysUntilExpiry(m.expiryDate);
+    // ── SSOT: Always use membershipEngine ────────────────────────────
+    const days = membershipEngine.calculateDaysLeft(m.expiryDate);
     if (days < 0) return 'expired';
     if (days <= 7) return 'urgent';
     if (days <= 30) return 'expiring_soon';
@@ -28,10 +34,9 @@ export default function MembersTable({ members, search, setSearch, statusFilter,
 
   const counts = {
     all: members.length,
-    active: members.filter(m => getDynamicStatus(m) === 'active').length,
-    expiring: members.filter(m => {
+    active: members.filter(m => {
       const ds = getDynamicStatus(m);
-      return ds === 'expiring_soon' || ds === 'urgent';
+      return ds === 'active' || ds === 'expiring_soon' || ds === 'urgent';
     }).length,
     expired: members.filter(m => getDynamicStatus(m) === 'expired').length,
     frozen: members.filter(m => getDynamicStatus(m) === 'frozen').length,
@@ -43,8 +48,7 @@ export default function MembersTable({ members, search, setSearch, statusFilter,
     const dynStatus = getDynamicStatus(m);
     
     let st = statusFilter === 'all';
-    if (statusFilter === 'active') st = dynStatus === 'active';
-    else if (statusFilter === 'expiring') st = (dynStatus === 'expiring_soon' || dynStatus === 'urgent');
+    if (statusFilter === 'active') st = (dynStatus === 'active' || dynStatus === 'expiring_soon' || dynStatus === 'urgent');
     else if (statusFilter === 'expired') st = dynStatus === 'expired';
     else if (statusFilter === 'frozen') st = dynStatus === 'frozen';
     
@@ -53,11 +57,17 @@ export default function MembersTable({ members, search, setSearch, statusFilter,
   });
 
   const getRiskLevel = (member: any) => {
-    const days = daysUntilExpiry(member.expiryDate);
+    // ── SSOT: Always use membershipEngine for renewal risk ────────
+    const days = membershipEngine.calculateDaysLeft(member.expiryDate);
+    const risk = membershipEngine.calculateRenewalRisk(days);
     if (days < 0) return { label: 'High', color: 'text-red-500', value: '95%' };
-    if (days <= 7) return { label: 'High', color: 'text-red-500', value: '85%' };
-    if (days <= 30) return { label: 'Medium', color: 'text-orange-500', value: '65%' };
-    return { label: 'Low', color: 'text-emerald-500', value: '25%' };
+    const config: Record<string, { color: string; value: string }> = {
+      Critical: { color: 'text-red-500', value: '95%' },
+      High:     { color: 'text-red-500', value: '85%' },
+      Medium:   { color: 'text-orange-500', value: '65%' },
+      Low:      { color: 'text-emerald-500', value: '25%' },
+    };
+    return { label: risk, ...(config[risk] || config.Low) };
   };
 
   return (
@@ -97,7 +107,6 @@ export default function MembersTable({ members, search, setSearch, statusFilter,
           {[
             { id: 'all', label: 'All Members', count: counts.all },
             { id: 'active', label: 'Active', count: counts.active },
-            { id: 'expiring', label: 'Expiring', count: counts.expiring },
             { id: 'expired', label: 'Expired', count: counts.expired },
             { id: 'frozen', label: 'Frozen', count: counts.frozen },
             { id: 'pt', label: 'PT Members', count: counts.pt },
@@ -139,7 +148,7 @@ export default function MembersTable({ members, search, setSearch, statusFilter,
           </thead>
           <tbody className="divide-y divide-slate-100">
             {filtered.map(member => {
-              const days = daysUntilExpiry(member.expiryDate);
+              const days = membershipEngine.calculateDaysLeft(member.expiryDate);
               const risk = getRiskLevel(member);
               const isSelected = selectedMemberId === member.id;
               
@@ -157,7 +166,7 @@ export default function MembersTable({ members, search, setSearch, statusFilter,
               return (
                 <tr 
                   key={member.id} 
-                  onClick={() => onSelectMember(member)}
+                  onClick={() => router.push(`/dashboard/members/${member.id}`)}
                   className={`hover:bg-slate-50 transition-colors cursor-pointer ${isSelected ? 'bg-indigo-50/50' : ''}`}
                 >
                   <td className="px-4 py-4"><input type="checkbox" className="rounded border-slate-300" onClick={e => e.stopPropagation()} /></td>
@@ -255,25 +264,27 @@ export default function MembersTable({ members, search, setSearch, statusFilter,
                     })()}
                   </td>
                   <td className="px-4 py-4">
-                    {member.paymentStatus === 'pending' ? (
-                      <div className="flex flex-col items-start gap-1">
-                        <span className="badge-yellow text-[9px] uppercase font-black px-2 py-0.5">Pending</span>
-                        <button 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if(window.confirm('Mark payment as paid and send invoice to client?')) {
-                               useGymStore.getState().markPaymentPaid(member.id);
-                               toast.success('Payment marked as paid!');
-                            }
-                          }}
-                          className="text-[10px] bg-indigo-50 text-indigo-600 hover:bg-indigo-100 font-bold px-2 py-1 rounded cursor-pointer transition-colors"
-                        >
-                          Mark Paid
-                        </button>
-                      </div>
-                    ) : (
-                      <span className="badge-green text-[9px] uppercase font-black px-2 py-0.5">Paid</span>
-                    )}
+                    {/* \u2500\u2500 SSOT: paymentEngine drives status \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */}
+                    {(() => {
+                      const invoiceTotal = (Number(member.invoiceAmount) || 0) + (Number(member.invoiceGst) || 0);
+                      const paidTotal    = Number(member.paidAmount) || 0;
+                      const status       = invoiceTotal > 0
+                        ? paymentEngine.calculatePaymentStatus(invoiceTotal, paidTotal)
+                        : (member.paymentStatus === 'pending' ? 'PENDING' : 'PAID');
+                      const outstanding  = paymentEngine.calculateOutstandingAmount(invoiceTotal, paidTotal);
+                      return status === 'PAID' ? (
+                        <span className="badge-green text-[9px] uppercase font-black px-2 py-0.5">PAID</span>
+                      ) : (
+                        <div className="flex flex-col items-start gap-1">
+                          <span className="badge-yellow text-[9px] uppercase font-black px-2 py-0.5">
+                            {status === 'PARTIAL' ? 'Partial' : 'Pending'}
+                          </span>
+                          {outstanding > 0 && (
+                            <span className="text-[9px] text-amber-600 font-black">\u20b9{outstanding.toLocaleString('en-IN')} due</span>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </td>
                   <td className="px-4 py-4 text-right">
                     <button className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors" onClick={(e) => { e.stopPropagation(); }}>

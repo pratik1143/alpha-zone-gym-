@@ -154,7 +154,7 @@ export default function AttendancePopupManager() {
       },
       (error) => {
         // Log Firestore listener errors so they are visible in browser console
-        console.error('[AttendancePopupManager] Firestore listener error:', error);
+        console.warn('[AttendancePopupManager] Firestore listener error:', error);
       }
     );
 
