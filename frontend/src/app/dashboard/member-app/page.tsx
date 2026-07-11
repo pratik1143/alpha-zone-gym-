@@ -20,6 +20,7 @@ interface MemberAppData {
   appEmail?: string;
   authUid?: string;
   expiryDate?: string;
+  originalDocId?: string;
 }
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
