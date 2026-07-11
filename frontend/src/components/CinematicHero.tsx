@@ -37,6 +37,9 @@ export default function CinematicHero() {
   const [phase, setPhase] = useState<1 | 2 | 3 | 4 | 5 | 6>(1);
   const [phaseProgress, setPhaseProgress] = useState(0); // 0 to 1 inside current phase
 
+  // Whether frames actually loaded (vs just 404ing)
+  const [framesAvailable, setFramesAvailable] = useState<boolean | null>(null);
+
   // Fetch images list
   useEffect(() => {
     async function fetchImages() {
@@ -44,17 +47,21 @@ export default function CinematicHero() {
         const res = await fetch('/api/images');
         const data = await res.json();
         if (data.images && data.images.length > 0) {
-          setImages(data.images);
+          // Quick probe: check if first frame actually exists
+          const probe = await fetch(data.images[0], { method: 'HEAD' });
+          if (probe.ok) {
+            setImages(data.images);
+            setFramesAvailable(true);
+          } else {
+            // Frames not deployed (e.g. Vercel) — use static hero
+            setFramesAvailable(false);
+          }
         } else {
-          // Fallback static files list if API fails
-          const fallbackList = Array.from({ length: 240 }, (_, i) => {
-            const num = String(i + 1).padStart(3, '0');
-            return `/alpha/ezgif-frame-${num}.png`;
-          });
-          setImages(fallbackList);
+          setFramesAvailable(false);
         }
       } catch (err) {
         console.error('Failed to load images from API:', err);
+        setFramesAvailable(false);
       }
     }
     fetchImages();
@@ -332,10 +339,60 @@ export default function CinematicHero() {
   return (
     <>
 
+      {/* ─── STATIC FALLBACK HERO (shown on Vercel / when frames not available) ─── */}
+      {framesAvailable === false && (
+        <div
+          className="relative h-screen w-full flex items-center justify-center overflow-hidden bg-[#08080a]"
+          style={{
+            backgroundImage: "url('/gym_hero.png')",
+            backgroundSize: 'cover',
+            backgroundPosition: 'center top',
+          }}
+        >
+          {/* Dark overlay */}
+          <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/50 to-black/90 z-10" />
+          {/* Neon glow */}
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(212,255,0,0.07)_0%,transparent_60%)] z-10 pointer-events-none" />
+
+          <div className="relative z-20 text-center px-6 space-y-6 max-w-4xl mx-auto">
+            <span className="inline-flex items-center gap-2 bg-[#d4ff00]/10 text-[#d4ff00] text-[9px] font-extrabold px-5 py-2 rounded-full uppercase tracking-[0.25em] border border-[#d4ff00]/30 backdrop-blur-md shadow-[0_0_15px_rgba(212,255,0,0.15)]">
+              <span className="w-2 h-2 rounded-full bg-[#d4ff00] animate-pulse" />
+              ALPHA ZONE — SOHANA, MOHALI
+            </span>
+
+            <h1 className="font-rowdies text-5xl md:text-8xl font-bold tracking-tight text-white uppercase leading-none">
+              Sculpt Your <span className="text-[#d4ff00] drop-shadow-[0_0_20px_rgba(212,255,0,0.4)]">Body</span>
+            </h1>
+            <h2 className="font-rowdies text-3xl md:text-5xl font-bold tracking-wide text-slate-300 uppercase leading-none">
+              Elevate Your <span className="text-white border-b-4 border-[#d4ff00] pb-1">Spirit</span>
+            </h2>
+
+            <p className="text-slate-400 text-xs md:text-sm font-mono tracking-widest uppercase">
+              Premium Strength · Expert Coaches · Smart Programming
+            </p>
+
+            <div className="flex justify-center gap-4 pt-4">
+              <a
+                href="#signup"
+                className="bg-[#d4ff00] text-black font-rowdies font-bold text-xs tracking-wider px-8 py-4 rounded-full hover:bg-white hover:scale-105 transition-all shadow-[0_0_25px_rgba(212,255,0,0.35)]"
+              >
+                JOIN NOW →
+              </a>
+              <a
+                href="#gallery"
+                className="border border-white/20 text-white font-bold text-xs tracking-wider px-8 py-4 rounded-full hover:border-[#d4ff00] transition-all"
+              >
+                TAKE THE TOUR
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ─── Pinned Scroll container (600vh height for scroll space) ─── */}
-      <div ref={containerRef} className="relative h-[650vh] bg-slate-950">
-        
+      {framesAvailable !== false && (
+        <div ref={containerRef} className="relative h-[650vh] bg-slate-950">
+
         {/* Pinned viewport container (pinned by ScrollTrigger) */}
         <div ref={stickyRef} className="relative h-screen w-full overflow-hidden flex items-center justify-center z-10">
           
@@ -560,7 +617,8 @@ export default function CinematicHero() {
           </AnimatePresence>
 
         </div>
-      </div>
+        </div>
+      )}
     </>
   );
 }
