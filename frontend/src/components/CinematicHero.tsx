@@ -136,7 +136,7 @@ export default function CinematicHero() {
     ctx.drawImage(img, drawX, drawY, drawWidth, drawHeight);
   }, []);
 
-  // Optimized batch and sequential loading
+  // Optimized spaced-keyframe preloader + background stream loading
   useEffect(() => {
     if (images.length === 0) return;
 
@@ -146,56 +146,101 @@ export default function CinematicHero() {
     for (let i = 0; i < images.length; i++) {
       preloadedImagesList.push(new Image());
     }
+
+    // Step size for critical keyframes (evenly spaced across the timeline)
+    const STEP = 6;
+    const keyframeIndices: number[] = [];
+    const remainingIndices: number[] = [];
+
+    for (let i = 0; i < images.length; i++) {
+      if (i % STEP === 0 || i === images.length - 1) {
+        keyframeIndices.push(i);
+      } else {
+        remainingIndices.push(i);
+      }
+    }
     
-    // 1. Load the first 15 frames immediately for instant visual rendering
-    const initialBatch = 15;
-    for (let i = 0; i < Math.min(initialBatch, images.length); i++) {
+    // Track how many keyframes have completed loading
+    let loadedKeyframesCount = 0;
+
+    // 1. Load the critical keyframes first (covers start to end of the video)
+    keyframeIndices.forEach((i) => {
       preloadedImagesList[i].onload = () => {
-        if (currentFrameIdx.current === i) {
-          drawFrame(i);
+        loadedKeyframesCount++;
+        // If this is the current frame or close to it, redraw
+        if (
+          currentFrameIdx.current === i || 
+          Math.abs(currentFrameIdx.current - i) <= STEP / 2
+        ) {
+          drawFrame(currentFrameIdx.current);
+        }
+
+        // Once a critical threshold of keyframes is loaded (e.g. 5 keyframes), we can safely trigger the rest in background
+        if (loadedKeyframesCount === 5) {
+          startBackgroundLoading();
+        }
+      };
+      preloadedImagesList[i].onerror = () => {
+        loadedKeyframesCount++;
+        if (loadedKeyframesCount === 5) {
+          startBackgroundLoading();
         }
       };
       preloadedImagesList[i].src = images[i];
-    }
-    
-    // 2. Load the remaining frames sequentially in background (yields to main thread)
-    let currentIndexToLoad = initialBatch;
-    function loadNext() {
-      if (currentIndexToLoad >= images.length) return;
-      const img = preloadedImagesList[currentIndexToLoad];
-      const src = images[currentIndexToLoad];
-      
-      img.onload = () => {
-        if (currentFrameIdx.current === currentIndexToLoad) {
-          drawFrame(currentIndexToLoad);
-        }
-        currentIndexToLoad++;
-        if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
-          window.requestIdleCallback(() => loadNext());
-        } else {
-          setTimeout(loadNext, 10);
-        }
-      };
-      
-      img.onerror = () => {
-        currentIndexToLoad++;
-        loadNext();
-      };
-      
-      img.src = src;
-    }
-    
-    // Begin sequential load after yield
-    if (images.length > initialBatch) {
+    });
+
+    // 2. Load the remaining frames sequentially in background
+    let bgStarted = false;
+    function startBackgroundLoading() {
+      if (bgStarted) return;
+      bgStarted = true;
+
+      let currentIndex = 0;
+      function loadNextBg() {
+        if (currentIndex >= remainingIndices.length) return;
+        const i = remainingIndices[currentIndex];
+        const img = preloadedImagesList[i];
+        const src = images[i];
+
+        img.onload = () => {
+          if (currentFrameIdx.current === i) {
+            drawFrame(i);
+          }
+          currentIndex++;
+          if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+            window.requestIdleCallback(() => loadNextBg());
+          } else {
+            setTimeout(loadNextBg, 15);
+          }
+        };
+
+        img.onerror = () => {
+          currentIndex++;
+          loadNextBg();
+        };
+
+        img.src = src;
+      }
+
+      // Start the background loader
       if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
-        window.requestIdleCallback(() => loadNext());
+        window.requestIdleCallback(() => loadNextBg());
       } else {
-        setTimeout(loadNext, 50);
+        setTimeout(loadNextBg, 100);
       }
     }
 
+    // Safety fallback: if background loading hasn't started after 1.5 seconds, start it anyway
+    const safetyTimeout = setTimeout(() => {
+      startBackgroundLoading();
+    }, 1500);
+
     imagesRef.current = preloadedImagesList;
     setIsPreloaded(true);
+
+    return () => {
+      clearTimeout(safetyTimeout);
+    };
   }, [images, drawFrame]);
 
   // Window Resize handler
