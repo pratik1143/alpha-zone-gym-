@@ -251,7 +251,7 @@ export default function TrainerDeskPage() {
       salary: Number(formSalary) || 30000,
       status: formStatus,
       certifications: formCertifications.split(',').map(c => c.trim()).filter(Boolean),
-      photo: formPhoto || `https://images.unsplash.com/photo-1571019614242-c5c5dee9f50b?q=80&w=150`,
+      photo: formPhoto || '/gym_images/Personal Training in Mohali.jpeg',
       bio: formBio,
       joiningDate: formJoiningDate,
       instagram: formInstagram,

@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
 import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { Clock, Flame, Dumbbell, Sparkles } from 'lucide-react';
@@ -23,37 +22,45 @@ export default function CinematicHero() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const smokeCanvasRef = useRef<HTMLCanvasElement>(null);
   
+  // HUD Elements Refs for high-performance direct DOM updates
+  const overlayRef = useRef<HTMLDivElement>(null);
+  const vignetteRef = useRef<HTMLDivElement>(null);
+  const phase1Ref = useRef<HTMLDivElement>(null);
+  const hud23Ref = useRef<HTMLDivElement>(null);
+  const hud23ProgressRef = useRef<HTMLDivElement>(null);
+  const hud23TextRef = useRef<HTMLDivElement>(null);
+  const hud4Ref = useRef<HTMLDivElement>(null);
+  const hud4TextRef = useRef<HTMLDivElement>(null);
+  const card1Ref = useRef<HTMLDivElement>(null);
+  const card2Ref = useRef<HTMLDivElement>(null);
+  const card3Ref = useRef<HTMLDivElement>(null);
+  const card4Ref = useRef<HTMLDivElement>(null);
+  const mobileStatsRef = useRef<HTMLDivElement>(null);
+  const finalBrandingRef = useRef<HTMLDivElement>(null);
+  
   // Preloading & frames store
   const [images, setImages] = useState<string[]>([]);
   const [isPreloaded, setIsPreloaded] = useState(false);
-  const [loadingProgress, setLoadingProgress] = useState(0);
+  const [framesAvailable, setFramesAvailable] = useState<boolean | null>(null);
   
   const imagesRef = useRef<HTMLImageElement[]>([]);
   const currentFrameIdx = useRef(0);
   const scrollProgress = useRef(0);
   const particles = useRef<Particle[]>([]);
 
-  // Scroll phase calculations for UI triggers
-  const [phase, setPhase] = useState<1 | 2 | 3 | 4 | 5 | 6>(1);
-  const [phaseProgress, setPhaseProgress] = useState(0); // 0 to 1 inside current phase
-
-  // Whether frames actually loaded (vs just 404ing)
-  const [framesAvailable, setFramesAvailable] = useState<boolean | null>(null);
-
-  // Fetch images list
+  // Fetch images list on mount
   useEffect(() => {
     async function fetchImages() {
       try {
         const res = await fetch('/api/images');
         const data = await res.json();
         if (data.images && data.images.length > 0) {
-          // Quick probe: check if first frame actually exists
+          // Probe first frame to verify availability (e.g. static assets deployed)
           const probe = await fetch(data.images[0], { method: 'HEAD' });
           if (probe.ok) {
             setImages(data.images);
             setFramesAvailable(true);
           } else {
-            // Frames not deployed (e.g. Vercel) — use static hero
             setFramesAvailable(false);
           }
         } else {
@@ -71,16 +78,42 @@ export default function CinematicHero() {
   const drawFrame = React.useCallback((index: number) => {
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext('2d');
-    const img = imagesRef.current[index];
+    if (!canvas || !ctx || imagesRef.current.length === 0) return;
 
-    if (!canvas || !ctx || !img) return;
+    // Optimization: Find the closest loaded image if the target index is not loaded yet
+    let img = imagesRef.current[index];
+    if (!img || !img.complete || img.naturalWidth === 0) {
+      let found = false;
+      // Search backwards first
+      for (let i = index - 1; i >= 0; i--) {
+        const testImg = imagesRef.current[i];
+        if (testImg && testImg.complete && testImg.naturalWidth > 0) {
+          img = testImg;
+          found = true;
+          break;
+        }
+      }
+      // If not found, search forwards
+      if (!found) {
+        for (let i = index + 1; i < imagesRef.current.length; i++) {
+          const testImg = imagesRef.current[i];
+          if (testImg && testImg.complete && testImg.naturalWidth > 0) {
+            img = testImg;
+            found = true;
+            break;
+          }
+        }
+      }
+    }
+
+    if (!img || !img.complete || img.naturalWidth === 0) return;
 
     // Clear canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     // Compute dimensions to fill viewport
-    const imgWidth = img.width || 1920;
-    const imgHeight = img.height || 1080;
+    const imgWidth = img.naturalWidth || 1920;
+    const imgHeight = img.naturalHeight || 1080;
     const canvasWidth = canvas.width;
     const canvasHeight = canvas.height;
 
@@ -103,31 +136,69 @@ export default function CinematicHero() {
     ctx.drawImage(img, drawX, drawY, drawWidth, drawHeight);
   }, []);
 
-  // Preloading images in memory - FAST LOAD (No blocking)
+  // Optimized batch and sequential loading
   useEffect(() => {
     if (images.length === 0) return;
 
-    // Immediately create image objects and set src without waiting
-    const preloadedImagesList = images.map((src, index) => {
-      const img = new Image();
-      img.onload = () => {
-        // Redraw if this frame is currently active
-        if (currentFrameIdx.current === index) {
-          drawFrame(index);
+    const preloadedImagesList: HTMLImageElement[] = [];
+    
+    // Instantiate all Image objects
+    for (let i = 0; i < images.length; i++) {
+      preloadedImagesList.push(new Image());
+    }
+    
+    // 1. Load the first 15 frames immediately for instant visual rendering
+    const initialBatch = 15;
+    for (let i = 0; i < Math.min(initialBatch, images.length); i++) {
+      preloadedImagesList[i].onload = () => {
+        if (currentFrameIdx.current === i) {
+          drawFrame(i);
         }
       };
-      img.src = src;
-      return img;
-    });
-
-    // Set images ref to all images (loaded or not)
-    imagesRef.current = preloadedImagesList;
+      preloadedImagesList[i].src = images[i];
+    }
     
-    // Immediately unlock the UI
+    // 2. Load the remaining frames sequentially in background (yields to main thread)
+    let currentIndexToLoad = initialBatch;
+    function loadNext() {
+      if (currentIndexToLoad >= images.length) return;
+      const img = preloadedImagesList[currentIndexToLoad];
+      const src = images[currentIndexToLoad];
+      
+      img.onload = () => {
+        if (currentFrameIdx.current === currentIndexToLoad) {
+          drawFrame(currentIndexToLoad);
+        }
+        currentIndexToLoad++;
+        if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+          window.requestIdleCallback(() => loadNext());
+        } else {
+          setTimeout(loadNext, 10);
+        }
+      };
+      
+      img.onerror = () => {
+        currentIndexToLoad++;
+        loadNext();
+      };
+      
+      img.src = src;
+    }
+    
+    // Begin sequential load after yield
+    if (images.length > initialBatch) {
+      if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+        window.requestIdleCallback(() => loadNext());
+      } else {
+        setTimeout(loadNext, 50);
+      }
+    }
+
+    imagesRef.current = preloadedImagesList;
     setIsPreloaded(true);
   }, [images, drawFrame]);
 
-  // Resize handler
+  // Window Resize handler
   useEffect(() => {
     if (!isPreloaded) return;
 
@@ -147,9 +218,9 @@ export default function CinematicHero() {
     handleResize();
 
     return () => window.removeEventListener('resize', handleResize);
-  }, [isPreloaded]);
+  }, [isPreloaded, drawFrame]);
 
-  // Main scroll controller (GSAP ScrollTrigger)
+  // High-performance GSAP ScrollTrigger timeline (No React state changes on scroll)
   useEffect(() => {
     if (!isPreloaded || imagesRef.current.length === 0) return;
 
@@ -157,67 +228,169 @@ export default function CinematicHero() {
 
     const totalFrames = imagesRef.current.length;
 
-    // Initial draw of the first frame
+    // Draw first frame
     drawFrame(0);
 
-    const scrollTriggerInstance = ScrollTrigger.create({
-      trigger: containerRef.current,
-      start: 'top top',
-      end: 'bottom bottom',
-      pin: stickyRef.current, // Pin via ScrollTrigger to avoid overflow sticky bugs
-      scrub: true,
-      onUpdate: (self) => {
-        const progress = self.progress;
-        scrollProgress.current = progress;
+    // Initial setup for GSAP properties
+    gsap.set(canvasRef.current, { scale: 1.0 });
+    gsap.set(overlayRef.current, { opacity: 0.95 });
+    gsap.set(vignetteRef.current, { opacity: 0.90 });
+    
+    gsap.set(phase1Ref.current, { opacity: 1, y: 0, display: 'flex' });
+    gsap.set(hud23Ref.current, { opacity: 0, display: 'none' });
+    gsap.set(hud23ProgressRef.current, { scaleX: 0, transformOrigin: 'left' });
+    gsap.set(hud4Ref.current, { opacity: 0, display: 'none' });
+    
+    gsap.set(card1Ref.current, { opacity: 0, x: -80, y: -80 });
+    gsap.set(card2Ref.current, { opacity: 0, x: 80, y: -80 });
+    gsap.set(card3Ref.current, { opacity: 0, x: -90, y: 90 });
+    gsap.set(card4Ref.current, { opacity: 0, x: 90, y: 90 });
+    gsap.set(mobileStatsRef.current, { opacity: 0, display: 'none' });
+    gsap.set(finalBrandingRef.current, { opacity: 0, scale: 0.95, display: 'none' });
 
-        // Map scroll progress to active frame index
-        const frameIdx = Math.min(
-          totalFrames - 1,
-          Math.floor(progress * totalFrames)
-        );
-        currentFrameIdx.current = frameIdx;
-        drawFrame(frameIdx);
+    // Create normalized scroll-scrubbed timeline (duration 1.0 mapping to progress 0.0 -> 1.0)
+    const tl = gsap.timeline({
+      scrollTrigger: {
+        trigger: containerRef.current,
+        start: 'top top',
+        end: 'bottom bottom',
+        pin: stickyRef.current,
+        scrub: 0.15, // Smooth scrubbing to absorb scroll jitters
+        onUpdate: (self) => {
+          const progress = self.progress;
+          scrollProgress.current = progress;
 
-        // Compute current section phase based on percentages
-        // Section 1: 0% to 15%
-        // Section 2: 15% to 35%
-        // Section 3: 35% to 55%
-        // Section 4: 55% to 80%
-        // Section 5: 80% to 90%
-        // Section 6: 90% to 100%
-        let currentPhase: 1 | 2 | 3 | 4 | 5 | 6 = 1;
-        let subProgress = 0;
+          // Map progress directly to image frames
+          const frameIdx = Math.min(
+            totalFrames - 1,
+            Math.floor(progress * totalFrames)
+          );
+          
+          if (currentFrameIdx.current !== frameIdx) {
+            currentFrameIdx.current = frameIdx;
+            drawFrame(frameIdx);
+          }
 
-        if (progress < 0.15) {
-          currentPhase = 1;
-          subProgress = progress / 0.15;
-        } else if (progress < 0.35) {
-          currentPhase = 2;
-          subProgress = (progress - 0.15) / 0.20;
-        } else if (progress < 0.55) {
-          currentPhase = 3;
-          subProgress = (progress - 0.35) / 0.20;
-        } else if (progress < 0.80) {
-          currentPhase = 4;
-          subProgress = (progress - 0.55) / 0.25;
-        } else if (progress < 0.90) {
-          currentPhase = 5;
-          subProgress = (progress - 0.80) / 0.10;
-        } else {
-          currentPhase = 6;
-          subProgress = (progress - 0.90) / 0.10;
+          // Direct text node manipulation (no React re-renders)
+          if (hud4TextRef.current) {
+            hud4TextRef.current.textContent = `FRAME ${frameIdx + 1} / ${totalFrames}`;
+          }
         }
-
-        setPhase(currentPhase);
-        setPhaseProgress(subProgress);
       }
     });
 
+    // ─── Timeline Animations mapped normalized 0.0 to 1.0 ───
+
+    // 1. Zoom Canvas (progress 0.15 to 0.80)
+    tl.to(canvasRef.current, {
+      scale: 1.18,
+      force3D: true,
+      ease: 'none',
+      duration: 0.65
+    }, 0.15);
+
+    // 2. Black Overlay (Brightness fade-in from dark, progress 0.15 -> 0.35 -> 0.55)
+    tl.to(overlayRef.current, {
+      opacity: 0.20,
+      ease: 'power1.out',
+      duration: 0.20
+    }, 0.15);
+
+    tl.to(overlayRef.current, {
+      opacity: 0.05,
+      ease: 'power1.inOut',
+      duration: 0.20
+    }, 0.35);
+
+    // 3. Vignette (adjust opacity over start phase)
+    tl.to(vignetteRef.current, {
+      opacity: 0.70,
+      ease: 'none',
+      duration: 0.15
+    }, 0.0);
+
+    // 4. Phase 1 Text (0.0 to 0.15)
+    tl.to(phase1Ref.current, {
+      opacity: 0,
+      y: -50,
+      ease: 'power1.out',
+      duration: 0.15
+    }, 0.0);
+    tl.set(phase1Ref.current, { display: 'none' }, 0.15);
+
+    // 5. Phase 2 & 3 HUD (0.15 to 0.55)
+    tl.set(hud23Ref.current, { display: 'block' }, 0.15);
+    tl.to(hud23Ref.current, {
+      opacity: 1,
+      ease: 'power1.in',
+      duration: 0.05
+    }, 0.15);
+    
+    tl.to(hud23ProgressRef.current, {
+      scaleX: 1,
+      ease: 'none',
+      duration: 0.40
+    }, 0.15);
+
+    // Text labels swaps inside scroll timeline (GSAP triggers on forward/backward scrub)
+    tl.call(() => {
+      if (hud23TextRef.current) {
+        hud23TextRef.current.textContent = 'STRUCTURE FORMING · CHEST & SHOULDERS';
+      }
+    }, [], 0.15);
+
+    tl.call(() => {
+      if (hud23TextRef.current) {
+        hud23TextRef.current.textContent = 'MUTATION STAGE · DEFINITION MAXIMIZING';
+      }
+    }, [], 0.35);
+
+    tl.to(hud23Ref.current, {
+      opacity: 0,
+      ease: 'power1.out',
+      duration: 0.05
+    }, 0.50);
+    tl.set(hud23Ref.current, { display: 'none' }, 0.55);
+
+    // 6. Phase 4 HUD (0.55 to 0.80)
+    tl.set(hud4Ref.current, { display: 'block' }, 0.55);
+    tl.to(hud4Ref.current, {
+      opacity: 1,
+      ease: 'power1.in',
+      duration: 0.05
+    }, 0.55);
+
+    tl.to(hud4Ref.current, {
+      opacity: 0,
+      ease: 'power1.out',
+      duration: 0.05
+    }, 0.75);
+    tl.set(hud4Ref.current, { display: 'none' }, 0.80);
+
+    // 7. Phase 5 & 6 Glass Cards (0.80 to 0.95)
+    tl.to([card1Ref.current, card2Ref.current, card3Ref.current, card4Ref.current], {
+      opacity: 1,
+      x: 0,
+      y: 0,
+      stagger: 0.02,
+      ease: 'back.out(1.2)',
+      duration: 0.15
+    }, 0.80);
+
+    // 8. Phase 6 Final Branding & Mobile Stats (0.90 to 1.00)
+    tl.set([finalBrandingRef.current, mobileStatsRef.current], { display: 'block' }, 0.90);
+    tl.to([finalBrandingRef.current, mobileStatsRef.current], {
+      opacity: 1,
+      scale: 1,
+      ease: 'power2.out',
+      duration: 0.10
+    }, 0.90);
+
     return () => {
-      scrollTriggerInstance.kill();
+      tl.kill();
       ScrollTrigger.getAll().forEach(t => t.kill());
     };
-  }, [isPreloaded]);
+  }, [isPreloaded, drawFrame]);
 
   // Smoke particles animation loop
   useEffect(() => {
@@ -235,10 +408,9 @@ export default function CinematicHero() {
 
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // Spawn particles only in Section 6 (progress > 90%)
       const p = scrollProgress.current;
       if (p > 0.88) {
-        const intensity = Math.min(1, (p - 0.88) * 8.33); // scales 0 to 1 from 88% to 100%
+        const intensity = Math.min(1, (p - 0.88) * 8.33);
         
         // Emit particles
         if (Math.random() < 0.25 * intensity) {
@@ -260,7 +432,7 @@ export default function CinematicHero() {
         item.life++;
         item.x += item.vx;
         item.y += item.vy;
-        item.size += 0.2; // expansion
+        item.size += 0.2;
 
         const ageRatio = item.life / item.maxLife;
         const currentAlpha = item.alpha * (1 - ageRatio);
@@ -268,7 +440,6 @@ export default function CinematicHero() {
         if (currentAlpha > 0 && item.life < item.maxLife) {
           ctx.beginPath();
           const grad = ctx.createRadialGradient(item.x, item.y, 0, item.x, item.y, item.size);
-          // Neon green glowing core tint, fading to transparent
           grad.addColorStop(0, `rgba(212, 255, 0, ${currentAlpha * 0.35})`);
           grad.addColorStop(0.3, `rgba(15, 23, 42, ${currentAlpha * 0.12})`);
           grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
@@ -289,69 +460,19 @@ export default function CinematicHero() {
     return () => cancelAnimationFrame(animId);
   }, [isPreloaded]);
 
-  // Compute CSS filter styling based on scroll progression
-  // Zoom: Section 2 to 4 scale increases (1.0 to 1.18)
-  // Contrast/Brightness: Section 3 contrast increases (1.0 to 1.25)
-  const getCanvasStyle = () => {
-    const p = scrollProgress.current;
-    let scale = 1.0;
-    let brightness = 1.0;
-    let contrast = 1.0;
-    let filterBlur = 0;
-
-    // Scale calculation
-    if (p < 0.15) {
-      scale = 1.0;
-    } else if (p < 0.8) {
-      scale = 1.0 + ((p - 0.15) / 0.65) * 0.18; // scale from 1.0 to 1.18
-    } else {
-      scale = 1.18;
-    }
-
-    // Dynamic contrast & brightness emerging from darkness
-    if (p < 0.15) {
-      brightness = 0.05; // start extremely dark
-      contrast = 0.8;
-      filterBlur = 5;
-    } else if (p < 0.35) {
-      // emerging
-      const sub = (p - 0.15) / 0.20;
-      brightness = 0.05 + sub * 0.75; // go up to 0.8
-      contrast = 0.8 + sub * 0.2; // go up to 1.0
-      filterBlur = 5 * (1 - sub);
-    } else if (p < 0.55) {
-      // definition increases
-      const sub = (p - 0.35) / 0.20;
-      brightness = 0.8 + sub * 0.3; // go up to 1.1
-      contrast = 1.0 + sub * 0.35; // go up to 1.35
-    } else {
-      brightness = 1.1;
-      contrast = 1.35;
-    }
-
-    return {
-      transform: `scale(${scale}) translate3d(0, 0, 0)`,
-      filter: `brightness(${brightness}) contrast(${contrast}) blur(${filterBlur}px)`,
-      transition: 'filter 0.1s ease-out'
-    };
-  };
-
   return (
     <>
-
-      {/* ─── STATIC FALLBACK HERO (shown on Vercel / when frames not available) ─── */}
+      {/* ─── STATIC FALLBACK HERO (shown when frames are not loaded / Vercel offline) ─── */}
       {framesAvailable === false && (
         <div
           className="relative h-screen w-full flex items-center justify-center overflow-hidden bg-[#08080a]"
           style={{
-            backgroundImage: "url('/gym_hero.png')",
+            backgroundImage: "url('/gym_images/Best Gym in Mohali.jpg')",
             backgroundSize: 'cover',
             backgroundPosition: 'center top',
           }}
         >
-          {/* Dark overlay */}
           <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/50 to-black/90 z-10" />
-          {/* Neon glow */}
           <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(212,255,0,0.07)_0%,transparent_60%)] z-10 pointer-events-none" />
 
           <div className="relative z-20 text-center px-6 space-y-6 max-w-4xl mx-auto">
@@ -389,234 +510,187 @@ export default function CinematicHero() {
         </div>
       )}
 
-      {/* ─── Pinned Scroll container (600vh height for scroll space) ─── */}
+      {/* ─── PINNED HIGH-PERFORMANCE CANVAS SCROLL SECTION ─── */}
       {framesAvailable !== false && (
         <div ref={containerRef} className="relative h-[650vh] bg-slate-950">
+          <div ref={stickyRef} className="relative h-screen w-full overflow-hidden flex items-center justify-center z-10">
+            
+            {/* Canvas for images (only uses scale transform which is GPU hardware-accelerated) */}
+            <canvas
+              ref={canvasRef}
+              className="absolute inset-0 w-full h-full object-cover z-0 origin-center will-change-transform"
+              style={{ transform: 'scale(1) translate3d(0,0,0)' }}
+            />
 
-        {/* Pinned viewport container (pinned by ScrollTrigger) */}
-        <div ref={stickyRef} className="relative h-screen w-full overflow-hidden flex items-center justify-center z-10">
-          
-          {/* Layer 1: Pinned Frame Canvas */}
-          <canvas
-            ref={canvasRef}
-            style={getCanvasStyle()}
-            className="absolute inset-0 w-full h-full object-cover z-0 origin-center will-change-transform"
-          />
+            {/* Black Overlay replacing expensive CSS brightness/contrast filters */}
+            <div
+              ref={overlayRef}
+              className="absolute inset-0 bg-black z-1 pointer-events-none will-change-opacity"
+              style={{ opacity: 0.95 }}
+            />
 
-          {/* Layer 2: Smoke Particles Overlay Canvas */}
-          <canvas
-            ref={smokeCanvasRef}
-            className="absolute inset-0 w-full h-full pointer-events-none z-10"
-          />
+            {/* Particle Canvas */}
+            <canvas
+              ref={smokeCanvasRef}
+              className="absolute inset-0 w-full h-full pointer-events-none z-10"
+            />
 
-          {/* Layer 3: Dynamic Spotlight Glow Overlay (mix-blend overlay) */}
-          <div 
-            style={{
-              opacity: scrollProgress.current > 0.85 ? (scrollProgress.current - 0.85) * 6.67 : 0
-            }}
-            className="absolute inset-0 z-15 bg-[radial-gradient(circle_at_center,rgba(212,255,0,0.18)_0%,transparent_60%)] mix-blend-screen pointer-events-none transition-opacity duration-200"
-          />
+            {/* Spotlight Glow Overlay */}
+            <div className="absolute inset-0 z-15 bg-[radial-gradient(circle_at_center,rgba(212,255,0,0.18)_0%,transparent_60%)] mix-blend-screen pointer-events-none opacity-40" />
 
-          {/* Vignette Overlay to maintain typography reading contrast */}
-          <div 
-            style={{
-              // vignette starts strong, gets slightly weaker as body emerges, then stays constant
-              opacity: scrollProgress.current < 0.15 ? 0.90 : 0.70 + (1 - Math.min(1, (scrollProgress.current - 0.15) / 0.2)) * 0.20
-            }}
-            className="absolute inset-0 bg-gradient-to-b from-black/80 via-black/40 to-black/90 z-5 pointer-events-none transition-opacity duration-200"
-          />
+            {/* Vignette Overlay */}
+            <div
+              ref={vignetteRef}
+              className="absolute inset-0 bg-gradient-to-b from-black/80 via-black/40 to-black/90 z-5 pointer-events-none will-change-opacity"
+              style={{ opacity: 0.90 }}
+            />
 
-          {/* ─── Layer 4: Interactive Typography overlays ─── */}
-          
-          {/* Section 1 Typography Overlay (visible at the start, fades out) */}
-          <AnimatePresence>
-            {phase === 1 && (
-              <motion.div
-                initial={{ opacity: 0, y: 30 }}
-                animate={{ opacity: 1 - phaseProgress, y: -20 * phaseProgress }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.1 }}
-                className="absolute inset-0 flex flex-col items-center justify-center text-center px-6 z-20 pointer-events-none"
-              >
-                <span className="inline-flex items-center gap-2 bg-[#d4ff00]/10 text-[#d4ff00] text-[9px] font-extrabold px-5 py-2 rounded-full uppercase tracking-[0.25em] border border-[#d4ff00]/30 backdrop-blur-md shadow-[0_0_15px_rgba(212,255,0,0.15)] mb-6">
-                  <span className="w-2 h-2 rounded-full bg-[#d4ff00] animate-pulse" />
-                  SCROLL DOWN TO INITIATE EXPERIENCE
+            {/* ─── TYPOGRAPHY & HUD OVERLAYS ─── */}
+
+            {/* Section 1 Overlay */}
+            <div
+              ref={phase1Ref}
+              className="absolute inset-0 flex flex-col items-center justify-center text-center px-6 z-20 pointer-events-none"
+              style={{ display: 'flex' }}
+            >
+              <span className="inline-flex items-center gap-2 bg-[#d4ff00]/10 text-[#d4ff00] text-[9px] font-extrabold px-5 py-2 rounded-full uppercase tracking-[0.25em] border border-[#d4ff00]/30 backdrop-blur-md shadow-[0_0_15px_rgba(212,255,0,0.15)] mb-6">
+                <span className="w-2 h-2 rounded-full bg-[#d4ff00] animate-pulse" />
+                SCROLL DOWN TO INITIATE EXPERIENCE
+              </span>
+              
+              <h1 className="font-rowdies text-5xl md:text-8xl font-bold tracking-tight text-white uppercase leading-none">
+                Sculpt Your <span className="text-[#d4ff00] drop-shadow-[0_0_20px_rgba(212,255,0,0.4)]">Body</span>
+              </h1>
+              
+              <h2 className="font-rowdies text-3xl md:text-5xl font-bold tracking-wide text-slate-300 uppercase leading-none mt-4">
+                Elevate Your <span className="text-white border-b-4 border-[#d4ff00] pb-1">Spirit</span>
+              </h2>
+              
+              <p className="text-slate-400 text-xs md:text-sm font-mono tracking-widest mt-8 uppercase animate-pulse">
+                [ The body emerges step by step ]
+              </p>
+            </div>
+
+            {/* Section 2 & 3 HUD */}
+            <div
+              ref={hud23Ref}
+              className="absolute top-28 left-6 md:left-12 z-20 text-left pointer-events-none font-mono"
+              style={{ display: 'none', opacity: 0 }}
+            >
+              <div className="text-[10px] text-[#d4ff00] uppercase tracking-[0.2em] font-bold">EMERGENCE IN PROGRESS</div>
+              <div className="h-[2px] bg-[#d4ff00]/30 w-32 mt-1.5 overflow-hidden">
+                <div ref={hud23ProgressRef} className="h-full bg-[#d4ff00]" style={{ width: '100%', transform: 'scaleX(0)', transformOrigin: 'left' }} />
+              </div>
+              <div ref={hud23TextRef} className="text-[9px] text-slate-400 mt-2 uppercase">
+                STRUCTURE FORMING · CHEST & SHOULDERS
+              </div>
+            </div>
+
+            {/* Section 4 HUD */}
+            <div
+              ref={hud4Ref}
+              className="absolute bottom-16 right-6 md:right-12 z-20 text-right pointer-events-none font-mono"
+              style={{ display: 'none', opacity: 0 }}
+            >
+              <div className="text-[10px] text-[#d4ff00] uppercase tracking-[0.2em] font-bold">CINEMATIC SCROLL STREAMING</div>
+              <div ref={hud4TextRef} className="text-xs text-white mt-1">FRAME 1 / 240</div>
+              <div className="text-[8px] text-slate-500 mt-1 uppercase">SCROLL PROGRESS MAPPED TO PERFORMANCE TIME</div>
+            </div>
+
+            {/* Section 5 & 6 HUD (Glass Cards) */}
+            <div className="absolute inset-0 z-20 pointer-events-none hidden md:block">
+              {/* Hours (Top-Left) */}
+              <div ref={card1Ref} className="absolute top-[35%] left-[22%]">
+                <GlassCard
+                  icon={<Clock className="text-[#d4ff00] w-5 h-5" />}
+                  title="ACTIVE HOURS"
+                  value="250+ Hours"
+                />
+              </div>
+
+              {/* Calories (Top-Right) */}
+              <div ref={card2Ref} className="absolute top-[35%] right-[22%]">
+                <GlassCard
+                  icon={<Flame className="text-amber-500 w-5 h-5" />}
+                  title="DAILY BURN"
+                  value="850 Kcal"
+                />
+              </div>
+
+              {/* Sets (Bottom-Left) */}
+              <div ref={card3Ref} className="absolute bottom-[35%] left-[22%]">
+                <GlassCard
+                  icon={<Dumbbell className="text-teal-400 w-5 h-5" />}
+                  title="COMPLETED SETS"
+                  value="12 Sets"
+                />
+              </div>
+
+              {/* Poses (Bottom-Right) */}
+              <div ref={card4Ref} className="absolute bottom-[35%] right-[22%]">
+                <GlassCard
+                  icon={<Sparkles className="text-purple-400 w-5 h-5" />}
+                  title="YOGA POSES"
+                  value="36 Poses"
+                />
+              </div>
+            </div>
+
+            {/* Mobile Stats Hud */}
+            <div 
+              ref={mobileStatsRef}
+              className="absolute bottom-28 left-0 right-0 z-20 px-6 block md:hidden max-w-sm mx-auto pointer-events-auto"
+              style={{ display: 'none', opacity: 0 }}
+            >
+              <div className="grid grid-cols-2 gap-2">
+                <div className="bg-slate-900/70 border border-white/10 backdrop-blur-md p-2 rounded-xl flex items-center gap-2">
+                  <Clock className="text-[#d4ff00] w-4 h-4" />
+                  <div className="text-left">
+                    <div className="text-[7px] text-slate-400 uppercase">HOURS</div>
+                    <div className="text-[10px] font-black text-white">250+ Hrs</div>
+                  </div>
+                </div>
+                <div className="bg-slate-900/70 border border-white/10 backdrop-blur-md p-2 rounded-xl flex items-center gap-2">
+                  <Flame className="text-amber-500 w-4 h-4" />
+                  <div className="text-left">
+                    <div className="text-[7px] text-slate-400 uppercase">BURN</div>
+                    <div className="text-[10px] font-black text-white">850 Kcal</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Final reveal typography */}
+            <div
+              ref={finalBrandingRef}
+              className="absolute inset-0 flex flex-col items-center justify-center z-25 pointer-events-none text-center px-6"
+              style={{ display: 'none', opacity: 0 }}
+            >
+              <div className="space-y-4 z-20 pt-8">
+                <span className="inline-flex items-center gap-2 bg-[#d4ff00]/20 text-[#d4ff00] text-[9px] font-extrabold px-6 py-2 rounded-full uppercase tracking-[0.3em] border border-[#d4ff00]/40 shadow-[0_0_20px_rgba(212,255,0,0.3)]">
+                  ALPHA ZONE OS
                 </span>
                 
-                <h1 className="font-rowdies text-5xl md:text-8xl font-bold tracking-tight text-white uppercase leading-none">
-                  Sculpt Your <span className="text-[#d4ff00] drop-shadow-[0_0_20px_rgba(212,255,0,0.4)]">Body</span>
+                <h1 className="font-rowdies text-5xl md:text-8xl font-bold tracking-tight text-white uppercase leading-none drop-shadow-[0_0_30px_rgba(0,0,0,0.8)]">
+                  LIMITLESS <span className="text-[#d4ff00] drop-shadow-[0_0_15px_rgba(212,255,0,0.4)]">POWER</span>
                 </h1>
                 
-                <h2 className="font-rowdies text-3xl md:text-5xl font-bold tracking-wide text-slate-300 uppercase leading-none mt-4">
-                  Elevate Your <span className="text-white border-b-4 border-[#d4ff00] pb-1">Spirit</span>
-                </h2>
-                
-                <p className="text-slate-400 text-xs md:text-sm font-mono tracking-widest mt-8 uppercase animate-pulse">
-                  [ The body emerges step by step ]
+                <p className="text-slate-400 text-xs md:text-sm font-mono tracking-widest max-w-md mx-auto uppercase">
+                  The athlete has fully emerged. Sculpting physical limits.
                 </p>
-              </motion.div>
-            )}
-          </AnimatePresence>
 
-          {/* Section 2 & 3 Typography HUD Indicators */}
-          <AnimatePresence>
-            {(phase === 2 || phase === 3) && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="absolute top-28 left-6 md:left-12 z-20 text-left pointer-events-none font-mono"
-              >
-                <div className="text-[10px] text-[#d4ff00] uppercase tracking-[0.2em] font-bold">EMERGENCE IN PROGRESS</div>
-                <div className="h-[2px] bg-[#d4ff00]/30 w-32 mt-1.5 overflow-hidden">
-                  <div className="h-full bg-[#d4ff00]" style={{ width: `${phaseProgress * 100}%` }} />
+                <div className="pt-4 pointer-events-auto flex justify-center gap-4">
+                  <a
+                    href="#signup"
+                    className="bg-[#d4ff00] text-black font-rowdies font-bold text-xs tracking-wider px-8 py-4 rounded-full hover:bg-white hover:scale-105 transition-all shadow-[0_0_25px_rgba(212,255,0,0.35)]"
+                  >
+                    FITNESS NOW
+                  </a>
                 </div>
-                <div className="text-[9px] text-slate-400 mt-2 uppercase">
-                  {phase === 2 ? 'STRUCTURE FORMING · CHEST & SHOULDERS' : 'MUTATION STAGE · DEFINITION MAXIMIZING'}
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {/* Section 4 Indicator */}
-          <AnimatePresence>
-            {phase === 4 && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="absolute bottom-16 right-6 md:right-12 z-20 text-right pointer-events-none font-mono"
-              >
-                <div className="text-[10px] text-[#d4ff00] uppercase tracking-[0.2em] font-bold">CINEMATIC SCROLL STREAMING</div>
-                <div className="text-xs text-white mt-1">FRAME {Math.floor(scrollProgress.current * images.length)} / {images.length}</div>
-                <div className="text-[8px] text-slate-500 mt-1 uppercase">SCROLL PROGRESS MAPPED TO PERFORMANCE TIME</div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {/* Section 5 & 6 Final Reveal Overlay */}
-          <AnimatePresence>
-            {(phase === 5 || phase === 6) && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center z-20 pointer-events-none text-center px-6">
-                
-                {/* Stats cards fly out container */}
-                <div className="absolute inset-0 z-30 pointer-events-none hidden md:block">
-                  {/* Hours (Top-Left) */}
-                  <div 
-                    style={{
-                      transform: `translate3d(${-(40 + phaseProgress * 80)}px, ${-(50 + phaseProgress * 120)}px, 0)`,
-                      opacity: phaseProgress
-                    }}
-                    className="absolute top-[35%] left-[22%] transition-transform duration-75"
-                  >
-                    <GlassCard
-                      icon={<Clock className="text-[#d4ff00] w-5 h-5" />}
-                      title="ACTIVE HOURS"
-                      value="250+ Hours"
-                    />
-                  </div>
-
-                  {/* Calories (Top-Right) */}
-                  <div 
-                    style={{
-                      transform: `translate3d(${40 + phaseProgress * 80}px, ${-(50 + phaseProgress * 120)}px, 0)`,
-                      opacity: phaseProgress
-                    }}
-                    className="absolute top-[35%] right-[22%] transition-transform duration-75"
-                  >
-                    <GlassCard
-                      icon={<Flame className="text-amber-500 w-5 h-5" />}
-                      title="DAILY BURN"
-                      value="850 Kcal"
-                    />
-                  </div>
-
-                  {/* Sets (Bottom-Left) */}
-                  <div 
-                    style={{
-                      transform: `translate3d(${-(50 + phaseProgress * 90)}px, ${50 + phaseProgress * 120}px, 0)`,
-                      opacity: phaseProgress
-                    }}
-                    className="absolute bottom-[35%] left-[22%] transition-transform duration-75"
-                  >
-                    <GlassCard
-                      icon={<Dumbbell className="text-teal-400 w-5 h-5" />}
-                      title="COMPLETED SETS"
-                      value="12 Sets"
-                    />
-                  </div>
-
-                  {/* Poses (Bottom-Right) */}
-                  <div 
-                    style={{
-                      transform: `translate3d(${50 + phaseProgress * 90}px, ${50 + phaseProgress * 120}px, 0)`,
-                      opacity: phaseProgress
-                    }}
-                    className="absolute bottom-[35%] right-[22%] transition-transform duration-75"
-                  >
-                    <GlassCard
-                      icon={<Sparkles className="text-purple-400 w-5 h-5" />}
-                      title="YOGA POSES"
-                      value="36 Poses"
-                    />
-                  </div>
-                </div>
-
-                {/* Mobile stats representation */}
-                {phase === 6 && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="absolute bottom-6 left-0 right-0 z-30 px-6 block md:hidden max-w-sm mx-auto pointer-events-auto"
-                  >
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="bg-slate-900/70 border border-white/10 backdrop-blur-md p-2 rounded-xl flex items-center gap-2">
-                        <Clock className="text-[#d4ff00] w-4 h-4" />
-                        <div className="text-left"><div className="text-[7px] text-slate-400 uppercase">HOURS</div><div className="text-[10px] font-black text-white">250+ Hrs</div></div>
-                      </div>
-                      <div className="bg-slate-900/70 border border-white/10 backdrop-blur-md p-2 rounded-xl flex items-center gap-2">
-                        <Flame className="text-amber-500 w-4 h-4" />
-                        <div className="text-left"><div className="text-[7px] text-slate-400 uppercase">BURN</div><div className="text-[10px] font-black text-white">850 Kcal</div></div>
-                      </div>
-                    </div>
-                  </motion.div>
-                )}
-
-                {/* Final Hero Title Branding (Section 6) */}
-                {phase === 6 && (
-                  <motion.div
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    className="space-y-4 z-20 pt-8"
-                  >
-                    <span className="inline-flex items-center gap-2 bg-[#d4ff00]/20 text-[#d4ff00] text-[9px] font-extrabold px-6 py-2 rounded-full uppercase tracking-[0.3em] border border-[#d4ff00]/40 shadow-[0_0_20px_rgba(212,255,0,0.3)]">
-                      ALPHA ZONE OS
-                    </span>
-                    
-                    <h1 className="font-rowdies text-5xl md:text-8xl font-bold tracking-tight text-white uppercase leading-none drop-shadow-[0_0_30px_rgba(0,0,0,0.8)]">
-                      LIMITLESS <span className="text-[#d4ff00] drop-shadow-[0_0_15px_rgba(212,255,0,0.4)]">POWER</span>
-                    </h1>
-                    
-                    <p className="text-slate-400 text-xs md:text-sm font-mono tracking-widest max-w-md mx-auto uppercase">
-                      The athlete has fully emerged. Sculpting physical limits.
-                    </p>
-
-                    <div className="pt-4 pointer-events-auto flex justify-center gap-4">
-                      <a
-                        href="#signup"
-                        className="bg-[#d4ff00] text-black font-rowdies font-bold text-xs tracking-wider px-8 py-4 rounded-full hover:bg-white hover:scale-105 transition-all shadow-[0_0_25px_rgba(212,255,0,0.35)]"
-                      >
-                        FITNESS NOW
-                      </a>
-                    </div>
-                  </motion.div>
-                )}
-
               </div>
-            )}
-          </AnimatePresence>
+            </div>
 
-        </div>
+          </div>
         </div>
       )}
     </>

@@ -6,7 +6,11 @@ export const metadata: Metadata = {
   title: 'ALPHA ZONE OS — Beyond Strength. Beyond Limits.',
   description: 'Enterprise Gym Operating System powered by AI. Real-time ESSL biometric turnstiles, workout builders, diet planners, client metrics, and gamified progress tracking.',
   icons: {
-    icon: '/logo.png'
+    icon: '/favicon.ico',
+    apple: '/gym_logo.png',
+  },
+  other: {
+    'theme-color': '#08080a',
   }
 };
 
