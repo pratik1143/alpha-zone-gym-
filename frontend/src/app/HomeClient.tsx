@@ -544,23 +544,23 @@ export default function AlphaZoneLandingPage() {
                 <ul className="space-y-3 text-xs text-slate-200">
                   <li className="flex items-center gap-2.5">
                     <Check size={13} className="text-[#d4ff00] shrink-0" />
-                    <span>Everything in Monthly</span>
+                    <span>Full gym access</span>
                   </li>
                   <li className="flex items-center gap-2.5">
                     <Check size={13} className="text-[#d4ff00] shrink-0" />
-                    <span className="font-bold text-white">2 personal training sessions</span>
+                    <span>All cardio & weight equipment</span>
                   </li>
                   <li className="flex items-center gap-2.5">
                     <Check size={13} className="text-[#d4ff00] shrink-0" />
-                    <span>Unlimited group classes</span>
+                    <span>Locker room access</span>
                   </li>
                   <li className="flex items-center gap-2.5">
                     <Check size={13} className="text-[#d4ff00] shrink-0" />
-                    <span>Diet & nutrition consultation</span>
+                    <span>Free fitness assessment</span>
                   </li>
                   <li className="flex items-center gap-2.5">
                     <Check size={13} className="text-[#d4ff00] shrink-0" />
-                    <span>Body composition tracking</span>
+                    <span>Open 7 days a week</span>
                   </li>
                 </ul>
               </div>
@@ -595,23 +595,23 @@ export default function AlphaZoneLandingPage() {
                 <ul className="space-y-3 text-xs text-slate-300">
                   <li className="flex items-center gap-2.5">
                     <Check size={13} className="text-[#d4ff00] shrink-0" />
-                    <span>Everything in Quarterly</span>
+                    <span>Full gym access</span>
                   </li>
                   <li className="flex items-center gap-2.5">
                     <Check size={13} className="text-[#d4ff00] shrink-0" />
-                    <span className="font-bold text-white">4 personal training sessions</span>
+                    <span>All cardio & weight equipment</span>
                   </li>
                   <li className="flex items-center gap-2.5">
                     <Check size={13} className="text-[#d4ff00] shrink-0" />
-                    <span>Priority locker reservation</span>
+                    <span>Locker room access</span>
                   </li>
                   <li className="flex items-center gap-2.5">
                     <Check size={13} className="text-[#d4ff00] shrink-0" />
-                    <span>Bi-monthly body assessments</span>
+                    <span>Free fitness assessment</span>
                   </li>
                   <li className="flex items-center gap-2.5">
                     <Check size={13} className="text-[#d4ff00] shrink-0" />
-                    <span>Diet & nutrition consultation</span>
+                    <span>Open 7 days a week</span>
                   </li>
                 </ul>
               </div>
@@ -649,23 +649,23 @@ export default function AlphaZoneLandingPage() {
                 <ul className="space-y-3 text-xs text-slate-300">
                   <li className="flex items-center gap-2.5">
                     <Check size={13} className="text-[#d4ff00] shrink-0" />
-                    <span>Everything in Semi-Annual</span>
+                    <span>Full gym access</span>
                   </li>
                   <li className="flex items-center gap-2.5">
                     <Check size={13} className="text-[#d4ff00] shrink-0" />
-                    <span className="font-bold text-white">8 personal training sessions</span>
+                    <span>All cardio & weight equipment</span>
                   </li>
                   <li className="flex items-center gap-2.5">
                     <Check size={13} className="text-[#d4ff00] shrink-0" />
-                    <span>Priority class booking</span>
+                    <span>Locker room access</span>
                   </li>
                   <li className="flex items-center gap-2.5">
                     <Check size={13} className="text-[#d4ff00] shrink-0" />
-                    <span>5 guest passes per year</span>
+                    <span>Free fitness assessment</span>
                   </li>
                   <li className="flex items-center gap-2.5">
                     <Check size={13} className="text-[#d4ff00] shrink-0" />
-                    <span>Monthly structural checkups</span>
+                    <span>Open 7 days a week</span>
                   </li>
                 </ul>
               </div>

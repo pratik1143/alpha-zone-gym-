@@ -44,11 +44,11 @@ const mainPlans = [
     period: '/ 3 months',
     tagline: 'Best value for real transformation.',
     features: [
-      'Everything in Monthly',
-      '2 personal training sessions',
-      'Unlimited group classes',
-      'Diet & nutrition consultation',
-      'Body composition tracking'
+      'Full gym access',
+      'All cardio & weight equipment',
+      'Locker room access',
+      'Free fitness assessment',
+      'Open 7 days a week'
     ],
     highlight: true,
     icon: Crown
@@ -63,11 +63,11 @@ const mainPlans = [
     period: '/ 6 months',
     tagline: 'Serious training for serious results.',
     features: [
-      'Everything in Quarterly',
-      '4 personal training sessions',
-      'Priority locker reservation',
-      'Bi-monthly body assessments',
-      'Diet & nutrition consultation'
+      'Full gym access',
+      'All cardio & weight equipment',
+      'Locker room access',
+      'Free fitness assessment',
+      'Open 7 days a week'
     ],
     highlight: false,
     icon: Star
@@ -82,11 +82,11 @@ const mainPlans = [
     period: '/ year',
     tagline: 'Commit to a stronger, elite version of you.',
     features: [
-      'Everything in Semi-Annual',
-      '8 personal training sessions',
-      'Priority class booking',
-      '5 guest passes per year',
-      'Monthly structural checkups'
+      'Full gym access',
+      'All cardio & weight equipment',
+      'Locker room access',
+      'Free fitness assessment',
+      'Open 7 days a week'
     ],
     highlight: false,
     icon: Crown
