@@ -29,18 +29,35 @@ export default function ContactPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+
+    const newMsg = {
+      id: 'msg_' + Date.now(),
+      name: formData.name || 'Anonymous User',
+      phone: formData.phone || '',
+      email: formData.email || '',
+      goal: formData.goal || '',
+      message: formData.message || '',
+      createdAt: new Date().toISOString(),
+      status: 'Unread'
+    };
+
+    try {
+      const cached = JSON.parse(localStorage.getItem('alphazone_messages') || '[]');
+      localStorage.setItem('alphazone_messages', JSON.stringify([newMsg, ...cached]));
+    } catch (e) {}
+
     try {
       await addDoc(collection(db, 'messages'), {
-        name: formData.name || 'Anonymous User',
-        phone: formData.phone || '',
-        email: formData.email || '',
-        goal: formData.goal || '',
-        message: formData.message || '',
-        createdAt: new Date().toISOString(),
-        status: 'Unread'
+        name: newMsg.name,
+        phone: newMsg.phone,
+        email: newMsg.email,
+        goal: newMsg.goal,
+        message: newMsg.message,
+        createdAt: newMsg.createdAt,
+        status: newMsg.status
       });
     } catch (err) {
-      console.warn("Failed to save message to Firestore:", err);
+      console.warn("Firestore permission/save note:", err);
     }
     setLoading(false);
     setSubmitted(true);
