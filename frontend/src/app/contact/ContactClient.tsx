@@ -108,7 +108,7 @@ export default function ContactPage() {
                   </div>
                   <div>
                     <span className="text-[10px] font-black text-[#d4ff00] uppercase tracking-widest">EXPERIENCE ALPHA</span>
-                    <h3 className="text-lg font-black text-white uppercase tracking-tight mt-0.5">Book A Free Trial</h3>
+                    <h3 className="text-lg font-black text-white uppercase tracking-tight mt-0.5">Book Now</h3>
                   </div>
                 </div>
                 <p className="text-slate-400 font-poppins text-xs leading-relaxed">

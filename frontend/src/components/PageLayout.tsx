@@ -56,7 +56,7 @@ export default function PageLayout({ children }: { children: React.ReactNode }) 
               href="/contact"
               className="bg-[#d4ff00] text-black font-extrabold text-xs px-6 py-3 rounded-full hover:bg-white transition-all cursor-pointer shadow-[0_0_15px_rgba(212,255,0,0.25)] hover:scale-105"
             >
-              BOOK FREE TRIAL
+              BOOK NOW
             </Link>
           </div>
 
@@ -87,7 +87,7 @@ export default function PageLayout({ children }: { children: React.ReactNode }) 
                 onClick={() => setMobileMenuOpen(false)}
                 className="w-full bg-[#d4ff00] text-black font-extrabold py-3 rounded-full text-xs uppercase text-center block"
               >
-                Book Free Trial
+                Book Now
               </Link>
             </div>
           </div>
@@ -105,7 +105,7 @@ export default function PageLayout({ children }: { children: React.ReactNode }) 
         className="fixed bottom-6 right-6 z-40 bg-[#d4ff00] text-black font-extrabold text-xs px-5 py-3 rounded-full shadow-[0_0_20px_rgba(212,255,0,0.4)] hover:bg-white hover:scale-105 transition-all tracking-wider uppercase hidden md:flex items-center gap-2"
       >
         <Dumbbell size={14} />
-        Book Free Trial
+        Book Now
       </Link>
 
       {/* Footer */}
@@ -122,7 +122,7 @@ export default function PageLayout({ children }: { children: React.ReactNode }) 
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Link href="/contact" className="bg-[#d4ff00] text-black font-extrabold text-sm px-8 py-4 rounded-full hover:bg-white transition-all shadow-[0_0_20px_rgba(212,255,0,0.3)] hover:scale-105">
-                Book Free Trial →
+                Book Now →
               </Link>
               <Link href="/packages" className="border border-white/15 hover:border-[#d4ff00] text-white font-bold text-sm px-8 py-4 rounded-full transition-all hover:text-[#d4ff00]">
                 View Membership Plans
