@@ -97,7 +97,7 @@ export default function WebMessagesPage() {
       });
       toast.success(`Message marked as ${newStatus}`);
       if (selectedMessage && selectedMessage.id === id) {
-        setSelectedMessage(prev => ({ ...prev, status: newStatus }));
+        setSelectedMessage((prev: any) => (prev ? { ...prev, status: newStatus } : null));
       }
     } catch (err: any) {
       toast.error('Failed to update status: ' + err.message);
