@@ -4,6 +4,9 @@ import Image from 'next/image';
 import PageLayout from '../../components/PageLayout';
 import { motion } from 'framer-motion';
 import { getGymImage } from '../../lib/gymImages';
+import { db } from '@/lib/firebase';
+import { collection, addDoc } from 'firebase/firestore';
+import toast from 'react-hot-toast';
 import { 
   Phone, Mail, MapPin, Send, CheckCircle, MessageSquare, 
   Smartphone, CheckCircle2, ChevronRight, Share2 
@@ -26,9 +29,22 @@ export default function ContactPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    await new Promise(r => setTimeout(r, 1200));
+    try {
+      await addDoc(collection(db, 'messages'), {
+        name: formData.name || 'Anonymous User',
+        phone: formData.phone || '',
+        email: formData.email || '',
+        goal: formData.goal || '',
+        message: formData.message || '',
+        createdAt: new Date().toISOString(),
+        status: 'Unread'
+      });
+    } catch (err) {
+      console.warn("Failed to save message to Firestore:", err);
+    }
     setLoading(false);
     setSubmitted(true);
+    toast.success('Message sent successfully!');
   };
 
   const heroImg = getGymImage('contact');

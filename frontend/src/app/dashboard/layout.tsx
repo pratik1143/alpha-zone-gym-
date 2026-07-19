@@ -295,6 +295,7 @@ export default function DashboardLayout({
                 { to: '/dashboard/members', label: 'Members', icon: Users },
                 { to: '/dashboard/employees', label: 'Employees', icon: Briefcase, badge: 'NEW' },
                 { to: '/dashboard/enquiries', label: 'Enquiries', icon: ClipboardList },
+                { to: '/dashboard/messages', label: 'Web Messages', icon: MessageSquare, badge: 'LIVE' },
                 { to: '/dashboard/expired', label: 'Expired', icon: UserX },
                 { to: '/dashboard/trainers', label: 'Trainers', icon: UserCheck },
                 { to: '/dashboard/follow-up', label: 'Follow Up', icon: AlertTriangle },
