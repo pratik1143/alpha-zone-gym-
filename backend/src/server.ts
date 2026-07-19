@@ -73,18 +73,18 @@ if (process.env.VERCEL) {
     // Start the WhatsApp Queue worker
     initQueueJob();
 
-    // Start daily automated emails scheduler (runs every 12 hours)
-    try {
-      const { runDailyAutomationChecks } = require('./services/automation.service');
-      setTimeout(() => {
-        runDailyAutomationChecks().catch((err: any) => console.error('Error running daily automation checks:', err));
-      }, 10000);
-
-      setInterval(() => {
-        runDailyAutomationChecks().catch((err: any) => console.error('Error running daily automation checks:', err));
-      }, 12 * 60 * 60 * 1000);
-    } catch (err) {
-      console.error('Failed to initialize daily automation scheduler:', err);
-    }
+    // ⛔ Auto email scheduler DISABLED — emails send only via manual dashboard trigger
+    // To re-enable: uncomment the block below
+    // try {
+    //   const { runDailyAutomationChecks } = require('./services/automation.service');
+    //   setTimeout(() => {
+    //     runDailyAutomationChecks().catch((err: any) => console.error('Error running daily automation checks:', err));
+    //   }, 10000);
+    //   setInterval(() => {
+    //     runDailyAutomationChecks().catch((err: any) => console.error('Error running daily automation checks:', err));
+    //   }, 12 * 60 * 60 * 1000);
+    // } catch (err) {
+    //   console.error('Failed to initialize daily automation scheduler:', err);
+    // }
   });
 }

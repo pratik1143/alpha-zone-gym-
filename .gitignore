@@ -31,3 +31,6 @@ serviceAccountKey.json
 __pycache__
 .firebase
 build
+.wwebjs_auth
+.wwebjs_cache
+flutter_sdk

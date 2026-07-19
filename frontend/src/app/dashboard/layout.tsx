@@ -283,7 +283,7 @@ export default function DashboardLayout({
             {/* Branding Logo - Large & Visible */}
             <div className="px-2 flex items-center justify-start border-b border-slate-100 pb-4">
               <Link href="/">
-                <img src="/gym_logo.png" alt="Alpha Zone Logo" className="h-12 w-auto object-contain" />
+                <img src="/gymlogo.png" alt="Alpha Zone Logo" className="h-12 w-auto object-contain" />
               </Link>
             </div>
 
@@ -342,41 +342,35 @@ export default function DashboardLayout({
             </nav>
           </div>
 
-          {/* Sidebar Chat Widget */}
-          <div className="mt-6 bg-[#FAF7F2] border border-[#EBE3D5] rounded-xl p-3 text-left space-y-3">
-            <div className="flex justify-between items-center">
-              <span className="text-[9px] font-black text-slate-800 flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                Live Chat Support
-              </span>
-              <span className="text-[8px] bg-slate-200/60 text-slate-600 px-1.5 py-0.5 rounded-full font-bold">48</span>
-            </div>
-            
-            <p className="text-[9px] text-slate-400 font-bold leading-none">Lukas is typing...</p>
-
-            <div className="space-y-2">
-              <div className="flex items-center gap-1 bg-white border border-slate-100 p-2 rounded-xl w-[90%] shadow-sm">
-                <Play size={10} className="text-black shrink-0 fill-current" />
-                <div className="flex gap-0.5 items-center flex-grow px-1">
-                  {[2,3,6,4,2,5,7,3,2,4,5,3].map((h, i) => (
-                    <span key={i} className="bg-slate-300 w-0.5 rounded-full" style={{ height: h * 1.5 }} />
-                  ))}
-                </div>
-                <span className="text-[7px] text-slate-400 font-mono">0:12</span>
+          {/* Sidebar Bottom: User Profile + Sign Out */}
+          <div className="mt-4 border-t border-slate-100 pt-4 space-y-2">
+            {/* User Info */}
+            <div className="flex items-center gap-3 px-2 py-2 rounded-xl bg-slate-50 border border-slate-100">
+              <div className="w-8 h-8 rounded-full bg-[#d4ff00] text-black font-black text-xs flex items-center justify-center shrink-0">
+                {getInitials(user?.name || 'A')}
               </div>
-
-              <div className="bg-[#d4ff00]/20 text-[#4a5f00] border border-[#d4ff00]/10 p-2 rounded-xl text-[9px] font-bold leading-snug w-[85%] ml-auto text-left shadow-sm">
-                Great job, team! Real-time checkins synced.
+              <div className="flex-1 min-w-0">
+                <div className="text-[10px] font-black text-slate-800 truncate">{user?.name || 'Gym Owner'}</div>
+                <div className="text-[8px] text-slate-400 font-bold uppercase tracking-wider truncate">{user?.role?.replace('_', ' ')}</div>
               </div>
             </div>
 
-            <div className="flex items-center bg-white border border-slate-250 rounded-lg p-1.5 text-[8.5px] text-slate-400 justify-between shadow-sm">
-              <span>Message...</span>
-              <SendIcon size={9} className="text-slate-400" />
-            </div>
+            {/* Sign Out Button */}
+            <button
+              onClick={() => {
+                logout();
+                toast.success('Signed out successfully');
+                router.push('/');
+              }}
+              className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-[10px] font-extrabold uppercase tracking-wider text-red-500 hover:bg-red-50 border border-transparent hover:border-red-100 transition-all cursor-pointer bg-transparent"
+            >
+              <LogOut size={13} className="shrink-0" />
+              <span>Sign Out</span>
+            </button>
           </div>
 
         </aside>
+
 
         {/* ─── Column 2: Middle Content Panel ─── */}
         <main className="flex-grow min-w-0 flex flex-col gap-6 text-left overflow-y-auto h-full pt-2 pb-2 pr-1">
@@ -384,7 +378,7 @@ export default function DashboardLayout({
         </main>
 
         {/* ─── Column 3: Right Content Panel ─── */}
-        {pathname === '/dashboard' && false && (
+        {pathname === '/dashboard' && (
           <aside className="w-full lg:w-[330px] flex-shrink-0 flex flex-col gap-6 text-left overflow-y-auto h-full pt-4 pb-4 pr-2">
           
           {/* Top header row: Profile card, toggles */}

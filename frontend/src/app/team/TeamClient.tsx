@@ -13,41 +13,32 @@ const fadeUp = {
 
 const trainers = [
   {
-    name: 'Gurpreet Singh',
+    name: 'Arshpreet Singh',
     role: 'Head Coach & Strength Specialist',
-    specialties: ['Powerlifting', 'Olympic Weightlifting', 'Injury Rehab'],
-    certs: ['IPF Level 2 Certified Strength Coach', 'Kinesiology Diploma'],
-    bio: 'Over 10 years of experience coaching competitive powerlifters and athletes. Specializes in building raw strength and mastering barbell movements.',
-    imgIdx: 0,
+    specialties: ['Powerlifting', 'Strength Training', 'Muscle Building'],
+    certs: ['Certified Personal Trainer', 'Strength & Conditioning Coach'],
+    bio: 'Experienced strength and conditioning coach with a passion for helping members achieve their fitness goals. Specializes in powerlifting, barbell training, and building raw strength.',
+    photo: '/arshpreet.png',
     rating: '5.0'
   },
   {
-    name: 'Amit Sharma',
-    role: 'CrossFit & Functional Expert',
-    specialties: ['High-Intensity Conditioning', 'CrossFit Box Programming', 'Agility'],
-    certs: ['CrossFit Level 2 Trainer', 'Certified Kettlebell Instructor'],
-    bio: 'Dedicated to helping you move better, faster, and longer. Focuses on functional movements, metabolic conditioning, and athletic development.',
-    imgIdx: 1,
+    name: 'Lovely Chaudhary',
+    role: 'Fitness & Transformation Coach',
+    specialties: ['Body Transformation', 'Weight Management', 'Functional Training'],
+    certs: ['Certified Fitness Trainer', 'Nutrition Specialist'],
+    bio: 'Dedicated transformation coach focused on helping clients achieve sustainable results. Expert in creating personalized workout and diet plans tailored to individual goals.',
+    photo: '/lovely.png',
     rating: '4.9'
   },
   {
-    name: 'Neha Sen',
-    role: 'Weight Loss & Female Fitness Coach',
-    specialties: ['Body Transformation', 'Nutritional Coaching', 'HIIT'],
-    certs: ['ACE Certified Personal Trainer', 'ISSN Nutrition Specialist'],
-    bio: 'Helped over 300+ clients achieve sustainable weight loss and body transformation. Believes in science-backed training combined with realistic diet plans.',
-    imgIdx: 2,
+    name: 'Sourav Kumar',
+    role: 'Performance & Conditioning Coach',
+    specialties: ['Athletic Performance', 'HIIT Training', 'Endurance Building'],
+    certs: ['Certified Coach', 'Sports Performance Specialist'],
+    bio: 'High-energy performance coach specializing in athletic conditioning, endurance training, and high-intensity workouts. Helps members push past their limits every session.',
+    photo: '/saurav.png',
     rating: '5.0'
   },
-  {
-    name: 'Vikram Jeet',
-    role: 'Bodybuilding & Hypertrophy Coach',
-    specialties: ['Muscle Hypertrophy', 'Supplementation', 'Contest Prep'],
-    certs: ['Gold Medalist Bodybuilder', 'IFBB Pro Certified Trainer'],
-    bio: 'A competitive bodybuilder with deep expertise in muscle growth principles, progressive overload, and physique sculpting.',
-    imgIdx: 3,
-    rating: '4.9'
-  }
 ];
 
 export default function TeamClient() {
@@ -102,7 +93,7 @@ export default function TeamClient() {
                   >
                     {/* Trainer Image (5 cols on sm) */}
                     <div className="sm:col-span-5 relative h-72 sm:h-auto min-h-[250px]">
-                      <Image src={img.src} alt={trainer.name} fill className="object-cover group-hover:scale-105 transition-transform duration-700 opacity-80 group-hover:opacity-100" sizes="(max-width: 768px) 100vw, 25vw" />
+                      <Image src={trainer.photo} alt={trainer.name} fill className="object-cover object-top group-hover:scale-105 transition-transform duration-700 opacity-80 group-hover:opacity-100" sizes="(max-width: 768px) 100vw, 25vw" />
                       <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/20 to-transparent sm:hidden" />
                       <div className="absolute top-4 left-4 bg-black/60 backdrop-blur-md border border-white/10 px-3 py-1 rounded-lg flex items-center gap-1">
                         <Star size={12} className="text-[#d4ff00] fill-[#d4ff00]" />

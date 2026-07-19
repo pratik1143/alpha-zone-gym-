@@ -40,31 +40,10 @@ API.interceptors.request.use(async (config) => {
   return Promise.reject(error);
 });
 
-// Response interceptor to handle authentication errors
+// Response interceptor — only reject, never auto-logout
 API.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response) {
-      const status = error.response.status;
-      const errorMessage = error.response.data?.error || '';
-
-      const isAuthError =
-        status === 401 ||
-        (status === 403 && (
-          errorMessage.includes('Token') ||
-          errorMessage.includes('Authentication') ||
-          errorMessage.includes('decode') ||
-          errorMessage.includes('decoding')
-        ));
-
-      if (isAuthError) {
-        console.warn('Authentication token invalid or expired. Logging out...');
-        if (typeof window !== 'undefined') {
-          localStorage.removeItem('alpha_zone_user');
-          window.location.href = '/';
-        }
-      }
-    }
     return Promise.reject(error);
   }
 );

@@ -16,7 +16,7 @@ export default function manifest(): MetadataRoute.Manifest {
         type: 'image/x-icon',
       },
       {
-        src: '/gym_logo.png',
+        src: '/gymlogo.png',
         sizes: '192x192',
         type: 'image/png',
       },

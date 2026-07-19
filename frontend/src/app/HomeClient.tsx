@@ -22,9 +22,6 @@ import { auth, db as fDb } from '../lib/firebase';
 import CinematicHero from '../components/CinematicHero';
 import { getGymImage, getGymImages } from '../lib/gymImages';
 
-const demoAccounts = [
-  { role: 'gym_owner', label: 'Gym Owner / Admin', email: 'owner@alphagym.com', password: '1234567', desc: 'Full Gym Operations', icon: Crown }
-];
 
 const mobileProgressData = [
   { day: 'M', value: 45 },
@@ -96,11 +93,6 @@ export default function AlphaZoneLandingPage() {
     }
   }, [isAuthenticated, router]);
 
-  const handleRoleSelect = (acc: typeof demoAccounts[0]) => {
-    setEmail(acc.email);
-    setPassword(acc.password);
-    setActiveRole(acc.role);
-  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -205,7 +197,7 @@ export default function AlphaZoneLandingPage() {
           
           {/* Logo */}
           <a href="#" className="flex items-center gap-2 cursor-pointer hover:opacity-90 transition-opacity">
-            <img src="/gym_logo.png" alt="Alpha Zone Logo" className="h-16 w-auto object-contain" />
+            <img src="/gymlogo.png" alt="Alpha Zone Logo" className="h-16 w-auto object-contain" />
           </a>
 
           {/* Desktop Navigation Links */}
@@ -221,7 +213,7 @@ export default function AlphaZoneLandingPage() {
           {/* Action buttons */}
           <div className="hidden sm:flex items-center gap-4">
             <button 
-              onClick={() => setShowLoginModal(true)} 
+              onClick={() => { setEmail(''); setPassword(''); setShowLoginModal(true); }} 
               className="text-slate-350 hover:text-[#d4ff00] font-bold text-xs tracking-wider uppercase transition-all bg-transparent border-none py-2 px-4 cursor-pointer"
             >
               Client Login
@@ -259,7 +251,7 @@ export default function AlphaZoneLandingPage() {
               <a href="/app" onClick={() => setMobileMenuOpen(false)} className="text-slate-300 hover:text-[#d4ff00] font-bold text-sm tracking-wide uppercase">App</a>
               <a href="/contact" onClick={() => setMobileMenuOpen(false)} className="text-slate-300 hover:text-[#d4ff00] font-bold text-sm tracking-wide uppercase">Contact</a>
               <div className="pt-4 border-t border-white/5 flex gap-4">
-                <button onClick={() => { setMobileMenuOpen(false); setShowLoginModal(true); }} className="w-1/2 bg-slate-900 text-white font-bold py-3 rounded-full text-xs uppercase text-center cursor-pointer border-none">Login</button>
+                <button onClick={() => { setEmail(''); setPassword(''); setMobileMenuOpen(false); setShowLoginModal(true); }} className="w-1/2 bg-slate-900 text-white font-bold py-3 rounded-full text-xs uppercase text-center cursor-pointer border-none">Login</button>
                 <a href="/contact" onClick={() => setMobileMenuOpen(false)} className="w-1/2 bg-[#d4ff00] text-black font-extrabold py-3 rounded-full text-xs uppercase text-center shadow-[0_0_15px_rgba(212,255,0,0.1)]">Join Now</a>
               </div>
             </motion.div>
@@ -470,38 +462,42 @@ export default function AlphaZoneLandingPage() {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-stretch font-poppins max-w-5xl mx-auto">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6 items-stretch font-poppins max-w-6xl mx-auto">
             
-            {/* Monthly Plan */}
-            <div className="bg-slate-900/40 border border-white/5 rounded-3xl p-8 flex flex-col justify-between text-left card-neon-hover relative">
-              <div className="space-y-6">
+            {/* 1 Month Plan */}
+            <div className="bg-slate-900/40 border border-white/5 rounded-3xl p-7 flex flex-col justify-between text-left card-neon-hover relative">
+              <div className="space-y-5">
                 <div>
-                  <h3 className="text-lg font-bold text-white uppercase tracking-wide">Monthly Access</h3>
+                  <span className="text-[10px] font-black text-[#d4ff00] tracking-widest uppercase">1 MONTH</span>
+                  <h3 className="text-lg font-bold text-white uppercase tracking-wide mt-1">Monthly Access</h3>
                   <p className="text-slate-400 text-xs mt-1">Perfect for trial and short-term routines</p>
                 </div>
                 
-                <div className="flex items-baseline gap-1">
-                  <span className="text-4xl font-black text-white">₹ 2,499</span>
-                  <span className="text-slate-400 text-xs">/ month</span>
+                <div className="space-y-0.5">
+                  <div className="text-slate-500 text-sm font-semibold line-through">₹3,500</div>
+                  <div className="flex items-baseline gap-1">
+                    <span className="text-4xl font-black text-white">₹3,000</span>
+                    <span className="text-slate-400 text-xs">/ month</span>
+                  </div>
                 </div>
 
                 <div className="h-[1px] bg-white/10" />
 
-                <ul className="space-y-3.5 text-xs text-slate-300">
+                <ul className="space-y-3 text-xs text-slate-300">
                   <li className="flex items-center gap-2.5">
-                    <Check size={14} className="text-[#d4ff00]" />
+                    <Check size={13} className="text-[#d4ff00] shrink-0" />
                     <span>Full Gym weights access</span>
                   </li>
                   <li className="flex items-center gap-2.5">
-                    <Check size={14} className="text-[#d4ff00]" />
+                    <Check size={13} className="text-[#d4ff00] shrink-0" />
                     <span>Cardio & treadmill zones</span>
                   </li>
                   <li className="flex items-center gap-2.5">
-                    <Check size={14} className="text-[#d4ff00]" />
+                    <Check size={13} className="text-[#d4ff00] shrink-0" />
                     <span>Locker room & shower access</span>
                   </li>
                   <li className="flex items-center gap-2.5">
-                    <Check size={14} className="text-[#d4ff00]" />
+                    <Check size={13} className="text-[#d4ff00] shrink-0" />
                     <span>1 Free Fitness Assessment</span>
                   </li>
                 </ul>
@@ -509,54 +505,57 @@ export default function AlphaZoneLandingPage() {
 
               <button 
                 onClick={() => selectPricingPlan('monthly')}
-                className="w-full mt-8 border border-white/10 hover:border-[#d4ff00] text-white hover:text-black hover:bg-[#d4ff00] font-bold py-3.5 rounded-xl text-xs uppercase text-center transition-all cursor-pointer bg-transparent"
+                className="w-full mt-7 border border-white/10 hover:border-[#d4ff00] text-white hover:text-black hover:bg-[#d4ff00] font-bold py-3 rounded-xl text-xs uppercase text-center transition-all cursor-pointer bg-transparent"
               >
-                SELECT MONTHLY
+                SELECT
               </button>
             </div>
 
-            {/* Quarterly Plan (Highlighted) */}
-            <div className="bg-slate-950 border-[2px] border-[#d4ff00] rounded-3xl p-8 flex flex-col justify-between text-left relative shadow-[0_0_35px_rgba(212,255,0,0.18)]">
-              {/* Popularity Badge */}
+            {/* 3 Months Plan (Highlighted) */}
+            <div className="bg-slate-950 border-[2px] border-[#d4ff00] rounded-3xl p-7 flex flex-col justify-between text-left relative shadow-[0_0_35px_rgba(212,255,0,0.18)]">
               <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-[#d4ff00] text-black font-black text-[9px] uppercase tracking-widest px-4 py-1.5 rounded-full shadow-md z-10">
                 MOST POPULAR
               </div>
               
-              <div className="space-y-6">
+              <div className="space-y-5">
                 <div>
-                  <h3 className="text-lg font-bold text-white uppercase tracking-wide flex items-center gap-2">
+                  <span className="text-[10px] font-black text-[#d4ff00] tracking-widest uppercase">3 MONTHS</span>
+                  <h3 className="text-lg font-bold text-white uppercase tracking-wide mt-1 flex items-center gap-2">
                     Quarterly Pass
-                    <span className="w-2 h-2 rounded-full bg-[#d4ff00] animate-ping" />
+                    <span className="w-2 h-2 rounded-full bg-[#d4ff00] animate-ping shrink-0" />
                   </h3>
-                  <p className="text-slate-400 text-xs mt-1">Our best value option for sustained results</p>
+                  <p className="text-slate-400 text-xs mt-1">Best value for real transformation</p>
                 </div>
                 
-                <div className="flex items-baseline gap-1">
-                  <span className="text-4xl font-black text-white">₹ 6,499</span>
-                  <span className="text-slate-400 text-xs">/ 3 months</span>
+                <div className="space-y-0.5">
+                  <div className="text-slate-500 text-sm font-semibold line-through">₹8,000</div>
+                  <div className="flex items-baseline gap-1">
+                    <span className="text-4xl font-black text-white">₹6,000</span>
+                    <span className="text-slate-400 text-xs">/ 3 months</span>
+                  </div>
                 </div>
 
                 <div className="h-[1px] bg-white/10" />
 
-                <ul className="space-y-3.5 text-xs text-slate-200">
+                <ul className="space-y-3 text-xs text-slate-200">
                   <li className="flex items-center gap-2.5">
-                    <Check size={14} className="text-[#d4ff00]" />
+                    <Check size={13} className="text-[#d4ff00] shrink-0" />
                     <span>Full Gym weights & cardio zones</span>
                   </li>
                   <li className="flex items-center gap-2.5">
-                    <Check size={14} className="text-[#d4ff00]" />
+                    <Check size={13} className="text-[#d4ff00] shrink-0" />
                     <span className="font-bold text-white">2 Free Personal Training Sessions</span>
                   </li>
                   <li className="flex items-center gap-2.5">
-                    <Check size={14} className="text-[#d4ff00]" />
+                    <Check size={13} className="text-[#d4ff00] shrink-0" />
                     <span>Locker, shower, & priority steam</span>
                   </li>
                   <li className="flex items-center gap-2.5">
-                    <Check size={14} className="text-[#d4ff00]" />
+                    <Check size={13} className="text-[#d4ff00] shrink-0" />
                     <span>Weekly CrossFit & group class access</span>
                   </li>
                   <li className="flex items-center gap-2.5">
-                    <Check size={14} className="text-[#d4ff00]" />
+                    <Check size={13} className="text-[#d4ff00] shrink-0" />
                     <span>Diet consultation & tracking logs</span>
                   </li>
                 </ul>
@@ -564,46 +563,104 @@ export default function AlphaZoneLandingPage() {
 
               <button 
                 onClick={() => selectPricingPlan('quarterly')}
-                className="w-full mt-8 bg-[#d4ff00] text-black font-black py-3.5 rounded-xl text-xs uppercase text-center transition-all cursor-pointer border-none shadow-[0_0_15px_rgba(212,255,0,0.3)] hover:bg-white hover:scale-[1.01]"
+                className="w-full mt-7 bg-[#d4ff00] text-black font-black py-3 rounded-xl text-xs uppercase text-center transition-all cursor-pointer border-none shadow-[0_0_15px_rgba(212,255,0,0.3)] hover:bg-white hover:scale-[1.01]"
               >
-                SELECT QUARTERLY
+                SELECT
               </button>
             </div>
 
-            {/* Annual VIP Plan */}
-            <div className="bg-slate-900/40 border border-white/5 rounded-3xl p-8 flex flex-col justify-between text-left card-neon-hover relative">
-              <div className="space-y-6">
+            {/* 6 Months Plan */}
+            <div className="bg-slate-900/40 border border-white/5 rounded-3xl p-7 flex flex-col justify-between text-left card-neon-hover relative">
+              <div className="space-y-5">
                 <div>
-                  <h3 className="text-lg font-bold text-white uppercase tracking-wide">Annual VIP Pass</h3>
-                  <p className="text-slate-400 text-xs mt-1">For athletes fully committed to their transformation</p>
+                  <span className="text-[10px] font-black text-[#d4ff00] tracking-widest uppercase">6 MONTHS</span>
+                  <h3 className="text-lg font-bold text-white uppercase tracking-wide mt-1">Semi-Annual Elite</h3>
+                  <p className="text-slate-400 text-xs mt-1">Serious training for serious results</p>
                 </div>
                 
-                <div className="flex items-baseline gap-1">
-                  <span className="text-4xl font-black text-white">₹ 19,999</span>
-                  <span className="text-slate-400 text-xs">/ year</span>
+                <div className="space-y-0.5">
+                  <div className="text-slate-500 text-sm font-semibold line-through">₹12,000</div>
+                  <div className="flex items-baseline gap-1">
+                    <span className="text-4xl font-black text-white">₹9,000</span>
+                    <span className="text-slate-400 text-xs">/ 6 months</span>
+                  </div>
                 </div>
 
                 <div className="h-[1px] bg-white/10" />
 
-                <ul className="space-y-3.5 text-xs text-slate-300">
+                <ul className="space-y-3 text-xs text-slate-300">
                   <li className="flex items-center gap-2.5">
-                    <Check size={14} className="text-[#d4ff00]" />
-                    <span>All access to weights, CrossFit, & steam</span>
+                    <Check size={13} className="text-[#d4ff00] shrink-0" />
+                    <span>All access — weights, CrossFit & steam</span>
                   </li>
                   <li className="flex items-center gap-2.5">
-                    <Check size={14} className="text-[#d4ff00]" />
-                    <span className="font-bold text-white">8 Free Personal Training Sessions</span>
+                    <Check size={13} className="text-[#d4ff00] shrink-0" />
+                    <span className="font-bold text-white">4 Free Personal Training Sessions</span>
                   </li>
                   <li className="flex items-center gap-2.5">
-                    <Check size={14} className="text-[#d4ff00]" />
+                    <Check size={13} className="text-[#d4ff00] shrink-0" />
                     <span>Priority locker reservation</span>
                   </li>
                   <li className="flex items-center gap-2.5">
-                    <Check size={14} className="text-[#d4ff00]" />
-                    <span>Monthly structural checkups & assessments</span>
+                    <Check size={13} className="text-[#d4ff00] shrink-0" />
+                    <span>Bi-monthly body assessments</span>
                   </li>
                   <li className="flex items-center gap-2.5">
-                    <Check size={14} className="text-[#d4ff00]" />
+                    <Check size={13} className="text-[#d4ff00] shrink-0" />
+                    <span>Diet consultation & nutrition logs</span>
+                  </li>
+                </ul>
+              </div>
+
+              <button 
+                onClick={() => selectPricingPlan('semi-annual')}
+                className="w-full mt-7 border border-white/10 hover:border-[#d4ff00] text-white hover:text-black hover:bg-[#d4ff00] font-bold py-3 rounded-xl text-xs uppercase text-center transition-all cursor-pointer bg-transparent"
+              >
+                SELECT
+              </button>
+            </div>
+
+            {/* 12 Months VIP Plan */}
+            <div className="bg-slate-900/40 border border-white/5 rounded-3xl p-7 flex flex-col justify-between text-left card-neon-hover relative">
+              <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-slate-700 text-[#d4ff00] font-black text-[9px] uppercase tracking-widest px-4 py-1.5 rounded-full shadow-md z-10 border border-[#d4ff00]/30">
+                BEST VALUE
+              </div>
+              <div className="space-y-5">
+                <div>
+                  <span className="text-[10px] font-black text-[#d4ff00] tracking-widest uppercase">12 MONTHS</span>
+                  <h3 className="text-lg font-bold text-white uppercase tracking-wide mt-1">Annual VIP Pass</h3>
+                  <p className="text-slate-400 text-xs mt-1">For athletes committed to transformation</p>
+                </div>
+                
+                <div className="space-y-0.5">
+                  <div className="text-slate-500 text-sm font-semibold line-through">₹18,000</div>
+                  <div className="flex items-baseline gap-1">
+                    <span className="text-4xl font-black text-white">₹14,000</span>
+                    <span className="text-slate-400 text-xs">/ year</span>
+                  </div>
+                </div>
+
+                <div className="h-[1px] bg-white/10" />
+
+                <ul className="space-y-3 text-xs text-slate-300">
+                  <li className="flex items-center gap-2.5">
+                    <Check size={13} className="text-[#d4ff00] shrink-0" />
+                    <span>All access — weights, CrossFit & steam</span>
+                  </li>
+                  <li className="flex items-center gap-2.5">
+                    <Check size={13} className="text-[#d4ff00] shrink-0" />
+                    <span className="font-bold text-white">8 Free Personal Training Sessions</span>
+                  </li>
+                  <li className="flex items-center gap-2.5">
+                    <Check size={13} className="text-[#d4ff00] shrink-0" />
+                    <span>Priority locker reservation</span>
+                  </li>
+                  <li className="flex items-center gap-2.5">
+                    <Check size={13} className="text-[#d4ff00] shrink-0" />
+                    <span>Monthly structural checkups</span>
+                  </li>
+                  <li className="flex items-center gap-2.5">
+                    <Check size={13} className="text-[#d4ff00] shrink-0" />
                     <span>5 Guest Passes per year</span>
                   </li>
                 </ul>
@@ -611,9 +668,9 @@ export default function AlphaZoneLandingPage() {
 
               <button 
                 onClick={() => selectPricingPlan('annual')}
-                className="w-full mt-8 border border-white/10 hover:border-[#d4ff00] text-white hover:text-black hover:bg-[#d4ff00] font-bold py-3.5 rounded-xl text-xs uppercase text-center transition-all cursor-pointer bg-transparent"
+                className="w-full mt-7 border border-white/10 hover:border-[#d4ff00] text-white hover:text-black hover:bg-[#d4ff00] font-bold py-3 rounded-xl text-xs uppercase text-center transition-all cursor-pointer bg-transparent"
               >
-                SELECT ANNUAL
+                SELECT
               </button>
             </div>
 
@@ -639,32 +696,32 @@ export default function AlphaZoneLandingPage() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 font-poppins max-w-5xl mx-auto">
             {[
               { 
-                name: "Rohan Singh", 
-                role: "Head Strength Coach", 
-                desc: "8+ years in powerlifting and athletic strength programming. Focused on biomechanics and heavy compound lifts.",
-                cert: "IPF Certified Coach",
-                img: "/gym_images/Personal Training at Alpha Zone Gym Mohali.jpg"
+                name: "Arshpreet Singh", 
+                role: "COACH", 
+                desc: "Experienced strength & conditioning specialist focused on powerlifting, heavy compound lifts, and personalized strength programming.",
+                cert: "CERTIFIED COACH",
+                img: "/arshpreet.png"
               },
               { 
-                name: "Priya Sharma", 
-                role: "Performance Coach", 
-                desc: "Functional fitness specialist and women's strength coach. Focuses on kettlebell flow, stability, and high intensity engine builds.",
-                cert: "ACE Certified Specialist",
-                img: "/gym_images/Personal Training in Mohali.jpeg"
+                name: "Lovely Chaudhary", 
+                role: "COACH", 
+                desc: "Dedicated transformation & functional fitness coach. Specializes in body weight management, functional mobility, and athletic growth.",
+                cert: "CERTIFIED COACH",
+                img: "/lovely.png"
               },
               { 
-                name: "Arjun Mehta", 
-                role: "CrossFit Coach", 
-                desc: "Certified conditioning specialist with 6+ years coaching metabolic routines, engine pacing, and Olympic lifting.",
-                cert: "CF-L2 Certified Coach",
-                img: "/gym_images/Strength Training Gym in Mohali.jpg"
+                name: "Sourav Kumar", 
+                role: "COACH", 
+                desc: "High-performance conditioning coach with expertise in athletic training, metabolic endurance routines, and high-intensity workouts.",
+                cert: "CERTIFIED COACH",
+                img: "/saurav.png"
               }
             ].map((coach, idx) => (
               <div key={idx} className="bg-slate-900/50 border border-white/5 rounded-3xl p-6 text-center space-y-4 card-neon-hover flex flex-col items-center justify-between">
-                <div className="space-y-4">
+                <div className="space-y-4 w-full">
                   {/* Circular Portrait Image */}
-                  <div className="relative w-36 h-36 rounded-full overflow-hidden border-2 border-white/10 group-hover:border-[#d4ff00] transition-colors mx-auto">
-                    <img src={coach.img} alt={coach.name} className="w-full h-full object-cover" />
+                  <div className="relative w-36 h-36 rounded-full overflow-hidden border-2 border-white/10 group-hover:border-[#d4ff00] transition-colors mx-auto bg-slate-800">
+                    <img src={coach.img} alt={coach.name} className="w-full h-full object-cover object-top" />
                   </div>
                   
                   <div>
@@ -672,11 +729,11 @@ export default function AlphaZoneLandingPage() {
                     <div className="text-[10px] font-black text-[#d4ff00] tracking-widest uppercase mt-0.5">{coach.role}</div>
                   </div>
 
-                  <p className="text-slate-400 text-xs leading-relaxed max-w-sm">{coach.desc}</p>
+                  <p className="text-slate-400 text-xs leading-relaxed max-w-sm mx-auto">{coach.desc}</p>
                 </div>
 
                 <div className="w-full pt-4 border-t border-white/5 mt-4 flex items-center justify-between">
-                  <span className="text-[9px] font-bold uppercase text-slate-500 bg-white/5 border border-white/10 px-3 py-1 rounded-full">{coach.cert}</span>
+                  <span className="text-[9px] font-bold uppercase text-slate-400 bg-white/5 border border-white/10 px-3 py-1 rounded-full">{coach.cert}</span>
                   <div className="flex gap-2">
                     <button onClick={() => toast.success(`Contacting ${coach.name.split(" ")[0]}...`)} className="p-1.5 rounded-lg bg-slate-800 hover:bg-[#d4ff00] hover:text-black text-slate-400 transition-colors border-none cursor-pointer">
                       <MessageSquare size={13} />
@@ -1306,9 +1363,10 @@ export default function AlphaZoneLandingPage() {
                   required
                 >
                   <option value="">Select Plan...</option>
-                  <option value="monthly">Monthly Access - ₹ 2,499/mo</option>
-                  <option value="quarterly">Quarterly Plan - ₹ 6,499/3mo</option>
-                  <option value="annual">Annual VIP Pass - ₹ 19,999/yr</option>
+                  <option value="monthly">1 Month (Monthly) - ₹ 3,000</option>
+                  <option value="quarterly">3 Months (Quarterly) - ₹ 6,000</option>
+                  <option value="semi-annual">6 Months (Semi-Annual) - ₹ 9,000</option>
+                  <option value="annual">12 Months (Annual VIP) - ₹ 14,000</option>
                 </select>
               </div>
 
@@ -1458,7 +1516,7 @@ export default function AlphaZoneLandingPage() {
             {/* Branding Column */}
             <div className="space-y-4">
               <a href="#" className="flex items-center gap-2 cursor-pointer hover:opacity-90 transition-opacity">
-                <img src="/gym_logo.png" alt="Alpha Zone Logo" className="h-12 w-auto object-contain" />
+                <img src="/gymlogo.png" alt="Alpha Zone Logo" className="h-12 w-auto object-contain" />
               </a>
               <p className="text-xs text-slate-500 leading-relaxed">
                 Beyond Strength. Beyond Limits. Elevate operations and fitness tracking using biometric turnstiles, real-time client databases, and interactive progress tools.
@@ -1589,54 +1647,28 @@ export default function AlphaZoneLandingPage() {
                 
                 <div className="space-y-4">
                   <div className="flex items-center gap-2">
-                    <img src="/gym_logo.png" alt="Alpha Zone Logo" className="h-10 w-auto object-contain" />
+                    <img src="/gymlogo.png" alt="Alpha Zone Logo" className="h-10 w-auto object-contain" />
                     <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 font-sans">Alpha OS</span>
                   </div>
 
                   <div>
                     <h2 className="text-3xl font-extrabold text-white tracking-tight leading-none">Welcome Back</h2>
-                    <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider mt-2">Enter credentials or select quick-access below</p>
-                  </div>
-                </div>
-
-                {/* Quick Access Demo Profiles */}
-                <div className="space-y-2.5 my-6">
-                  <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block font-sans">Quick Access Demo Profiles</span>
-                  
-                  <div className="grid grid-cols-1 gap-2">
-                    {demoAccounts.map(acc => {
-                      const isSelected = activeRole === acc.role;
-                      return (
-                        <button
-                          key={acc.role}
-                          type="button"
-                          onClick={() => handleRoleSelect(acc)}
-                          className={`px-4 py-3 rounded-xl text-left border cursor-pointer transition-all flex flex-col justify-center border-none ${
-                            isSelected 
-                              ? 'bg-[#d4ff00] text-black shadow-md scale-[1.02] ring-1 ring-[#d4ff00]/40' 
-                              : 'bg-slate-900 border border-white/5 text-slate-350 hover:bg-slate-800 hover:border-white/10'
-                          }`}
-                        >
-                          <span className={`text-[10px] font-extrabold tracking-tight ${isSelected ? 'text-black font-black' : 'text-white'}`}>
-                            {acc.label.split(' / ')[0]}
-                          </span>
-                          <span className={`text-[8px] truncate block mt-0.5 ${isSelected ? 'text-black/75' : 'text-slate-500'}`}>{acc.desc}</span>
-                        </button>
-                      );
-                    })}
+                    <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider mt-2">Enter your admin credentials below</p>
                   </div>
                 </div>
 
                 {/* Form */}
-                <form onSubmit={handleLogin} className="space-y-5 text-left font-poppins">
+                <form onSubmit={handleLogin} autoComplete="off" className="space-y-5 text-left font-poppins">
                   <div className="space-y-1">
                     <label className="block text-[9px] font-black text-slate-450 uppercase tracking-widest font-sans">Email Address</label>
                     <input 
                       type="email" 
+                      name="az_admin_usr"
+                      autoComplete="off"
                       value={email} 
-                      onChange={e => { setEmail(e.target.value); setActiveRole(''); }} 
+                      onChange={e => setEmail(e.target.value)} 
                       className="w-full bg-[#060608] border border-white/10 focus:border-[#d4ff00] rounded-xl px-4 py-3.5 text-xs text-white placeholder-slate-600 outline-none transition-all focus:shadow-[0_0_15px_rgba(212,255,0,0.1)]" 
-                      placeholder="hello.alex@gmail.com"
+                      placeholder="Enter admin email address"
                       required 
                     />
                   </div>
@@ -1646,10 +1678,12 @@ export default function AlphaZoneLandingPage() {
                     <div className="relative flex items-center">
                       <input 
                         type={showPass ? 'text' : 'password'} 
+                        name="az_admin_pwd"
+                        autoComplete="new-password"
                         value={password} 
-                        onChange={e => { setPassword(e.target.value); setActiveRole(''); }} 
+                        onChange={e => setPassword(e.target.value)} 
                         className="w-full bg-[#060608] border border-white/10 focus:border-[#d4ff00] rounded-xl px-4 py-3.5 text-xs text-white placeholder-slate-600 outline-none transition-all focus:shadow-[0_0_15px_rgba(212,255,0,0.1)] pr-10" 
-                        placeholder="••••••••••••"
+                        placeholder="Enter password"
                         required 
                       />
                       <button 

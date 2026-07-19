@@ -17,8 +17,12 @@ const fadeUp = {
 const mainPlans = [
   {
     id: 'monthly',
+    tenure: '1 MONTH',
     label: 'Monthly',
     badge: null,
+    originalPrice: '₹3,500',
+    price: '₹3,000',
+    period: '/ month',
     tagline: 'Try the Zone. No long commitment.',
     features: [
       'Full gym access',
@@ -32,8 +36,12 @@ const mainPlans = [
   },
   {
     id: 'quarterly',
+    tenure: '3 MONTHS',
     label: 'Quarterly',
     badge: 'RECOMMENDED',
+    originalPrice: '₹8,000',
+    price: '₹6,000',
+    period: '/ 3 months',
     tagline: 'Best value for real transformation.',
     features: [
       'Everything in Monthly',
@@ -46,16 +54,39 @@ const mainPlans = [
     icon: Crown
   },
   {
-    id: 'annual',
-    label: 'Annual',
-    badge: 'BEST VALUE',
-    tagline: 'Commit to a stronger, elite version of you.',
+    id: 'semi-annual',
+    tenure: '6 MONTHS',
+    label: 'Semi-Annual',
+    badge: null,
+    originalPrice: '₹12,000',
+    price: '₹9,000',
+    period: '/ 6 months',
+    tagline: 'Serious training for serious results.',
     features: [
       'Everything in Quarterly',
+      '4 personal training sessions',
+      'Priority locker reservation',
+      'Bi-monthly body assessments',
+      'Diet & nutrition consultation'
+    ],
+    highlight: false,
+    icon: Star
+  },
+  {
+    id: 'annual',
+    tenure: '12 MONTHS',
+    label: 'Annual',
+    badge: 'BEST VALUE',
+    originalPrice: '₹18,000',
+    price: '₹14,000',
+    period: '/ year',
+    tagline: 'Commit to a stronger, elite version of you.',
+    features: [
+      'Everything in Semi-Annual',
       '8 personal training sessions',
       'Priority class booking',
-      '4 guest passes',
-      'Exclusive Alpha merch kit'
+      '5 guest passes per year',
+      'Monthly structural checkups'
     ],
     highlight: false,
     icon: Crown
@@ -118,51 +149,62 @@ export default function PlansPage() {
         {/* Section 1: Plans Grid */}
         <section className="py-24 bg-[#0a0a0c] border-t border-white/5 relative overflow-hidden">
           <div className="max-w-7xl mx-auto px-6 space-y-16">
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-stretch">
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6 items-stretch">
               {mainPlans.map((plan, i) => (
                 <motion.div key={plan.id} custom={i} variants={fadeUp} initial="hidden" whileInView="visible" viewport={{ once: true }}
-                  className={`relative flex flex-col justify-between rounded-3xl p-8 ${
+                  className={`relative flex flex-col justify-between rounded-3xl p-7 ${
                     plan.highlight 
                       ? 'bg-slate-950 border-2 border-[#d4ff00] shadow-[0_0_40px_rgba(212,255,0,0.15)] z-10' 
                       : 'bg-slate-900/40 border border-white/5 card-neon-hover'
                   }`}
                 >
                   {plan.badge && (
-                    <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-[#d4ff00] text-black font-black text-[9px] uppercase tracking-widest px-4 py-1.5 rounded-full shadow-md">
+                    <div className={`absolute -top-3.5 left-1/2 -translate-x-1/2 font-black text-[9px] uppercase tracking-widest px-4 py-1.5 rounded-full shadow-md ${
+                      plan.highlight ? 'bg-[#d4ff00] text-black' : 'bg-slate-700 text-[#d4ff00] border border-[#d4ff00]/30'
+                    }`}>
                       {plan.badge}
                     </div>
                   )}
 
-                  <div className="space-y-6">
+                  <div className="space-y-5">
                     <div>
-                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center mb-4 ${
+                      <span className="text-[10px] font-black text-[#d4ff00] tracking-widest uppercase">{plan.tenure}</span>
+                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center mt-3 mb-3 ${
                         plan.highlight ? 'bg-[#d4ff00] text-black' : 'bg-slate-950 border border-white/10 text-[#d4ff00]'
                       }`}>
                         <plan.icon size={18} />
                       </div>
-                      <h3 className="text-xl font-black text-white uppercase tracking-wide flex items-center gap-2">
-                        {plan.label} {plan.highlight && <span className="w-1.5 h-1.5 rounded-full bg-[#d4ff00] animate-ping" />}
+                      <h3 className="text-lg font-black text-white uppercase tracking-wide flex items-center gap-2">
+                        {plan.label} {plan.highlight && <span className="w-1.5 h-1.5 rounded-full bg-[#d4ff00] animate-ping shrink-0" />}
                       </h3>
                       <p className="text-slate-400 text-xs mt-1 font-poppins">{plan.tagline}</p>
                     </div>
 
+                    <div className="space-y-0.5">
+                      <div className="text-slate-500 text-sm font-semibold line-through">{plan.originalPrice}</div>
+                      <div className="flex items-baseline gap-1">
+                        <span className="text-3xl font-black text-white">{plan.price}</span>
+                        <span className="text-slate-400 text-xs font-poppins">{plan.period}</span>
+                      </div>
+                    </div>
+
                     <div className="h-px bg-white/10" />
 
-                    <ul className="space-y-3">
+                    <ul className="space-y-2.5">
                       {plan.features.map((f, j) => (
                         <li key={j} className="flex items-center gap-2.5 text-xs text-slate-300">
-                          <Check className="text-[#d4ff00] shrink-0" size={13} />
+                          <Check className="text-[#d4ff00] shrink-0" size={12} />
                           <span>{f}</span>
                         </li>
                       ))}
                     </ul>
                   </div>
 
-                  <div className="mt-8 pt-4">
+                  <div className="mt-7 pt-4">
                     <a href={`https://wa.me/919779333155?text=Hi! I am interested in the ${plan.label} membership plan at Alpha Zone Gym.`} target="_blank" rel="noopener noreferrer"
-                      className={`w-full py-4 rounded-xl font-black text-xs uppercase tracking-widest text-center transition-all block ${
+                      className={`w-full py-3.5 rounded-xl font-black text-xs uppercase tracking-widest text-center transition-all block ${
                         plan.highlight 
-                          ? 'bg-[#d4ff00] text-black hover:bg-white shadow-[0_0_15px_rgba(212,255,0,0.25)] hover:scale-102' 
+                          ? 'bg-[#d4ff00] text-black hover:bg-white shadow-[0_0_15px_rgba(212,255,0,0.25)]' 
                           : 'border border-white/10 hover:border-[#d4ff00] text-white hover:text-black hover:bg-[#d4ff00]'
                       }`}
                     >

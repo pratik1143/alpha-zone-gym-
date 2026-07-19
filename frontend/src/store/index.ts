@@ -43,7 +43,41 @@ export const useAuthStore = create<AuthStore>((set) => ({
   login: async (credentials) => {
     set({ isLoading: true });
     try {
-      // Step 1: Authenticate with Firebase (REQUIRED — no fallback)
+      // ── Demo Account Bypass (no Firebase account needed) ──────────────
+      const DEMO_ACCOUNTS: Record<string, { password: string; user: User }> = {
+        'owner@alphagym.com': {
+          password: '1234567',
+          user: {
+            uid: 'demo_owner_001',
+            name: 'Gym Owner',
+            email: 'owner@alphagym.com',
+            role: 'gym_owner',
+            branch: 'Mohali, Punjab',
+            gymId: 'gym_001',
+          }
+        },
+        'admin@alphagym.com': {
+          password: '1234567',
+          user: {
+            uid: 'demo_admin_001',
+            name: 'Admin',
+            email: 'admin@alphagym.com',
+            role: 'gym_owner',
+            branch: 'Mohali, Punjab',
+            gymId: 'gym_001',
+          }
+        },
+      };
+
+      const demoMatch = DEMO_ACCOUNTS[credentials.email.toLowerCase()];
+      if (demoMatch && demoMatch.password === credentials.password) {
+        localStorage.setItem('alpha_zone_user', JSON.stringify(demoMatch.user));
+        set({ user: demoMatch.user, isAuthenticated: true, isLoading: false });
+        return demoMatch.user;
+      }
+      // ─────────────────────────────────────────────────────────────────
+
+      // Step 1: Authenticate with Firebase for real accounts
       const userCredential = await signInWithEmailAndPassword(auth, credentials.email, credentials.password);
       const idToken = await userCredential.user.getIdToken();
 
@@ -57,7 +91,7 @@ export const useAuthStore = create<AuthStore>((set) => ({
       } catch (backendErr) {
         // Backend unavailable — build user from Firebase token claims
         const fbUser = userCredential.user;
-        const user = {
+        const user: User = {
           uid: fbUser.uid,
           name: fbUser.displayName || fbUser.email?.split('@')[0] || 'Admin',
           email: fbUser.email || credentials.email,
@@ -72,7 +106,6 @@ export const useAuthStore = create<AuthStore>((set) => ({
       }
     } catch (firebaseErr: any) {
       set({ isLoading: false });
-      // Firebase auth failed — user does not exist or wrong password
       throw new Error('Invalid Email or Password');
     }
   },
