@@ -291,7 +291,6 @@ export default function DashboardLayout({
             <nav className="space-y-1 pr-1">
               {[
                 { to: '/dashboard', label: 'Home', icon: HomeIcon },
-                { to: '/dashboard/overview', label: 'Overview', icon: LayoutDashboard, badge: 'PRO' },
                 { to: '/dashboard/members', label: 'Members', icon: Users },
                 { to: '/dashboard/employees', label: 'Employees', icon: Briefcase, badge: 'NEW' },
                 { to: '/dashboard/enquiries', label: 'Enquiries', icon: ClipboardList },
@@ -299,20 +298,13 @@ export default function DashboardLayout({
                 { to: '/dashboard/expired', label: 'Expired', icon: UserX },
                 { to: '/dashboard/trainers', label: 'Trainers', icon: UserCheck },
                 { to: '/dashboard/follow-up', label: 'Follow Up', icon: AlertTriangle },
-                { to: '/dashboard/risk-radar', label: 'Risk Radar', icon: ShieldAlert },
                 { to: '/dashboard/referrals', label: 'Referrals', icon: Gift },
-                { to: '/dashboard/new-follow-up', label: 'New Follow Up', icon: UserPlus },
                 { to: '/dashboard/inconsistent', label: 'Inconsistent', icon: UserX },
                 { to: '/dashboard/attendance', label: 'Attendance', icon: Clock },
-                { to: '/dashboard/access-control', label: 'Access Control', icon: Shield },
-                { to: '/dashboard/trainer-desk', label: 'Trainer Desk', icon: Dumbbell },
                 { to: '/dashboard/diet-management', label: 'Diet Management', icon: AppleIcon },
                 { to: '/dashboard/billing', label: 'Billing', icon: CreditCard },
-                { to: '/dashboard/settings/member-migration', label: 'CSV Import', icon: Upload },
-                { to: '/dashboard/settings/enquiry-form', label: 'Enquiry Form', icon: ClipboardList },
                 { to: '/dashboard/automation', label: 'Email Automation', icon: Mail },
                 { to: '/dashboard/automation/whatsapp', label: 'WhatsApp Automation', icon: MessageSquare },
-                { to: '/dashboard/analytics', label: 'Analytics', icon: BarChart2 },
                 { to: '/dashboard/memberships', label: 'Memberships', icon: Award },
                 { to: '/dashboard/member-app', label: 'Member App', icon: Smartphone },
                 { to: '/dashboard/settings', label: 'Settings', icon: Settings }
@@ -383,7 +375,7 @@ export default function DashboardLayout({
           <aside className="w-full lg:w-[330px] flex-shrink-0 flex flex-col gap-6 text-left overflow-y-auto h-full pt-4 pb-4 pr-2">
           
           {/* Top header row: Profile card, toggles */}
-          <div className="flex justify-between items-center bg-white/60 p-2.5 rounded-2xl border border-white/45 shadow-sm gap-2">
+          <div className="flex justify-between items-center bg-white/60 p-2.5 rounded-2xl border border-white/45 shadow-sm gap-2 relative z-50">
             <div className="flex gap-2">
               <button className="w-10 h-10 rounded-xl bg-black text-[#d4ff00] flex items-center justify-center shadow-sm cursor-pointer border-none">
                 <Sun size={15} />

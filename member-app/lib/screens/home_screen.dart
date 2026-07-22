@@ -78,7 +78,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
 
-            const SizedBox(height: 24),
+            SliverToBoxAdapter(child: const SizedBox(height: 24)),
             // ── Membership Card ──
             SliverToBoxAdapter(
                 child: Padding(

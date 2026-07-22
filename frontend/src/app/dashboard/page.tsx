@@ -300,24 +300,8 @@ export default function DashboardPage() {
             <span className={`w-2 h-2 rounded-full ${deviceStatus === 'connected' ? 'bg-green-500' : deviceStatus === 'syncing' ? 'bg-yellow-500 animate-pulse' : 'bg-red-500'}`} />
             {deviceStatus === 'connected' ? 'Device Online' : deviceStatus === 'syncing' ? 'Syncing...' : 'Device Offline'}
           </div>
-
-          <div className="flex bg-slate-100 border border-slate-200 rounded-2xl p-0.5 self-start md:self-auto text-[9px] font-black uppercase tracking-wider shadow-sm">
-            <button
-              onClick={() => setViewMode('owner')}
-              className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer border-none outline-none ${
-                viewMode === 'owner' ? 'bg-black text-white shadow-sm font-black' : 'text-slate-400 hover:text-slate-700 bg-transparent font-extrabold'
-              }`}
-            >
-              Owner View
-            </button>
-            <button
-              onClick={() => setViewMode('reception')}
-              className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer border-none outline-none ${
-                viewMode === 'reception' ? 'bg-black text-white shadow-sm font-black' : 'text-slate-400 hover:text-slate-700 bg-transparent font-extrabold'
-              }`}
-            >
-              Reception View
-            </button>
+          <div className="px-3 py-1 bg-slate-900 text-[#d4ff00] text-[10px] font-black uppercase tracking-widest rounded-full shadow-sm">
+            Owner Command Center
           </div>
         </div>
       </div>

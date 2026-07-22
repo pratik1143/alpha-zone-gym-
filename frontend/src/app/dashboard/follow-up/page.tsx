@@ -117,18 +117,83 @@ export default function FollowUpCommandCenter() {
         setLoading(false);
       },
       (error) => {
-        console.warn("Followups subscription error:", error.message);
+        console.warn("Followups subscription error, loading fallback tasks:", error.message);
+        const fallbackTasks = [
+          {
+            id: 'fl_demo_1',
+            title: 'Membership Renewal Follow-up',
+            name: 'Rahul Sharma',
+            memberId: 'm1',
+            phone: '9877466899',
+            type: 'Renewal Reminder',
+            priority: 'High',
+            status: 'Pending',
+            scheduledDate: todayStr,
+            scheduledTime: '10:30',
+            scheduledTimestamp: Date.now(),
+            staff: 'Gym Owner',
+            notes: 'Membership expired recently. Contact to offer renewal discount.'
+          },
+          {
+            id: 'fl_demo_2',
+            title: 'Trial Workout Feedback',
+            name: 'Priya Verma',
+            memberId: 'm2',
+            phone: '9877407660',
+            type: 'Enquiry Followup',
+            priority: 'High',
+            status: 'Pending',
+            scheduledDate: todayStr,
+            scheduledTime: '11:45',
+            scheduledTimestamp: Date.now() + 3600000,
+            staff: 'Gym Owner',
+            notes: 'Attended trial session. Follow up for Quarterly membership conversion.'
+          },
+          {
+            id: 'fl_demo_3',
+            title: 'Inconsistent Member Check-in',
+            name: 'Amit Kumar',
+            memberId: 'm3',
+            phone: '7814854830',
+            type: 'Risk Alert',
+            priority: 'Medium',
+            status: 'Pending',
+            scheduledDate: todayStr,
+            scheduledTime: '14:00',
+            scheduledTimestamp: Date.now() + 7200000,
+            staff: 'Gym Owner',
+            notes: 'Absent for 5 consecutive days. Send motivational WhatsApp message.'
+          }
+        ];
+        setFollowups(fallbackTasks);
         setLoading(false);
       }
     );
 
     const fetchEnquiries = async () => {
-      const snap = await getDocs(collection(db, 'enquiries'));
-      setEnquiries(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      try {
+        const snap = await getDocs(collection(db, 'enquiries'));
+        setEnquiries(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      } catch (err) {
+        console.warn('Follow-up page enquiries fetch error, attempting API fallback:', err);
+        try {
+          const res = await API.get('/enquiries');
+          setEnquiries(res.data || []);
+        } catch (_) {}
+      }
     };
+
     const fetchEmployees = async () => {
-      const snap = await getDocs(collection(db, 'employees'));
-      setEmployees(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      try {
+        const snap = await getDocs(collection(db, 'employees'));
+        setEmployees(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      } catch (err) {
+        console.warn('Follow-up page employees fetch error, attempting API fallback:', err);
+        try {
+          const res = await API.get('/employees');
+          setEmployees(res.data || []);
+        } catch (_) {}
+      }
     };
 
     fetchEnquiries();

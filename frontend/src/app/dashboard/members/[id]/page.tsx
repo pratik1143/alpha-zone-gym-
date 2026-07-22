@@ -14,6 +14,8 @@ import toast from 'react-hot-toast';
 import { membershipEngine } from '@/lib/engines/membershipEngine';
 import { paymentEngine } from '@/lib/engines/paymentEngine';
 import { calculateRealAttendance } from '@/lib/utils';
+import API from '@/services/api';
+import { useGymStore } from '@/store';
 
 // Tabs
 import ProfileTab from './components/ProfileTab';
@@ -37,7 +39,9 @@ const TABS = [
 export default function ClientProfileSystem() {
   const router = useRouter();
   const params = useParams();
-  const id = params.id as string;
+  const rawId = params?.id as string;
+  const id = rawId ? decodeURIComponent(rawId) : '';
+
   const [activeTab, setActiveTab] = useState('Profile');
   const [member, setMember] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -62,37 +66,83 @@ export default function ClientProfileSystem() {
     ...(outstanding > 0 ? [{ type: 'Payment', title: 'Outstanding Balance', time: `₹${outstanding.toLocaleString('en-IN')} due`, icon: <DollarSign size={14} className="text-orange-500" /> }] : [{ type: 'Payment', title: 'All Payments Cleared', time: 'Fully Paid ✅', icon: <DollarSign size={14} className="text-emerald-500" /> }]),
   ];
 
-  // ── SELF HEAL on profile open ──────────────────────────────────
+  // ── SELF HEAL & FALLBACK member fetch ───────────────────────────
   useEffect(() => {
     if (!id) return;
+    setLoading(true);
+    let isMounted = true;
+
+    const fetchFallbackMember = async () => {
+      try {
+        const res = await API.get('/members');
+        const list = res.data || [];
+        const found = list.find((m: any) => m.id === id || m.uid === id || m.memberId === id);
+        if (found && isMounted) {
+          setMember(found);
+          setLoading(false);
+          return;
+        }
+      } catch (e) {
+        console.warn('API fallback fetch failed:', e);
+      }
+
+      const storeMembers = useGymStore.getState().members;
+      const foundInStore = storeMembers.find((m: any) => m.id === id || m.uid === id || m.memberId === id);
+      if (isMounted) {
+        setMember(foundInStore || null);
+        setLoading(false);
+      }
+    };
+
     const unsub = onSnapshot(doc(db, 'members', id), (d) => {
+      if (!isMounted) return;
       if (d.exists()) {
         const m = { id: d.id, ...d.data() };
         setMember(m);
-        // Self-heal: auto-fix stale data in Firestore
-        membershipEngine.selfHealMemberData(m);
+        setLoading(false);
+        try { membershipEngine.selfHealMemberData(m); } catch (_) {}
       } else {
-        toast.error('Member not found');
-        router.push('/dashboard/members');
+        fetchFallbackMember();
       }
-      setLoading(false);
     }, (error) => {
       console.warn("Member profile snapshot error:", error.message);
-      setLoading(false);
+      if (isMounted) fetchFallbackMember();
     });
-    return () => unsub();
-  }, [id, router]);
 
-  // ── Real-time listener for invoices ───────────────────────────
+    return () => {
+      isMounted = false;
+      unsub();
+    };
+  }, [id]);
+
+  // ── Real-time listener for invoices with API Fallback ───────────
   useEffect(() => {
     if (!id) return;
+    let isMounted = true;
+
+    const fetchFallbackInvoices = async () => {
+      try {
+        const res = await API.get('/billing');
+        const list = res.data || [];
+        const invs = list.filter((inv: any) => inv.memberId === id || inv.memberUid === id);
+        if (isMounted) setMemberInvoices(invs);
+      } catch (e) {
+        console.warn('API fallback invoices fetch failed:', e);
+      }
+    };
+
     const q = query(collection(db, 'payments'), where('memberId', '==', id));
     const unsub = onSnapshot(q, (snap) => {
-      setMemberInvoices(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      if (isMounted) setMemberInvoices(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     }, (error) => {
       console.warn("Member invoices snapshot error:", error.message);
+      if (isMounted) fetchFallbackInvoices();
     });
-    return () => unsub();
+
+    return () => {
+      isMounted = false;
+      unsub();
+    };
   }, [id]);
 
   if (loading) {
@@ -108,7 +158,25 @@ export default function ClientProfileSystem() {
     );
   }
 
-  if (!member) return null;
+  if (!member) {
+    return (
+      <div className="min-h-[500px] bg-white rounded-[32px] shadow-sm border border-slate-100 p-12 flex flex-col items-center justify-center text-center my-6">
+        <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 mb-4">
+          <User size={32} />
+        </div>
+        <h2 className="text-xl font-bold text-slate-800 mb-2">Member Profile Not Found</h2>
+        <p className="text-sm text-slate-500 max-w-md mb-6">
+          The requested member record (<code className="bg-slate-100 px-2 py-1 rounded text-slate-700 font-mono text-xs">{id}</code>) could not be located.
+        </p>
+        <button
+          onClick={() => router.push('/dashboard/members')}
+          className="px-6 py-3 bg-[#0052FF] text-white rounded-xl text-xs font-bold hover:bg-blue-700 transition-all flex items-center gap-2 cursor-pointer shadow-md"
+        >
+          <ArrowLeft size={16} /> Return to Members Directory
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] p-6 font-sans pb-32">
@@ -126,7 +194,7 @@ export default function ClientProfileSystem() {
                 <img src={member.avatarUrl || member.avatar} alt="Profile" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
               ) : (
                 <div className="w-full h-full flex items-center justify-center text-4xl font-black text-slate-300">
-                  {member.name.charAt(0).toUpperCase()}
+                  {(member.name || 'Member').charAt(0).toUpperCase()}
                 </div>
               )}
               <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
@@ -137,7 +205,7 @@ export default function ClientProfileSystem() {
 
           <div className="flex-1 flex flex-col justify-center">
             <div className="flex items-center gap-3 mb-2">
-              <h1 className="text-4xl font-black text-slate-900 tracking-tight">{member.name}</h1>
+              <h1 className="text-4xl font-black text-slate-900 tracking-tight">{member.name || 'Member'}</h1>
               <span className="px-3 py-1 bg-emerald-50 text-emerald-600 rounded-full text-xs font-black uppercase tracking-wider border border-emerald-100">
                 Active
               </span>
