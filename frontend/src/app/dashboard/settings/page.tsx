@@ -128,14 +128,14 @@ export default function SettingsGodLevelPage() {
   const fetchDeviceData = async () => {
     try {
       const res = await API.get('/devices');
-      const devs = (res.data.devices || []).map((d: any) => ({
+      const devs: Device[] = (res.data.devices || []).map((d: any) => ({
         ...d,
         status: d.enabled ? 'connected' : 'offline',
         connectionHealth: d.enabled ? (d.connectionHealth || 100) : 0
       }));
       setDevices(devs);
       
-      const onlineDevs = devs.filter(d => d.enabled).length;
+      const onlineDevs = devs.filter((d: Device) => d.enabled).length;
       setStats({
         totalDevices: devs.length,
         onlineDevices: onlineDevs,
