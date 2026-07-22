@@ -1793,9 +1793,13 @@ def main_sync_orchestrator():
         time.sleep(30)
 
 if __name__ == "__main__":
-    try:
-        main_sync_orchestrator()
-    except KeyboardInterrupt:
-        logging.info("Service shutting down...")
-        threads_running = False
-        sys.exit(0)
+    while True:
+        try:
+            main_sync_orchestrator()
+        except KeyboardInterrupt:
+            logging.info("Service shutting down...")
+            threads_running = False
+            sys.exit(0)
+        except Exception as err:
+            logging.error(f"Device service crashed due to network/gRPC error: {err}. Auto-restarting in 10s...")
+            time.sleep(10)
