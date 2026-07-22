@@ -128,6 +128,7 @@ interface GymStore {
   selectedBranch: string;
   sidebarCollapsed: boolean;
   deviceStatus: 'connected' | 'syncing' | 'offline';
+  setDeviceStatus: (status: 'connected' | 'syncing' | 'offline') => void;
   gymPresence: any[];
   setGymPresence: (presence: any[]) => void;
   isLoading: boolean;
@@ -175,7 +176,8 @@ export const useGymStore = create<GymStore>((set, get) => ({
   setGymPresence: (presence) => set({ gymPresence: presence }),
   selectedBranch: 'Mohali, Punjab',
   sidebarCollapsed: false,
-  deviceStatus: 'offline', // Default to offline unless we get a successful ping
+  deviceStatus: 'connected',
+  setDeviceStatus: (deviceStatus) => set({ deviceStatus }),
   isLoading: false,
 
   dashboardAnalytics: { totalMembers: 0, todayAttendance: 0, activeMembers: 0, revenue: 0 },
