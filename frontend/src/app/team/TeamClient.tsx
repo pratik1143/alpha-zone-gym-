@@ -17,7 +17,7 @@ const trainers = [
     role: 'Head Coach & Strength Specialist',
     specialties: ['Powerlifting', 'Strength Training', 'Muscle Building'],
     certs: ['Certified Personal Trainer', 'Strength & Conditioning Coach'],
-    bio: 'Experienced strength and conditioning coach with a passion for helping members achieve their fitness goals. Specializes in powerlifting, barbell training, and building raw strength.',
+    bio: 'Helping you build strength, improve fitness, and achieve lasting results with expert coaching.',
     photo: '/arshpreet.png',
     rating: '5.0'
   },
@@ -26,7 +26,7 @@ const trainers = [
     role: 'Fitness & Transformation Coach',
     specialties: ['Body Transformation', 'Weight Management', 'Functional Training'],
     certs: ['Certified Fitness Trainer', 'Nutrition Specialist'],
-    bio: 'Dedicated transformation coach focused on helping clients achieve sustainable results. Expert in creating personalized workout and diet plans tailored to individual goals.',
+    bio: 'Helping you transform your body, improve fitness, and achieve lasting results with expert coaching.',
     photo: '/lovely.png',
     rating: '4.9'
   },
@@ -35,7 +35,7 @@ const trainers = [
     role: 'Performance & Conditioning Coach',
     specialties: ['Athletic Performance', 'HIIT Training', 'Endurance Building'],
     certs: ['Certified Coach', 'Sports Performance Specialist'],
-    bio: 'High-energy performance coach specializing in athletic conditioning, endurance training, and high-intensity workouts. Helps members push past their limits every session.',
+    bio: 'Helping you stay fit, build strength, and achieve lasting results with expert coaching.',
     photo: '/saurav.png',
     rating: '5.0'
   },

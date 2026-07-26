@@ -129,6 +129,21 @@ interface GymStore {
   sidebarCollapsed: boolean;
   deviceStatus: 'connected' | 'syncing' | 'offline';
   setDeviceStatus: (status: 'connected' | 'syncing' | 'offline') => void;
+  
+  // Real Device Status Engine
+  internetStatus: 'online' | 'offline';
+  pythonStatus: 'connected' | 'offline';
+  firebaseStatus: 'connected' | 'offline';
+  esslStatus: 'connected' | 'connecting' | 'offline';
+  attendanceListenerStatus: 'listening' | 'stopped' | 'error';
+  gateStatus: 'enabled' | 'disabled';
+  isDeviceFullyOnline: boolean;
+  lastHeartbeat: string;
+  latencyMs: number;
+  eventsTodayCount: number;
+  latestPunchEvent: any | null;
+  checkRealDeviceHealth: () => Promise<void>;
+
   gymPresence: any[];
   setGymPresence: (presence: any[]) => void;
   isLoading: boolean;
@@ -178,6 +193,78 @@ export const useGymStore = create<GymStore>((set, get) => ({
   sidebarCollapsed: false,
   deviceStatus: 'connected',
   setDeviceStatus: (deviceStatus) => set({ deviceStatus }),
+
+  // Real Device Status Engine initial values
+  internetStatus: typeof navigator !== 'undefined' && navigator.onLine ? 'online' : 'offline',
+  pythonStatus: 'connected',
+  firebaseStatus: 'connected',
+  esslStatus: 'connected',
+  attendanceListenerStatus: 'listening',
+  gateStatus: 'enabled',
+  isDeviceFullyOnline: true,
+  lastHeartbeat: new Date().toISOString(),
+  latencyMs: 12,
+  eventsTodayCount: 0,
+  latestPunchEvent: null,
+
+  checkRealDeviceHealth: async () => {
+    const isNavOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+
+    if (!isNavOnline) {
+      set({
+        internetStatus: 'offline',
+        pythonStatus: 'offline',
+        esslStatus: 'offline',
+        attendanceListenerStatus: 'stopped',
+        gateStatus: 'disabled',
+        isDeviceFullyOnline: false,
+        deviceStatus: 'offline'
+      });
+      return;
+    }
+
+    try {
+      const res = await API.get('/python/status');
+      const data = res.data;
+
+      const pythonConnected = !!data.pythonConnected;
+      const esslConnected = !!data.esslConnected;
+      const listenerRunning = !!data.attendanceListenerRunning;
+      const lastHb = data.lastHeartbeat || new Date().toISOString();
+      const diffSec = data.diffSeconds !== undefined ? data.diffSeconds : 1;
+
+      const isFullyOnline =
+        isNavOnline &&
+        pythonConnected &&
+        esslConnected &&
+        listenerRunning &&
+        diffSec <= 10;
+
+      set({
+        internetStatus: 'online',
+        pythonStatus: pythonConnected ? 'connected' : 'offline',
+        firebaseStatus: 'connected',
+        esslStatus: esslConnected ? 'connected' : 'offline',
+        attendanceListenerStatus: listenerRunning ? 'listening' : 'stopped',
+        gateStatus: isFullyOnline ? 'enabled' : 'disabled',
+        isDeviceFullyOnline: isFullyOnline,
+        deviceStatus: isFullyOnline ? 'connected' : 'offline',
+        lastHeartbeat: lastHb,
+        latencyMs: data.latencyMs || 12
+      });
+    } catch (err) {
+      set({
+        internetStatus: 'online',
+        pythonStatus: 'offline',
+        esslStatus: 'offline',
+        attendanceListenerStatus: 'stopped',
+        gateStatus: 'disabled',
+        isDeviceFullyOnline: false,
+        deviceStatus: 'offline'
+      });
+    }
+  },
+
   isLoading: false,
 
   dashboardAnalytics: { totalMembers: 0, todayAttendance: 0, activeMembers: 0, revenue: 0 },
@@ -209,11 +296,13 @@ export const useGymStore = create<GymStore>((set, get) => ({
   fetchMembers: async () => {
     try {
       const res = await API.get('/members');
-      // Deduplicate by id to prevent React key conflicts
       const seen = new Set<string>();
       const unique = (res.data as any[]).filter(m => {
-        if (seen.has(m.id)) return false;
-        seen.add(m.id);
+        const key = (m.memberId && m.memberId !== 'AZ-2026-0000')
+          ? `mid_${m.memberId.trim()}`
+          : (m.phone ? `phone_${m.phone.replace(/\D/g, '')}` : `id_${m.id}`);
+        if (seen.has(key)) return false;
+        seen.add(key);
         return true;
       });
       set({ members: unique });

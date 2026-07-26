@@ -3,8 +3,10 @@
 
 export const membershipEngine = {
   calculateDaysLeft: (expiryDate: string | null | undefined): number => {
-    if (!expiryDate) return 0;
+    if (!expiryDate || expiryDate === 'N/A' || expiryDate === '—') return 999;
     const expiry = new Date(expiryDate);
+    if (isNaN(expiry.getTime())) return 999;
+
     const today = new Date();
     
     const eDay = new Date(expiry.getFullYear(), expiry.getMonth(), expiry.getDate());

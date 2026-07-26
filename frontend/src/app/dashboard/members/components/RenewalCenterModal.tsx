@@ -7,6 +7,7 @@ import { formatDaysLeft, getInitials, formatCurrency } from '@/lib/utils';
 import { membershipEngine } from '@/lib/engines/membershipEngine';
 import { useGymStore } from '@/store';
 import toast from 'react-hot-toast';
+import MemberAvatar from '../../components/MemberAvatar';
 
 interface RenewalCenterProps {
   isOpen: boolean;
@@ -147,13 +148,7 @@ export default function RenewalCenterModal({ isOpen, onClose, onOpenRenewWizard 
                         <tr key={m.id} className="hover:bg-white/40 transition-colors">
                           <td className="px-4 py-4">
                             <div className="flex items-center gap-3">
-                              {m.avatar ? (
-                                <img src={m.avatar} alt={m.name} className="w-9 h-9 rounded-full object-cover border border-slate-100" />
-                              ) : (
-                                <div className="w-9 h-9 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center font-bold">
-                                  {getInitials(m.name)}
-                                </div>
-                              )}
+                              <MemberAvatar member={m} className="w-9 h-9 rounded-full object-cover border border-slate-100" size={36} />
                               <div>
                                 <div className="font-bold text-slate-900">{m.name}</div>
                                 <div className="text-[10px] text-slate-400 font-mono mt-0.5">{m.phone}</div>

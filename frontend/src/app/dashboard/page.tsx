@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import { 
-  Users, Clock, Plus, ArrowUpRight, Activity, Unlock, Phone, MessageSquare, CheckCircle2, TrendingUp, DollarSign, ShieldAlert, Sparkles
+  Users, Clock, Plus, ArrowUpRight, Activity, Unlock, Phone, MessageSquare, CheckCircle2, TrendingUp, DollarSign, ShieldAlert, Sparkles, ClipboardList, AlertTriangle
 } from 'lucide-react';
 import { ComposedChart, Bar, Line, XAxis, ResponsiveContainer } from 'recharts';
 import { useGymStore } from '@/store';
@@ -10,10 +11,15 @@ import { getInitials, daysUntilExpiry } from '@/lib/utils';
 import toast from 'react-hot-toast';
 import { collection, addDoc, onSnapshot } from 'firebase/firestore';
 import { db as fDb, isFirebaseReady } from '@/lib/firebase';
+import API from '@/services/api';
+
+import { useFollowups } from '@/hooks/useFollowups';
 
 export default function DashboardPage() {
+  const router = useRouter();
+  const { pendingCount: followupsCount, todaysCount } = useFollowups();
   const {
-    members, attendance, gymPresence, fetchMembers, fetchAttendance, fetchPayments,
+    members, attendance, gymPresence, payments, fetchMembers, fetchAttendance, fetchPayments,
     triggerGateUnlock, dashboardAnalytics, fetchDashboardAnalytics, deviceStatus
   } = useGymStore();
 
@@ -25,6 +31,7 @@ export default function DashboardPage() {
   const [empAttendance, setEmpAttendance] = useState<any[]>([]);
   const [memberAttendance, setMemberAttendance] = useState<any[]>([]);
   const [realtimeMembers, setRealtimeMembers] = useState<any[]>([]);
+  const [enquiriesCount, setEnquiriesCount] = useState<number>(0);
 
   // Fallback sync with store
   useEffect(() => {
@@ -61,12 +68,32 @@ export default function DashboardPage() {
       console.warn("Firestore members listener error:", err);
     });
 
+    const unsubEnq = onSnapshot(collection(fDb, 'enquiries'), (snap) => {
+      setEnquiriesCount(snap.size);
+    }, (err) => {
+      console.warn("Enquiries listener notice:", err);
+    });
+
     return () => {
       unsubEmployees();
       unsubEmpAtt();
       unsubAtt();
       unsubMembers();
+      unsubEnq();
     };
+  }, []);
+
+  useEffect(() => {
+    const loadCounts = async () => {
+      try {
+        const enqRes = await API.get('/enquiries');
+        if (Array.isArray(enqRes.data)) setEnquiriesCount(enqRes.data.length);
+      } catch (_) {}
+    };
+
+    loadCounts();
+    const interval = setInterval(loadCounts, 5000);
+    return () => clearInterval(interval);
   }, []);
 
   // Load real data from backend API
@@ -278,6 +305,32 @@ export default function DashboardPage() {
 
   const { membersMissing, employeesMissing, needsFollowUp, critical } = getAbsenceStats();
 
+  const todaysCollection = useMemo(() => {
+    const todayStr = new Date().toISOString().split('T')[0];
+    const todayDateStr = new Date().toDateString();
+
+    let total = 0;
+
+    if (Array.isArray(payments) && payments.length > 0) {
+      payments.forEach((p: any) => {
+        if (p.isLegacyImport || p.isHistorical || p.isSample || p.isMock) return;
+        if (!p.isRealTimeToday) return;
+        const pDate = String(p.date || p.createdAt || p.paymentDate || '');
+        if (pDate.startsWith(todayStr) || (pDate && new Date(pDate).toDateString() === todayDateStr)) {
+          const val = Number(p.paid) || Number(p.amount) || 0;
+          total += val;
+        }
+      });
+    }
+
+    return total;
+  }, [payments]);
+
+  const expiringSoonCount = realtimeMembers.filter((m: any) => {
+    const left = daysUntilExpiry(m.expiryDate);
+    return left >= 0 && left <= 30;
+  }).length;
+
   return (
     <div className="flex flex-col gap-6 w-full text-slate-800 text-left">
       
@@ -308,53 +361,67 @@ export default function DashboardPage() {
 
       {viewMode === 'owner' ? (
         <>
-          {/* Owner Analytics Metrics Row */}
+          {/* Owner Analytics Metrics Row - 4 Clickable Action Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 animate-fade-in">
-            {/* Card 1: Total Members At Risk */}
-            <div className="bg-white border border-slate-100 p-5 rounded-[26px] shadow-sm flex items-center gap-4 hover:border-red-200 transition-all">
-              <div className="w-12 h-12 rounded-2xl bg-red-50 text-red-500 flex items-center justify-center shrink-0">
-                <ShieldAlert size={24} />
+            {/* Card 1: Today's Followups */}
+            <div 
+              onClick={() => router.push('/dashboard/follow-up')}
+              className="bg-white border border-slate-100 p-5 rounded-[26px] shadow-sm flex items-center gap-4 hover:border-amber-400 hover:shadow-md transition-all cursor-pointer group"
+            >
+              <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
+                <AlertTriangle size={24} />
               </div>
               <div>
-                <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">At-Risk Roster</span>
-                <h3 className="text-xl font-black text-slate-900 mt-0.5">{totalAtRiskCount} Members</h3>
-                <p className="text-[8px] text-slate-400 font-semibold mt-0.5">High/Critical Risk Levels</p>
+                <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">Today's Followups</span>
+                <h3 className="text-xl font-black text-slate-900 mt-0.5">{todaysCount} Follow-ups</h3>
+                <p className="text-[8px] text-amber-600 font-semibold mt-0.5">Click to view follow-up list →</p>
               </div>
             </div>
 
-            {/* Card 2: Expected Revenue Loss */}
-            <div className="bg-white border border-slate-100 p-5 rounded-[26px] shadow-sm flex items-center gap-4 hover:border-rose-200 transition-all">
-              <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-500 flex items-center justify-center shrink-0">
+            {/* Card 2: Total Enquiry */}
+            <div 
+              onClick={() => router.push('/dashboard/enquiries')}
+              className="bg-white border border-slate-100 p-5 rounded-[26px] shadow-sm flex items-center gap-4 hover:border-blue-400 hover:shadow-md transition-all cursor-pointer group"
+            >
+              <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
+                <ClipboardList size={24} />
+              </div>
+              <div>
+                <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">Total Enquiry</span>
+                <h3 className="text-xl font-black text-slate-900 mt-0.5">{enquiriesCount} Enquiries</h3>
+                <p className="text-[8px] text-blue-600 font-semibold mt-0.5">Click to view enquiry leads →</p>
+              </div>
+            </div>
+
+            {/* Card 3: Expiring Soon Clients */}
+            <div 
+              onClick={() => router.push('/dashboard/expired')}
+              className="bg-white border border-slate-100 p-5 rounded-[26px] shadow-sm flex items-center gap-4 hover:border-orange-400 hover:shadow-md transition-all cursor-pointer group"
+            >
+              <div className="w-12 h-12 rounded-2xl bg-orange-50 text-orange-600 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
+                <Clock size={24} />
+              </div>
+              <div>
+                <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">Expiring Soon Clients</span>
+                <h3 className="text-xl font-black text-slate-900 mt-0.5">{expiringSoonCount} Clients</h3>
+                <p className="text-[8px] text-orange-600 font-semibold mt-0.5">Click to view expiring list →</p>
+              </div>
+            </div>
+
+            {/* Card 4: Today's Collection */}
+            <div 
+              onClick={() => router.push('/dashboard/billing')}
+              className="bg-white border border-slate-100 p-5 rounded-[26px] shadow-sm flex items-center gap-4 hover:border-emerald-400 hover:shadow-md transition-all cursor-pointer group"
+            >
+              <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
                 <DollarSign size={24} />
               </div>
               <div>
-                <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">Expected Loss</span>
-                <h3 className="text-xl font-black text-rose-600 mt-0.5">₹{Math.round(expectedRevenueLoss).toLocaleString()}</h3>
-                <p className="text-[8px] text-slate-400 font-semibold mt-0.5">Weighted Churn Risk Value</p>
-              </div>
-            </div>
-
-            {/* Card 3: Expected Renewals */}
-            <div className="bg-white border border-slate-100 p-5 rounded-[26px] shadow-sm flex items-center gap-4 hover:border-emerald-200 transition-all">
-              <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-500 flex items-center justify-center shrink-0">
-                <TrendingUp size={24} />
-              </div>
-              <div>
-                <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">Expected Renewals</span>
-                <h3 className="text-xl font-black text-slate-900 mt-0.5">{Math.round(expectedRenewalsCount)} Members</h3>
-                <p className="text-[8px] text-slate-400 font-semibold mt-0.5">Forecasted Renewals Count</p>
-              </div>
-            </div>
-
-            {/* Card 4: Retention & Churn Rate */}
-            <div className="bg-white border border-slate-100 p-5 rounded-[26px] shadow-sm flex items-center gap-4 hover:border-blue-200 transition-all">
-              <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-500 flex items-center justify-center shrink-0">
-                <CheckCircle2 size={24} />
-              </div>
-              <div>
-                <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">Retention Rate</span>
-                <h3 className="text-xl font-black text-slate-900 mt-0.5">{retentionRate}%</h3>
-                <p className="text-[8px] text-slate-400 font-semibold mt-0.5">Churn Rate: {churnRate}%</p>
+                <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">Today's Collection</span>
+                <h3 className="text-xl font-black text-emerald-600 mt-0.5">
+                  ₹{todaysCollection.toLocaleString('en-IN')}
+                </h3>
+                <p className="text-[8px] text-emerald-600 font-semibold mt-0.5">Click to view billing ledger →</p>
               </div>
             </div>
           </div>

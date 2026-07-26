@@ -21,6 +21,8 @@ import { useCallback } from 'react';
 import AttendancePopupManager from './components/AttendancePopupManager';
 import EmployeePopupManager from './components/EmployeePopupManager';
 import NotificationCenter from './components/NotificationCenter';
+import UniversalSearchBar from './components/UniversalSearchBar';
+import { RealDeviceHeaderBadges, RealDeviceDisconnectBanner } from './components/RealDeviceStatusEngine';
 
 export default function DashboardLayout({
   children,
@@ -251,7 +253,7 @@ export default function DashboardLayout({
 
   return (
     <div 
-      className="min-h-screen h-screen w-full relative flex p-6 font-poppins text-slate-800 overflow-hidden"
+      className="min-h-screen h-screen w-full relative flex p-5 font-poppins text-slate-800 overflow-hidden"
       style={{
         backgroundImage: "linear-gradient(to bottom right, rgba(20, 20, 25, 0.4), rgba(10, 10, 12, 0.55)), url('/custom_gym_bg.png')",
         backgroundSize: 'cover',
@@ -290,7 +292,8 @@ export default function DashboardLayout({
             {/* Sidebar Navigation */}
             <nav className="space-y-1 pr-1">
               {[
-                { to: '/dashboard', label: 'Home', icon: HomeIcon },
+                { to: '/dashboard/overview', label: 'Overview', icon: LayoutDashboard },
+                { to: '/dashboard', label: 'Control Center', icon: HomeIcon },
                 { to: '/dashboard/members', label: 'Members', icon: Users },
                 { to: '/dashboard/employees', label: 'Employees', icon: Briefcase, badge: 'NEW' },
                 { to: '/dashboard/enquiries', label: 'Enquiries', icon: ClipboardList },
@@ -366,7 +369,15 @@ export default function DashboardLayout({
 
 
         {/* ─── Column 2: Middle Content Panel ─── */}
-        <main className="flex-grow min-w-0 flex flex-col gap-6 text-left overflow-y-auto h-full pt-2 pb-2 pr-1">
+        <main className="flex-grow min-w-0 flex flex-col gap-4 text-left overflow-y-auto h-full pt-2 pb-2 pr-1">
+          {/* Sticky Disconnect Banner */}
+          <RealDeviceDisconnectBanner />
+
+          {/* Universal Search Header & Independent Health Badges */}
+          <div className="w-full flex flex-col sm:flex-row items-center justify-between gap-4 shrink-0">
+            <UniversalSearchBar />
+            <RealDeviceHeaderBadges />
+          </div>
           {children}
         </main>
 

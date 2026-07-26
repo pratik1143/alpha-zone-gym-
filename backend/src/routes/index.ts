@@ -4,7 +4,7 @@ import whatsappRoutes from './whatsapp.routes';
 import { loginUser } from '../controllers/auth.controller';
 import { getMembers, createMember, updateMember, deleteMember, toggleFreezeMember, resetMemberPassword, sendMemberCredentials } from '../controllers/member.controller';
 import { getAttendanceFeed, createCheckIn, checkoutLog, triggerGateUnlock, getAccessLogs, getDoorStatus, getDashboardAnalyticsFeed, getAttendanceSummaryFeed } from '../controllers/attendance.controller';
-import { getDevices, createDevice, updateDevice, deleteDevice, getDeviceLogs, triggerSimulationTap, restartDevice, queueConnectionTest, queueReadUsers, queueReadAttendance, getTesterStatus, queueSyncFirebase, queueImportUsers, startEnrollFingerprint, deleteEnrollment, syncMemberToDevice, getEnrollmentStatus } from '../controllers/device.controller';
+import { getDevices, createDevice, updateDevice, deleteDevice, getDeviceLogs, triggerSimulationTap, restartDevice, queueConnectionTest, queueReadUsers, queueReadAttendance, getTesterStatus, queueSyncFirebase, queueImportUsers, startEnrollFingerprint, deleteEnrollment, syncMemberToDevice, getEnrollmentStatus, getPythonStatus, getLatestPunch } from '../controllers/device.controller';
 import { getInvoices, createInvoice, markPaymentPaid } from '../controllers/billing.controller';
 import { 
   getWorkoutPlan, saveWorkoutPlan, getDietPlan, saveDietPlan,
@@ -15,7 +15,7 @@ import {
 } from '../controllers/trainer.controller';
 import { getChatHistory, sendChatMessage } from '../controllers/chat.controller';
 import { getProgressTimeline, addProgressRecord, getReferralsByMember, createReferralInvitation } from '../controllers/progress.controller';
-import { nextBiometricId, migrateMembers, rollbackMigration, mapBiometricUser, getDeviceUsers, getMigrations, seedDeviceUsers, purgeCRMData } from '../controllers/migration.controller';
+import { nextBiometricId, migrateMembers, dryRunMigration, resumeMigration, rebuildAnalyticsAndIndex, auditVerification, rollbackMigration, mapBiometricUser, getDeviceUsers, getMigrations, seedDeviceUsers, purgeCRMData, repairImportedPhotos, repairImportedBilling } from '../controllers/migration.controller';
 import { getSmtpConfig, saveSmtpConfig, getTemplates, saveTemplatesController, sendTestEmail, getInvoicePreview } from '../controllers/automation.controller';
 import { getPlansController, createPlanController, updatePlanController, deletePlanController } from '../controllers/plan.controller';
 import { getEmployees, createEmployee, updateEmployee, deleteEmployee, getEmployeeAttendance } from '../controllers/employee.controller';
@@ -33,10 +33,20 @@ router.use(authenticateToken);
 router.use('/enquiries', enquiryRoutes);
 router.use('/whatsapp', whatsappRoutes);
 
+// System Health & Python Bridge Probes
+router.get('/python/status', getPythonStatus);
+router.get('/system/health', getPythonStatus);
+
 // Member CRUD & Actions
 router.get('/members', getMembers);
 router.get('/members/next-biometric-id', nextBiometricId);
 router.post('/members/migrate', migrateMembers);
+router.post('/members/dry-run-migration', dryRunMigration);
+router.post('/members/repair-photos', repairImportedPhotos);
+router.post('/members/repair-billing', repairImportedBilling);
+router.post('/members/resume-migration', resumeMigration);
+router.post('/members/rebuild-analytics', rebuildAnalyticsAndIndex);
+router.get('/members/audit-verification', auditVerification);
 router.post('/members/rollback-migration', rollbackMigration);
 router.post('/members/purge-all', purgeCRMData);
 router.post('/members/map-biometric', mapBiometricUser);
@@ -50,6 +60,7 @@ router.post('/members/:id/send-credentials', sendMemberCredentials);
 // Attendance & Hardware Controller Sync
 router.get('/analytics/dashboard', getDashboardAnalyticsFeed);
 router.get('/attendance', getAttendanceFeed);
+router.get('/attendance/latest-punch', getLatestPunch);
 router.get('/attendance/summary/:memberId', getAttendanceSummaryFeed);
 router.post('/attendance/checkin', createCheckIn);
 router.put('/attendance/checkout/:id', checkoutLog);
@@ -138,11 +149,19 @@ router.post('/memberships', createPlanController);
 router.put('/memberships/:id', updatePlanController);
 router.delete('/memberships/:id', deletePlanController);
 
+import { getFollowups, createFollowup, updateFollowup, deleteFollowup } from '../controllers/followup.controller';
+
 // Employee Management
 router.get('/employees', getEmployees);
 router.post('/employees', createEmployee);
 router.put('/employees/:id', updateEmployee);
 router.delete('/employees/:id', deleteEmployee);
 router.get('/employee-attendance', getEmployeeAttendance);
+
+// Followups Management
+router.get('/followups', getFollowups);
+router.post('/followups', createFollowup);
+router.put('/followups/:id', updateFollowup);
+router.delete('/followups/:id', deleteFollowup);
 
 export default router;

@@ -56,7 +56,7 @@ export default function MembersKPI() {
       activeToday: todayPunches.size, // Use actual punches today!
       expiring: expiringThisMonth,
       pt: ptMembers,
-      revenue: revenueThisMonth || 245800 // Fallback to mock if 0 for demo
+      revenue: revenueThisMonth
     };
   }, [members, dashboardAnalytics, attendance]);
 

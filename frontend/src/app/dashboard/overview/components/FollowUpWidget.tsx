@@ -7,40 +7,14 @@ import { motion } from "framer-motion";
 import { Phone, MessageCircle, CheckCircle, Clock, Calendar, MoreHorizontal } from "lucide-react";
 import toast from "react-hot-toast";
 
+import { useFollowups } from "@/hooks/useFollowups";
+
 export default function FollowUpWidget() {
-  const [followups, setFollowups] = useState<any[]>([]);
+  const { followups, completeFollowup } = useFollowups();
 
-  useEffect(() => {
-    if (!isFirebaseReady || !fDb) return;
-    
-    // Listen to real-time firestore 'followups' collection
-    const q = query(collection(fDb, 'followups'));
-    const unsub = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map(doc => {
-        const d = doc.data();
-        const date = d.scheduledDate || d.dueDate || d.date || d.createdAt?.split('T')[0] || '';
-        const time = d.scheduledTime || d.time || '09:00';
-        const status = d.status ? (d.status.charAt(0).toUpperCase() + d.status.slice(1).toLowerCase()) : 'Pending';
-        return {
-          id: doc.id,
-          ...d,
-          date,
-          time,
-          status,
-          notes: d.notes || d.description || 'No reason provided'
-        };
-      });
-      setFollowups(data);
-    }, (err) => {
-      console.warn("Firestore FollowUpWidget query error:", err);
-    });
-
-    return () => unsub();
-  }, []);
-
-  const markCompleted = async (id: string) => {
+  const markCompleted = async (id: string, memberId?: string, enquiryId?: string) => {
     try {
-      await updateDoc(doc(fDb, 'followups', id), { status: 'Completed', updatedAt: new Date().toISOString() });
+      await completeFollowup(id, "Completed via Overview Kanban Widget", "Connected", memberId, enquiryId);
       toast.success("Follow-up marked as completed");
     } catch (e) {
       toast.error("Error updating follow-up");
@@ -57,7 +31,9 @@ export default function FollowUpWidget() {
   };
 
   followups.forEach(f => {
-    const fDate = new Date(f.date + "T" + (f.time || "00:00"));
+    const dateStr = f.scheduledDate || f.dueDate || f.date || new Date().toISOString().split('T')[0];
+    const timeStr = f.scheduledTime || '10:00';
+    const fDate = new Date(`${dateStr}T${timeStr}`);
     
     if (f.status === 'Completed') {
       grouped.completed.push(f);

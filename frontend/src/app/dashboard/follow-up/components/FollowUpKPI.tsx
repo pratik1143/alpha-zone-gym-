@@ -44,7 +44,7 @@ export default function FollowUpKPI() {
       activeToday: dashboardAnalytics?.todayAttendance || 0,
       expiring: expiringThisMonth,
       pt: ptMembers,
-      revenue: revenueThisMonth || 245800 // Fallback to mock if 0 for demo
+      revenue: revenueThisMonth
     };
   }, [members, dashboardAnalytics]);
 

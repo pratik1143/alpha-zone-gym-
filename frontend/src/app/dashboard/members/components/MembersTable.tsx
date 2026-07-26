@@ -8,6 +8,7 @@ import { calculateRealAttendance, formatDaysLeft } from '@/lib/utils';
 import { useGymStore } from '@/store';
 import toast from 'react-hot-toast';
 import { useRouter } from 'next/navigation';
+import MemberAvatar from '../../components/MemberAvatar';
 interface MembersTableProps {
   members: any[];
   search: string;
@@ -172,11 +173,11 @@ export default function MembersTable({ members, search, setSearch, statusFilter,
                   <td className="px-4 py-4"><input type="checkbox" className="rounded border-slate-300" onClick={e => e.stopPropagation()} /></td>
                   <td className="px-4 py-4">
                     <div className="flex items-center gap-3">
-                      <img src={member.avatar || 'https://i.pravatar.cc/150?u=' + member.id} alt={member.name} className="w-10 h-10 rounded-full object-cover" />
+                      <MemberAvatar member={member} className="w-10 h-10 rounded-full object-cover" />
                       <div>
-                        <div className="font-bold text-slate-900">{member.name}</div>
-                        <div className="text-xs text-slate-500 flex items-center gap-1">
-                          {member.memberId || member.id}
+                        <div className="font-extrabold text-slate-900 text-sm">{member.name}</div>
+                        <div className="text-xs font-mono font-semibold text-slate-500 flex items-center gap-1 mt-0.5">
+                          {member.clientId || member.customId || (member.memberId && !member.memberId.startsWith('AZ-2026-') ? member.memberId : null) || member.biometricId || member.id}
                         </div>
                         <div className="text-[10px] text-slate-400 font-mono mt-0.5">{member.phone}</div>
                       </div>

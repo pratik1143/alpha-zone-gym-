@@ -1,15 +1,187 @@
 import { Request, Response } from 'express';
-import { getFirestoreDb } from '../firebase';
+import { getFirestoreDb, mockEnquiries, mockMembers, saveMockDb, db } from '../firebase';
+
+export const getEnquiries = async (req: Request, res: Response) => {
+  try {
+    const firestore = getFirestoreDb();
+    if (firestore) {
+      const snap = await firestore.collection('enquiries').orderBy('createdAt', 'desc').get();
+      const list = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      return res.json(list);
+    }
+    return res.json(mockEnquiries);
+  } catch (error: any) {
+    console.error('Error fetching enquiries:', error);
+    res.json(mockEnquiries);
+  }
+};
+
+export const createEnquiry = async (req: Request, res: Response) => {
+  try {
+    const firestore = getFirestoreDb();
+    const data = req.body;
+    const newEnquiry = {
+      name: data.name || `${data.firstName || ''} ${data.lastName || ''}`.trim() || 'New Lead',
+      firstName: data.firstName || '',
+      lastName: data.lastName || '',
+      phone: data.phone || data.contact || '',
+      altPhone: data.altPhone || data.altContact || '',
+      email: data.email || '',
+      gender: data.gender || 'Male',
+      address: data.address || '',
+      nextFollowUp: data.nextFollowUp || data.followupDate || new Date().toISOString().split('T')[0],
+      followUpTime: data.followUpTime || data.followupTime || '11:00',
+      trialDate: data.trialDate || '',
+      status: data.status || 'Pending',
+      assignedTo: data.assignedTo || data.attendedBy || 'Karan Verma',
+      priority: data.priority || 'Warm',
+      source: data.source || 'Walk-in',
+      interestedPlan: data.interestedPlan || data.inquiryFor || 'Monthly Access',
+      remarks: data.remarks || '',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    let createdId = `enq_${Date.now()}`;
+
+    if (firestore) {
+      const docRef = await firestore.collection('enquiries').add(newEnquiry);
+      createdId = docRef.id;
+    }
+
+    const savedRecord = { id: createdId, ...newEnquiry };
+    mockEnquiries.unshift(savedRecord);
+    saveMockDb();
+
+    res.status(201).json({
+      success: true,
+      message: 'Enquiry created successfully',
+      enquiry: savedRecord
+    });
+  } catch (error: any) {
+    console.error('Error creating enquiry:', error);
+    res.status(500).json({ error: error.message || 'Failed to create enquiry' });
+  }
+};
+
+export const updateEnquiry = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const updates = req.body;
+    updates.updatedAt = new Date().toISOString();
+
+    const firestore = getFirestoreDb();
+    if (firestore) {
+      await firestore.collection('enquiries').doc(id).set(updates, { merge: true });
+    }
+
+    const idx = mockEnquiries.findIndex(e => e.id === id);
+    if (idx !== -1) {
+      mockEnquiries[idx] = { ...mockEnquiries[idx], ...updates };
+      saveMockDb();
+    }
+
+    res.json({
+      success: true,
+      message: 'Enquiry updated successfully'
+    });
+  } catch (error: any) {
+    console.error('Error updating enquiry:', error);
+    res.status(500).json({ error: error.message || 'Failed to update enquiry' });
+  }
+};
+
+export const deleteEnquiry = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const firestore = getFirestoreDb();
+    if (firestore) {
+      await firestore.collection('enquiries').doc(id).delete();
+    }
+
+    const idx = mockEnquiries.findIndex(e => e.id === id);
+    if (idx !== -1) {
+      mockEnquiries.splice(idx, 1);
+      saveMockDb();
+    }
+
+    res.json({
+      success: true,
+      message: 'Enquiry deleted successfully'
+    });
+  } catch (error: any) {
+    console.error('Error deleting enquiry:', error);
+    res.status(500).json({ error: error.message || 'Failed to delete enquiry' });
+  }
+};
+
+export const convertEnquiryToMember = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { plan, price } = req.body;
+
+    const firestore = getFirestoreDb();
+    let enquiry: any = null;
+
+    if (firestore) {
+      const doc = await firestore.collection('enquiries').doc(id).get();
+      if (doc.exists) enquiry = { id: doc.id, ...doc.data() };
+    }
+
+    if (!enquiry) {
+      enquiry = mockEnquiries.find(e => e.id === id);
+    }
+
+    if (!enquiry) {
+      return res.status(404).json({ error: 'Enquiry not found' });
+    }
+
+    // Provision new member document
+    const newMemberData = {
+      name: enquiry.name || 'Converted Member',
+      phone: enquiry.phone || '',
+      email: enquiry.email || '',
+      gender: enquiry.gender || 'Male',
+      address: enquiry.address || '',
+      plan: plan || enquiry.interestedPlan || 'Monthly Access',
+      totalBilled: Number(price) || 3000,
+      totalPaid: Number(price) || 3000,
+      status: 'active',
+      joinDate: new Date().toISOString().split('T')[0],
+      expiryDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      source: enquiry.source || 'Enquiry Conversion',
+      notes: `Converted from Lead ${enquiry.id}`
+    };
+
+    const createdMember = await db.addMember(newMemberData);
+
+    // Update enquiry status to Converted
+    const updatePayload = { status: 'Converted', convertedMemberId: createdMember.id || createdMember.memberId, updatedAt: new Date().toISOString() };
+    if (firestore) {
+      await firestore.collection('enquiries').doc(id).set(updatePayload, { merge: true });
+    }
+    const idx = mockEnquiries.findIndex(e => e.id === id);
+    if (idx !== -1) {
+      mockEnquiries[idx] = { ...mockEnquiries[idx], ...updatePayload };
+      saveMockDb();
+    }
+
+    res.json({
+      success: true,
+      message: 'Enquiry successfully converted to active Member',
+      member: createdMember
+    });
+  } catch (error: any) {
+    console.error('Error converting enquiry:', error);
+    res.status(500).json({ error: error.message || 'Failed to convert enquiry' });
+  }
+};
 
 export const parseEnquiryPdf = async (req: Request, res: Response) => {
   try {
-    // Expect base64 pdf data or just a signal
     const { pdfBase64, filename } = req.body;
+    await new Promise(resolve => setTimeout(resolve, 1500));
 
-    // Simulated AI Processing Delay
-    await new Promise(resolve => setTimeout(resolve, 2000));
-
-    // Simulated AI response detecting fields in a standard gym brochure/enquiry form
     const detectedFields = [
       { id: 'name', label: 'Full Name', type: 'text', required: true, enabled: true },
       { id: 'phone', label: 'Mobile Number', type: 'tel', required: true, enabled: true },

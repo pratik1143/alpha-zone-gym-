@@ -82,7 +82,7 @@ export default function EnquiryGodLevelHub() {
   const [convertPlan, setConvertPlan] = useState('Monthly Standard');
   const [convertPrice, setConvertPrice] = useState('2500');
 
-  // ── REALTIME FIRESTORE LISTENER WITH SAFE API FALLBACK ────────────
+  // ── REALTIME FIRESTORE LISTENER WITH API BACKEND SYNC ──────────────
   useEffect(() => {
     setLoading(true);
     let isMounted = true;
@@ -91,77 +91,15 @@ export default function EnquiryGodLevelHub() {
       try {
         const res = await API.get('/enquiries');
         if (isMounted && res.data) {
-          setEnquiries(res.data);
+          setEnquiries(Array.isArray(res.data) ? res.data : []);
           setLoading(false);
           return;
         }
       } catch (err) {
         console.warn('API fallback for enquiries failed:', err);
       }
-      // Demo mock fallback if Firestore & API both unavailable
-      if (isMounted && enquiries.length === 0) {
-        setEnquiries([
-          {
-            id: 'enq_101',
-            name: 'Rohit Sharma',
-            firstName: 'Rohit',
-            lastName: 'Sharma',
-            phone: '9876543210',
-            email: 'rohit.s@gmail.com',
-            gender: 'Male',
-            address: 'Phase 7, Mohali',
-            nextFollowUp: '2026-07-24',
-            followUpTime: '14:00',
-            trialDate: '2026-07-23',
-            status: 'Trial Scheduled',
-            assignedTo: 'Karan Verma',
-            priority: 'Hot',
-            source: 'Instagram',
-            interestedPlan: 'Annual VIP',
-            remarks: 'Wants personal training + diet consultation.',
-            createdAt: new Date().toISOString()
-          },
-          {
-            id: 'enq_102',
-            name: 'Ananya Roy',
-            firstName: 'Ananya',
-            lastName: 'Roy',
-            phone: '9812345678',
-            email: 'ananya.roy@yahoo.com',
-            gender: 'Female',
-            address: 'Sector 68, Mohali',
-            nextFollowUp: '2026-07-25',
-            followUpTime: '11:30',
-            trialDate: '',
-            status: 'Pending',
-            assignedTo: 'Sneha Kapoor',
-            priority: 'Warm',
-            source: 'Walk-in',
-            interestedPlan: 'Quarterly Prime',
-            remarks: 'Inquired about ladies fitness batch.',
-            createdAt: new Date().toISOString()
-          },
-          {
-            id: 'enq_103',
-            name: 'Vikram Singh',
-            firstName: 'Vikram',
-            lastName: 'Singh',
-            phone: '9988776655',
-            email: 'vikram.v@gmail.com',
-            gender: 'Male',
-            address: 'Aerocity, Mohali',
-            nextFollowUp: '2026-07-22',
-            followUpTime: '17:00',
-            trialDate: '2026-07-22',
-            status: 'Contacted',
-            assignedTo: 'Dev Rana',
-            priority: 'Hot',
-            source: 'Referral',
-            interestedPlan: 'Monthly Standard',
-            remarks: 'Friend of Arjun Mehta. Excited for trial today.',
-            createdAt: new Date().toISOString()
-          }
-        ]);
+      if (isMounted) {
+        setEnquiries([]);
         setLoading(false);
       }
     };
@@ -248,11 +186,17 @@ export default function EnquiryGodLevelHub() {
     try {
       let docId = 'enq_' + Date.now();
       try {
-        const docRef = await addDoc(collection(db, 'enquiries'), newLeadPayload);
-        docId = docRef.id;
+        const res = await API.post('/enquiries', newLeadPayload);
+        if (res.data?.enquiry?.id) {
+          docId = res.data.enquiry.id;
+        }
       } catch (err) {
-        console.warn('Saved locally due to offline/permission:', err);
+        console.warn('API lead creation notice:', err);
       }
+
+      try {
+        await addDoc(collection(db, 'enquiries'), { id: docId, ...newLeadPayload });
+      } catch (err) {}
 
       setEnquiries(prev => [{ id: docId, ...newLeadPayload }, ...prev]);
       toast.success('🎉 New Enquiry Lead Captured Successfully!');
@@ -267,9 +211,12 @@ export default function EnquiryGodLevelHub() {
   // Update Status
   const handleUpdateStatus = async (id: string, newStatus: Enquiry['status']) => {
     try {
-      await updateDoc(doc(db, 'enquiries', id), { status: newStatus });
-      toast.success(`Updated status to ${newStatus}`);
+      await API.put(`/enquiries/${id}`, { status: newStatus });
     } catch (_) {}
+    try {
+      await updateDoc(doc(db, 'enquiries', id), { status: newStatus });
+    } catch (_) {}
+    toast.success(`Updated status to ${newStatus}`);
     setEnquiries(prev => prev.map(item => item.id === id ? { ...item, status: newStatus } : item));
     if (selectedEnquiry?.id === id) {
       setSelectedEnquiry(prev => prev ? { ...prev, status: newStatus } : null);
@@ -279,6 +226,9 @@ export default function EnquiryGodLevelHub() {
   // Delete Enquiry
   const handleDeleteEnquiry = async (id: string) => {
     if (!window.confirm('Are you sure you want to delete this enquiry record?')) return;
+    try {
+      await API.delete(`/enquiries/${id}`);
+    } catch (_) {}
     try {
       await deleteDoc(doc(db, 'enquiries', id));
     } catch (_) {}
@@ -292,6 +242,13 @@ export default function EnquiryGodLevelHub() {
     try {
       const today = new Date().toISOString().split('T')[0];
       const expiry = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+      try {
+        await API.post(`/enquiries/${enq.id}/convert`, {
+          plan: convertPlan,
+          price: convertPrice
+        });
+      } catch (_) {}
 
       await addMember({
         name: enq.name,
@@ -314,6 +271,7 @@ export default function EnquiryGodLevelHub() {
       confetti({ particleCount: 120, spread: 90, origin: { y: 0.5 } });
       toast.success(`🚀 ${enq.name} successfully converted to Active Member!`);
       setShowConvertModal(null);
+      await fetchMembers();
     } catch (err: any) {
       toast.error('Conversion failed: ' + err.message);
     }

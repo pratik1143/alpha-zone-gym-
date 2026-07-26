@@ -1,6 +1,6 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import { getFirestore, setLogLevel } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 
 const firebaseConfig = {
@@ -18,6 +18,23 @@ const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 const auth = getAuth(app);
 const db = getFirestore(app);
 const storage = getStorage(app);
+
+// Suppress Firestore internal connection warning log noise
+try {
+  setLogLevel('silent');
+} catch (_) {}
+
+if (typeof window !== 'undefined') {
+  const originalError = console.error;
+  console.error = (...args: any[]) => {
+    const msg = String(args[0] || '');
+    if (msg.includes('Could not reach Cloud Firestore backend') || msg.includes('code=unavailable')) {
+      console.warn('[Firestore Offline Mode Warning]', ...args);
+      return;
+    }
+    originalError.apply(console, args);
+  };
+}
 
 const isFirebaseReady = true;
 

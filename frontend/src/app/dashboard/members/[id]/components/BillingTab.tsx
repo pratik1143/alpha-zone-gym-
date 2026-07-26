@@ -11,26 +11,51 @@ export default function BillingTab({ member }: { member: any }) {
   const [loading, setLoading] = useState(true);
   const [markingId, setMarkingId] = useState<string | null>(null);
 
-  // ── Real-time listener for this member's invoices ────────────────────
+  // ── Real-time listener & billing history fallback ────────────────────
   useEffect(() => {
-    if (!member?.id) return;
+    if (!member) return;
     setLoading(true);
 
-    // Listen to 'payments' collection filtered by memberId
-    const q = query(collection(db, 'payments'), where('memberId', '==', member.id));
+    const fallbackInvoices = Array.isArray(member.billingHistory) && member.billingHistory.length > 0
+      ? member.billingHistory
+      : (Array.isArray(member.payments) && member.payments.length > 0 ? member.payments : []);
+
+    const docId = member.id || member.uid || member.memberId;
+    const q = query(collection(db, 'payments'), where('memberId', '==', docId));
+    
     const unsub = onSnapshot(q, (snap) => {
-      const data = snap.docs
-        .map(d => ({ id: d.id, ...d.data() }))
-        .sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
-      setInvoices(data);
+      const liveData = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const combinedMap = new Map<string, any>();
+
+      fallbackInvoices.forEach((inv: any, idx: number) => {
+        const key = inv.invoiceNumber || inv.invoice || inv.id || `inv_${idx}`;
+        combinedMap.set(key, inv);
+      });
+
+      liveData.forEach((inv: any) => {
+        const key = inv.invoiceNumber || inv.invoice || inv.id;
+        combinedMap.set(key, inv);
+      });
+
+      const sorted = Array.from(combinedMap.values()).sort((a: any, b: any) =>
+        new Date(b.date || b.createdAt || b.startDate || 0).getTime() -
+        new Date(a.date || a.createdAt || a.startDate || 0).getTime()
+      );
+
+      setInvoices(sorted);
+      setLoading(false);
+    }, (err) => {
+      console.warn("Firestore payments listener notice:", err);
+      setInvoices(fallbackInvoices);
       setLoading(false);
     });
+
     return () => unsub();
-  }, [member?.id]);
+  }, [member]);
 
   // ── Derived totals ───────────────────────────────────────────────────
-  const totalBilled    = invoices.reduce((s, inv) => s + (Number(inv.amount) || 0), 0);
-  const totalPaid      = invoices.reduce((s, inv) => s + (Number(inv.paid) || 0), 0);
+  const totalBilled    = invoices.reduce((s, inv) => s + (Number(inv.amount) || Number(inv.total) || 0), 0) || Number(member?.totalBilled) || Number(member?.lifetimeRevenue) || 0;
+  const totalPaid      = invoices.reduce((s, inv) => s + (Number(inv.paid) || Number(inv.amount) || 0), 0) || Number(member?.totalPaid) || Number(member?.lifetimeRevenue) || totalBilled;
   const totalOutstanding = paymentEngine.calculateOutstandingAmount(totalBilled, totalPaid);
 
   // ── Mark invoice as paid ─────────────────────────────────────────────
@@ -122,16 +147,17 @@ export default function BillingTab({ member }: { member: any }) {
 
         {invoices.length > 0 && (
           <div className="divide-y divide-slate-50">
-            {invoices.map((inv) => {
+            {invoices.map((inv, idx) => {
               const total       = Number(inv.amount) || 0;   // no GST
               const paidAmt     = Number(inv.paid) || 0;
               const outstanding = paymentEngine.calculateOutstandingAmount(total, paidAmt);
               const isPaid      = inv.status === 'paid' || outstanding <= 0;
               const isPartial   = !isPaid && paidAmt > 0;
               const date        = inv.date ? new Date(inv.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+              const itemKey     = inv.id || inv.invoiceNumber || inv.invoice || `inv_${idx}_${inv.date || ''}_${total}`;
 
               return (
-                <div key={inv.id} className="px-5 py-4 hover:bg-slate-50/70 transition-colors">
+                <div key={itemKey} className="px-5 py-4 hover:bg-slate-50/70 transition-colors">
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">

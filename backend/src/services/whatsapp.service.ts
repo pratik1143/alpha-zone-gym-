@@ -28,8 +28,21 @@ class WhatsAppService {
   }
 
   public async initClient() {
-    if (this.client) {
-      console.log('[WhatsApp] Client already exists. Skipping initialization.');
+    if (this.client && this.status === 'Connecting') {
+      console.log('[WhatsApp] Initialization already in progress.');
+      return;
+    }
+
+    if (this.client && this.status !== 'Connected') {
+      console.log('[WhatsApp] Re-initializing disconnected client instance...');
+      try {
+        await this.client.destroy();
+      } catch (e) {}
+      this.client = null;
+    }
+
+    if (this.client && this.status === 'Connected') {
+      console.log('[WhatsApp] Client is already connected.');
       return;
     }
 
@@ -69,7 +82,7 @@ class WhatsAppService {
     this.client.on('qr', async (qr) => {
       console.log('[WhatsApp] QR Code received. Generating data URL...');
       try {
-        const qrDataUrl = await QRCode.toDataURL(qr);
+        const qrDataUrl = await QRCode.toDataURL(qr, { margin: 2, scale: 8 });
         this.qrCode = qrDataUrl;
         this.status = 'Disconnected';
         this.updateStatusInFirebase();

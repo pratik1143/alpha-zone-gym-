@@ -88,33 +88,37 @@ export default function InvoiceBuilderModal({ isOpen, type, onClose, members }: 
 
     setIsSubmitting(true);
     try {
-      const member = members.find((m: any) => m.id === memberId);
+      const member = members.find((m: any) => m.id === memberId || m.memberId === memberId);
       const invoiceNumber = `INV-${Date.now().toString().slice(-6)}`;
+      const todayStr = new Date().toISOString().split('T')[0];
 
       const payload = {
-        invoice:     invoiceNumber,
-        memberId:    memberId,
-        memberName:  member?.name || 'Unknown',
-        memberPhone: member?.phone || '',
-        plan:        description || selectedPlan?.label || 'Membership',
-        amount:      base,
-        gst:         Math.round(gst),
-        total:       Math.round(total),
-        paid:        Math.round(paid),
-        pendingAmount: Math.round(outstanding),
-        status:      status.toLowerCase(),
-        method:      notPaid ? 'Not Paid' : paymentMode,
-        date:        new Date().toISOString(),
+        invoice:         invoiceNumber,
+        memberId:        memberId,
+        memberName:      member?.name || 'Member',
+        memberPhone:     member?.phone || '',
+        plan:            description || selectedPlan?.label || 'Membership',
+        amount:          base,
+        gst:             0,
+        total:           Math.round(total),
+        paid:            Math.round(paid),
+        pendingAmount:   Math.round(outstanding),
+        status:          notPaid ? 'pending' : 'paid',
+        method:          notPaid ? 'Not Paid' : paymentMode,
+        date:            todayStr,
+        isRealTimeToday: true,
+        createdAt:       new Date().toISOString(),
       };
 
-      await addDoc(collection(db, 'payments'), payload);
-      await addDoc(collection(db, 'invoices'), payload);
+      try {
+        const { default: API } = await import('@/services/api');
+        await API.post('/billing', payload);
+      } catch (_) {
+        await addDoc(collection(db, 'payments'), payload);
+        await addDoc(collection(db, 'invoices'), payload);
+      }
 
       // ── SYNC MEMBER DOCUMENT ──────────────────────────────────────
-      // Update the member's payment fields so profile, member list,
-      // and dashboard all reflect the new bill instantly.
-      const { updateDoc, doc } = await import('firebase/firestore');
-      
       let memberUpdates: any = {
         invoiceAmount:  base,
         invoiceGst:     0,
@@ -128,20 +132,29 @@ export default function InvoiceBuilderModal({ isOpen, type, onClose, members }: 
 
       // Auto-renew member if a plan is selected
       if (type !== 'POS' && selectedPlan) {
-        let currentExpiry = member.expiryDate ? new Date(member.expiryDate) : new Date();
+        let currentExpiry = member?.expiryDate ? new Date(member.expiryDate) : new Date();
         const now = new Date();
-        // If expired, start from today. If active, extend from current expiry.
         let startDate = currentExpiry < now ? now : currentExpiry;
         const newExpiry = new Date(startDate.getTime() + selectedPlan.months * 30 * 24 * 60 * 60 * 1000);
         
         memberUpdates.plan = selectedPlan.label;
         memberUpdates.expiryDate = newExpiry.toISOString().split('T')[0];
-        memberUpdates.status = 'active'; // activate automatically
+        memberUpdates.status = 'active';
       }
 
-      await updateDoc(doc(db, 'members', memberId), memberUpdates);
+      try {
+        const { updateDoc, doc } = await import('firebase/firestore');
+        await updateDoc(doc(db, 'members', memberId), memberUpdates);
+      } catch (_) {}
 
-      toast.success(`✅ Invoice ${invoiceNumber} generated for ${member?.name}!`);
+      // Refresh store state so Overview & Billing update in real-time
+      try {
+        const { useGymStore } = await import('@/store');
+        useGymStore.getState().fetchMembers();
+        useGymStore.getState().fetchPayments();
+      } catch (_) {}
+
+      toast.success(`Payment of ₹${Math.round(paid).toLocaleString('en-IN')} received via ${paymentMode}! Invoice ${invoiceNumber} issued for ${member?.name}! 📄✨`);
       onClose();
     } catch (err: any) {
       toast.error('Failed: ' + err.message);

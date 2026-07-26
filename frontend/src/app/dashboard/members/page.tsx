@@ -38,7 +38,9 @@ import {
   Star,
   Trophy,
   Dumbbell,
+  Zap
 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useGymStore } from "@/store";
 import {
   formatDate,
@@ -115,6 +117,7 @@ const getPlanTheme = (planName: string) => {
 };
 
 export default function MembersPage() {
+  const router = useRouter();
   const {
     members: rawMembers,
     fetchMembers,
@@ -128,7 +131,17 @@ export default function MembersPage() {
   } = useGymStore();
 
   const members = useMemo(() => {
-    return rawMembers.map((m: any) => {
+    const seenKeys = new Set<string>();
+    const uniqueRaw = (rawMembers || []).filter((m: any) => {
+      const key = (m.memberId && m.memberId !== 'AZ-2026-0000')
+        ? `mid_${m.memberId.trim()}`
+        : (m.phone ? `phone_${m.phone.replace(/\D/g, '')}` : `id_${m.id}`);
+      if (seenKeys.has(key)) return false;
+      seenKeys.add(key);
+      return true;
+    });
+
+    return uniqueRaw.map((m: any) => {
       const daysLeft = membershipEngine.calculateDaysLeft(m.expiryDate);
       let derivedStatus = membershipEngine.calculateMembershipStatus(daysLeft, m.status).toLowerCase();
       // Merge expiring into active per user request
@@ -197,6 +210,9 @@ export default function MembersPage() {
 
   useEffect(() => {
     fetchMembers();
+    if (typeof window !== 'undefined' && window.location.search.includes('action=add')) {
+      setShowAddModal(true);
+    }
   }, [fetchMembers]);
 
   // ── Biometric Enrollment State ──────────────────────────────────────────────
@@ -888,6 +904,12 @@ export default function MembersPage() {
           </p>
         </div>
         <div className="flex gap-2">
+          <button
+            onClick={() => router.push('/dashboard/import')}
+            className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-[#d4ff00] rounded-xl text-sm font-bold hover:bg-black transition-all shadow-sm cursor-pointer border-none"
+          >
+            <Zap size={16} /> Auto Map Legacy Data
+          </button>
           <button
             onClick={handleExportCSV}
             className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 hover:bg-slate-50 transition-colors shadow-sm"

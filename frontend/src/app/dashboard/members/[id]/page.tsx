@@ -16,6 +16,7 @@ import { paymentEngine } from '@/lib/engines/paymentEngine';
 import { calculateRealAttendance } from '@/lib/utils';
 import API from '@/services/api';
 import { useGymStore } from '@/store';
+import MemberAvatar from '../../components/MemberAvatar';
 
 // Tabs
 import ProfileTab from './components/ProfileTab';
@@ -190,13 +191,7 @@ export default function ClientProfileSystem() {
               <ArrowLeft size={14} /> Back
             </button>
             <div className="w-32 h-32 rounded-3xl bg-slate-100 border-[4px] border-white shadow-xl overflow-hidden relative group cursor-pointer flex-shrink-0">
-              {member.avatarUrl || member.avatar ? (
-                <img src={member.avatarUrl || member.avatar} alt="Profile" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center text-4xl font-black text-slate-300">
-                  {(member.name || 'Member').charAt(0).toUpperCase()}
-                </div>
-              )}
+              <MemberAvatar member={member} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" size={128} />
               <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                 <Camera className="text-white" size={24} />
               </div>

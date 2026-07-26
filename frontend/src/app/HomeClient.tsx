@@ -10,7 +10,7 @@ import {
   Users, Flame, Target, Droplet, CheckCircle2,
   Home as HomeIcon, QrCode, BarChart2,
   Clock, Calendar, Award, Phone, Mail, MessageSquare,
-  Menu, ChevronLeft, ChevronRight, Play, ExternalLink,
+  Menu, ChevronLeft, ChevronRight, ChevronDown, Play, ExternalLink,
   Heart
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer } from 'recharts';
@@ -84,6 +84,31 @@ export default function AlphaZoneLandingPage() {
     { name: "Karan V.", role: "Powerlifter", review: "The strength equipment at Alpha Zone is incredible. Rogue bars, calibrated plates, and coaches who know how to program for performance. Transformed my squat from 140kg to 210kg in 10 months.", rating: 5 },
     { name: "Sneha R.", role: "Athletic Conditioning", review: "Reception staff are super friendly, and the AI mobile app simulator is amazing for tracking workouts and hydration streak inside. Everything feels clean, premium, and extremely motivating.", rating: 5 },
     { name: "Vikram K.", role: "CrossFit enthusiast", review: "Best gym environment in Sohana! The weekly CrossFit and group conditioning classes push you beyond limits. Plus, no locked contracts makes it completely pressure-free.", rating: 5 }
+  ];
+
+  // FAQ state & data
+  const [openFaq, setOpenFaq] = useState<number | null>(null);
+  const homeFaqs = [
+    { 
+      q: 'Do you offer a free trial session?', 
+      a: 'Yes! We offer a free trial session so you can explore our gym, meet our trainers, and experience our facilities before joining.' 
+    },
+    { 
+      q: 'What membership plans do you offer?', 
+      a: 'We offer flexible monthly, quarterly, half-yearly, and annual membership plans to suit your fitness goals and budget.' 
+    },
+    { 
+      q: 'Do you provide personal training?', 
+      a: 'Yes, our certified trainers provide one-on-one personal training with customised workout and nutrition guidance.' 
+    },
+    { 
+      q: 'What facilities are available at Alpha Zone Gym?', 
+      a: 'Our gym features modern equipment, strength & cardio zones, functional training, CrossFit, HIIT, and a supportive fitness environment.' 
+    },
+    { 
+      q: 'How can I join Alpha Zone Gym?', 
+      a: 'Simply visit our gym, call us, or contact us on WhatsApp (+91 97793 33155) to choose your membership plan and start your fitness journey today.' 
+    }
   ];
 
   useEffect(() => {
@@ -702,21 +727,21 @@ export default function AlphaZoneLandingPage() {
               { 
                 name: "Arshpreet Singh", 
                 role: "COACH", 
-                desc: "Experienced strength & conditioning specialist focused on powerlifting, heavy compound lifts, and personalized strength programming.",
+                desc: "Helping you build strength, improve fitness, and achieve lasting results with expert coaching.",
                 cert: "CERTIFIED COACH",
                 img: "/arshpreet.png"
               },
               { 
                 name: "Lovely Chaudhary", 
                 role: "COACH", 
-                desc: "Dedicated transformation & functional fitness coach. Specializes in body weight management, functional mobility, and athletic growth.",
+                desc: "Helping you transform your body, improve fitness, and achieve lasting results with expert coaching.",
                 cert: "CERTIFIED COACH",
                 img: "/lovely.png"
               },
               { 
                 name: "Sourav Kumar", 
                 role: "COACH", 
-                desc: "High-performance conditioning coach with expertise in athletic training, metabolic endurance routines, and high-intensity workouts.",
+                desc: "Helping you stay fit, build strength, and achieve lasting results with expert coaching.",
                 cert: "CERTIFIED COACH",
                 img: "/saurav.png"
               }
@@ -1202,6 +1227,43 @@ export default function AlphaZoneLandingPage() {
               ))}
             </motion.div>
 
+          </div>
+        </div>
+      </section>
+
+      {/* ─── FAQ Section ─── */}
+      <section id="faq" className="py-24 bg-[#08080a] text-white relative z-20 border-t border-white/5 font-poppins">
+        <div className="max-w-4xl mx-auto px-6 space-y-12">
+          <div className="text-center space-y-4">
+            <span className="text-xs font-black text-[#d4ff00] tracking-widest uppercase text-neon-glow">FREQUENTLY ASKED QUESTIONS</span>
+            <h2 className="text-3xl md:text-5xl font-black uppercase tracking-tighter">Everything You Need To Know</h2>
+            <p className="text-slate-400 text-sm max-w-xl mx-auto">Have questions before joining? Here are answers to the most common queries about Alpha Zone Gym.</p>
+            <div className="w-20 h-1 bg-[#d4ff00] mx-auto rounded-full" />
+          </div>
+          <div className="space-y-4">
+            {homeFaqs.map((faq, i) => (
+              <motion.div 
+                key={i} 
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.5, delay: i * 0.08 }}
+                className="bg-slate-900/50 border border-white/5 rounded-2xl overflow-hidden hover:border-white/10 transition-colors"
+              >
+                <button 
+                  onClick={() => setOpenFaq(openFaq === i ? null : i)} 
+                  className="w-full p-6 text-left flex items-center justify-between gap-4 cursor-pointer bg-transparent border-none"
+                >
+                  <span className="font-bold text-white text-base md:text-lg">{faq.q}</span>
+                  <ChevronDown size={20} className={`text-[#d4ff00] shrink-0 transition-transform duration-300 ${openFaq === i ? 'rotate-180' : ''}`} />
+                </button>
+                {openFaq === i && (
+                  <div className="px-6 pb-6 text-slate-300 text-sm md:text-base leading-relaxed font-poppins border-t border-white/5 pt-4">
+                    {faq.a}
+                  </div>
+                )}
+              </motion.div>
+            ))}
           </div>
         </div>
       </section>

@@ -1,69 +1,140 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
-import { CreditCard, DollarSign, Receipt, AlertCircle, Plus, Download, Search, TrendingUp, X, RefreshCw, Printer, Mail, MessageSquare, Share2 } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { 
+  CreditCard, DollarSign, Receipt, AlertCircle, Plus, Download, Search, 
+  TrendingUp, X, RefreshCw, Printer, Mail, MessageSquare, Share2, 
+  CheckCircle2, Phone, Calendar, ArrowUpRight, Shield, Filter, Check, Wallet, Smartphone, Banknote
+} from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { db } from '@/lib/firebase';
 import { collection, onSnapshot, orderBy, query, updateDoc, doc } from 'firebase/firestore';
 import { paymentEngine } from '@/lib/engines/paymentEngine';
-import { formatCurrency, formatDate, getInitials, getMembershipName } from '@/lib/utils';
+import { formatCurrency, formatDate, getInitials } from '@/lib/utils';
 import { useGymStore } from '@/store';
 import toast from 'react-hot-toast';
 import InvoiceBuilderModal from './components/InvoiceBuilderModal';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-const payMethods: Record<string, { icon: string; color: string; bg: string }> = {
-  UPI:           { icon: '📱', color: '#7c3aed', bg: 'rgba(124,58,237,0.08)' },
-  Cash:          { icon: '💵', color: '#16a34a', bg: 'rgba(22,163,74,0.08)'  },
-  Razorpay:      { icon: '💳', color: '#2563eb', bg: 'rgba(37,99,235,0.08)'  },
-  'Credit Card': { icon: '💳', color: '#dc2626', bg: 'rgba(220,38,38,0.08)'  },
-  PhonePe:       { icon: '📲', color: '#5b21b6', bg: 'rgba(91,33,182,0.08)'  },
+const payMethods: Record<string, { icon: any; label: string; color: string; bg: string }> = {
+  UPI:           { icon: Smartphone, label: 'UPI / QR', color: '#7c3aed', bg: 'rgba(124,58,237,0.1)' },
+  Cash:          { icon: Banknote,   label: 'Cash',     color: '#16a34a', bg: 'rgba(22,163,74,0.1)'  },
+  Card:          { icon: CreditCard, label: 'Card',     color: '#2563eb', bg: 'rgba(37,99,235,0.1)'  },
+  NetBanking:    { icon: Wallet,     label: 'Net Bank', color: '#0284c7', bg: 'rgba(2,132,199,0.1)'  },
 };
 
-function StatCard({ label, value, icon: Icon, color, sub }: any) {
-  return (
-    <div className="bg-white rounded-[20px] p-5 border border-slate-100"
-      style={{ boxShadow: '0 2px 12px rgba(15,23,42,0.06)' }}>
-      <div className="flex items-center justify-between mb-4">
-        <div className="w-10 h-10 rounded-2xl flex items-center justify-center" style={{ background: `${color}14` }}>
-          <Icon size={18} style={{ color }} />
-        </div>
-        <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">{sub || 'Real-Time'}</span>
-      </div>
-      <div className="text-[26px] font-black text-slate-900 leading-none mb-1">{value}</div>
-      <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{label}</div>
-    </div>
-  );
-}
+const fadeUp = (delay = 0) => ({
+  initial: { opacity: 0, y: 16 },
+  animate: { opacity: 1, y: 0 },
+  transition: { duration: 0.35, delay, ease: "easeOut" as const },
+});
 
 export default function BillingPage() {
-  const { members } = useGymStore();
+  const { members, fetchPayments: refreshStorePayments } = useGymStore();
   const [payments, setPayments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [selectedInvoice, setSelectedInvoice] = useState<any | null>(null);
-  const [showBillingDropdown, setShowBillingDropdown] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<'all' | 'paid' | 'pending'>('all');
+  const [methodFilter, setMethodFilter] = useState<string>('all');
+  const [selectedReceipt, setSelectedReceipt] = useState<any | null>(null);
   const [showInvoiceModal, setShowInvoiceModal] = useState<string | null>(null);
-
   const [markingPaid, setMarkingPaid] = useState<string | null>(null);
 
-  // Real-time Firestore listener
+  const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
+
+  // Real-time Firestore listener with member billing history fallback
   useEffect(() => {
     setLoading(true);
+
+    const getFallbackPayments = () => {
+      const allInvoices: any[] = [];
+      members.forEach((m: any) => {
+        const history = Array.isArray(m.billingHistory) && m.billingHistory.length > 0
+          ? m.billingHistory
+          : (Array.isArray(m.payments) && m.payments.length > 0 ? m.payments : []);
+
+        history.forEach((inv: any, idx: number) => {
+          allInvoices.push({
+            id: inv.id || `pay_${m.id || m.memberId}_${idx}`,
+            invoice: inv.invoice || inv.invoiceNumber || `INV-${String(idx + 1).padStart(6, '0')}`,
+            memberId: m.id || m.memberId,
+            memberName: m.name || 'Member',
+            memberPhone: m.phone || '',
+            plan: inv.plan || inv.package || m.plan || 'Monthly Access',
+            amount: Number(inv.amount) || Number(m.totalBilled) || 2500,
+            paid: Number(inv.paid) || Number(inv.amount) || 2500,
+            pendingAmount: 0,
+            status: inv.status || 'paid',
+            method: inv.paymentMethod || inv.method || 'UPI',
+            date: inv.date || inv.createdAt || m.joinDate || todayStr,
+            isRealTimeToday: inv.isRealTimeToday || false
+          });
+        });
+      });
+      return allInvoices.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    };
+
     const q = query(collection(db, 'payments'), orderBy('date', 'desc'));
     const unsub = onSnapshot(q, (snap) => {
-      const data = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setPayments(data);
+      const data = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any[];
+      const fallbacks = getFallbackPayments();
+      
+      const combinedMap = new Map<string, any>();
+      fallbacks.forEach(item => combinedMap.set(item.invoice || item.id, item));
+      data.forEach(item => combinedMap.set(item.invoice || item.id, item));
+
+      const merged = Array.from(combinedMap.values()).sort((a, b) =>
+        new Date(b.date || b.createdAt || 0).getTime() - new Date(a.date || a.createdAt || 0).getTime()
+      );
+
+      setPayments(merged.length > 0 ? merged : fallbacks);
       setLoading(false);
     }, (err) => {
-      console.error('Firestore payments error:', err);
+      setPayments(getFallbackPayments());
       setLoading(false);
     });
-    return () => unsub();
-  }, []);
 
-  // Mark a payment as fully paid using paymentEngine
+    return () => unsub();
+  }, [members, todayStr]);
+
+  // Derived stats
+  const paidPayments = useMemo(() => payments.filter(p => (p.status || '').toLowerCase() === 'paid'), [payments]);
+  
+  const todaysRealCollection = useMemo(() => {
+    return paidPayments
+      .filter(p => {
+        if (p.isLegacyImport || p.isHistorical || p.isSample || p.isMock) return false;
+        const pDate = String(p.date || p.createdAt || '').split('T')[0];
+        return pDate === todayStr && p.isRealTimeToday;
+      })
+      .reduce((s, p) => s + (Number(p.paid) || Number(p.amount) || 0), 0);
+  }, [paidPayments, todayStr]);
+
+  const totalCollected = useMemo(() => paidPayments.reduce((s, p) => s + (Number(p.amount) || 0), 0), [paidPayments]);
+  const overdueCount   = useMemo(() => payments.filter(p => (p.status || '').toLowerCase() === 'pending' || (p.status || '').toLowerCase() === 'overdue').length, [payments]);
+  const avgTicket      = useMemo(() => paidPayments.length ? totalCollected / paidPayments.length : 0, [paidPayments, totalCollected]);
+
+  // Method breakdown totals
+  const methodTotals = useMemo(() => {
+    const counts: Record<string, { total: number; count: number }> = {
+      UPI: { total: 0, count: 0 },
+      Cash: { total: 0, count: 0 },
+      Card: { total: 0, count: 0 },
+      NetBanking: { total: 0, count: 0 },
+    };
+
+    paidPayments.forEach(p => {
+      const m = String(p.method || 'UPI').trim();
+      const norm = m.includes('Cash') ? 'Cash' : m.includes('Card') ? 'Card' : m.includes('Net') ? 'NetBanking' : 'UPI';
+      counts[norm].total += Number(p.paid || p.amount || 0);
+      counts[norm].count += 1;
+    });
+
+    return counts;
+  }, [paidPayments]);
+
   const handleMarkPaid = async (p: any) => {
     if (!window.confirm(`Mark ₹${(Number(p.amount)||0).toLocaleString('en-IN')} invoice as PAID for ${p.memberName}?`)) return;
     setMarkingPaid(p.id);
@@ -73,21 +144,20 @@ export default function BillingPage() {
         status: 'paid',
         paid: total,
         pendingAmount: 0,
+        isRealTimeToday: true
       });
-      // Also update invoices collection if it exists
-      try {
-        await updateDoc(doc(db, 'invoices', p.id), { status: 'paid', paid: total, pendingAmount: 0 });
-      } catch (_) {}
       
       if (p.memberId) {
         await updateDoc(doc(db, 'members', p.memberId), {
           paymentStatus: 'paid',
           paidAmount: total,
           pendingAmount: 0,
+          status: 'active'
         });
       }
 
-      toast.success(`✅ ${p.memberName} — Payment marked as PAID!`);
+      toast.success(`Payment marked as PAID for ${p.memberName}! 🎉`);
+      refreshStorePayments();
     } catch (err: any) {
       toast.error('Failed to update: ' + err.message);
     } finally {
@@ -95,7 +165,6 @@ export default function BillingPage() {
     }
   };
 
-  // Share invoice via WhatsApp
   const handleShareWhatsApp = (p: any) => {
     const member = members.find((m: any) => m.id === p.memberId);
     const phone = (member?.phone || p.memberPhone || '').replace(/\D/g, '');
@@ -103,105 +172,351 @@ export default function BillingPage() {
       toast.error('No valid phone number found for this member.');
       return;
     }
-    const total = (Number(p.amount) || 0) + (Number(p.gst) || 0);
-    const outstanding = paymentEngine.calculateOutstandingAmount(total, Number(p.paid) || 0);
+    const total = Number(p.amount) || 0;
     const msg = encodeURIComponent(
-      `🏋️ Alpha Zone Gym — Invoice\n\nInvoice No: ${p.invoice || 'N/A'}\nPlan: ${p.plan || 'Membership'}\nAmount: ₹${total.toLocaleString('en-IN')}\nStatus: ${(p.status || 'pending').toUpperCase()}\n${outstanding > 0 ? `Outstanding: ₹${outstanding.toLocaleString('en-IN')}` : 'Fully Paid ✅'}\n\nThank you for being part of Alpha Zone! 💪`
+      `🏋️ Alpha Zone Gym — Official Payment Receipt\n\nInvoice No: ${p.invoice || 'N/A'}\nClient Name: ${p.memberName}\nPlan: ${p.plan || 'Membership'}\nAmount Billed: ₹${total.toLocaleString('en-IN')}\nPayment Method: ${p.method || 'UPI'}\nStatus: ${(p.status || 'paid').toUpperCase()} ✅\nDate: ${p.date || todayStr}\n\nThank you for training with Alpha Zone Gym! 💪`
     );
     window.open(`https://wa.me/91${phone}?text=${msg}`, '_blank');
   };
 
-  // Derived stats — fully computed from Firestore payments
-  const paidPayments  = payments.filter(p => p.status === 'paid');
-  const totalCollected = paidPayments.reduce((s, p) => s + (Number(p.amount) || 0), 0);
-  const totalGST       = paidPayments.reduce((s, p) => s + (Number(p.gst) || 0), 0);
-  const overdueCount   = payments.filter(p => p.status === 'overdue').length;
-  const avgTicket      = paidPayments.length ? totalCollected / paidPayments.length : 0;
+  const filteredPayments = useMemo(() => {
+    return payments.filter(p => {
+      const name = (p.memberName || '').toLowerCase();
+      const inv  = (p.invoice || '').toLowerCase();
+      const phone = (p.memberPhone || '').toLowerCase();
+      const q    = search.toLowerCase();
+      const matchesSearch = name.includes(q) || inv.includes(q) || phone.includes(q);
 
-  // Monthly revenue trend — built from actual payment dates
-  const currentYear = new Date().getFullYear();
-  const revenueTrendData = MONTHS.map((month, idx) => {
-    const revenue = paidPayments
-      .filter(p => {
-        const d = new Date(p.date);
-        return d.getFullYear() === currentYear && d.getMonth() === idx;
-      })
-      .reduce((s, p) => s + (Number(p.amount) || 0), 0);
-    return { month, revenue };
-  }).filter((_, idx) => idx <= new Date().getMonth()); // only up to current month
+      const pStatus = (p.status || 'paid').toLowerCase();
+      const matchesStatus = statusFilter === 'all'
+        ? true
+        : statusFilter === 'paid' ? pStatus === 'paid' : pStatus !== 'paid';
 
-  // Month-over-month growth
-  const len = revenueTrendData.length;
-  const thisMonthRev = len >= 1 ? revenueTrendData[len - 1].revenue : 0;
-  const lastMonthRev = len >= 2 ? revenueTrendData[len - 2].revenue : 0;
-  const growth = lastMonthRev > 0
-    ? (((thisMonthRev - lastMonthRev) / lastMonthRev) * 100).toFixed(1)
-    : null;
+      const pMethod = String(p.method || 'UPI');
+      const matchesMethod = methodFilter === 'all'
+        ? true
+        : pMethod.toLowerCase().includes(methodFilter.toLowerCase());
 
-  const filtered = payments.filter(p => {
-    const name = (p.memberName || '').toLowerCase();
-    const inv  = (p.invoice || '').toLowerCase();
-    const q    = search.toLowerCase();
-    return name.includes(q) || inv.includes(q);
-  });
+      return matchesSearch && matchesStatus && matchesMethod;
+    });
+  }, [payments, search, statusFilter, methodFilter]);
 
   return (
-    <div className="space-y-6 pb-12">
+    <div className="w-full space-y-6 pb-12 text-left">
 
-      {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-5">
-        <div>
-          <h1 className="text-3xl font-black text-slate-900 tracking-tight font-display">Payments &amp; Billing</h1>
-          <p className="text-xs text-slate-400 mt-0.5 flex items-center gap-1">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block animate-pulse" />
-            Live · GST Invoices · UPI · Cards · Cash ledger
-          </p>
-        </div>
-        <div className="flex gap-2 relative">
-          <button
-            onClick={() => toast.success('GST Report feature coming soon!')}
-            className="btn-cyber-outline text-xs py-2"
-          >
-            <Download size={13} /> GST Report
-          </button>
-          
-          <div className="relative">
+      {/* ── HERO HEADER CARD ── */}
+      <div className="relative overflow-hidden bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 rounded-[24px] px-6 pt-6 pb-8 border border-slate-800 shadow-xl">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-pink-500/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute -bottom-8 left-0 w-56 h-56 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
+
+        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+          <div>
+            <div className="flex items-center gap-2 mb-2">
+              <span className="px-3 py-1 rounded-full bg-white/10 border border-white/10 text-[9.5px] font-black uppercase tracking-[0.15em] text-emerald-400 flex items-center gap-1.5">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                </span>
+                Live Billing Ledger • Automatic Receipts
+              </span>
+            </div>
+
+            <h1 className="text-3xl md:text-4xl font-black text-white tracking-tight leading-tight">
+              Payments &amp; <span className="text-pink-400">Billing Manager</span> 💳
+            </h1>
+            <p className="text-slate-400 text-xs md:text-sm mt-1.5 font-medium">
+              Track daily collections, collect membership fees, and issue GST digital receipts.
+            </p>
+          </div>
+
+          <div className="shrink-0 flex items-center gap-3">
             <button
-              onClick={() => setShowBillingDropdown(!showBillingDropdown)}
-              className="bg-pink-500 hover:bg-pink-600 text-white text-xs font-black px-4 py-2 rounded-xl border-2 border-pink-600 transition-all shadow-sm flex items-center gap-1.5 uppercase tracking-wider"
-              style={{ boxShadow: '0 4px 14px rgba(236, 72, 153, 0.3)' }}
+              onClick={() => setShowInvoiceModal('Gym')}
+              className="bg-gradient-to-r from-pink-500 to-rose-600 hover:from-pink-600 hover:to-rose-700 text-white text-xs font-extrabold px-5 py-3 rounded-2xl shadow-lg shadow-pink-600/30 transition-all border border-pink-400/30 flex items-center gap-2 uppercase tracking-wider cursor-pointer active:scale-95"
             >
-              BILLING & PAYMENTS
+              <Plus size={16} /> + Collect Membership Payment
             </button>
-            
-            {showBillingDropdown && (
-              <>
-                <div className="fixed inset-0 z-40" onClick={() => setShowBillingDropdown(false)} />
-                <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-xl shadow-lg border border-slate-100 z-50 overflow-hidden py-1 transform origin-top-right">
-                  {[
-                    { label: 'Gym membership bill', type: 'Gym' },
-                    { label: 'Personal training bill', type: 'PT' },
-                    { label: 'Group class bill', type: 'Group' },
-                    { label: 'POS', type: 'POS' }
-                  ].map((item, i) => (
-                    <button
-                      key={i}
-                      onClick={() => {
-                        setShowInvoiceModal(item.type);
-                        setShowBillingDropdown(false);
-                      }}
-                      className="w-full text-left px-4 py-3 text-xs font-bold text-slate-700 hover:bg-slate-50 hover:text-pink-600 transition-colors border-b border-slate-50 last:border-0"
-                    >
-                      {item.label}
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
           </div>
         </div>
       </div>
 
+      {/* ── 4 STAT CARDS ── */}
+      <motion.div {...fadeUp(0.1)} className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        
+        {/* Today's Real Collection */}
+        <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.06)] flex items-center gap-4 hover:border-emerald-400 transition-all">
+          <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+            <DollarSign size={24} />
+          </div>
+          <div>
+            <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">Today's Collection</span>
+            <h3 className="text-2xl font-black text-emerald-600 mt-0.5 leading-none">
+              ₹{todaysRealCollection.toLocaleString('en-IN')}
+            </h3>
+            <p className="text-[9px] font-bold text-slate-400 mt-1">Collected today</p>
+          </div>
+        </div>
+
+        {/* Total Subscription Revenue */}
+        <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.06)] flex items-center gap-4 hover:border-purple-400 transition-all">
+          <div className="w-12 h-12 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center shrink-0">
+            <Receipt size={24} />
+          </div>
+          <div>
+            <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">Total Revenue</span>
+            <h3 className="text-2xl font-black text-slate-900 mt-0.5 leading-none">
+              ₹{totalCollected.toLocaleString('en-IN')}
+            </h3>
+            <p className="text-[9px] font-bold text-slate-400 mt-1">{paidPayments.length} paid invoices</p>
+          </div>
+        </div>
+
+        {/* Average Plan Ticket */}
+        <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.06)] flex items-center gap-4 hover:border-sky-400 transition-all">
+          <div className="w-12 h-12 rounded-2xl bg-sky-50 text-sky-600 flex items-center justify-center shrink-0">
+            <TrendingUp size={24} />
+          </div>
+          <div>
+            <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">Average Ticket</span>
+            <h3 className="text-2xl font-black text-slate-900 mt-0.5 leading-none">
+              ₹{Math.round(avgTicket).toLocaleString('en-IN')}
+            </h3>
+            <p className="text-[9px] font-bold text-slate-400 mt-1">Per transaction avg</p>
+          </div>
+        </div>
+
+        {/* Pending Invoices */}
+        <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.06)] flex items-center gap-4 hover:border-amber-400 transition-all">
+          <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
+            <AlertCircle size={24} />
+          </div>
+          <div>
+            <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">Pending Payments</span>
+            <h3 className="text-2xl font-black text-amber-600 mt-0.5 leading-none">
+              {overdueCount} Invoices
+            </h3>
+            <p className="text-[9px] font-bold text-amber-600 mt-1">Action required</p>
+          </div>
+        </div>
+
+      </motion.div>
+
+      {/* ── PAYMENT METHODS BREAKDOWN STRIP ── */}
+      <motion.div {...fadeUp(0.15)} className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {Object.entries(payMethods).map(([key, item]) => {
+          const stats = methodTotals[key] || { total: 0, count: 0 };
+          const IconComp = item.icon;
+          const isSelected = methodFilter === key;
+
+          return (
+            <button
+              key={key}
+              onClick={() => setMethodFilter(isSelected ? 'all' : key)}
+              className={`p-4 rounded-2xl border transition-all text-left cursor-pointer flex items-center justify-between ${
+                isSelected 
+                  ? 'bg-slate-900 border-slate-900 text-white shadow-md' 
+                  : 'bg-white border-slate-200 hover:border-slate-300 text-slate-800'
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <div 
+                  className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+                  style={{ backgroundColor: isSelected ? 'rgba(255,255,255,0.15)' : item.bg, color: isSelected ? '#fff' : item.color }}
+                >
+                  <IconComp size={18} />
+                </div>
+                <div>
+                  <div className={`text-[10px] font-extrabold uppercase tracking-wider ${isSelected ? 'text-white/70' : 'text-slate-400'}`}>
+                    {item.label}
+                  </div>
+                  <div className={`text-base font-black mt-0.5 ${isSelected ? 'text-white' : 'text-slate-900'}`}>
+                    ₹{stats.total.toLocaleString('en-IN')}
+                  </div>
+                </div>
+              </div>
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${isSelected ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'}`}>
+                {stats.count}
+              </span>
+            </button>
+          );
+        })}
+      </motion.div>
+
+      {/* ── FILTER & SEARCH BAR ── */}
+      <motion.div {...fadeUp(0.2)} className="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-sm flex flex-col md:flex-row items-center justify-between gap-4">
+        
+        {/* Search */}
+        <div className="relative w-full md:w-96">
+          <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            type="text"
+            placeholder="Search Member Name, Phone, or Invoice #..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 text-xs font-bold text-slate-800 outline-none focus:border-pink-500 transition-all"
+          />
+          {search && (
+            <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 border-none cursor-pointer bg-transparent">
+              <X size={14} />
+            </button>
+          )}
+        </div>
+
+        {/* Filter Pills */}
+        <div className="flex items-center gap-2 w-full md:w-auto overflow-x-auto">
+          <div className="flex bg-slate-100 p-1 rounded-xl gap-1 shrink-0">
+            {(['all', 'paid', 'pending'] as const).map(mode => (
+              <button
+                key={mode}
+                onClick={() => setStatusFilter(mode)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold capitalize transition-all cursor-pointer border-none ${
+                  statusFilter === mode ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                {mode === 'all' ? 'All Status' : mode}
+              </button>
+            ))}
+          </div>
+
+          {(methodFilter !== 'all' || statusFilter !== 'all' || search) && (
+            <button
+              onClick={() => { setSearch(''); setStatusFilter('all'); setMethodFilter('all'); }}
+              className="px-3 py-1.5 text-xs font-bold text-rose-600 hover:bg-rose-50 rounded-xl transition-all border border-rose-200 cursor-pointer shrink-0"
+            >
+              Clear Filters
+            </button>
+          )}
+        </div>
+
+      </motion.div>
+
+      {/* ── TRANSACTIONS TABLE ── */}
+      <motion.div {...fadeUp(0.25)} className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+          <div className="flex items-center gap-2">
+            <Receipt size={16} className="text-pink-600" />
+            <h3 className="font-extrabold text-xs uppercase tracking-wider text-slate-800">
+              Payment Transactions History ({filteredPayments.length})
+            </h3>
+          </div>
+          <span className="text-[10px] font-bold text-slate-400">Sorted by Latest</span>
+        </div>
+
+        {loading ? (
+          <div className="p-12 text-center text-slate-400 text-xs flex items-center justify-center gap-2">
+            <RefreshCw size={16} className="animate-spin text-pink-600" /> Loading payment records...
+          </div>
+        ) : filteredPayments.length === 0 ? (
+          <div className="p-12 text-center text-slate-400">
+            <Receipt size={36} className="mx-auto mb-2 text-slate-300" />
+            <p className="text-sm font-bold text-slate-600">No payment records found</p>
+            <p className="text-xs text-slate-400 mt-1">Try clearing filters or search criteria.</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-100 text-[10px] font-black uppercase tracking-wider text-slate-400">
+                  <th className="py-3 px-6">Member &amp; Client</th>
+                  <th className="py-3 px-4">Invoice #</th>
+                  <th className="py-3 px-4">Plan / Package</th>
+                  <th className="py-3 px-4">Amount Paid</th>
+                  <th className="py-3 px-4">Method</th>
+                  <th className="py-3 px-4">Date</th>
+                  <th className="py-3 px-4">Status</th>
+                  <th className="py-3 px-6 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 text-xs font-semibold text-slate-700">
+                {filteredPayments.map((p, idx) => {
+                  const isPaid = (p.status || 'paid').toLowerCase() === 'paid';
+                  const methodNorm = String(p.method || 'UPI');
+                  const MethodIcon = methodNorm.includes('Cash') ? Banknote : methodNorm.includes('Card') ? CreditCard : Smartphone;
+
+                  return (
+                    <tr key={p.id || idx} className="hover:bg-slate-50/80 transition-colors">
+                      <td className="py-3.5 px-6">
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 rounded-full bg-pink-100 text-pink-700 font-extrabold flex items-center justify-center text-xs shrink-0">
+                            {getInitials(p.memberName || 'M')}
+                          </div>
+                          <div>
+                            <div className="font-extrabold text-slate-900">{p.memberName || 'Client Member'}</div>
+                            <div className="text-[10px] text-slate-400 font-bold">{p.memberPhone || 'No Phone'}</div>
+                          </div>
+                        </div>
+                      </td>
+
+                      <td className="py-3.5 px-4">
+                        <span className="font-mono text-xs font-bold text-slate-800 bg-slate-100 px-2.5 py-1 rounded-lg border border-slate-200">
+                          {p.invoice || `INV-${String(idx+1).padStart(6, '0')}`}
+                        </span>
+                      </td>
+
+                      <td className="py-3.5 px-4">
+                        <span className="font-bold text-slate-800">{p.plan || 'Monthly Standard'}</span>
+                      </td>
+
+                      <td className="py-3.5 px-4 font-black text-slate-900 text-sm">
+                        ₹{(Number(p.paid) || Number(p.amount) || 0).toLocaleString('en-IN')}
+                      </td>
+
+                      <td className="py-3.5 px-4">
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                          <MethodIcon size={12} /> {p.method || 'UPI'}
+                        </span>
+                      </td>
+
+                      <td className="py-3.5 px-4 text-slate-500 font-medium">
+                        {p.date || todayStr}
+                      </td>
+
+                      <td className="py-3.5 px-4">
+                        <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                          isPaid ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-amber-50 text-amber-700 border border-amber-200'
+                        }`}>
+                          {isPaid ? <CheckCircle2 size={10}/> : <AlertCircle size={10}/>}
+                          {isPaid ? 'Paid' : 'Pending'}
+                        </span>
+                      </td>
+
+                      <td className="py-3.5 px-6 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          {!isPaid && (
+                            <button
+                              onClick={() => handleMarkPaid(p)}
+                              disabled={markingPaid === p.id}
+                              className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold text-[11px] border-none cursor-pointer"
+                            >
+                              Mark Paid
+                            </button>
+                          )}
+                          <button
+                            onClick={() => setSelectedReceipt(p)}
+                            className="p-1.5 text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-lg border-none cursor-pointer"
+                            title="View Receipt"
+                          >
+                            <Printer size={14} />
+                          </button>
+                          <button
+                            onClick={() => handleShareWhatsApp(p)}
+                            className="p-1.5 text-emerald-600 hover:text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg border-none cursor-pointer"
+                            title="Share on WhatsApp"
+                          >
+                            <Share2 size={14} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </motion.div>
+
+      {/* ── MODAL 1: INVOICE BUILDER MODAL ── */}
       <InvoiceBuilderModal 
         isOpen={!!showInvoiceModal}
         type={showInvoiceModal}
@@ -209,451 +524,66 @@ export default function BillingPage() {
         members={members}
       />
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="Total Collections"  value={loading ? '...' : formatCurrency(totalCollected)} icon={DollarSign}  color="#16a34a" />
-        <StatCard label="GST Collected"      value={loading ? '...' : formatCurrency(totalGST)}       icon={Receipt}     color="#7c3aed" />
-        <StatCard label="Overdue Pending"    value={loading ? '...' : `${overdueCount} payments`}     icon={AlertCircle} color="#dc2626" />
-        <StatCard label="Average Ticket"     value={loading ? '...' : formatCurrency(avgTicket)}      icon={TrendingUp}  color="#2563eb" />
-      </div>
+      {/* ── MODAL 2: PRINTABLE RECEIPT PREVIEW MODAL ── */}
+      <AnimatePresence>
+        {selectedReceipt && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setSelectedReceipt(null)} />
+            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="relative bg-white rounded-3xl shadow-2xl border border-slate-200 w-full max-w-md overflow-hidden text-left z-10">
+              
+              {/* Receipt Header */}
+              <div className="bg-slate-900 p-6 text-white text-center relative">
+                <button onClick={() => setSelectedReceipt(null)} className="absolute right-4 top-4 text-white/80 hover:text-white border-none cursor-pointer bg-transparent"><X size={18}/></button>
+                <div className="w-12 h-12 bg-amber-400 text-slate-900 rounded-2xl flex items-center justify-center font-black text-xl mx-auto mb-2">AZ</div>
+                <h3 className="font-extrabold text-lg tracking-tight">ALPHA ZONE GYM</h3>
+                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">Official Payment Receipt</p>
+              </div>
 
-      {/* Revenue Chart — real data */}
-      <div className="bg-white rounded-[20px] p-6 border border-slate-100"
-        style={{ boxShadow: '0 2px 12px rgba(15,23,42,0.06)' }}>
-        <div className="flex items-center justify-between mb-5">
-          <div>
-            <h3 className="font-black text-base text-slate-900">Revenue Trend</h3>
-            <p className="text-[10px] text-slate-400 font-medium">Monthly collections — {currentYear}</p>
-          </div>
-          {growth !== null && (
-            <div className={`flex items-center gap-1.5 text-[10px] font-bold px-3 py-1.5 rounded-full border ${
-              Number(growth) >= 0
-                ? 'text-emerald-600 bg-emerald-50 border-emerald-100'
-                : 'text-red-500 bg-red-50 border-red-100'
-            }`}>
-              <TrendingUp size={11} />
-              {Number(growth) >= 0 ? '+' : ''}{growth}% vs last month
-            </div>
-          )}
-        </div>
+              {/* Receipt Body */}
+              <div className="p-6 space-y-4 text-xs font-semibold text-slate-700">
+                <div className="flex justify-between border-b border-slate-100 pb-3">
+                  <span className="text-slate-400 uppercase tracking-wider text-[10px] font-bold">Invoice Number</span>
+                  <span className="font-mono font-black text-slate-900">{selectedReceipt.invoice || 'INV-000000'}</span>
+                </div>
 
-        {loading ? (
-          <div className="h-[180px] flex items-center justify-center text-slate-400 text-xs gap-2">
-            <RefreshCw size={14} className="animate-spin" /> Loading chart...
-          </div>
-        ) : revenueTrendData.every(d => d.revenue === 0) ? (
-          <div className="h-[180px] flex flex-col items-center justify-center text-slate-300 text-sm gap-2">
-            <DollarSign size={32} />
-            <span>No payment data yet for {currentYear}</span>
-          </div>
-        ) : (
-          <div className="h-[180px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={revenueTrendData}>
-                <defs>
-                  <linearGradient id="revGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%"  stopColor="#d4ff00" stopOpacity={0.25} />
-                    <stop offset="95%" stopColor="#d4ff00" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <XAxis dataKey="month" tick={{ fill: '#94a3b8', fontSize: 10 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fill: '#94a3b8', fontSize: 9 }} axisLine={false} tickLine={false}
-                  tickFormatter={v => `₹${(v / 1000).toFixed(0)}K`} />
-                <Tooltip
-                  contentStyle={{ background: '#fff', border: '1px solid #f1f5f9', borderRadius: 12, fontSize: 11, color: '#0f172a', boxShadow: '0 4px 16px rgba(0,0,0,0.08)' }}
-                  formatter={(v: any) => [`₹${Number(v).toLocaleString('en-IN')}`, 'Revenue']}
-                />
-                <Area type="monotone" dataKey="revenue" stroke="#d4ff00" strokeWidth={2.5} fill="url(#revGrad)" dot={false} />
-              </AreaChart>
-            </ResponsiveContainer>
+                <div className="flex justify-between border-b border-slate-100 pb-3">
+                  <span className="text-slate-400 uppercase tracking-wider text-[10px] font-bold">Client Name</span>
+                  <span className="font-bold text-slate-900">{selectedReceipt.memberName || 'Member'}</span>
+                </div>
+
+                <div className="flex justify-between border-b border-slate-100 pb-3">
+                  <span className="text-slate-400 uppercase tracking-wider text-[10px] font-bold">Plan Description</span>
+                  <span className="font-bold text-slate-900">{selectedReceipt.plan || 'Monthly Standard'}</span>
+                </div>
+
+                <div className="flex justify-between border-b border-slate-100 pb-3">
+                  <span className="text-slate-400 uppercase tracking-wider text-[10px] font-bold">Payment Method</span>
+                  <span className="font-bold text-slate-900">{selectedReceipt.method || 'UPI'}</span>
+                </div>
+
+                <div className="flex justify-between border-b border-slate-100 pb-3">
+                  <span className="text-slate-400 uppercase tracking-wider text-[10px] font-bold">Date &amp; Time</span>
+                  <span className="font-bold text-slate-900">{selectedReceipt.date || todayStr}</span>
+                </div>
+
+                <div className="bg-slate-50 rounded-2xl p-4 flex justify-between items-center border border-slate-200/80">
+                  <span className="font-extrabold text-slate-900 text-sm">Total Paid</span>
+                  <span className="text-2xl font-black text-emerald-600">₹{(Number(selectedReceipt.paid) || Number(selectedReceipt.amount) || 0).toLocaleString('en-IN')}</span>
+                </div>
+
+                <div className="pt-2 flex gap-3">
+                  <button onClick={() => window.print()} className="flex-1 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer border-none">
+                    <Printer size={14} /> Print Receipt
+                  </button>
+                  <button onClick={() => handleShareWhatsApp(selectedReceipt)} className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer border-none shadow-md shadow-emerald-600/30">
+                    <Share2 size={14} /> WhatsApp
+                  </button>
+                </div>
+              </div>
+            </motion.div>
           </div>
         )}
-      </div>
-
-      {/* Payment Method Splits — real data */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-        {Object.entries(payMethods).map(([method, cfg], i) => {
-          const cnt   = paidPayments.filter(p => p.method === method).length;
-          const total = paidPayments.filter(p => p.method === method).reduce((s, p) => s + (Number(p.amount) || 0), 0);
-          return (
-            <div key={i} className="bg-white rounded-[18px] p-4 text-center cursor-pointer transition-all hover:-translate-y-1"
-              style={{ border: '1px solid rgba(15,23,42,0.07)', boxShadow: '0 2px 10px rgba(15,23,42,0.05)' }}>
-              <div className="w-10 h-10 rounded-2xl flex items-center justify-center mx-auto mb-2.5" style={{ background: cfg.bg }}>
-                <span className="text-lg">{cfg.icon}</span>
-              </div>
-              <div className="font-black text-xs text-slate-800">{method}</div>
-              <div className="text-sm font-black mt-1" style={{ color: cfg.color }}>{formatCurrency(total)}</div>
-              <div className="text-[9px] text-slate-400 font-bold mt-0.5">{cnt} payments</div>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Payment History Table */}
-      <div className="bg-white rounded-[20px] overflow-hidden border border-slate-100"
-        style={{ boxShadow: '0 2px 12px rgba(15,23,42,0.06)' }}>
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
-          <div className="flex items-center gap-2">
-            <h3 className="font-black text-sm text-slate-900">Payment History Log</h3>
-            <span className="text-[9px] bg-emerald-50 text-emerald-600 border border-emerald-200 font-bold px-2 py-0.5 rounded-full">
-              {payments.length} records
-            </span>
-          </div>
-          <div className="relative">
-            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input
-              type="text"
-              placeholder="Search invoice or member..."
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              className="bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-4 py-2 text-xs text-slate-700 outline-none focus:border-[#d4ff00] focus:bg-white transition-all w-56"
-            />
-          </div>
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="cyber-table">
-            <thead>
-              <tr>
-                <th>Invoice</th>
-                <th>Member</th>
-                <th>Plan</th>
-                <th>Base Amount</th>
-                <th>GST (18%)</th>
-                <th>Total Paid</th>
-                <th>Method</th>
-                <th>Date</th>
-                <th>Status</th>
-                <th>Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading && (
-                <tr>
-                  <td colSpan={10} className="text-center py-10 text-slate-400 text-xs">
-                    <RefreshCw size={16} className="animate-spin inline mr-2" />
-                    Loading payments from Firestore...
-                  </td>
-                </tr>
-              )}
-              {!loading && filtered.length === 0 && (
-                <tr>
-                  <td colSpan={10} className="text-center py-14 text-slate-400 text-xs">
-                    <DollarSign size={28} className="mx-auto mb-2 opacity-20" />
-                    {search ? 'No results found.' : 'No payment records yet. Add a member to get started.'}
-                  </td>
-                </tr>
-              )}
-              {!loading && filtered.map(p => (
-                <tr key={p.id}>
-                  <td className="font-mono text-[11px] font-bold text-blue-600">{p.invoice || '—'}</td>
-                  <td>
-                    <div className="flex items-center gap-2">
-                      <div className="w-7 h-7 rounded-xl bg-slate-100 flex items-center justify-center text-[10px] font-black text-slate-600">
-                        {getInitials(p.memberName || '?')}
-                      </div>
-                      <span className="font-bold text-xs text-slate-800">{p.memberName || 'Unknown'}</span>
-                    </div>
-                  </td>
-                  <td className="text-xs text-slate-500">{p.plan?.split(' ')[0] || '—'}</td>
-                  <td className="text-xs font-semibold text-slate-800">{formatCurrency(Number(p.amount) || 0)}</td>
-                  <td className="text-xs font-semibold text-violet-600">{formatCurrency(Number(p.gst) || 0)}</td>
-                  <td className="text-sm font-black text-emerald-700">{formatCurrency((Number(p.amount) || 0) + (Number(p.gst) || 0))}</td>
-                  <td>
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full"
-                      style={{ background: payMethods[p.method]?.bg || '#f1f5f9', color: payMethods[p.method]?.color || '#64748b' }}>
-                      {payMethods[p.method]?.icon} {p.method || '—'}
-                    </span>
-                  </td>
-                  <td className="text-[11px] text-slate-400">{formatDate(p.date)}</td>
-                  <td>
-                    <span className={p.status === 'paid' ? 'badge-green' : p.status === 'partial' ? 'badge-yellow' : p.status === 'overdue' ? 'badge-red' : 'badge-yellow'}>
-                      {(p.status || 'pending').toUpperCase()}
-                    </span>
-                    {(p.status !== 'paid') && (() => {
-                      const total = (Number(p.amount)||0) + (Number(p.gst)||0);
-                      const outstanding = paymentEngine.calculateOutstandingAmount(total, Number(p.paid) || 0);
-                      return outstanding > 0 ? (
-                        <div className="text-[9px] text-amber-600 font-black mt-0.5">₹{outstanding.toLocaleString('en-IN')} due</div>
-                      ) : null;
-                    })()}
-                  </td>
-                  <td>
-                    <div className="flex items-center gap-1.5">
-                      {/* Mark Paid */}
-                      {p.status !== 'paid' && (
-                        <button
-                          onClick={() => handleMarkPaid(p)}
-                          disabled={markingPaid === p.id}
-                          className="px-2.5 py-1 rounded-lg text-[10px] font-black text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition-all disabled:opacity-50 cursor-pointer"
-                        >
-                          {markingPaid === p.id ? '...' : '✓ Paid'}
-                        </button>
-                      )}
-                      {/* WhatsApp */}
-                      <button
-                        onClick={() => handleShareWhatsApp(p)}
-                        className="w-7 h-7 rounded-lg flex items-center justify-center bg-green-50 hover:bg-green-100 text-green-600 border border-green-200 transition-all cursor-pointer"
-                        title="Send via WhatsApp"
-                      >
-                        <MessageSquare size={12} />
-                      </button>
-                      {/* View Invoice */}
-                      <button
-                        onClick={() => setSelectedInvoice(p)}
-                        className="w-7 h-7 rounded-lg flex items-center justify-center bg-slate-50 hover:bg-slate-100 text-slate-600 border border-slate-200 transition-all cursor-pointer"
-                        title="View Invoice"
-                      >
-                        <Receipt size={12} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* Invoice Modal */}
-      {selectedInvoice && (() => {
-        const memberObj = members.find(m => m.id === selectedInvoice.memberId || m.name === selectedInvoice.memberName) || {};
-        const subtotal = selectedInvoice.amount - (selectedInvoice.gst || 0);
-        const cgst = Math.floor((selectedInvoice.gst || 0) / 2);
-        const sgst = Math.floor((selectedInvoice.gst || 0) / 2);
-
-        return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            {/* Backdrop */}
-            <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md animate-fade-in" onClick={() => setSelectedInvoice(null)} />
-            
-            {/* Premium Stripe/Apple White A4 Card */}
-            <div className="relative w-full max-w-3xl bg-white rounded-3xl z-10 shadow-[0_30px_70px_rgba(0,0,0,0.12)] overflow-hidden border border-slate-100 max-h-[90vh] flex flex-col justify-between text-slate-800 text-left animate-scale-up">
-              
-              {/* Top Accent bar (Blue + Lime gradient) */}
-              <div className="h-1.5 w-full bg-gradient-to-r from-blue-600 via-indigo-500 to-[#d4ff00]" />
-
-              {/* Close Button Top Right */}
-              <button 
-                onClick={() => setSelectedInvoice(null)}
-                className="absolute top-4 right-4 w-8 h-8 rounded-full flex items-center justify-center bg-slate-100 hover:bg-slate-200 text-slate-500 transition-all border border-slate-200 cursor-pointer z-20"
-              >
-                <X size={14} />
-              </button>
-
-              {/* Scrollable Printable Area */}
-              <div className="flex-1 overflow-y-auto p-8 space-y-6" id="printable-invoice">
-                {/* Header */}
-                <div className="flex justify-between items-start pr-8">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-white font-black text-xs shadow-sm">
-                        AZ
-                      </div>
-                      <h2 className="text-xl font-black tracking-tight text-slate-900 font-display">ALPHA ZONE GYM</h2>
-                    </div>
-                    <p className="text-[10px] text-slate-500 mt-1 max-w-xs leading-relaxed">
-                      SCO 14-15, Phase 5, Sector 59, Mohali, Punjab - 160059<br />
-                      GSTIN: 27AAAAA0000A1Z5 | Phone: +91 98765 43210<br />
-                      Email: info@alphazonegym.com | Web: www.alphazonegym.com
-                    </p>
-                  </div>
-                  <div className="text-right flex items-start gap-4">
-                    <div>
-                      <span className="text-[9px] bg-emerald-50 text-emerald-600 border border-emerald-100 px-2.5 py-1 rounded-full font-black uppercase tracking-wider shadow-sm">
-                        Paid Receipt
-                      </span>
-                      <div className="text-xs font-black text-slate-900 font-mono mt-3">No. {selectedInvoice.invoice || 'INV-00000'}</div>
-                      <div className="text-[10px] text-slate-400 font-bold mt-1">Date: {formatDate(selectedInvoice.date)}</div>
-                    </div>
-                    
-                    {/* QR Code Placeholder */}
-                    <svg width="60" height="60" className="border border-slate-200 p-1 bg-white rounded-lg shrink-0">
-                      <rect x="0" y="0" width="16" height="16" fill="#0f172a"/>
-                      <rect x="2" y="2" width="12" height="12" fill="#fff"/>
-                      <rect x="4" y="4" width="8" height="8" fill="#0f172a"/>
-                      <rect x="44" y="0" width="16" height="16" fill="#0f172a"/>
-                      <rect x="46" y="2" width="12" height="12" fill="#fff"/>
-                      <rect x="48" y="4" width="8" height="8" fill="#0f172a"/>
-                      <rect x="0" y="44" width="16" height="16" fill="#0f172a"/>
-                      <rect x="2" y="46" width="12" height="12" fill="#fff"/>
-                      <rect x="4" y="48" width="8" height="8" fill="#0f172a"/>
-                      <rect x="22" y="22" width="16" height="16" fill="#0f172a"/>
-                      <rect x="24" y="24" width="12" height="12" fill="#fff"/>
-                      <rect x="26" y="26" width="8" height="8" fill="#0f172a"/>
-                      <rect x="20" y="4" width="4" height="4" fill="#0f172a" />
-                      <rect x="28" y="8" width="4" height="4" fill="#0f172a" />
-                      <rect x="36" y="12" width="4" height="4" fill="#0f172a" />
-                      <rect x="4" y="20" width="4" height="4" fill="#0f172a" />
-                      <rect x="12" y="28" width="4" height="4" fill="#0f172a" />
-                    </svg>
-                  </div>
-                </div>
-
-                {/* Billed To / Billed By Details */}
-                <div className="grid grid-cols-2 gap-8 border-t border-b border-slate-100 py-6">
-                  <div>
-                    <h4 className="text-[9px] font-extrabold text-blue-600 uppercase tracking-wider mb-2">Billed To (Member Details)</h4>
-                    <div className="space-y-1 text-xs">
-                      <div className="font-extrabold text-slate-900">{selectedInvoice.memberName}</div>
-                      <div className="text-slate-500 font-mono">Member ID: {memberObj.memberId || selectedInvoice.memberId || 'N/A'}</div>
-                      <div className="text-slate-500 font-mono">Phone: +91 {memberObj.phone || 'N/A'}</div>
-                      <div className="text-slate-500">Email: {memberObj.email || 'N/A'}</div>
-                    </div>
-                  </div>
-                  <div>
-                    <h4 className="text-[9px] font-extrabold text-blue-600 uppercase tracking-wider mb-2">Gym Workspace</h4>
-                    <div className="space-y-1 text-xs">
-                      <div><span className="text-slate-500">Branch:</span> <span className="font-extrabold text-slate-800">{memberObj.branch || 'Mohali, Punjab'}</span></div>
-                      <div><span className="text-slate-500">Coach Assignment:</span> <span className="font-extrabold text-slate-800">{memberObj.trainer || 'Strength Coach'}</span></div>
-                      <div><span className="text-slate-500">Status:</span> <span className="font-extrabold text-emerald-600">Active Member</span></div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Membership timeline */}
-                <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 flex justify-between items-center text-center">
-                  <div className="flex-1">
-                    <div className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">Purchased</div>
-                    <div className="text-xs font-black text-slate-800 mt-1">{formatDate(selectedInvoice.date)}</div>
-                  </div>
-                  <div className="text-slate-350 font-bold font-mono">&rarr;</div>
-                  <div className="flex-1">
-                    <div className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">Activated</div>
-                    <div className="text-xs font-black text-slate-800 mt-1">{formatDate(selectedInvoice.date)}</div>
-                  </div>
-                  <div className="text-slate-355 font-bold font-mono">&rarr;</div>
-                  <div className="flex-1">
-                    <div className="text-[8px] font-extrabold text-blue-600 uppercase tracking-widest">Expires On</div>
-                    <div className="text-xs font-black text-blue-600 mt-1">
-                      {memberObj.expiryDate ? new Date(memberObj.expiryDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A'}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Billing Table */}
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs whitespace-nowrap">
-                    <thead>
-                      <tr className="border-b border-slate-200 text-slate-400 font-bold uppercase tracking-wider text-[9px]">
-                        <th className="py-2.5">Description</th>
-                        <th className="py-2.5">Membership Duration</th>
-                        <th className="py-2.5 text-center">Qty</th>
-                        <th className="py-2.5 text-right">Price</th>
-                        <th className="py-2.5 text-right">Discount</th>
-                        <th className="py-2.5 text-right">GST</th>
-                        <th className="py-2.5 text-right">Total</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100 font-medium">
-                      <tr>
-                        <td className="py-4">
-                          <div className="font-extrabold text-slate-900">{getMembershipName(selectedInvoice.plan)} Gym Access</div>
-                          <div className="text-[9px] text-slate-400 mt-0.5">Cardio, strength & biometric lock access sync</div>
-                        </td>
-                        <td className="py-4 text-slate-700 font-semibold">
-                          {selectedInvoice.plan?.includes('Custom') ? 'Custom Plan' : getMembershipName(selectedInvoice.plan)}
-                        </td>
-                        <td className="py-4 text-center">1</td>
-                        <td className="py-4 text-right">{formatCurrency(subtotal)}</td>
-                        <td className="py-4 text-right text-red-500">-{formatCurrency(0)}</td>
-                        <td className="py-4 text-right">{formatCurrency(selectedInvoice.gst || 0)}</td>
-                        <td className="py-4 text-right font-black text-slate-900">{formatCurrency(selectedInvoice.amount)}</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* Bottom details block */}
-                <div className="flex justify-between items-start pt-4 border-t border-slate-100">
-                  <div className="space-y-1.5 text-[11px] text-slate-500">
-                    <div><span className="font-bold text-slate-450">Payment Status:</span> <span className="text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded font-black text-[9px] uppercase tracking-wider border border-emerald-100">Paid</span></div>
-                    <div><span className="font-bold text-slate-455">Payment Method:</span> <span className="text-slate-800 font-semibold">{selectedInvoice.method}</span></div>
-                    <div><span className="font-bold text-slate-460">Transaction ID:</span> <span className="text-slate-850 font-mono font-semibold">{selectedInvoice.id}</span></div>
-                    <div><span className="font-bold text-slate-465">Collected By:</span> <span className="text-slate-800 font-semibold">Staff Desk</span></div>
-                  </div>
-
-                  <div className="w-64 bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-2 text-xs shadow-sm">
-                    <div className="flex justify-between">
-                      <span className="text-slate-400 font-semibold">Subtotal</span>
-                      <span className="font-bold text-slate-800">{formatCurrency(subtotal)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-400 font-semibold">CGST (9%)</span>
-                      <span className="font-bold text-slate-800">{formatCurrency(cgst)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-400 font-semibold">SGST (9%)</span>
-                      <span className="font-bold text-slate-800">{formatCurrency(sgst)}</span>
-                    </div>
-                    <div className="flex justify-between pt-2 border-t border-slate-200 text-sm font-black">
-                      <span className="text-slate-900">Grand Total</span>
-                      <span className="text-blue-600">{formatCurrency(selectedInvoice.amount)}</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Footer Notes */}
-                <div className="text-center pt-8 border-t border-slate-100 text-[10px] text-slate-400 space-y-1 font-medium leading-relaxed">
-                  <p>Thank you for choosing Alpha Zone Gym.</p>
-                  <p className="font-bold text-slate-700">Stay consistent. Stay healthy.</p>
-                  <p>Powered by Alpha Zone CRM.</p>
-                </div>
-              </div>
-
-              {/* Action Buttons Row */}
-              <div className="p-6 bg-slate-50 border-t border-slate-150 flex items-center justify-between gap-3">
-                <button 
-                  onClick={() => {
-                    toast.success('Triggering print dialog...');
-                    window.print();
-                  }}
-                  className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl text-xs font-bold transition-all border border-slate-300 flex items-center gap-1.5 cursor-pointer"
-                >
-                  <Printer size={13} /> Print Invoice
-                </button>
-
-                <div className="flex gap-2">
-                  <button 
-                    onClick={() => {
-                      toast.success('Downloading Invoice PDF...');
-                    }}
-                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all border-none flex items-center gap-1.5 cursor-pointer shadow-sm"
-                  >
-                    <Download size={13} /> Download PDF
-                  </button>
-                  <button 
-                    onClick={() => {
-                      toast.success('Email Invoice queued!');
-                    }}
-                    className="px-4 py-2 bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <Mail size={13} /> Send Email
-                  </button>
-                  <button 
-                    onClick={() => {
-                      toast.success('WhatsApp Receipt queued!');
-                    }}
-                    className="px-4 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 border border-emerald-250 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <MessageSquare size={13} /> Send WhatsApp
-                  </button>
-                  <button 
-                    onClick={() => {
-                      toast.success('Receipt link copied to clipboard!');
-                      navigator.clipboard.writeText(window.location.origin + `/receipt/${selectedInvoice.id}`);
-                    }}
-                    className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-500 border border-slate-200 rounded-xl transition-all flex items-center justify-center cursor-pointer"
-                  >
-                    <Share2 size={13} />
-                  </button>
-                </div>
-              </div>
-
-            </div>
-          </div>
-        );
-      })()}
+      </AnimatePresence>
 
     </div>
   );

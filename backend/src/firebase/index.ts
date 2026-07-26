@@ -156,8 +156,8 @@ export let mockMigrations: any[] = [];
 export let mockPlans: any[] = [
   {
     id: 'p_mon',
-    name: 'Monthly Standard',
-    price: 2500,
+    name: 'Monthly Access',
+    price: 3000,
     duration: '30 Days',
     durationDays: 30,
     features: ['Biometric Access Roster', 'Daily facility check-ins', 'Locker Room access'],
@@ -169,8 +169,8 @@ export let mockPlans: any[] = [
   },
   {
     id: 'p_qrt',
-    name: 'Quarterly Prime',
-    price: 6500,
+    name: 'Quarterly Pass',
+    price: 6000,
     duration: '90 Days',
     durationDays: 90,
     features: ['All Monthly benefits', '2 PT consultation sessions', 'Steam Bath Access'],
@@ -182,8 +182,8 @@ export let mockPlans: any[] = [
   },
   {
     id: 'p_semi',
-    name: 'Semi-Annual Pro',
-    price: 11500,
+    name: 'Semi-Annual Elite',
+    price: 9000,
     duration: '180 Days',
     durationDays: 180,
     features: ['All Quarterly benefits', 'Diet & Nutrition builder', 'Body fat measurements'],
@@ -195,8 +195,8 @@ export let mockPlans: any[] = [
   },
   {
     id: 'p_ann',
-    name: 'Annual Premium',
-    price: 18000,
+    name: 'Annual VIP Pass',
+    price: 14000,
     duration: '365 Days',
     durationDays: 365,
     features: ['All Semi-Annual benefits', 'Dedicated coach + personal locker', 'Guest passes (5/month)'],
@@ -218,6 +218,7 @@ export let mockAccessLogs: any[] = [];
 export let mockDoorStatus: any[] = [
   { id: 'dev_k90_main', doorId: 'dev_k90_main', doorName: 'Main Entrance Gate', status: 'locked', lastOpen: new Date().toISOString(), lastUser: 'Arjun Mehta', lastEvent: 'Access Granted' }
 ];
+export let mockEnquiries: any[] = [];
 
 const MOCK_DB_FILE = path.join(__dirname, 'mockDb.json');
 
@@ -241,7 +242,8 @@ export const saveMockDb = () => {
       mockDevices,
       mockDeviceLogs,
       mockAccessLogs,
-      mockDoorStatus
+      mockDoorStatus,
+      mockEnquiries
     }, null, 2));
   } catch (e) {
     console.error('Failed to write mock database:', e);
@@ -270,7 +272,8 @@ export const loadMockDb = () => {
       if (data.mockDeviceLogs) { mockDeviceLogs.length = 0; mockDeviceLogs.push(...data.mockDeviceLogs); }
       if (data.mockAccessLogs) { mockAccessLogs.length = 0; mockAccessLogs.push(...data.mockAccessLogs); }
       if (data.mockDoorStatus) { mockDoorStatus.length = 0; mockDoorStatus.push(...data.mockDoorStatus); }
-      console.log(`[Offline Mock DB] Loaded ${mockMembers.length} members from mockDb.json`);
+      if (data.mockEnquiries) { mockEnquiries.length = 0; mockEnquiries.push(...data.mockEnquiries); }
+      console.log(`[Offline Mock DB] Loaded ${mockMembers.length} members and ${mockEnquiries.length} enquiries from mockDb.json`);
     } else {
       saveMockDb();
     }
@@ -419,7 +422,17 @@ export const db = {
             .catch(err => console.error('[Self-Healing] Failed to commit auto-provisioned members batch:', err));
         }
 
-        membersCache = membersList;
+        const seenKeys = new Set<string>();
+        const deduplicatedList = membersList.filter((m: any) => {
+          const key = (m.memberId && m.memberId !== 'AZ-2026-0000')
+            ? `mid_${m.memberId.trim()}`
+            : (m.phone ? `phone_${m.phone.replace(/\D/g, '')}` : `id_${m.id}`);
+          if (seenKeys.has(key)) return false;
+          seenKeys.add(key);
+          return true;
+        });
+
+        membersCache = deduplicatedList;
         return membersCache;
       } catch (error) {
         console.error('Error fetching/healing members:', error);
@@ -427,7 +440,15 @@ export const db = {
         return membersCache || [];
       }
     }
-    return mockMembers;
+    const seenMockKeys = new Set<string>();
+    return mockMembers.filter((m: any) => {
+      const key = (m.memberId && m.memberId !== 'AZ-2026-0000')
+        ? `mid_${m.memberId.trim()}`
+        : (m.phone ? `phone_${m.phone.replace(/\D/g, '')}` : `id_${m.id}`);
+      if (seenMockKeys.has(key)) return false;
+      seenMockKeys.add(key);
+      return true;
+    });
   },
 
   addMember: async (member: any): Promise<any> => {

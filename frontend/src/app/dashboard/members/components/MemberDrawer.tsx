@@ -7,6 +7,7 @@ import { membershipEngine } from '@/lib/engines/membershipEngine';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useGymStore } from '@/store';
 import toast from 'react-hot-toast';
+import MemberAvatar from '../../components/MemberAvatar';
 
 interface MemberDrawerProps {
   member: any;
@@ -75,18 +76,14 @@ export default function MemberDrawer({ member, onClose, onCall, onMessage, onChe
 
               <div className="flex items-center gap-4">
                 <div className="relative">
-                  {member.avatar ? (
-                    <img src={member.avatar} alt={member.name} className="w-16 h-16 rounded-full object-cover border-2 border-white shadow-sm" />
-                  ) : (
-                    <div className="w-16 h-16 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-xl font-black border-2 border-white shadow-sm">
-                      {getInitials(member.name)}
-                    </div>
-                  )}
+                  <MemberAvatar member={member} className="w-16 h-16 rounded-full object-cover border-2 border-white shadow-sm" size={64} />
                   <div className={`absolute bottom-0 right-0 w-4 h-4 rounded-full border-2 border-white ${member.status === 'active' ? 'bg-emerald-500' : 'bg-red-500'}`} />
                 </div>
                 <div>
                   <h2 className="text-xl font-black text-slate-900 leading-tight">{member.name}</h2>
-                  <p className="text-xs text-slate-500 font-mono mt-0.5 tracking-wider">{member.memberId || member.id}</p>
+                  <p className="text-xs font-bold text-indigo-600 font-mono mt-0.5 tracking-wider">
+                    ID: {member.clientId || member.customId || (member.memberId && !member.memberId.startsWith('AZ-2026-') ? member.memberId : null) || member.biometricId || member.id}
+                  </p>
                   <div className="flex items-center gap-2 mt-1.5">
                     <span className="px-2 py-0.5 bg-amber-100 text-amber-700 text-[10px] font-bold rounded-md uppercase tracking-wider flex items-center gap-1">
                       <Crown size={10} /> {member.plan || 'Premium Gold'}

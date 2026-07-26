@@ -101,11 +101,26 @@ const addons = [
 ];
 
 const commonQuestions = [
-  { q: 'Are there any hidden sign-up fees?', a: 'No hidden joining fees. The price you see is the price you pay.' },
-  { q: 'Can I temporarily freeze my membership?', a: 'Yes — Quarterly and Annual members can freeze up to 15 and 30 days respectively.' },
-  { q: 'Can I try the gym floor before committing?', a: 'Absolutely. Book a free walk-in assessment and try the floor before you commit.' },
-  { q: 'Are group classes included in the standard access?', a: 'Group classes are included. Dedicated 1-on-1 personal training is available on select plans and as an add-on.' },
-  { q: 'Do you offer a satisfaction guarantee?', a: 'Full refund within 7 days of enrollment if you\'re not satisfied. No questions asked.' }
+  { 
+    q: 'Do you offer a free trial session?', 
+    a: 'Yes! We offer a free trial session so you can explore our gym, meet our trainers, and experience our facilities before joining.' 
+  },
+  { 
+    q: 'What membership plans do you offer?', 
+    a: 'We offer flexible monthly, quarterly, half-yearly, and annual membership plans to suit your fitness goals and budget.' 
+  },
+  { 
+    q: 'Do you provide personal training?', 
+    a: 'Yes, our certified trainers provide one-on-one personal training with customised workout and nutrition guidance.' 
+  },
+  { 
+    q: 'What facilities are available at Alpha Zone Gym?', 
+    a: 'Our gym features modern equipment, strength & cardio zones, functional training, CrossFit, HIIT, and a supportive fitness environment.' 
+  },
+  { 
+    q: 'How can I join Alpha Zone Gym?', 
+    a: 'Simply visit our gym, call us, or contact us on WhatsApp (+91 97793 33155) to choose your membership plan and start your fitness journey today.' 
+  }
 ];
 
 export default function PlansPage() {
