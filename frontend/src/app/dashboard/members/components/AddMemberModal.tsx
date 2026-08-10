@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   X, Camera, User, Smartphone, Activity, CheckCircle2,
@@ -10,13 +10,19 @@ import toast from 'react-hot-toast';
 import { useGymStore } from '@/store';
 import SmartPhotoCapture from '@/app/dashboard/components/SmartPhotoCapture';
 
+import { membershipEngine } from '@/lib/engines/membershipEngine';
+
 interface AddMemberModalProps {
   isOpen: boolean;
   onClose: () => void;
 }
 
 export default function AddMemberModal({ isOpen, onClose }: AddMemberModalProps) {
-  const { addMember } = useGymStore();
+  const { addMember, plans, fetchPlans } = useGymStore();
+
+  useEffect(() => {
+    fetchPlans();
+  }, [fetchPlans]);
   
   const [step, setStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -29,7 +35,14 @@ export default function AddMemberModal({ isOpen, onClose }: AddMemberModalProps)
   const [isUploading, setIsUploading] = useState(false);
 
   // Step 2: Membership
-  const [plan, setPlan] = useState('Monthly');
+  const activePlans = plans && plans.length > 0 ? plans : [
+    { id: 'p_mon', name: 'Monthly Standard', price: 2500, duration: '30 Days' },
+    { id: 'p_qrt', name: 'Quarterly Prime', price: 6500, duration: '90 Days' },
+    { id: 'p_semi', name: 'Semi-Annual Pro', price: 11500, duration: '180 Days' },
+    { id: 'p_ann', name: 'Annual Premium', price: 18000, duration: '365 Days' },
+  ];
+
+  const [plan, setPlan] = useState(activePlans[0]?.name || 'Monthly Standard');
   const [trainer, setTrainer] = useState('');
 
   // Step 3: Bio & App
@@ -62,6 +75,9 @@ export default function AddMemberModal({ isOpen, onClose }: AddMemberModalProps)
     }
     setIsSubmitting(true);
     try {
+      const todayStr = new Date().toISOString().split('T')[0];
+      const expiryStr = membershipEngine.calculatePlanExpiryDate(plan, todayStr, plans);
+
       await addMember({
         name: fullName,
         phone: mobile,
@@ -70,7 +86,8 @@ export default function AddMemberModal({ isOpen, onClose }: AddMemberModalProps)
         trainer: trainer,
         avatar: photoPreview || undefined,
         status: 'active',
-        joinDate: new Date().toISOString()
+        joinDate: todayStr,
+        expiryDate: expiryStr
       });
       toast.success('Member created successfully!');
       onClose();
@@ -247,7 +264,11 @@ export default function AddMemberModal({ isOpen, onClose }: AddMemberModalProps)
                       <div className="relative group">
                         <label className="block text-[10px] font-black uppercase tracking-wider text-slate-500 mb-2">Membership Plan</label>
                         <select value={plan} onChange={(e) => setPlan(e.target.value)} className="w-full h-14 bg-slate-50 border border-slate-200 rounded-2xl px-5 text-slate-900 font-bold focus:outline-none focus:border-[#2563EB]">
-                          <option>Monthly</option><option>Quarterly</option><option>Semi-Annual</option><option>Annual Premium</option>
+                          {activePlans.map((p: any) => (
+                            <option key={p.id || p.name} value={p.name}>
+                              {p.name} ({p.duration || (p.durationDays ? `${p.durationDays} Days` : '')}) - ₹{p.price}
+                            </option>
+                          ))}
                         </select>
                       </div>
                       <div className="relative group">

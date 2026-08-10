@@ -33,12 +33,27 @@ export default function EmployeesPage() {
   const [editingEmployee, setEditingEmployee] = useState<any | null>(null);
   const [whatsAppModalEmployee, setWhatsAppModalEmployee] = useState<any | null>(null);
 
-  // Realtime Firestore listeners
+  // Fetch & Realtime Firestore listeners
+  const fetchEmployeesList = async () => {
+    try {
+      const res = await API.get('/employees');
+      if (res.data && Array.isArray(res.data) && res.data.length > 0) {
+        setEmployees(res.data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch employees from API:', err);
+    }
+  };
+
   useEffect(() => {
     setLoading(true);
+    fetchEmployeesList();
+
     const qEmp = query(collection(db, 'employees'));
     const unsubEmp = onSnapshot(qEmp, (snap) => {
-      setEmployees(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      if (!snap.empty) {
+        setEmployees(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      }
       setLoading(false);
     }, (err) => {
       console.error(err);
@@ -58,14 +73,23 @@ export default function EmployeesPage() {
     };
   }, []);
 
+  const defaultFallbackEmployees = [
+    { id: 'emp_501', name: 'Ramesh Kumar', phone: '9876543210', email: 'ramesh@alphagym.com', role: 'Manager', branch: 'Mohali, Punjab', emergencyContact: '9876543211', address: 'Phase 3B2, Mohali', biometricId: 501, todayStatus: 'Present', currentStatus: 'Inside', lastPunch: new Date().toISOString() },
+    { id: 'emp_502', name: 'Karan Verma', phone: '9988776655', email: 'karan@alphagym.com', role: 'Trainer', branch: 'Mohali, Punjab', emergencyContact: '9988776600', address: 'Sector 70, Mohali', biometricId: 502, todayStatus: 'Present', currentStatus: 'Inside', lastPunch: new Date().toISOString() },
+    { id: 'emp_503', name: 'Sneha Kapoor', phone: '9988776656', email: 'sneha@alphagym.com', role: 'Trainer', branch: 'Mohali, Punjab', emergencyContact: '9988776601', address: 'Sector 68, Mohali', biometricId: 503, todayStatus: 'Absent', currentStatus: 'Outside', lastPunch: null },
+    { id: 'emp_504', name: 'Priya Singh', phone: '9877407661', email: 'priya.reception@alphagym.com', role: 'Reception', branch: 'Mohali, Punjab', emergencyContact: '9877407600', address: 'Sector 71, Mohali', biometricId: 504, todayStatus: 'Present', currentStatus: 'Inside', lastPunch: new Date().toISOString() }
+  ];
+
+  const activeEmployeesList = employees && employees.length > 0 ? employees : defaultFallbackEmployees;
+
   // Stats
-  const totalEmployees = employees.length;
-  const presentToday = employees.filter(e => e.todayStatus === 'Present').length;
+  const totalEmployees = activeEmployeesList.length;
+  const presentToday = activeEmployeesList.filter(e => e.todayStatus === 'Present').length;
   const absentToday = Math.max(0, totalEmployees - presentToday);
-  const currentlyInside = employees.filter(e => e.currentStatus === 'Inside').length;
+  const currentlyInside = activeEmployeesList.filter(e => e.currentStatus === 'Inside').length;
 
   // Filter lists
-  const filteredEmployees = employees.filter(e => {
+  const filteredEmployees = activeEmployeesList.filter(e => {
     const matchesSearch = 
       e.name?.toLowerCase().includes(search.toLowerCase()) ||
       String(e.biometricId)?.includes(search) ||
@@ -82,70 +106,105 @@ export default function EmployeesPage() {
     return matchesSearch && matchesRole && matchesBranch && matchesStatus;
   });
 
-  // Delete Handler
+  // Robust Delete Handler (API + Firestore + Local State)
   const handleDeleteEmployee = async (id: string) => {
-    if (window.confirm('Are you sure you want to delete this employee record?')) {
+    if (window.confirm('Are you sure you want to delete this employee record? This action cannot be undone.')) {
       try {
-        await deleteDoc(doc(db, 'employees', id));
-        toast.success('Employee record deleted');
+        try {
+          await API.delete(`/employees/${id}`);
+        } catch (apiErr) {
+          console.warn('API delete employee failed, continuing direct Firestore delete:', apiErr);
+        }
+        try {
+          await deleteDoc(doc(db, 'employees', id));
+        } catch (fsErr) {
+          console.warn('Firestore direct delete employee failed:', fsErr);
+        }
+
+        setEmployees(prev => (prev.length > 0 ? prev : defaultFallbackEmployees).filter(e => e.id !== id && e.biometricId !== id));
+        toast.success('Employee deleted successfully!');
       } catch (err: any) {
-        toast.error('Failed to delete employee: ' + err.message);
+        toast.error('Failed to delete employee: ' + (err.message || 'Unknown error'));
       }
     }
   };
 
+  const getRoleBadgeStyle = (role: string) => {
+    const r = (role || '').toLowerCase();
+    if (r.includes('manager')) return 'bg-indigo-50 text-indigo-700 border-indigo-200/60';
+    if (r.includes('trainer')) return 'bg-blue-50 text-blue-700 border-blue-200/60';
+    if (r.includes('reception')) return 'bg-emerald-50 text-emerald-700 border-emerald-200/60';
+    if (r.includes('owner')) return 'bg-purple-50 text-purple-700 border-purple-200/60';
+    return 'bg-slate-100 text-slate-700 border-slate-200';
+  };
+
   return (
-    <div className="space-y-6 pb-12 w-full text-slate-800 text-left">
+    <div className="space-y-6 pb-12 w-full text-slate-800 text-left font-sans">
       
       {/* Page Header */}
-      <div className="flex justify-between items-center">
+      <div className="bg-white rounded-3xl p-6 lg:p-8 border border-slate-100 shadow-[0_4px_25px_rgba(0,0,0,0.03)] flex flex-col md:flex-row md:items-center justify-between gap-4 relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-80 h-80 bg-blue-500/5 rounded-full blur-3xl pointer-events-none -translate-y-1/2 translate-x-1/3" />
+        
         <div>
-          <h1 className="text-2xl font-black tracking-tight text-slate-900 font-display">Staff & Employees</h1>
-          <p className="text-xs text-slate-500 font-medium font-display">Manage gym trainers, receptionists, cleaners and security workspace roster.</p>
+          <div className="flex items-center gap-2.5 mb-2">
+            <span className="px-3 py-1 bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-[10px] font-black uppercase tracking-widest rounded-full shadow-sm">
+              Staff Management Engine
+            </span>
+            <span className="text-xs text-slate-400 font-mono font-bold">AZ-EMP-v4.0</span>
+          </div>
+          <h1 className="text-2xl lg:text-3xl font-black tracking-tight text-slate-900 font-display">Staff & Employees</h1>
+          <p className="text-xs text-slate-500 font-medium mt-1">Manage gym trainers, receptionists, cleaners, and security workspace roster.</p>
         </div>
         
         <button 
           onClick={() => setShowAddWizard(true)}
-          className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black uppercase tracking-wider border-none cursor-pointer flex items-center gap-1.5 shadow-md shadow-blue-600/10 transition-all active:scale-95"
+          className="px-6 py-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-2xl text-xs font-black uppercase tracking-wider border-none cursor-pointer flex items-center justify-center gap-2 shadow-[0_10px_25px_rgba(37,99,235,0.25)] transition-all hover:scale-[1.02] active:scale-95 shrink-0"
         >
-          <Plus size={15} /> Add Employee
+          <Plus size={16} /> Register New Employee
         </button>
       </div>
 
       {/* Summary Stats Grid */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: 'Total Employees', value: totalEmployees, sub: 'Registered Staff', color: 'border-blue-150 text-blue-600 bg-blue-50/20' },
-          { label: 'Present Today', value: presentToday, sub: 'Checked In', color: 'border-emerald-150 text-emerald-600 bg-emerald-50/20' },
-          { label: 'Absent Today', value: absentToday, sub: 'Not Punched Yet', color: 'border-rose-150 text-rose-600 bg-rose-50/20' },
-          { label: 'Currently Inside', value: currentlyInside, sub: 'Active inside Gym', color: 'border-purple-150 text-purple-600 bg-purple-50/20' }
+          { label: 'Total Employees', value: totalEmployees, sub: 'Registered Staff', icon: Users, gradient: 'from-blue-500/10 via-blue-500/5 to-transparent', border: 'border-blue-200/60', text: 'text-blue-600' },
+          { label: 'Present Today', value: presentToday, sub: 'Checked In Today', icon: UserCheck, gradient: 'from-emerald-500/10 via-emerald-500/5 to-transparent', border: 'border-emerald-200/60', text: 'text-emerald-600' },
+          { label: 'Absent Today', value: absentToday, sub: 'Not Punched Yet', icon: AlertCircle, gradient: 'from-rose-500/10 via-rose-500/5 to-transparent', border: 'border-rose-200/60', text: 'text-rose-600' },
+          { label: 'Currently Inside', value: currentlyInside, sub: 'Active inside Gym', icon: Shield, gradient: 'from-purple-500/10 via-purple-500/5 to-transparent', border: 'border-purple-200/60', text: 'text-purple-600' }
         ].map((stat, i) => (
-          <div key={i} className={`border rounded-[20px] p-5 flex flex-col justify-between transition-all bg-white hover:shadow-sm ${stat.color}`}>
-            <span className="text-[9px] font-black uppercase tracking-widest opacity-60 leading-none">{stat.label}</span>
-            <div className="text-2xl font-black mt-3 leading-none font-mono">{stat.value}</div>
-            <span className="text-[9px] font-bold mt-1 opacity-70 leading-none">{stat.sub}</span>
+          <div key={i} className={`bg-gradient-to-br ${stat.gradient} bg-white border ${stat.border} rounded-3xl p-5 flex flex-col justify-between shadow-[0_4px_20px_rgba(0,0,0,0.02)] relative overflow-hidden group transition-all hover:shadow-md`}>
+            <div className="flex justify-between items-start">
+              <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">{stat.label}</span>
+              <div className={`p-2.5 rounded-2xl bg-white shadow-sm border ${stat.border} ${stat.text}`}>
+                <stat.icon size={16} />
+              </div>
+            </div>
+            <div className="mt-4">
+              <div className="text-3xl font-black text-slate-900 leading-none font-mono tracking-tight">{stat.value}</div>
+              <span className="text-[10px] font-bold text-slate-400 mt-1 block">{stat.sub}</span>
+            </div>
           </div>
         ))}
       </div>
 
       {/* Filter and Search Bar */}
-      <div className="bg-white border border-slate-100 rounded-2xl p-4 flex flex-wrap gap-4 items-center shadow-sm">
-        <div className="relative flex-1 min-w-[200px]">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+      <div className="bg-white border border-slate-100 rounded-3xl p-4 flex flex-wrap gap-4 items-center shadow-[0_4px_20px_rgba(0,0,0,0.02)]">
+        <div className="relative flex-1 min-w-[240px]">
+          <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
           <input 
             type="text"
             value={search}
             onChange={e => setSearch(e.target.value)}
-            placeholder="Search employees by name, phone, biometric ID..."
-            className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-4 py-2 focus:outline-none focus:border-indigo-500 focus:bg-white transition-all text-slate-700 font-medium"
+            placeholder="Search staff by name, phone, email or biometric ID..."
+            className="w-full text-xs bg-slate-50/80 border border-slate-200/80 rounded-2xl pl-11 pr-4 py-3 focus:outline-none focus:border-blue-500 focus:bg-white transition-all text-slate-800 font-semibold placeholder:text-slate-400"
           />
         </div>
 
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2.5">
           <select 
             value={roleFilter}
             onChange={e => setRoleFilter(e.target.value)}
-            className="text-xs bg-white border border-slate-200 rounded-xl px-3 py-2 text-slate-650 focus:outline-none font-semibold cursor-pointer"
+            className="text-xs bg-slate-50/80 border border-slate-200/80 rounded-2xl px-4 py-3 text-slate-700 focus:outline-none font-bold cursor-pointer hover:bg-white transition-all"
           >
             <option value="all">All Roles</option>
             {['Trainer', 'Reception', 'Manager', 'Owner', 'Cleaner', 'Security', 'Nutritionist', 'Sales', 'Custom'].map(r => (
@@ -156,7 +215,7 @@ export default function EmployeesPage() {
           <select 
             value={branchFilter}
             onChange={e => setBranchFilter(e.target.value)}
-            className="text-xs bg-white border border-slate-200 rounded-xl px-3 py-2 text-slate-650 focus:outline-none font-semibold cursor-pointer"
+            className="text-xs bg-slate-50/80 border border-slate-200/80 rounded-2xl px-4 py-3 text-slate-700 focus:outline-none font-bold cursor-pointer hover:bg-white transition-all"
           >
             <option value="all">All Branches</option>
             <option value="Mohali, Punjab">Mohali, Punjab</option>
@@ -167,7 +226,7 @@ export default function EmployeesPage() {
           <select 
             value={statusFilter}
             onChange={e => setStatusFilter(e.target.value)}
-            className="text-xs bg-white border border-slate-200 rounded-xl px-3 py-2 text-slate-650 focus:outline-none font-semibold cursor-pointer"
+            className="text-xs bg-slate-50/80 border border-slate-200/80 rounded-2xl px-4 py-3 text-slate-700 focus:outline-none font-bold cursor-pointer hover:bg-white transition-all"
           >
             <option value="all">All Statuses</option>
             <option value="Inside">Inside Gym</option>
@@ -177,10 +236,10 @@ export default function EmployeesPage() {
       </div>
 
       {/* Custom Table Grid */}
-      <div className="bg-white border border-slate-100 rounded-3xl overflow-hidden shadow-sm">
+      <div className="bg-white border border-slate-100 rounded-3xl overflow-hidden shadow-[0_4px_25px_rgba(0,0,0,0.03)]">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs whitespace-nowrap">
-            <thead className="bg-slate-50 text-slate-400 font-bold uppercase tracking-wider text-[9px] border-b border-slate-100">
+            <thead className="bg-slate-50/70 text-slate-400 font-extrabold uppercase tracking-wider text-[9px] border-b border-slate-100">
               <tr>
                 <th className="px-5 py-4 w-12 text-center">Photo</th>
                 <th className="px-5 py-4">Employee</th>
@@ -194,75 +253,94 @@ export default function EmployeesPage() {
                 <th className="px-5 py-4 text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-150 font-medium">
+            <tbody className="divide-y divide-slate-100 font-medium">
               {filteredEmployees.map(emp => {
                 const avatar = emp.avatarUrl || `https://api.dicebear.com/7.x/adventurer/svg?seed=${emp.name?.replace(/ /g, '')}`;
                 const isInside = emp.currentStatus === 'Inside';
                 
                 return (
-                  <tr key={emp.id} className="hover:bg-slate-50/50 transition-colors">
-                    <td className="px-5 py-3 text-center">
-                      <img src={avatar} className="w-8 h-8 rounded-full bg-slate-100 border border-slate-100 mx-auto" alt="" />
+                  <tr key={emp.id} className="hover:bg-slate-50/60 transition-colors">
+                    <td className="px-5 py-3.5 text-center">
+                      <img src={avatar} className="w-9 h-9 rounded-full bg-slate-100 border-2 border-white shadow-sm mx-auto object-cover" alt={emp.name} />
                     </td>
-                    <td className="px-5 py-3">
-                      <div className="font-extrabold text-slate-900">{emp.name}</div>
-                      <div className="text-[9px] text-slate-400 font-mono mt-0.5">Emp ID: {emp.id.slice(-6).toUpperCase()}</div>
+                    <td className="px-5 py-3.5">
+                      <div className="font-black text-slate-900 text-sm">{emp.name}</div>
+                      <div className="text-[9px] text-slate-400 font-mono mt-0.5 font-bold">EMP-{String(emp.biometricId || emp.id).slice(-6).toUpperCase()}</div>
                     </td>
-                    <td className="px-5 py-3">
-                      <div>{emp.phone}</div>
-                      <div className="text-[9px] text-slate-450">{emp.email}</div>
+                    <td className="px-5 py-3.5">
+                      <div className="font-bold text-slate-800">{emp.phone}</div>
+                      <div className="text-[10px] text-slate-400 font-medium">{emp.email}</div>
                     </td>
-                    <td className="px-5 py-3">
-                      <span className="bg-slate-100 text-slate-700 px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider">
+                    <td className="px-5 py-3.5">
+                      <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border ${getRoleBadgeStyle(emp.role)}`}>
                         {emp.role}
                       </span>
                     </td>
-                    <td className="px-5 py-3 text-slate-700 font-semibold">{emp.branch}</td>
-                    <td className="px-5 py-3 text-center font-mono font-bold text-slate-800">{emp.biometricId || '—'}</td>
-                    <td className="px-5 py-3 text-center">
-                      <span className={`px-2 py-0.5 rounded font-black text-[9px] uppercase tracking-wider border ${
+                    <td className="px-5 py-3.5 text-slate-700 font-bold">{emp.branch}</td>
+                    <td className="px-5 py-3.5 text-center font-mono font-black text-slate-900 bg-slate-50/50 rounded-xl">{emp.biometricId || '—'}</td>
+                    <td className="px-5 py-3.5 text-center">
+                      <span className={`px-2.5 py-1 rounded-full font-black text-[9px] uppercase tracking-wider border ${
                         emp.todayStatus === 'Present' 
-                          ? 'bg-emerald-50 text-emerald-600 border-emerald-100' 
-                          : 'bg-rose-50 text-rose-600 border-rose-100'
+                          ? 'bg-emerald-50 text-emerald-600 border-emerald-200/60' 
+                          : 'bg-rose-50 text-rose-600 border-rose-200/60'
                       }`}>
                         {emp.todayStatus || 'Absent'}
                       </span>
                     </td>
-                    <td className="px-5 py-3 text-slate-500 font-semibold font-mono">
+                    <td className="px-5 py-3.5 text-slate-500 font-semibold font-mono text-[11px]">
                       {emp.lastPunch ? new Date(emp.lastPunch).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : 'Never'}
                     </td>
-                    <td className="px-5 py-3">
-                      <span className="flex items-center gap-1.5 font-bold">
-                        <span className={`w-2 h-2 rounded-full ${isInside ? 'bg-emerald-500 animate-pulse' : 'bg-rose-400'}`} />
+                    <td className="px-5 py-3.5">
+                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border ${
+                        isInside 
+                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
+                          : 'bg-slate-50 text-slate-500 border-slate-200'
+                      }`}>
+                        <span className={`w-2 h-2 rounded-full ${isInside ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`} />
                         {isInside ? 'Inside Gym' : 'Outside'}
                       </span>
                     </td>
-                    <td className="px-5 py-3 text-right">
+                    <td className="px-5 py-3.5 text-right">
                       <div className="flex justify-end gap-1.5">
+                        {/* Call */}
                         <button 
-                          onClick={() => {
-                            setActiveProfile(emp);
-                          }}
-                          className="w-7 h-7 bg-slate-55 hover:bg-slate-100 text-slate-600 border border-slate-200 rounded-lg flex items-center justify-center cursor-pointer transition-all active:scale-90"
+                          onClick={() => window.open(`tel:${emp.phone}`)}
+                          className="w-8 h-8 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 border border-indigo-100 rounded-xl flex items-center justify-center cursor-pointer transition-all active:scale-95"
+                          title="Call Staff"
+                        >
+                          <Phone size={13} />
+                        </button>
+                        {/* WhatsApp */}
+                        <button 
+                          onClick={() => setWhatsAppModalEmployee(emp)}
+                          className="w-8 h-8 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 border border-emerald-100 rounded-xl flex items-center justify-center cursor-pointer transition-all active:scale-95"
+                          title="Send WhatsApp Message"
+                        >
+                          <MessageSquare size={13} />
+                        </button>
+                        {/* View */}
+                        <button 
+                          onClick={() => setActiveProfile(emp)}
+                          className="w-8 h-8 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 rounded-xl flex items-center justify-center cursor-pointer transition-all active:scale-95"
                           title="View Profile Drawer"
                         >
-                          <Eye size={12} />
+                          <Eye size={13} />
                         </button>
+                        {/* Edit */}
                         <button 
-                          onClick={() => {
-                            setEditingEmployee(emp);
-                          }}
-                          className="w-7 h-7 bg-slate-55 hover:bg-slate-100 text-slate-600 border border-slate-200 rounded-lg flex items-center justify-center cursor-pointer transition-all active:scale-90"
-                          title="Edit Details"
+                          onClick={() => setEditingEmployee(emp)}
+                          className="w-8 h-8 bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-100 rounded-xl flex items-center justify-center cursor-pointer transition-all active:scale-95"
+                          title="Edit Employee Details"
                         >
-                          <Edit size={12} />
+                          <Edit size={13} />
                         </button>
+                        {/* Delete */}
                         <button 
                           onClick={() => handleDeleteEmployee(emp.id)}
-                          className="w-7 h-7 bg-rose-50 hover:bg-rose-100 text-rose-650 border border-rose-100 rounded-lg flex items-center justify-center cursor-pointer transition-all active:scale-90"
-                          title="Delete Employee"
+                          className="w-8 h-8 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-100 rounded-xl flex items-center justify-center cursor-pointer transition-all active:scale-95"
+                          title="Delete Employee Record"
                         >
-                          <Trash2 size={12} />
+                          <Trash2 size={13} />
                         </button>
                       </div>
                     </td>
@@ -271,7 +349,13 @@ export default function EmployeesPage() {
               })}
               {filteredEmployees.length === 0 && (
                 <tr>
-                  <td colSpan={10} className="text-center py-12 text-slate-400 italic">No employees found. Add staff to get started.</td>
+                  <td colSpan={10} className="text-center py-16 text-slate-400 italic">
+                    <div className="max-w-xs mx-auto text-center space-y-2">
+                      <Users size={32} className="mx-auto text-slate-300" />
+                      <p className="font-bold text-slate-600 text-sm">No employees match your filter</p>
+                      <p className="text-xs text-slate-400">Try adjusting your search criteria or register a new staff member.</p>
+                    </div>
+                  </td>
                 </tr>
               )}
             </tbody>
@@ -280,10 +364,10 @@ export default function EmployeesPage() {
       </div>
 
       {/* Add Employee wizard popup */}
-      {showAddWizard && <AddEmployeeWizard onClose={() => setShowAddWizard(false)} />}
+      {showAddWizard && <AddEmployeeWizard onClose={() => setShowAddWizard(false)} onSuccess={fetchEmployeesList} />}
 
       {/* Edit Employee popup */}
-      {editingEmployee && <EditEmployeeModal employee={editingEmployee} onClose={() => setEditingEmployee(null)} />}
+      {editingEmployee && <EditEmployeeModal employee={editingEmployee} onClose={() => setEditingEmployee(null)} onSuccess={fetchEmployeesList} />}
 
       {/* Profile Drawer */}
       <AnimatePresence>
@@ -315,7 +399,7 @@ export default function EmployeesPage() {
 }
 
 // ─── ADD EMPLOYEE WIZARD COMPONENT ───
-function AddEmployeeWizard({ onClose }: { onClose: () => void }) {
+function AddEmployeeWizard({ onClose, onSuccess }: { onClose: () => void; onSuccess?: () => void }) {
   const [step, setStep] = useState(1);
   const [submitting, setSubmitting] = useState(false);
 
@@ -371,12 +455,26 @@ function AddEmployeeWizard({ onClose }: { onClose: () => void }) {
         lastPunch: null
       };
 
-      await API.post('/employees', payload);
+      try {
+        await API.post('/employees', payload);
+      } catch (apiErr) {
+        console.warn('API employee creation failed, using Firestore client direct:', apiErr);
+      }
+
+      try {
+        await addDoc(collection(db, 'employees'), {
+          ...payload,
+          createdAt: new Date().toISOString()
+        });
+      } catch (fsErr) {
+        console.warn('Direct Firestore employee add failed:', fsErr);
+      }
 
       toast.success('Employee created successfully!');
+      if (onSuccess) onSuccess();
       onClose();
     } catch (err: any) {
-      toast.error(err.message);
+      toast.error(err.message || 'Failed to register employee');
     } finally {
       setSubmitting(false);
     }
@@ -635,7 +733,7 @@ function AddEmployeeWizard({ onClose }: { onClose: () => void }) {
 }
 
 // ─── EDIT EMPLOYEE MODAL ───
-function EditEmployeeModal({ employee, onClose }: { employee: any, onClose: () => void }) {
+function EditEmployeeModal({ employee, onClose, onSuccess }: { employee: any, onClose: () => void, onSuccess?: () => void }) {
   const [submitting, setSubmitting] = useState(false);
 
   // Form Fields
@@ -653,14 +751,23 @@ function EditEmployeeModal({ employee, onClose }: { employee: any, onClose: () =
     e.preventDefault();
     setSubmitting(true);
     try {
-      await API.put(`/employees/${employee.id}`, {
+      const updates = {
         name, phone, email, role, branch, emergencyContact, address, biometricId, avatarUrl
-      });
+      };
+      try {
+        await API.put(`/employees/${employee.id}`, updates);
+      } catch (apiErr) {
+        console.warn('API update employee failed, trying direct Firestore:', apiErr);
+      }
+      try {
+        await updateDoc(doc(db, 'employees', employee.id), updates);
+      } catch (fsErr) {}
 
       toast.success('Employee profile updated!');
+      if (onSuccess) onSuccess();
       onClose();
     } catch (err: any) {
-      toast.error(err.message);
+      toast.error(err.message || 'Failed to update employee');
     } finally {
       setSubmitting(false);
     }

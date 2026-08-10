@@ -150,6 +150,29 @@ export default function MemberDrawer({ member, onClose, onCall, onMessage, onChe
                 </div>
               </div>
 
+              {/* Membership History */}
+              {member.membershipHistory && member.membershipHistory.length > 0 && (
+                <div className="space-y-3">
+                  <h4 className="text-[10px] font-bold uppercase tracking-widest text-indigo-600 flex items-center gap-1.5">
+                    <Crown size={12} /> Membership History ({member.membershipHistory.length})
+                  </h4>
+                  <div className="space-y-2 max-h-[180px] overflow-y-auto pr-1">
+                    {member.membershipHistory.map((h: any, idx: number) => (
+                      <div key={idx} className="p-3 bg-slate-50 border border-slate-100 rounded-xl flex justify-between items-center text-xs">
+                        <div>
+                          <div className="font-bold text-slate-800">{h.packageName}</div>
+                          <div className="text-[10px] text-slate-500">{h.startDate} → {h.expiryDate || 'Active'}</div>
+                        </div>
+                        <div className="text-right">
+                          <div className="font-black text-indigo-600">₹{(h.amount || 0).toLocaleString('en-IN')}</div>
+                          <div className="text-[9px] uppercase font-bold text-emerald-600">{h.invoiceNumber || 'Paid'}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Physical Parameters */}
               <div className="space-y-3">
                 <h4 className="text-[10px] font-bold uppercase tracking-widest text-indigo-600 flex items-center gap-1.5">

@@ -1,6 +1,65 @@
 import { Request, Response } from 'express';
 import { admin, isFirebaseInitialized } from '../firebase';
 
+const defaultEmployeesList = [
+  {
+    name: 'Ramesh Kumar',
+    phone: '9876543210',
+    email: 'ramesh@alphagym.com',
+    role: 'Manager',
+    branch: 'Mohali, Punjab',
+    emergencyContact: '9876543211',
+    address: 'Phase 3B2, Mohali',
+    biometricId: 501,
+    todayStatus: 'Present',
+    currentStatus: 'Inside',
+    lastPunch: new Date().toISOString(),
+    createdAt: new Date().toISOString()
+  },
+  {
+    name: 'Karan Verma',
+    phone: '9988776655',
+    email: 'karan@alphagym.com',
+    role: 'Trainer',
+    branch: 'Mohali, Punjab',
+    emergencyContact: '9988776600',
+    address: 'Sector 70, Mohali',
+    biometricId: 502,
+    todayStatus: 'Present',
+    currentStatus: 'Inside',
+    lastPunch: new Date().toISOString(),
+    createdAt: new Date().toISOString()
+  },
+  {
+    name: 'Sneha Kapoor',
+    phone: '9988776656',
+    email: 'sneha@alphagym.com',
+    role: 'Trainer',
+    branch: 'Mohali, Punjab',
+    emergencyContact: '9988776601',
+    address: 'Sector 68, Mohali',
+    biometricId: 503,
+    todayStatus: 'Absent',
+    currentStatus: 'Outside',
+    lastPunch: null,
+    createdAt: new Date().toISOString()
+  },
+  {
+    name: 'Priya Singh',
+    phone: '9877407661',
+    email: 'priya.reception@alphagym.com',
+    role: 'Reception',
+    branch: 'Mohali, Punjab',
+    emergencyContact: '9877407600',
+    address: 'Sector 71, Mohali',
+    biometricId: 504,
+    todayStatus: 'Present',
+    currentStatus: 'Inside',
+    lastPunch: new Date().toISOString(),
+    createdAt: new Date().toISOString()
+  }
+];
+
 export const getEmployees = async (req: Request, res: Response) => {
   try {
     if (!isFirebaseInitialized || !admin) {
@@ -8,6 +67,18 @@ export const getEmployees = async (req: Request, res: Response) => {
     }
     const firestore = admin.firestore();
     const snap = await firestore.collection('employees').get();
+    if (snap.empty) {
+      console.log('[Auto-Seed] Firestore employees empty. Seeding default employees...');
+      const batch = firestore.batch();
+      const seeded: any[] = [];
+      for (const emp of defaultEmployeesList) {
+        const docRef = firestore.collection('employees').doc();
+        batch.set(docRef, emp);
+        seeded.push({ id: docRef.id, ...emp });
+      }
+      await batch.commit().catch(e => console.error('[Auto-Seed] Failed to seed employees:', e));
+      return res.json(seeded);
+    }
     const list = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     res.json(list);
   } catch (error: any) {

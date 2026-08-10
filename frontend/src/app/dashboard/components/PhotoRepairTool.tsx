@@ -139,6 +139,27 @@ export default function PhotoRepairTool() {
     }
   };
 
+  const [isMarkingPaid, setIsMarkingPaid] = useState(false);
+
+  const handleMarkAllPaid = async () => {
+    if (!window.confirm('Are you sure you want to mark ALL member bills and invoices as PAID (Fully Cleared)?')) {
+      return;
+    }
+
+    setIsMarkingPaid(true);
+    toast.loading('Marking all bills & invoices as PAID...', { id: 'mark-all-paid' });
+
+    try {
+      const res = await API.post('/members/mark-all-paid');
+      toast.success(res.data.message || 'All member bills marked as PAID successfully!', { id: 'mark-all-paid', duration: 5000 });
+      await fetchMembers();
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || err.message || 'Failed to mark bills as paid', { id: 'mark-all-paid' });
+    } finally {
+      setIsMarkingPaid(false);
+    }
+  };
+
   return (
     <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm space-y-6">
       {/* Header */}
@@ -158,6 +179,24 @@ export default function PhotoRepairTool() {
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
+          <button
+            onClick={handleMarkAllPaid}
+            disabled={isMarkingPaid}
+            className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 text-white font-black rounded-xl text-sm hover:bg-indigo-700 transition-all shadow-sm cursor-pointer disabled:opacity-50 border-none"
+          >
+            {isMarkingPaid ? (
+              <>
+                <RefreshCw size={16} className="animate-spin text-white" />
+                Updating All Bills...
+              </>
+            ) : (
+              <>
+                <CheckCircle2 size={16} />
+                Mark All Bills Paid
+              </>
+            )}
+          </button>
+
           <button
             onClick={handleRepairBilling}
             disabled={isRepairingBilling}

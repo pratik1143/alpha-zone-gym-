@@ -98,15 +98,24 @@ export default function ClientProfileSystem() {
     const unsub = onSnapshot(doc(db, 'members', id), (d) => {
       if (!isMounted) return;
       if (d.exists()) {
-        const m = { id: d.id, ...d.data() };
+        let m: any = { id: d.id, ...d.data() };
+        if (m.plan && (!m.expiryDate || m.expiryDate === m.joinDate || m.expiryDate === new Date().toISOString().split('T')[0])) {
+          const rawJoin = m.joinDate || m.createdAt;
+          const corrected = membershipEngine.calculatePlanExpiryDate(m.plan, rawJoin);
+          if (corrected > (m.expiryDate || '')) {
+            m.expiryDate = corrected;
+            membershipEngine.selfHealMemberData(m);
+          }
+        }
         setMember(m);
         setLoading(false);
-        try { membershipEngine.selfHealMemberData(m); } catch (_) {}
       } else {
         fetchFallbackMember();
       }
     }, (error) => {
-      console.warn("Member profile snapshot error:", error.message);
+      if (error?.code !== 'permission-denied' && !error?.message?.includes('permissions')) {
+        console.warn("Member profile snapshot notice:", error.message);
+      }
       if (isMounted) fetchFallbackMember();
     });
 
@@ -250,29 +259,15 @@ export default function ClientProfileSystem() {
           <div className="flex flex-col gap-2 w-48">
             <button
               onClick={() => {
-                const PLAN_DURATION_MAP: Record<string, number> = {
-                  '1 month': 30, 'monthly': 30, '1month': 30,
-                  '2 month': 60, '2 months': 60,
-                  '3 month': 90, '3 months': 90, 'quarterly': 90,
-                  '6 month': 180, '6 months': 180, 'semi': 180, 'half year': 180,
-                  '12 month': 365, '12 months': 365, 'annual': 365, 'yearly': 365, '1 year': 365,
-                  'lifetime': 3650,
-                };
-                const planLower = (member.plan || '').toLowerCase();
-                let days = 30;
-                for (const [key, d] of Object.entries(PLAN_DURATION_MAP)) {
-                  if (planLower.includes(key)) { days = d; break; }
-                }
-                // Since this is a manual fix for a paid renewal, start from TODAY
-                const start = new Date();
-                const newExpiry = new Date(start.getTime() + days * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+                const rawJoin = member.joinDate || member.createdAt;
+                const newExpiry = membershipEngine.calculatePlanExpiryDate(member.plan, rawJoin);
                 updateDoc(doc(db, 'members', member.id), { expiryDate: newExpiry, status: 'active' })
                   .then(() => toast.success(`\u2705 Auto-synced! Expiry is now ${newExpiry}`))
                   .catch((e: any) => toast.error('Failed to sync: ' + e.message));
               }}
               className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black transition-all shadow-md flex justify-center items-center gap-2 cursor-pointer"
             >
-              \u26a1 Auto-Sync Expiry
+              ⚡ Auto-Sync Expiry
             </button>
             <button className="w-full py-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-xl text-xs font-black transition-all flex justify-center items-center gap-2 cursor-pointer">
               <DollarSign size={14} /> Renew Membership

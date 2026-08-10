@@ -120,7 +120,9 @@ export default function MembersPage() {
   const router = useRouter();
   const {
     members: rawMembers,
+    plans,
     fetchMembers,
+    fetchPlans,
     addMember,
     updateMember,
     deleteMember,
@@ -142,7 +144,25 @@ export default function MembersPage() {
     });
 
     return uniqueRaw.map((m: any) => {
-      const daysLeft = membershipEngine.calculateDaysLeft(m.expiryDate);
+      let expiryDate = typeof m.expiryDate === 'string' ? m.expiryDate : (m.expiryDate ? new Date(m.expiryDate).toISOString().split('T')[0] : '');
+      const todayStr = new Date().toISOString().split('T')[0];
+      const rawJoin = m.joinDate || m.createdAt;
+      const joinStr = typeof rawJoin === 'string'
+        ? (rawJoin.includes('T') ? rawJoin.split('T')[0] : rawJoin)
+        : (rawJoin && typeof rawJoin === 'object' && typeof rawJoin.seconds === 'number'
+            ? new Date(rawJoin.seconds * 1000).toISOString().split('T')[0]
+            : todayStr);
+
+      // Auto-heal members whose expiryDate was set to joinDate or missing for a plan like "10 DAYS"
+      if (m.plan && (!expiryDate || expiryDate === joinStr || expiryDate === todayStr)) {
+        const computed = membershipEngine.calculatePlanExpiryDate(m.plan, rawJoin || todayStr, plans);
+        if (computed > (expiryDate || '')) {
+          expiryDate = computed;
+          membershipEngine.selfHealMemberData({ ...m, expiryDate: computed });
+        }
+      }
+
+      const daysLeft = membershipEngine.calculateDaysLeft(expiryDate);
       let derivedStatus = membershipEngine.calculateMembershipStatus(daysLeft, m.status).toLowerCase();
       // Merge expiring into active per user request
       if (derivedStatus === 'expiring soon' || derivedStatus === 'expiring') {
@@ -150,11 +170,12 @@ export default function MembersPage() {
       }
       return {
         ...m,
+        expiryDate,
         daysLeft,
         status: derivedStatus
       };
     });
-  }, [rawMembers]);
+  }, [rawMembers, plans]);
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -210,10 +231,11 @@ export default function MembersPage() {
 
   useEffect(() => {
     fetchMembers();
+    fetchPlans();
     if (typeof window !== 'undefined' && window.location.search.includes('action=add')) {
       setShowAddModal(true);
     }
-  }, [fetchMembers]);
+  }, [fetchMembers, fetchPlans]);
 
   // ── Biometric Enrollment State ──────────────────────────────────────────────
   const [enrollModalOpen, setEnrollModalOpen] = useState(false);
@@ -545,41 +567,8 @@ export default function MembersPage() {
       return;
     }
 
-    // ── PLAN DURATION MAP (Single Source of Truth) ──────────────────────
-    // Maps plan name keywords to days. Covers all naming conventions.
-    const PLAN_DURATION_MAP: Record<string, number> = {
-      '1 month':   30,  'monthly':    30,  '1month':    30,
-      '2 month':   60,  '2 months':   60,
-      '3 month':   90,  '3 months':   90,  'quarterly': 90,
-      '4 month':  120,  '4 months':  120,
-      '5 month':  150,  '5 months':  150,
-      '6 month':  180,  '6 months':  180,  'semi':      180,  'half year': 180,
-      '8 month':  240,  '8 months':  240,
-      '9 month':  270,  '9 months':  270,
-      '10 month': 300,  '10 months': 300,
-      '11 month': 330,  '11 months': 330,
-      '12 month': 365,  '12 months': 365,  'annual':    365,  'yearly':    365,  '1 year': 365,
-      'lifetime': 3650,
-    };
-
-    // Match plan name (case-insensitive) against the map
-    const planLower = (newPlan || '').toLowerCase();
-    let durationDays = 30; // safe default
-    for (const [key, days] of Object.entries(PLAN_DURATION_MAP)) {
-      if (planLower.includes(key)) {
-        durationDays = days;
-        break;
-      }
-    }
-    // Also try matching from Firestore plans (in case gym has custom durations)
-    const currentPlans = useGymStore.getState().plans || [];
-    const matchedPlan = currentPlans.find((p: any) => p.name === newPlan || p.id === newPlan);
-    if (matchedPlan?.durationDays) durationDays = matchedPlan.durationDays;
-
-    const startDate = newJoiningDate ? new Date(newJoiningDate) : new Date();
-    const expiry = new Date(startDate.getTime() + durationDays * 24 * 60 * 60 * 1000)
-      .toISOString()
-      .split('T')[0];
+    const joinDateStr = newJoiningDate || new Date().toISOString().split('T')[0];
+    const expiry = membershipEngine.calculatePlanExpiryDate(newPlan, joinDateStr, plans);
 
     try {
       await addMember({
@@ -966,6 +955,28 @@ export default function MembersPage() {
         setStatusFilter={setStatusFilter}
         selectedMemberId={activeProfile?.id || null}
         onSelectMember={setActiveProfile}
+        onEdit={(m) => setEditingMember(m)}
+        onRenew={(m) => setRenewWizardMember(m)}
+        onFreeze={async (m) => {
+          try {
+            await toggleFreeze(m.id);
+            toast.success(`Status updated for ${m.name}`);
+            fetchMembers();
+          } catch {
+            toast.error('Failed to update status');
+          }
+        }}
+        onDelete={async (m) => {
+          if (confirm(`Are you sure you want to delete member ${m.name}? This action cannot be undone.`)) {
+            try {
+              await deleteMember(m.id);
+              toast.success(`Member ${m.name} deleted`);
+              fetchMembers();
+            } catch {
+              toast.error('Failed to delete member');
+            }
+          }
+        }}
       />
 
       {/* Profile Drawer */}
@@ -1083,10 +1094,14 @@ export default function MembersPage() {
                       value={editingMember.plan || ""}
                       onChange={(e) => setEditingMember({ ...editingMember, plan: e.target.value })}
                     >
-                      <option value="Monthly">Monthly</option>
-                      <option value="Quarterly">Quarterly</option>
-                      <option value="Semi-Annual">Semi-Annual</option>
-                      <option value="Annual Premium">Annual Premium</option>
+                      {(plans && plans.length > 0 ? plans : [
+                        { id: 'p_mon', name: 'Monthly Standard' },
+                        { id: 'p_qrt', name: 'Quarterly Prime' },
+                        { id: 'p_semi', name: 'Semi-Annual Pro' },
+                        { id: 'p_ann', name: 'Annual Premium' }
+                      ]).map((p: any) => (
+                        <option key={p.id || p.name} value={p.name}>{p.name}</option>
+                      ))}
                     </select>
                   </div>
                   <div>

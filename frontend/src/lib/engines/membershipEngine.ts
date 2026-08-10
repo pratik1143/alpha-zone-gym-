@@ -46,13 +46,84 @@ export const membershipEngine = {
     return Math.min(100, score);
   },
 
+  calculatePlanExpiryDate: (planName: string, startDateVal?: any, plansList: any[] = []): string => {
+    let validStart: Date;
+    if (!startDateVal) {
+      validStart = new Date();
+    } else if (typeof startDateVal === 'string') {
+      validStart = new Date(startDateVal);
+    } else if (typeof startDateVal === 'object' && typeof startDateVal.seconds === 'number') {
+      validStart = new Date(startDateVal.seconds * 1000);
+    } else if (startDateVal instanceof Date) {
+      validStart = startDateVal;
+    } else {
+      validStart = new Date(startDateVal);
+    }
+    if (isNaN(validStart.getTime())) validStart = new Date();
+    
+    let durationDays = 30;
+    const p = String(planName || '').trim().toLowerCase();
+
+    if (plansList && plansList.length > 0) {
+      const matched = plansList.find((item: any) => {
+        const name = String(item.name || '').trim().toLowerCase();
+        const id = String(item.id || '').trim().toLowerCase();
+        return name === p || id === p || (name && p.includes(name)) || (name && name.includes(p));
+      });
+      if (matched) {
+        if (typeof matched.durationDays === 'number' && matched.durationDays > 0) {
+          durationDays = matched.durationDays;
+        } else if (matched.duration) {
+          const dMatch = String(matched.duration).match(/(\d+)\s*(?:day|days|d)\b/i);
+          if (dMatch) durationDays = parseInt(dMatch[1], 10);
+        }
+      }
+    }
+
+    if (durationDays === 30 && p) {
+      const dayMatch = p.match(/(\d+)\s*(?:day|days|d)\b/i);
+      const monthMatch = p.match(/(\d+)\s*(?:month|months|m)\b/i);
+      const yearMatch = p.match(/(\d+)\s*(?:year|years|y)\b/i);
+
+      if (dayMatch) {
+        durationDays = parseInt(dayMatch[1], 10) || 30;
+      } else if (monthMatch) {
+        durationDays = (parseInt(monthMatch[1], 10) || 1) * 30;
+      } else if (yearMatch) {
+        durationDays = (parseInt(yearMatch[1], 10) || 1) * 365;
+      } else if (p.includes('quarterly')) {
+        durationDays = 90;
+      } else if (p.includes('semi') || p.includes('half year')) {
+        durationDays = 180;
+      } else if (p.includes('annual') || p.includes('yearly')) {
+        durationDays = 365;
+      } else if (p.includes('lifetime')) {
+        durationDays = 3650;
+      }
+    }
+
+    const expiryDate = new Date(validStart.getTime() + durationDays * 24 * 60 * 60 * 1000);
+    return expiryDate.toISOString().split('T')[0];
+  },
+
   selfHealMemberData: async (member: any) => {
     if (!member || !member.id) return member;
     
     let needsUpdate = false;
     const updates: any = {};
 
-    const computedDaysLeft = membershipEngine.calculateDaysLeft(member.expiryDate);
+    // Check if expiryDate is missing or same as joinDate for a plan that has non-zero duration
+    if (member.plan && (!member.expiryDate || member.expiryDate === member.joinDate)) {
+      const join = member.joinDate || member.createdAt || new Date().toISOString().split('T')[0];
+      const correctExpiry = membershipEngine.calculatePlanExpiryDate(member.plan, join);
+      if (correctExpiry !== member.expiryDate) {
+        updates.expiryDate = correctExpiry;
+        needsUpdate = true;
+      }
+    }
+
+    const effectiveExpiry = updates.expiryDate || member.expiryDate;
+    const computedDaysLeft = membershipEngine.calculateDaysLeft(effectiveExpiry);
     const computedStatus = membershipEngine.calculateMembershipStatus(computedDaysLeft, member.status);
 
     if (!member.ai || member.ai.daysLeft !== computedDaysLeft) {
@@ -72,10 +143,13 @@ export const membershipEngine = {
         const { db } = await import('@/lib/firebase');
         const { updateDoc, doc } = await import('firebase/firestore');
         await updateDoc(doc(db, 'members', member.id), updates);
-        console.log(`[Self-Heal] Repaired membership data for ${member.id}`);
+        console.log(`[Self-Heal] Repaired membership data for ${member.id}`, updates);
         return { ...member, ...updates };
-      } catch(e) {
-        console.error('[Self-Heal] Failed', e);
+      } catch(e: any) {
+        if (e?.code !== 'permission-denied' && !e?.message?.includes('permissions')) {
+          console.warn('[Self-Heal] Firestore update notice:', e?.message || e);
+        }
+        return { ...member, ...updates };
       }
     }
     

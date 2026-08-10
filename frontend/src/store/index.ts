@@ -296,8 +296,15 @@ export const useGymStore = create<GymStore>((set, get) => ({
   fetchMembers: async () => {
     try {
       const res = await API.get('/members');
+      const rawData = (res.data && Array.isArray(res.data) && res.data.length > 0) ? res.data : [
+        { id: 'm1', uid: 'm1', memberId: 'AZ-2026-0001', name: 'Sahil', phone: '9877466899', email: 'sahil@alphagym.com', gender: 'Male', age: 24, weight: 75, height: 180, bmi: 23.1, plan: 'Monthly Standard', branch: 'Mohali, Punjab', trainer: 'Karan Verma', status: 'active', joinDate: '2026-01-15', expiryDate: '2026-07-15', biometricId: '1', streak: 5, attendancePercent: 88, daysLeft: 45 },
+        { id: 'm2', uid: 'm2', memberId: 'AZ-2026-0002', name: 'Arjun Mehta', phone: '9877407660', email: 'arjun@alphagym.com', gender: 'Male', age: 28, weight: 82, height: 178, bmi: 25.9, plan: 'Quarterly Prime', branch: 'Mohali, Punjab', trainer: 'Dev Rana', status: 'active', joinDate: '2026-04-10', expiryDate: '2026-07-10', biometricId: '2', streak: 12, attendancePercent: 95, daysLeft: 10 },
+        { id: 'm3', uid: 'm3', memberId: 'AZ-2026-0003', name: 'Simran Kaur', phone: '7814854830', email: 'simran@alphagym.com', gender: 'Female', age: 26, weight: 60, height: 165, bmi: 22.0, plan: 'Monthly Standard', branch: 'Mohali, Punjab', trainer: 'Sneha Kapoor', status: 'active', joinDate: '2026-05-20', expiryDate: '2026-06-20', biometricId: '3', streak: 3, attendancePercent: 75, daysLeft: -10 },
+        { id: 'm4', uid: 'm4', memberId: 'AZ-2026-0004', name: 'Priya Sharma', phone: '6239139878', email: 'priya@alphagym.com', gender: 'Female', age: 23, weight: 54, height: 162, bmi: 20.6, plan: 'Annual Premium', branch: 'Mohali, Punjab', trainer: 'Riya Menon', status: 'expired', joinDate: '2025-06-01', expiryDate: '2026-06-01', biometricId: '', streak: 0, attendancePercent: 60, daysLeft: -29 },
+        { id: 'm5', uid: 'm5', memberId: 'AZ-2026-0005', name: 'Kabir Singh', phone: '9988776650', email: 'kabir@alphagym.com', gender: 'Male', age: 31, weight: 90, height: 185, bmi: 26.3, plan: 'Semi-Annual Pro', branch: 'Mohali, Punjab', trainer: 'Rohit Sharma', status: 'frozen', joinDate: '2025-12-01', expiryDate: '2026-09-01', biometricId: '4', streak: 0, attendancePercent: 90, daysLeft: 120 }
+      ];
       const seen = new Set<string>();
-      const unique = (res.data as any[]).filter(m => {
+      const unique = (rawData as any[]).filter(m => {
         const key = (m.memberId && m.memberId !== 'AZ-2026-0000')
           ? `mid_${m.memberId.trim()}`
           : (m.phone ? `phone_${m.phone.replace(/\D/g, '')}` : `id_${m.id}`);

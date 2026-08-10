@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Search, Filter, MoreHorizontal, Phone, MessageSquare, MapPin } from 'lucide-react';
+import { Search, Filter, MoreHorizontal, Phone, MessageSquare, MapPin, Edit, RefreshCw, Snowflake, Trash2, Eye } from 'lucide-react';
 import { membershipEngine } from '@/lib/engines/membershipEngine';
 import { paymentEngine } from '@/lib/engines/paymentEngine';
 import { calculateRealAttendance, formatDaysLeft } from '@/lib/utils';
@@ -9,6 +9,7 @@ import { useGymStore } from '@/store';
 import toast from 'react-hot-toast';
 import { useRouter } from 'next/navigation';
 import MemberAvatar from '../../components/MemberAvatar';
+
 interface MembersTableProps {
   members: any[];
   search: string;
@@ -17,9 +18,16 @@ interface MembersTableProps {
   setStatusFilter: (val: string) => void;
   onSelectMember: (m: any) => void;
   selectedMemberId: string | null;
+  onEdit?: (m: any) => void;
+  onRenew?: (m: any) => void;
+  onFreeze?: (m: any) => void;
+  onDelete?: (m: any) => void;
 }
 
-export default function MembersTable({ members, search, setSearch, statusFilter, setStatusFilter, onSelectMember, selectedMemberId }: MembersTableProps) {
+export default function MembersTable({ 
+  members, search, setSearch, statusFilter, setStatusFilter, onSelectMember, selectedMemberId,
+  onEdit, onRenew, onFreeze, onDelete
+}: MembersTableProps) {
   const router = useRouter();
 
   const getDynamicStatus = (m: any) => {
@@ -184,15 +192,27 @@ export default function MembersTable({ members, search, setSearch, statusFilter,
                     </div>
                   </td>
                   <td className="px-4 py-4">
-                    <span className={`px-2.5 py-1 text-[10px] font-bold rounded-full uppercase tracking-wider ${
-                      member.plan?.toLowerCase().includes('gold') ? 'bg-amber-100 text-amber-700' :
-                      member.plan?.toLowerCase().includes('platinum') ? 'bg-purple-100 text-purple-700' :
-                      member.plan?.toLowerCase().includes('pro') ? 'bg-emerald-100 text-emerald-700' :
-                      'bg-blue-100 text-blue-700'
-                    }`}>
-                      {member.plan || 'Standard'}
-                    </span>
-                    <div className="text-xs text-slate-500 mt-1.5 font-medium">Exp: {new Date(member.expiryDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</div>
+                    {(() => {
+                      const amountVal = Number(member.amount ?? member.currentAmount ?? member.paidAmount ?? 0);
+                      return (
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className={`px-2.5 py-1 text-[10px] font-bold rounded-full uppercase tracking-wider ${
+                              member.plan?.toLowerCase().includes('gold') ? 'bg-amber-100 text-amber-700' :
+                              member.plan?.toLowerCase().includes('platinum') ? 'bg-purple-100 text-purple-700' :
+                              member.plan?.toLowerCase().includes('pro') ? 'bg-emerald-100 text-emerald-700' :
+                              'bg-blue-100 text-blue-700'
+                            }`}>
+                              {member.plan || 'Standard'}
+                            </span>
+                            {amountVal > 0 && (
+                              <span className="text-xs font-black text-slate-800 font-mono">₹{amountVal.toLocaleString('en-IN')}</span>
+                            )}
+                          </div>
+                          <div className="text-xs text-slate-500 mt-1 font-medium">Exp: {new Date(member.expiryDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</div>
+                        </div>
+                      );
+                    })()}
                   </td>
                   <td className="px-4 py-4">
                     {member.trainer ? (
@@ -265,8 +285,8 @@ export default function MembersTable({ members, search, setSearch, statusFilter,
                     })()}
                   </td>
                   <td className="px-4 py-4">
-                    {/* \u2500\u2500 SSOT: paymentEngine drives status \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */}
                     {(() => {
+                      const amountVal = Number(member.amount ?? member.currentAmount ?? member.paidAmount ?? 0);
                       const invoiceTotal = (Number(member.invoiceAmount) || 0) + (Number(member.invoiceGst) || 0);
                       const paidTotal    = Number(member.paidAmount) || 0;
                       const status       = invoiceTotal > 0
@@ -274,23 +294,83 @@ export default function MembersTable({ members, search, setSearch, statusFilter,
                         : (member.paymentStatus === 'pending' ? 'PENDING' : 'PAID');
                       const outstanding  = paymentEngine.calculateOutstandingAmount(invoiceTotal, paidTotal);
                       return status === 'PAID' ? (
-                        <span className="badge-green text-[9px] uppercase font-black px-2 py-0.5">PAID</span>
+                        <div className="flex flex-col items-start gap-1">
+                          <span className="badge-green text-[9px] uppercase font-black px-2 py-0.5">PAID</span>
+                          {amountVal > 0 && (
+                            <span className="text-xs font-black text-slate-800 font-mono">₹{amountVal.toLocaleString('en-IN')}</span>
+                          )}
+                        </div>
                       ) : (
                         <div className="flex flex-col items-start gap-1">
                           <span className="badge-yellow text-[9px] uppercase font-black px-2 py-0.5">
                             {status === 'PARTIAL' ? 'Partial' : 'Pending'}
                           </span>
+                          {amountVal > 0 && (
+                            <span className="text-xs font-black text-slate-800 font-mono">₹{amountVal.toLocaleString('en-IN')}</span>
+                          )}
                           {outstanding > 0 && (
-                            <span className="text-[9px] text-amber-600 font-black">\u20b9{outstanding.toLocaleString('en-IN')} due</span>
+                            <span className="text-[9px] text-amber-600 font-black">₹{outstanding.toLocaleString('en-IN')} due</span>
                           )}
                         </div>
                       );
                     })()}
                   </td>
-                  <td className="px-4 py-4 text-right">
-                    <button className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors" onClick={(e) => { e.stopPropagation(); }}>
-                      <MoreHorizontal size={16} />
-                    </button>
+                  <td className="px-4 py-4 text-right" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex items-center justify-end gap-1">
+                      {/* Call Button */}
+                      <button 
+                        title="Call Member"
+                        onClick={() => window.open(`tel:${member.phone}`)}
+                        className="p-1.5 text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors cursor-pointer border-0"
+                      >
+                        <Phone size={14} />
+                      </button>
+
+                      {/* WhatsApp Button */}
+                      <button 
+                        title="Send WhatsApp"
+                        onClick={() => window.open(`https://wa.me/91${(member.phone || '').replace(/\D/g, '')}?text=Hello%20${encodeURIComponent(member.name || '')}%20👋,%20greeting%20from%20Alpha%20Zone%20Gym!`)}
+                        className="p-1.5 text-emerald-600 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition-colors cursor-pointer border-0"
+                      >
+                        <MessageSquare size={14} />
+                      </button>
+
+                      {/* Edit Button */}
+                      <button 
+                        title="Edit Member Profile"
+                        onClick={() => onEdit ? onEdit(member) : onSelectMember(member)}
+                        className="p-1.5 text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors cursor-pointer border-0"
+                      >
+                        <Edit size={14} />
+                      </button>
+
+                      {/* Renew Plan Button */}
+                      <button 
+                        title="Renew / Upgrade Membership"
+                        onClick={() => onRenew ? onRenew(member) : null}
+                        className="p-1.5 text-amber-600 bg-amber-50 hover:bg-amber-100 rounded-lg transition-colors cursor-pointer border-0"
+                      >
+                        <RefreshCw size={14} />
+                      </button>
+
+                      {/* Freeze Button */}
+                      <button 
+                        title={member.status === 'frozen' ? 'Unfreeze Status' : 'Freeze Status'}
+                        onClick={() => onFreeze ? onFreeze(member) : null}
+                        className="p-1.5 text-cyan-600 bg-cyan-50 hover:bg-cyan-100 rounded-lg transition-colors cursor-pointer border-0"
+                      >
+                        <Snowflake size={14} />
+                      </button>
+
+                      {/* Delete Button */}
+                      <button 
+                        title="Delete Member"
+                        onClick={() => onDelete ? onDelete(member) : null}
+                        className="p-1.5 text-rose-600 bg-rose-50 hover:bg-rose-100 rounded-lg transition-colors cursor-pointer border-0"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               );

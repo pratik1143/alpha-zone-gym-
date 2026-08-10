@@ -61,12 +61,35 @@ const Confetti = () => {
 };
 
 export default function RenewalWizardModal({ isOpen, member, onClose }: RenewalWizardProps) {
-  const { addPayment, updateMember, fetchMembers } = useGymStore();
+  const { addPayment, updateMember, fetchMembers, plans, fetchPlans } = useGymStore();
   const [step, setStep] = useState(1);
   const [trainers, setTrainers] = useState<any[]>([]);
 
+  useEffect(() => {
+    fetchPlans();
+  }, [fetchPlans]);
+
+  const activePlans = plans && plans.length > 0 ? plans : [
+    { id: '1m', name: '1 Month Standard', price: 2500, durationDays: 30, features: ['Basic single month access'] },
+    { id: '3m', name: '3 Months Pro', price: 6500, durationDays: 90, features: ['Quarterly membership saver'] },
+    { id: '6m', name: '6 Months Elite', price: 11500, durationDays: 180, features: ['Semi-annual transformation pack'] },
+    { id: '12m', name: '12 Months VIP', price: 18000, durationDays: 365, features: ['Annual ultimate access'] },
+  ];
+
+  const availablePlans = [
+    ...activePlans.map((p: any) => ({
+      id: p.id || p.name,
+      name: p.name,
+      price: p.price,
+      duration: Math.max(1, Math.round((p.durationDays || 30) / 30)),
+      desc: Array.isArray(p.features) && p.features.length > 0 ? p.features.join(', ') : `${p.duration || (p.durationDays ? `${p.durationDays} Days` : 'Access')}`
+    })),
+    { id: 'pt', name: 'Personal Training (PT)', price: 8000, duration: 1, desc: '1-on-1 personal trainer sessions' },
+    { id: 'custom', name: 'Custom Custom Plan', price: 0, duration: 1, desc: 'Enter custom pricing and duration' },
+  ];
+
   // Step 1 states
-  const [selectedPlanId, setSelectedPlanId] = useState('1m');
+  const [selectedPlanId, setSelectedPlanId] = useState(availablePlans[0]?.id || '1m');
   const [customPrice, setCustomPrice] = useState(3000);
   const [customDuration, setCustomDuration] = useState(1);
 
@@ -105,7 +128,7 @@ export default function RenewalWizardModal({ isOpen, member, onClose }: RenewalW
 
   if (!isOpen || !member) return null;
 
-  const currentPlan = PLANS.find(p => p.id === selectedPlanId) || PLANS[0];
+  const currentPlan = availablePlans.find(p => p.id === selectedPlanId) || availablePlans[0];
   const planPrice = selectedPlanId === 'custom' ? customPrice : currentPlan.price;
   const planDuration = selectedPlanId === 'custom' ? customDuration : currentPlan.duration;
 
@@ -236,7 +259,7 @@ export default function RenewalWizardModal({ isOpen, member, onClose }: RenewalW
               >
                 <h4 className="text-sm font-black text-slate-800">Choose Membership Plan</h4>
                 <div className="grid grid-cols-2 gap-2.5 max-h-[300px] overflow-y-auto pr-1">
-                  {PLANS.map(p => (
+                  {availablePlans.map(p => (
                     <div 
                       key={p.id}
                       onClick={() => setSelectedPlanId(p.id)}

@@ -11,6 +11,55 @@ export const getMembers = async (req: Request, res: Response) => {
   }
 };
 
+function calculateBackendPlanExpiry(planName: string, startDateStr?: string, plansList: any[] = []): string {
+  const startDate = startDateStr ? new Date(startDateStr) : new Date();
+  const validStart = isNaN(startDate.getTime()) ? new Date() : startDate;
+  
+  let durationDays = 30;
+  const p = String(planName || '').trim().toLowerCase();
+
+  if (plansList && plansList.length > 0) {
+    const matched = plansList.find((item: any) => {
+      const name = String(item.name || '').trim().toLowerCase();
+      const id = String(item.id || '').trim().toLowerCase();
+      return name === p || id === p || (name && p.includes(name)) || (name && name.includes(p));
+    });
+    if (matched) {
+      if (typeof matched.durationDays === 'number' && matched.durationDays > 0) {
+        durationDays = matched.durationDays;
+      } else if (matched.duration) {
+        const dMatch = String(matched.duration).match(/(\d+)\s*(?:day|days|d)\b/i);
+        if (dMatch) durationDays = parseInt(dMatch[1], 10);
+      }
+    }
+  }
+
+  if (durationDays === 30 && p) {
+    const dayMatch = p.match(/(\d+)\s*(?:day|days|d)\b/i);
+    const monthMatch = p.match(/(\d+)\s*(?:month|months|m)\b/i);
+    const yearMatch = p.match(/(\d+)\s*(?:year|years|y)\b/i);
+
+    if (dayMatch) {
+      durationDays = parseInt(dayMatch[1], 10) || 30;
+    } else if (monthMatch) {
+      durationDays = (parseInt(monthMatch[1], 10) || 1) * 30;
+    } else if (yearMatch) {
+      durationDays = (parseInt(yearMatch[1], 10) || 1) * 365;
+    } else if (p.includes('quarterly')) {
+      durationDays = 90;
+    } else if (p.includes('semi') || p.includes('half year')) {
+      durationDays = 180;
+    } else if (p.includes('annual') || p.includes('yearly')) {
+      durationDays = 365;
+    } else if (p.includes('lifetime')) {
+      durationDays = 3650;
+    }
+  }
+
+  const expiryDate = new Date(validStart.getTime() + durationDays * 24 * 60 * 60 * 1000);
+  return expiryDate.toISOString().split('T')[0];
+}
+
 export const createMember = async (req: Request, res: Response) => {
   try {
     const { 
@@ -62,11 +111,18 @@ export const createMember = async (req: Request, res: Response) => {
       }, { merge: true });
     }
 
+    const startJoinDate = joinDate || new Date().toISOString().split('T')[0];
+    const plansList = await db.getPlans();
+    let finalExpiry = expiryDate;
+    if (!finalExpiry || finalExpiry === startJoinDate) {
+      finalExpiry = calculateBackendPlanExpiry(plan || 'Monthly', startJoinDate, plansList);
+    }
+
     const member = await db.addMember({
       uid, // align document ID with Auth UID
       name, phone, email: loginEmail, plan: plan || 'Monthly',
-      joinDate: joinDate || new Date().toISOString().split('T')[0],
-      expiryDate: expiryDate || new Date().toISOString().split('T')[0],
+      joinDate: startJoinDate,
+      expiryDate: finalExpiry,
       status: 'active', branch: branch || 'Mohali, Punjab', trainer: trainer || '',
       gender: gender || 'Male', age: Number(age) || 25,
       weight: Number(weight) || 70, height: Number(height) || 170,
@@ -86,7 +142,6 @@ export const createMember = async (req: Request, res: Response) => {
     });
 
     // Also auto-generate an invoice for new member
-    const plansList = await db.getPlans();
     const matchedPlan = plansList.find(p => {
       const dbName = String(p.name || '').toLowerCase();
       const dbId = String(p.id || '').toLowerCase();

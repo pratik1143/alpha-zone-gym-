@@ -7,14 +7,9 @@ import { paymentEngine } from '@/lib/engines/paymentEngine';
 import { membershipEngine } from '@/lib/engines/membershipEngine';
 import toast from 'react-hot-toast';
 
-// ── Plan Catalogue (auto-filled prices) ──────────────────────────────────────
-const SUBSCRIPTION_PLANS = [
-  { label: '1 Month',   months: 1,  price: 2500  },
-  { label: '3 Months',  months: 3,  price: 6500  },
-  { label: '6 Months',  months: 6,  price: 11500 },
-  { label: '12 Months', months: 12, price: 18000 },
-];
+import { useGymStore } from '@/store';
 
+// ── Payment Modes ──────────────────────────────────────
 const PAYMENT_MODES = [
   { value: 'Cash',        label: 'Cash',      icon: '💵', color: '#16a34a' },
   { value: 'UPI',         label: 'UPI',       icon: '📱', color: '#7c3aed' },
@@ -39,8 +34,27 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }
 };
 
 export default function InvoiceBuilderModal({ isOpen, type, onClose, members }: any) {
+  const { plans, fetchPlans } = useGymStore();
+
+  useEffect(() => {
+    fetchPlans();
+  }, [fetchPlans]);
+
+  const activePlans = plans && plans.length > 0 ? plans : [
+    { id: '1m', name: '1 Month Standard', price: 2500, durationDays: 30 },
+    { id: '3m', name: '3 Months Pro', price: 6500, durationDays: 90 },
+    { id: '6m', name: '6 Months Elite', price: 11500, durationDays: 180 },
+    { id: '12m', name: '12 Months VIP', price: 18000, durationDays: 365 },
+  ];
+
+  const SUBSCRIPTION_PLANS = activePlans.map((p: any) => ({
+    label: p.name,
+    months: Math.max(1, Math.round((p.durationDays || 30) / 30)),
+    price: p.price
+  }));
+
   const [memberId, setMemberId]       = useState('');
-  const [selectedPlan, setSelectedPlan] = useState<typeof SUBSCRIPTION_PLANS[0] | null>(null);
+  const [selectedPlan, setSelectedPlan] = useState<any | null>(null);
   const [baseAmount, setBaseAmount]   = useState<number | ''>('');
   const [paymentMode, setPaymentMode] = useState('Cash');
   const [description, setDescription] = useState('');
@@ -58,7 +72,7 @@ export default function InvoiceBuilderModal({ isOpen, type, onClose, members }: 
   }, [isOpen]);
 
   // Auto-fill price when plan is selected
-  const handlePlanSelect = (plan: typeof SUBSCRIPTION_PLANS[0]) => {
+  const handlePlanSelect = (plan: any) => {
     setSelectedPlan(plan);
     setBaseAmount(plan.price);
     if (!description) setDescription(plan.label + ' Membership');

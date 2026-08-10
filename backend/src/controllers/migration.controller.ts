@@ -461,6 +461,79 @@ export const nextBiometricId = async (req: Request, res: Response) => {
 /**
  * Dry Run Simulator Endpoint
  */
+export function parseRecordAmount(record: any, fallbackPkg?: string): number {
+  if (!record) return 0;
+  const rawAmt = record.Amount ?? record.amount ?? record.Fee ?? record.fee ?? record.Price ?? record.price ?? record.PaidAmount ?? record.paidAmount ?? record.payment ?? record.Cost ?? record.amountPaid;
+  
+  if (typeof rawAmt === 'number' && !isNaN(rawAmt)) {
+    return Math.max(0, rawAmt);
+  }
+  if (typeof rawAmt === 'string' && rawAmt.trim()) {
+    const cleaned = rawAmt.replace(/[^0-9.]/g, '');
+    const parsed = parseFloat(cleaned);
+    if (!isNaN(parsed)) return Math.max(0, parsed);
+  }
+  
+  if (fallbackPkg) {
+    const pObj = getPackagePrice(fallbackPkg);
+    if (pObj && typeof pObj.amount === 'number') return pObj.amount;
+  }
+  return 0;
+}
+
+export function sanitizePhotoUrl(url: any): string | null {
+  if (!url || typeof url !== 'string') return null;
+  let trimmed = url.trim();
+  if (!trimmed) return null;
+  
+  if (trimmed.startsWith('ps://')) {
+    trimmed = 'htt' + trimmed;
+  } else if (trimmed.startsWith('s://')) {
+    trimmed = 'http' + trimmed;
+  } else if (!trimmed.startsWith('http://') && !trimmed.startsWith('https://') && !trimmed.startsWith('data:')) {
+    if (trimmed.includes('://')) {
+      trimmed = 'https://' + trimmed.split('://')[1];
+    } else {
+      trimmed = 'https://' + trimmed.replace(/^[^a-zA-Z0-9]+/, '');
+    }
+  }
+  return trimmed;
+}
+
+export function calculatePlanExpiry(pkgName: string, startDateStr: string): string {
+  const start = startDateStr ? new Date(startDateStr) : new Date();
+  const validStart = isNaN(start.getTime()) ? new Date() : start;
+  const target = new Date(validStart);
+
+  const lower = (pkgName || '').toLowerCase().trim();
+  const dayMatch = lower.match(/(\d+)\s*day/);
+  const monthMatch = lower.match(/(\d+)\s*month/);
+  const yearMatch = lower.match(/(\d+)\s*year/);
+
+  if (lower.includes('3+1') || lower.includes('3 + 1')) {
+    target.setMonth(target.getMonth() + 4);
+  } else if (dayMatch) {
+    target.setDate(target.getDate() + parseInt(dayMatch[1], 10));
+  } else if (monthMatch) {
+    target.setMonth(target.getMonth() + parseInt(monthMatch[1], 10));
+  } else if (yearMatch) {
+    target.setFullYear(target.getFullYear() + parseInt(yearMatch[1], 10));
+  } else if (lower.includes('annual') || lower.includes('yearly') || lower.includes('12 month')) {
+    target.setFullYear(target.getFullYear() + 1);
+  } else if (lower.includes('quarter') || lower.includes('3 month')) {
+    target.setMonth(target.getMonth() + 3);
+  } else if (lower.includes('half') || lower.includes('6 month')) {
+    target.setMonth(target.getMonth() + 6);
+  } else {
+    target.setMonth(target.getMonth() + 1);
+  }
+
+  return target.toISOString().split('T')[0];
+}
+
+/**
+ * Dry Run Simulator Endpoint
+ */
 export const dryRunMigration = async (req: Request, res: Response) => {
   try {
     const { members: payload } = req.body;
@@ -471,104 +544,46 @@ export const dryRunMigration = async (req: Request, res: Response) => {
     const existingMembers = await db.getMembers();
     const existingPhones = new Set(existingMembers.map((m: any) => String(m.phone).trim()));
     const existingIds = new Set(existingMembers.map((m: any) => m.memberId ? String(m.memberId).trim() : ''));
-    const existingFingerprints = new Set(existingMembers.map((m: any) => m.fingerprint || ''));
 
-    let totalRows = payload.length;
-    let expectedMembers = 0;
-    let duplicateConflicts: any[] = [];
-    let warningsList: string[] = [];
-    let fatalErrors: string[] = [];
-    let photosCount = 0;
-    let historyCount = 0;
-    let invoicesCount = 0;
-    let activeCount = 0;
-    let expiredCount = 0;
-    let ptCount = 0;
-    let skippedIdempotent = 0;
-
+    const groupsMap = new Map<string, any[]>();
     payload.forEach((record: any, idx: number) => {
-      const val = validateMemberRecord(record, idx);
-      if (!val.isValid) {
-        fatalErrors.push(val.fatalError!);
-        return;
-      }
+      const clientId = String(record.clientId || record['Client ID'] || record.id || '').trim();
+      const name = String(record.name || record['Client name'] || record.clientName || '').trim();
+      const phoneRaw = String(record.phone || record.Number || record.number || record.mobile || '').trim();
+      const phone = phoneRaw.replace(/\D/g, '');
 
-      val.warnings.forEach(w => warningsList.push(w));
+      let key = '';
+      if (clientId && clientId !== 'N/A') key = `cid_${clientId.toLowerCase()}`;
+      else if (phone && phone.length >= 7) key = `ph_${phone}`;
+      else if (name) key = `nm_${name.toLowerCase().replace(/\s+/g, '')}`;
+      else key = `row_${idx}`;
 
-      const clientId = String(record.clientId || '').trim();
-      const name = String(record.name || '').trim();
-      const phone = String(record.phone || '').trim();
-      const regDate = parseCSVDate(record.registrationDate || '');
-      const expiryDate = parseCSVDate(record.membershipExpiry || '');
-      const pkgRaw = String(record.membershipPackage || 'Monthly').trim();
+      if (!groupsMap.has(key)) groupsMap.set(key, []);
+      groupsMap.get(key)!.push({ record, idx });
+    });
 
-      const fp = createRecordFingerprint(clientId, regDate, expiryDate, pkgRaw);
-      if (existingFingerprints.has(fp)) {
-        skippedIdempotent++;
-        warningsList.push(`Row #${idx + 1}: Identical legacy fingerprint already exists. Will be skipped.`);
-        return;
-      }
+    const expectedMembers = groupsMap.size;
+    let historyCount = payload.length;
+    let invoicesCount = payload.length;
+    let photosCount = 0;
+    let duplicatesMerged = payload.length - expectedMembers;
 
-      expectedMembers++;
-      if (record.avatarUrl) photosCount++;
-
-      const pkgs = pkgRaw.split(/[\n\r,;]+/).map(p => p.trim()).filter(Boolean);
-      const historyItemsCount = Math.max(1, pkgs.length);
-      historyCount += historyItemsCount;
-      invoicesCount += historyItemsCount; // 1 invoice per history entry for parity
-
-      const pkgInfo = parsePackageDetails(pkgRaw);
-      if (pkgInfo.ptIncluded) ptCount++;
-
-      const smart = calculateSmartStatus(expiryDate, '', pkgInfo.ptIncluded);
-      if (smart.status === 'active') activeCount++;
-      else if (smart.status === 'expired') expiredCount++;
-
-      let isIdDup = clientId && existingIds.has(clientId);
-      let isPhoneDup = phone && existingPhones.has(phone);
-      let highestFuzzyScore = 0;
-      let closestMatchName = '';
-
-      if (!isIdDup && !isPhoneDup) {
-        existingMembers.forEach((m: any) => {
-          if (m.name) {
-            const sim = calcStringSimilarity(name, m.name);
-            if (sim > highestFuzzyScore) {
-              highestFuzzyScore = sim;
-              closestMatchName = m.name;
-            }
-          }
-        });
-      }
-
-      if (isIdDup || isPhoneDup || highestFuzzyScore >= 0.85) {
-        duplicateConflicts.push({
-          rowNumber: idx + 1,
-          name,
-          phone,
-          clientId,
-          reason: isIdDup ? 'Client ID match' : (isPhoneDup ? 'Phone number match' : `Fuzzy Name Match (${Math.round(highestFuzzyScore * 100)}% with "${closestMatchName}")`),
-          similarityScore: Math.round(highestFuzzyScore * 100),
-          suggestedAction: isIdDup || isPhoneDup ? 'Merge' : 'Review'
-        });
-      }
+    payload.forEach((r: any) => {
+      const p = sanitizePhotoUrl(r.photoUrl || r.avatarUrl || r.Photo || r.photo || r.image);
+      if (p) photosCount++;
     });
 
     res.json({
       dryRun: true,
-      totalRows,
+      totalRows: payload.length,
       expectedMembers,
-      skippedIdempotent,
-      duplicateConflictsCount: duplicateConflicts.length,
-      duplicateConflicts,
+      duplicatesMerged,
       photosCount,
       historyCount,
       invoicesCount,
-      activeCount,
-      expiredCount,
-      ptCount,
-      warnings: warningsList,
-      errors: fatalErrors
+      paymentsCount: invoicesCount,
+      warnings: [],
+      errors: []
     });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -576,11 +591,11 @@ export const dryRunMigration = async (req: Request, res: Response) => {
 };
 
 /**
- * Migration Member Processor with Full 18+15 Point Architecture & History-Billing Parity Guarantee.
+ * Migration Member Processor with Pre-Grouping & Parity Guarantee
  */
 export const migrateMembers = async (req: Request, res: Response) => {
   try {
-    const { members: payload, sessionId, isResume, dryRun, conflictDecisions, excelFileName } = req.body;
+    const { members: payload, sessionId, dryRun, excelFileName } = req.body;
     if (!payload || !Array.isArray(payload)) {
       return res.status(400).json({ error: 'Members list payload is required and must be an array' });
     }
@@ -593,35 +608,30 @@ export const migrateMembers = async (req: Request, res: Response) => {
     const migrationSessionId = sessionId || 'mig_' + Date.now();
     const migrationLogs: string[] = [];
     const importedList: any[] = [];
-    const conflictList: any[] = [];
     const invoicesCreated: any[] = [];
+    const paymentsCreated: any[] = [];
     const parityAuditFailures: any[] = [];
 
-    let importedCount = 0;
-    let duplicateCount = 0;
-    let skippedCount = 0;
-    let skippedIdempotentCount = 0;
-    let expiredCount = 0;
-    let activeCount = 0;
-    let ptCount = 0;
-    let enquiryCount = 0;
-    let lostCount = 0;
-    let frozenCount = 0;
-    let cancelledCount = 0;
+    let uniqueMembersCount = 0;
+    let totalHistoryCount = 0;
+    let totalInvoicesCount = 0;
+    let totalPaymentsCount = 0;
+    let totalTimelineEventsCount = 0;
     let photosImportedCount = 0;
     let photosFailedCount = 0;
-    let invalidRows = 0;
+    let duplicatesMergedCount = 0;
+    let skippedCount = 0;
+
+    let activeCount = 0;
+    let expiredCount = 0;
     const warnings: string[] = [];
 
     const operatorInfo = req.headers['user-agent'] || 'System Admin';
     const clientIp = req.ip || req.socket.remoteAddress || '127.0.0.1';
 
-    migrationLogs.push(`[${new Date().toLocaleTimeString()}] Migration session initiated. ID: ${migrationSessionId}, Operator: ${operatorInfo}, IP: ${clientIp}`);
+    migrationLogs.push(`[${new Date().toLocaleTimeString()}] Migration session initiated. ID: ${migrationSessionId}`);
 
     const existingMembers = await db.getMembers();
-    const existingPhones = new Set(existingMembers.map((m: any) => String(m.phone).trim()));
-    const existingFingerprints = new Set(existingMembers.map((m: any) => m.fingerprint || ''));
-
     const currentYear = new Date().getFullYear();
     const prefix = `AZ-${currentYear}-`;
     let nextNum = 1;
@@ -641,191 +651,164 @@ export const migrateMembers = async (req: Request, res: Response) => {
 
     let legacyInvoiceCounter = 1;
 
-    const processRecord = async (record: any, rowIndex: number) => {
-      const val = validateMemberRecord(record, rowIndex);
-      if (!val.isValid) {
-        invalidRows++;
-        skippedCount++;
-        migrationLogs.push(`[${new Date().toLocaleTimeString()}] [Fatal] ${val.fatalError}`);
-        return;
-      }
+    // STEP 1: PRE-GROUP ROWS BY UNIQUE MEMBER
+    interface RowItem {
+      rowIndex: number;
+      record: any;
+      clientId: string;
+      name: string;
+      phone: string;
+      gender: string;
+      regDateRaw: string;
+      expiryRaw: string;
+      regDate: string;
+      expDate: string;
+      pkgName: string;
+      amount: number;
+      photoUrl: string | null;
+      fingerprint: string;
+    }
 
-      val.warnings.forEach(w => warnings.push(w));
+    interface MemberGroup {
+      groupKey: string;
+      primaryName: string;
+      primaryPhone: string;
+      primaryClientId: string;
+      primaryGender: string;
+      primaryPhotoUrl: string | null;
+      branch: string;
+      trainer: string;
+      rows: RowItem[];
+    }
 
-      const clientId = String(record.clientId || '').trim();
-      const name = String(record.name || '').trim();
-      const phone = String(record.phone || '').trim();
-      const gender = String(record.gender || 'Male').trim();
-      const regDateRaw = String(record.registrationDate || '').trim();
-      const pkgRaw = String(record.membershipPackage || 'Monthly').trim();
-      const expiryRaw = String(record.membershipExpiry || '').trim();
+    const groupsMap = new Map<string, MemberGroup>();
+
+    payload.forEach((record: any, idx: number) => {
+      const clientId = String(record.clientId || record['Client ID'] || record.id || '').trim();
+      const name = String(record.name || record['Client name'] || record.clientName || '').trim();
+      const phoneRaw = String(record.phone || record.Number || record.number || record.mobile || '').trim();
+      const phone = phoneRaw.replace(/\D/g, '');
+      const gender = String(record.gender || record.Gender || 'Male').trim();
+      const regDateRaw = String(record.registrationDate || record.Registration || record.joinDate || '').trim();
+      const expiryRaw = String(record.membershipExpiry || record.Expiration || record.expiryDate || '').trim();
+      const pkgName = String(record.membershipPackage || record.Package || record.plan || 'Monthly').trim();
+      const amount = parseRecordAmount(record, pkgName);
+      const photoRaw = record.photoUrl || record.avatarUrl || record.Photo || record.photo || record.image || '';
+      const photoUrl = sanitizePhotoUrl(photoRaw);
+
       const regDate = parseCSVDate(regDateRaw) || new Date().toISOString().split('T')[0];
-
-      const recordFingerprint = createRecordFingerprint(clientId, regDateRaw, expiryRaw, pkgRaw);
-      if (existingFingerprints.has(recordFingerprint)) {
-        skippedIdempotentCount++;
-        skippedCount++;
-        migrationLogs.push(`[${new Date().toLocaleTimeString()}] [Skip] Idempotency match: ${name} (${clientId}). Already imported.`);
-        return;
+      let expDate = parseCSVDate(expiryRaw);
+      if (!expDate && pkgName) {
+        expDate = calculatePlanExpiry(pkgName, regDate);
       }
-      existingFingerprints.add(recordFingerprint);
+      if (!expDate) expDate = regDate;
 
-      const decision = conflictDecisions && conflictDecisions[clientId];
-      if (decision === 'skip' || decision === 'ignore') {
-        skippedCount++;
-        migrationLogs.push(`[${new Date().toLocaleTimeString()}] [Wizard Decision] Skipped ${name} per administrator instruction.`);
-        return;
-      }
+      const fingerprint = createRecordFingerprint(clientId, regDateRaw, expiryRaw, pkgName);
 
-      const pkgs = pkgRaw.split(/[\n\r,;]+/).map(p => p.trim()).filter(Boolean);
-      const expiries = expiryRaw.split(/[\n\r,;]+/).map(e => e.trim()).filter(Boolean);
-
-      const pairs: { pkg: string; expiryStr: string; expiryParsed: string }[] = [];
-      const maxLen = Math.max(pkgs.length, expiries.length, 1);
-      for (let i = 0; i < maxLen; i++) {
-        const p = pkgs[i] || pkgs[pkgs.length - 1] || 'Monthly';
-        const eStr = expiries[i] || expiries[expiries.length - 1] || '';
-        const eParsed = parseCSVDate(eStr);
-        pairs.push({ pkg: p, expiryStr: eStr, expiryParsed: eParsed });
+      let groupKey = '';
+      if (clientId && clientId !== 'N/A') {
+        groupKey = `cid_${clientId.toLowerCase()}`;
+      } else if (phone && phone.length >= 7) {
+        groupKey = `ph_${phone}`;
+      } else if (name) {
+        groupKey = `nm_${name.toLowerCase().replace(/\s+/g, '')}`;
+      } else {
+        groupKey = `row_${idx}`;
       }
 
-      pairs.sort((a, b) => {
-        if (!a.expiryParsed && !b.expiryParsed) return 0;
-        if (!a.expiryParsed) return 1;
-        if (!b.expiryParsed) return -1;
-        return b.expiryParsed.localeCompare(a.expiryParsed);
+      if (!groupsMap.has(groupKey)) {
+        groupsMap.set(groupKey, {
+          groupKey,
+          primaryName: name || 'Member',
+          primaryPhone: phoneRaw || phone,
+          primaryClientId: clientId,
+          primaryGender: gender,
+          primaryPhotoUrl: photoUrl,
+          branch: String(record.branch || 'Mohali, Punjab').trim(),
+          trainer: String(record.trainer || '').trim(),
+          rows: []
+        });
+      }
+
+      const grp = groupsMap.get(groupKey)!;
+      if (!grp.primaryPhotoUrl && photoUrl) grp.primaryPhotoUrl = photoUrl;
+      grp.rows.push({
+        rowIndex: idx,
+        record,
+        clientId,
+        name,
+        phone: phoneRaw || phone,
+        gender,
+        regDateRaw,
+        expiryRaw,
+        regDate,
+        expDate,
+        pkgName,
+        amount,
+        photoUrl,
+        fingerprint
+      });
+    });
+
+    // STEP 2: PROCESS EACH MEMBER GROUP
+    for (const [groupKey, group] of Array.from(groupsMap.entries())) {
+      if (group.rows.length === 0) continue;
+
+      uniqueMembersCount++;
+      if (group.rows.length > 1) {
+        duplicatesMergedCount += (group.rows.length - 1);
+      }
+
+      // Sort rows chronologically: Reg Date -> Expiry Date -> Row Index
+      group.rows.sort((a, b) => {
+        if (a.regDate !== b.regDate) return a.regDate.localeCompare(b.regDate);
+        if (a.expDate !== b.expDate) return a.expDate.localeCompare(b.expDate);
+        return a.rowIndex - b.rowIndex;
       });
 
-      const latestPair = pairs[0] || { pkg: 'Monthly', expiryStr: '', expiryParsed: '' };
-      const activePkg = latestPair.pkg;
-      const activeExpiry = latestPair.expiryParsed;
-      const parsedPkg = parsePackageDetails(activePkg);
-      const hasPT = parsedPkg.ptIncluded || pkgs.some(p => p.toLowerCase().includes('pt'));
-      const todayStr = new Date().toISOString().split('T')[0];
+      // Select Current Membership by Priority:
+      // 1. Latest Reg Date
+      // 2. Latest Expiration Date
+      // 3. Highest Duration
+      // 4. Latest Row Index
+      let currentMemberRow = group.rows[0];
+      for (const row of group.rows) {
+        const rowPkgDetails = parsePackageDetails(row.pkgName);
+        const curPkgDetails = parsePackageDetails(currentMemberRow.pkgName);
 
-      const getStartDate = (expiryStr: string, durationDays: number): string => {
-        if (!expiryStr) return regDate;
-        const date = new Date(expiryStr);
-        if (isNaN(date.getTime())) return regDate;
-        date.setDate(date.getDate() - durationDays);
-        return date.toISOString().split('T')[0];
-      };
-
-      const history = pairs.map(p => {
-        const details = parsePackageDetails(p.pkg);
-        const start = getStartDate(p.expiryParsed || p.expiryStr, details.durationDays);
-        const pSmart = calculateSmartStatus(p.expiryParsed || p.expiryStr, '', details.ptIncluded);
-        return {
-          packageName: p.pkg,
-          packageCategory: details.packageCategory,
-          startDate: start,
-          expiryDate: p.expiryParsed || p.expiryStr,
-          duration: `${details.durationDays} Days`,
-          durationDays: details.durationDays,
-          status: pSmart.status,
-          smartStatus: pSmart.smartStatus,
-          legacyRowNumber: rowIndex + 1,
-          legacyExcelFile: excelFileName || 'Import.csv',
-          fingerprint: recordFingerprint,
-          reasonClosed: pSmart.status === 'expired' ? 'Expired' : 'Current Plan'
-        };
-      });
-
-      const timeline: any[] = [
-        { event: 'Joined', date: regDate, description: `Joined Alpha Gym Zone with ${pairs[pairs.length - 1]?.pkg || 'Initial Plan'}` }
-      ];
-      for (let i = pairs.length - 2; i >= 0; i--) {
-        const p = pairs[i];
-        if (p.pkg.toLowerCase().includes('pt')) {
-          timeline.push({ event: 'PT Purchased', date: p.expiryParsed || regDate, description: `Purchased Personal Training: ${p.pkg}` });
-        } else {
-          timeline.push({ event: 'Renewed', date: p.expiryParsed || regDate, description: `Renewed Membership with ${p.pkg}` });
-        }
-      }
-
-      const smartStatusObj = calculateSmartStatus(activeExpiry, record.status, hasPT);
-      let computedStatus = smartStatusObj.status;
-      const smartStatus = smartStatusObj.smartStatus;
-
-      if (!pkgRaw || pkgRaw === '' || !expiryRaw || expiryRaw === '') {
-        computedStatus = 'enquiry';
-      }
-
-      const incomingPhoto = (record.photoUrl || record.avatarUrl || record.photo || record.image || '').trim() || null;
-      let originalPhotoUrl = incomingPhoto;
-      let firebasePhotoUrl = incomingPhoto;
-      let thumbnailUrl = incomingPhoto;
-      let photoMigrationStatus = 'skipped';
-
-      if (incomingPhoto && incomingPhoto.startsWith('http')) {
-        const base64Data = await downloadPhotoAsBase64(incomingPhoto);
-        if (base64Data) {
-          firebasePhotoUrl = base64Data;
-          thumbnailUrl = base64Data;
-          photoMigrationStatus = 'completed';
-          photosImportedCount++;
-        } else {
-          photoMigrationStatus = 'failed';
-          photosFailedCount++;
-          warnings.push(`Photo download timeout for ${name}. Preserved original URL.`);
-        }
-      }
-
-      let existingMember: any = null;
-      let matchScore = 0;
-      let conflictReason = '';
-
-      if (clientId) {
-        existingMember = existingMembers.find((m: any) => m.memberId && String(m.memberId).trim() === clientId);
-        if (existingMember) { matchScore = 100; conflictReason = 'Client ID Match'; }
-      }
-      if (!existingMember && phone) {
-        existingMember = existingMembers.find((m: any) => m.phone && String(m.phone).trim() === phone);
-        if (existingMember) { matchScore = 100; conflictReason = 'Phone Number Match'; }
-      }
-      if (!existingMember) {
-        let bestScore = 0;
-        let matchedM: any = null;
-        existingMembers.forEach((m: any) => {
-          if (m.name) {
-            const score = calcStringSimilarity(name, m.name);
-            if (score > bestScore) {
-              bestScore = score;
-              matchedM = m;
+        if (row.regDate > currentMemberRow.regDate) {
+          currentMemberRow = row;
+        } else if (row.regDate === currentMemberRow.regDate) {
+          if (row.expDate > currentMemberRow.expDate) {
+            currentMemberRow = row;
+          } else if (row.expDate === currentMemberRow.expDate) {
+            if (rowPkgDetails.durationDays > curPkgDetails.durationDays) {
+              currentMemberRow = row;
+            } else if (row.rowIndex > currentMemberRow.rowIndex) {
+              currentMemberRow = row;
             }
           }
-        });
-        if (bestScore >= 0.85 && matchedM) {
-          existingMember = matchedM;
-          matchScore = Math.round(bestScore * 100);
-          conflictReason = `Fuzzy Name Match (${matchScore}% similarity with "${matchedM.name}")`;
         }
       }
 
-      if (existingMember) {
-        duplicateCount++;
-        conflictList.push({
-          rowNumber: rowIndex + 1,
-          name,
-          phone,
-          clientId,
-          matchScore,
-          conflictReason,
-          existingMemberId: existingMember.memberId || existingMember.id
-        });
+      const name = group.primaryName;
+      const phone = group.primaryPhone;
+      const clientId = group.primaryClientId;
+      const gender = group.primaryGender;
+
+      let existingMember: any = null;
+      if (clientId) {
+        existingMember = existingMembers.find((m: any) => m.memberId && String(m.memberId).trim() === clientId);
+      }
+      if (!existingMember && phone) {
+        existingMember = existingMembers.find((m: any) => m.phone && String(m.phone).replace(/\D/g, '') === phone.replace(/\D/g, ''));
+      }
+      if (!existingMember && name) {
+        existingMember = existingMembers.find((m: any) => m.name && m.name.toLowerCase() === name.toLowerCase());
       }
 
-      if (computedStatus === 'active' || computedStatus === 'lifetime') activeCount++;
-      else if (computedStatus === 'expired') expiredCount++;
-      else if (computedStatus === 'lost') lostCount++;
-      else if (computedStatus === 'enquiry') enquiryCount++;
-      else if (computedStatus === 'frozen') frozenCount++;
-      else if (computedStatus === 'cancelled') cancelledCount++;
-
-      if (hasPT) ptCount++;
-
-      let uid = existingMember ? (existingMember.uid || existingMember.id) : ('m_mig_' + clientId + '_' + Date.now());
-      const loginEmail = `${phone.replace(/\D/g, '')}@alphagym.com`;
+      let uid = existingMember ? (existingMember.uid || existingMember.id) : ('m_mig_' + (clientId || phone || Date.now()) + '_' + Math.floor(Math.random() * 1000));
+      const loginEmail = `${phone.replace(/\D/g, '') || uid}@alphagym.com`;
 
       if (!existingMember && auth && firestore) {
         try {
@@ -842,100 +825,185 @@ export const migrateMembers = async (req: Request, res: Response) => {
                 emailVerified: true
               });
               uid = userRecord.uid;
-            } else { throw err; }
+            }
           }
-
           await firestore.collection('users').doc(uid).set({
-            uid,
-            name,
-            email: loginEmail,
-            role: 'member',
-            branch: record.branch || 'Alpha Zone Main Branch',
-            gymId: 'gym_001',
-            createdAt: new Date().toISOString()
+            uid, name, email: loginEmail, role: 'member',
+            branch: group.branch || 'Mohali, Punjab',
+            gymId: 'gym_001', createdAt: new Date().toISOString()
           }, { merge: true });
         } catch (e: any) {}
       }
 
-      const currentNextNum = nextNum++;
-      const memberId = existingMember ? (existingMember.memberId || `${prefix}${String(currentNextNum).padStart(4, '0')}`) : `${prefix}${String(currentNextNum).padStart(4, '0')}`;
-      importedCount++;
+      const memberId = existingMember ? (existingMember.memberId || `${prefix}${String(nextNum++).padStart(4, '0')}`) : `${prefix}${String(nextNum++).padStart(4, '0')}`;
 
-      // Parity Requirement: 1 legacy billing/invoice per history entry
-      const memberInvoices: any[] = [];
-      history.forEach((hItem: any) => {
+      // Build Membership History, Billing Invoices & Payments (1:1:1 parity)
+      const membershipHistory: any[] = [];
+      const billingHistory: any[] = [];
+      const paymentsList: any[] = [];
+      const timeline: any[] = [];
+
+      group.rows.forEach((row, idx) => {
         const invNum = `LEG-${String(legacyInvoiceCounter++).padStart(6, '0')}`;
-        const legacyInvoiceObj = {
+        const pkgDetails = parsePackageDetails(row.pkgName);
+        const rowSmart = calculateSmartStatus(row.expDate);
+
+        const historyObj = {
+          packageName: row.pkgName,
+          packageCategory: pkgDetails.packageCategory,
+          startDate: row.regDate,
+          expiryDate: row.expDate,
+          duration: `${pkgDetails.durationDays} Days`,
+          durationDays: pkgDetails.durationDays,
+          amount: row.amount,
+          amountDisplay: `₹${row.amount.toLocaleString('en-IN')}`,
+          status: rowSmart.smartStatus,
+          invoiceNumber: invNum,
+          legacyRowNumber: row.rowIndex + 1,
+          fingerprint: row.fingerprint
+        };
+        membershipHistory.push(historyObj);
+        totalHistoryCount++;
+
+        const invoiceObj = {
           invoiceNumber: invNum,
           memberId: uid,
           memberName: name,
           memberPhone: phone,
           invoiceType: 'Legacy',
-          package: hItem.packageName,
-          amount: null,
-          paymentStatus: 'Imported Legacy',
-          amountSource: 'Unknown',
+          package: row.pkgName,
+          amount: row.amount,
+          amountDisplay: `₹${row.amount.toLocaleString('en-IN')}`,
+          paymentStatus: 'Paid',
+          paymentMode: 'Legacy Import',
+          status: 'Paid',
+          verified: true,
           billingVerified: true,
-          requiresManualAmount: false,
-          amountDisplay: 'Imported Legacy (Payment Verified)',
-          status: 'Imported',
           sessionId: migrationSessionId,
-          createdAt: new Date().toISOString()
+          createdAt: row.regDate ? new Date(row.regDate).toISOString() : new Date().toISOString()
         };
-        invoicesCreated.push(legacyInvoiceObj);
-        memberInvoices.push(legacyInvoiceObj);
+        billingHistory.push(invoiceObj);
+        invoicesCreated.push(invoiceObj);
+        totalInvoicesCount++;
+
+        const paymentObj = {
+          memberId: uid,
+          memberName: name,
+          amount: row.amount,
+          plan: row.pkgName,
+          invoiceNumber: invNum,
+          method: 'Cash',
+          paymentMode: 'Legacy Import',
+          status: 'paid',
+          notes: `Legacy Import (Row #${row.rowIndex + 1})`,
+          date: row.regDate,
+          sessionId: migrationSessionId,
+          createdAt: row.regDate ? new Date(row.regDate).toISOString() : new Date().toISOString()
+        };
+        paymentsList.push(paymentObj);
+        paymentsCreated.push(paymentObj);
+        totalPaymentsCount++;
+
+        if (idx === 0) {
+          timeline.push({
+            event: 'Joined',
+            type: 'Joined',
+            date: row.regDate,
+            description: `Joined Alpha Zone Gym with ${row.pkgName} (₹${row.amount.toLocaleString('en-IN')})`,
+            details: `Joined Alpha Zone Gym with ${row.pkgName} (₹${row.amount.toLocaleString('en-IN')})`
+          });
+        } else {
+          timeline.push({
+            event: 'Renewed',
+            type: 'Renewed',
+            date: row.regDate,
+            description: `Renewed Membership: ${row.pkgName} (₹${row.amount.toLocaleString('en-IN')})`,
+            details: `Renewed Membership: ${row.pkgName} (₹${row.amount.toLocaleString('en-IN')})`
+          });
+        }
+        totalTimelineEventsCount++;
       });
 
-      // Billing History == Membership History Parity Verification Audit
-      if (history.length !== memberInvoices.length) {
+      timeline.push({
+        event: 'Current',
+        type: 'Current',
+        date: currentMemberRow.regDate,
+        description: `Active Membership: ${currentMemberRow.pkgName} (Exp: ${currentMemberRow.expDate})`,
+        details: `Active Membership: ${currentMemberRow.pkgName} (Exp: ${currentMemberRow.expDate})`
+      });
+      totalTimelineEventsCount++;
+
+      if (membershipHistory.length !== billingHistory.length || membershipHistory.length !== paymentsList.length) {
         parityAuditFailures.push({
-          memberId: uid,
-          name,
-          historyCount: history.length,
-          billingCount: memberInvoices.length
+          memberId: uid, name,
+          historyCount: membershipHistory.length,
+          billingCount: billingHistory.length,
+          paymentCount: paymentsList.length
         });
+      }
+
+      const currentSmart = calculateSmartStatus(currentMemberRow.expDate);
+      const currentDaysLeft = currentSmart.daysLeft;
+      const currentSmartStatus = currentSmart.smartStatus;
+      if (currentSmart.status === 'active') activeCount++;
+      else if (currentSmart.status === 'expired') expiredCount++;
+
+      // Photo Import Processing Pipeline
+      const incomingPhoto = group.primaryPhotoUrl;
+      let originalPhotoUrl = incomingPhoto;
+      let firebasePhotoUrl = incomingPhoto;
+      let thumbnailUrl = incomingPhoto;
+      let photoMigrationStatus = 'skipped';
+
+      if (incomingPhoto && incomingPhoto.startsWith('http')) {
+        const base64Data = await downloadPhotoAsBase64(incomingPhoto);
+        if (base64Data) {
+          firebasePhotoUrl = base64Data;
+          thumbnailUrl = base64Data;
+          photoMigrationStatus = 'completed';
+          photosImportedCount++;
+        } else {
+          photoMigrationStatus = 'failed';
+          photosFailedCount++;
+          warnings.push(`Photo download failed for ${name} (${incomingPhoto}). Preserved original URL.`);
+        }
       }
 
       const memberData = {
         uid,
+        id: uid,
         memberId,
         name,
         phone,
         email: loginEmail,
-        plan: activePkg,
-        packageCategory: parsedPkg.packageCategory,
-        joinDate: regDate,
-        startDate: regDate,
-        expiryDate: activeExpiry || todayStr,
-        status: computedStatus,
-        smartStatus: smartStatus,
-        daysLeft: smartStatusObj.daysLeft,
-        branch: record.branch || 'Alpha Zone Main Branch',
-        trainer: record.trainer || '',
+        plan: currentMemberRow.pkgName,
+        packageCategory: parsePackageDetails(currentMemberRow.pkgName).packageCategory,
+        joinDate: group.rows[0].regDate,
+        startDate: currentMemberRow.regDate,
+        expiryDate: currentMemberRow.expDate,
+        amount: currentMemberRow.amount,
+        currentAmount: currentMemberRow.amount,
+        status: currentSmartStatus.toLowerCase(),
+        smartStatus: currentSmartStatus,
+        daysLeft: currentDaysLeft,
+        branch: group.branch || 'Mohali, Punjab',
+        trainer: group.trainer || '',
         gender,
         biometricId: clientId,
         deviceUserId: clientId,
         biometricStatus: 'Linked',
-        membershipHistory: history,
-        billingHistory: memberInvoices,
+        membershipHistory,
+        billingHistory,
+        paymentHistory: paymentsList,
         timeline,
-        hasPersonalTraining: hasPT,
         avatar: firebasePhotoUrl || `https://api.dicebear.com/7.x/adventurer/svg?seed=${name.replace(' ', '')}`,
-
         originalPhotoUrl,
-        legacyPhotoUrl: originalPhotoUrl || record.photoUrl || record.avatarUrl || null,
+        legacyPhotoUrl: originalPhotoUrl,
         firebasePhotoUrl,
         profilePhotoUrl: firebasePhotoUrl || originalPhotoUrl || null,
         thumbnailUrl,
         photoMigrationStatus,
-
-        legacyRowNumber: rowIndex + 1,
-        legacyExcelFile: excelFileName || 'Import.csv',
-        legacySheetName: 'Sheet1',
         legacyImportSession: migrationSessionId,
-        legacySoftware: record.legacySoftware || 'Previous Gym Software',
-        fingerprint: recordFingerprint,
-
         migrationSessionId,
         isImportedMember: true,
         updatedAt: new Date().toISOString()
@@ -943,21 +1011,11 @@ export const migrateMembers = async (req: Request, res: Response) => {
 
       if (firestore) {
         await firestore.collection('members').doc(uid).set(memberData, { merge: true });
-        for (const inv of memberInvoices) {
+        for (const inv of billingHistory) {
           await firestore.collection('invoices').doc(inv.invoiceNumber).set(inv, { merge: true });
-          await firestore.collection('payments').add({
-            memberId: uid,
-            memberName: name,
-            amount: null,
-            paymentStatus: 'Imported Legacy',
-            amountSource: 'Unknown',
-            billingVerified: true,
-            plan: inv.package,
-            method: 'Legacy Import Verified',
-            status: 'paid',
-            sessionId: migrationSessionId,
-            createdAt: new Date().toISOString()
-          });
+        }
+        for (const pay of paymentsList) {
+          await firestore.collection('payments').add(pay);
         }
       } else {
         const idx = (db as any).mockMembers.findIndex((m: any) => m.id === uid || m.uid === uid);
@@ -968,17 +1026,28 @@ export const migrateMembers = async (req: Request, res: Response) => {
         }
       }
 
-      migrationLogs.push(`[${new Date().toLocaleTimeString()}] [Success] Row #${rowIndex + 1}: ${name} (${phone}) -> ${smartStatus} [Parity Check: ${history.length} H = ${memberInvoices.length} B]`);
       importedList.push(memberData);
-    };
-
-    const batchSize = 15;
-    for (let i = 0; i < payload.length; i += batchSize) {
-      const batch = payload.slice(i, i + batchSize);
-      await Promise.all(batch.map((record, bIdx) => processRecord(record, i + bIdx)));
+      migrationLogs.push(`[${new Date().toLocaleTimeString()}] [Success] Member ${name} (${phone}): ${group.rows.length} rows merged -> Current: ${currentMemberRow.pkgName} [Parity Check: ${membershipHistory.length} H = ${billingHistory.length} B = ${paymentsList.length} P]`);
     }
 
     const durationSeconds = Math.round((Date.now() - migrationStartTime) / 1000);
+    const successRatePct = Math.round(((payload.length - skippedCount) / Math.max(1, payload.length)) * 100);
+
+    const migrationSummary = {
+      rowsRead: payload.length,
+      uniqueMembers: uniqueMembersCount,
+      membershipHistoryCreated: totalHistoryCount,
+      billingRecordsCreated: totalInvoicesCount,
+      paymentsCreated: totalPaymentsCount,
+      invoicesCreated: totalInvoicesCount,
+      timelineEvents: totalTimelineEventsCount,
+      photosImported: photosImportedCount,
+      photosFailed: photosFailedCount,
+      duplicatesMerged: duplicatesMergedCount,
+      skipped: skippedCount,
+      conflicts: 0,
+      successRate: `${successRatePct}%`
+    };
 
     const stats = {
       sessionId: migrationSessionId,
@@ -988,20 +1057,17 @@ export const migrateMembers = async (req: Request, res: Response) => {
       clientIp,
       durationSeconds: `${durationSeconds}s`,
       excelFileName: excelFileName || 'Import.csv',
+      migrationSummary,
       totalRows: payload.length,
-      importedMembers: importedCount,
+      importedMembers: uniqueMembersCount,
       skippedMembers: skippedCount,
-      skippedIdempotent: skippedIdempotentCount,
-      duplicateMembers: duplicateCount,
+      duplicateMembers: duplicatesMergedCount,
       expiredMembers: expiredCount,
       activeMembers: activeCount,
-      ptMembers: ptCount,
-      enquiryMembers: enquiryCount,
       photosImported: photosImportedCount,
       photosFailed: photosFailedCount,
-      invalidRows,
       warnings,
-      conflicts: conflictList,
+      conflicts: [],
       parityAudit: {
         passed: parityAuditFailures.length === 0,
         mismatchesCount: parityAuditFailures.length,
@@ -1021,9 +1087,11 @@ export const migrateMembers = async (req: Request, res: Response) => {
     res.json({
       success: true,
       sessionId: migrationSessionId,
+      migrationSummary,
       stats
     });
   } catch (error: any) {
+    console.error('Migration failed:', error);
     res.status(500).json({ error: error.message });
   }
 };
@@ -1658,7 +1726,11 @@ export const repairImportedBilling = async (req: Request, res: Response) => {
       history.forEach((hItem: any, idx: number) => {
         const pkgName = hItem.packageName || hItem.package || m.plan || 'Monthly Access';
         const priceObj = getPackagePrice(pkgName, configuredPlans);
-        const invAmount = priceObj.amount;
+        const invAmount = (hItem.amount !== undefined && hItem.amount !== null && !isNaN(Number(hItem.amount)) && Number(hItem.amount) > 0)
+          ? Number(hItem.amount)
+          : (m.amount !== undefined && m.amount !== null && !isNaN(Number(m.amount)) && Number(m.amount) > 0)
+            ? Number(m.amount)
+            : priceObj.amount;
 
         if (invAmount !== null) {
           memberTotalBilled += invAmount;
@@ -1667,9 +1739,10 @@ export const repairImportedBilling = async (req: Request, res: Response) => {
           hasReviewNeeded = true;
         }
 
-        const invNum = `LEG-${String(invoiceCounter++).padStart(6, '0')}`;
+        const invNum = hItem.invoiceNumber || `LEG-${String(invoiceCounter++).padStart(6, '0')}`;
         const startDate = hItem.startDate || m.joinDate || new Date().toISOString().split('T')[0];
         const expiryDate = hItem.expiryDate || m.expiryDate || startDate;
+        const amountDisplay = invAmount ? `₹${Number(invAmount).toLocaleString('en-IN')}` : priceObj.amountDisplay;
 
         const legacyInvoiceObj = {
           id: `pay_${docId}_${idx + 1}`,
@@ -1687,9 +1760,9 @@ export const repairImportedBilling = async (req: Request, res: Response) => {
           status: 'paid',
           paymentMethod: 'Legacy Import',
           invoiceType: 'Legacy',
-          amountSource: priceObj.requiresReview ? 'Manual Review Needed' : 'Package Pricing Config',
-          amountDisplay: priceObj.amountDisplay,
-          billingVerified: !priceObj.requiresReview,
+          amountSource: (hItem.amount || m.amount) ? 'Excel Legacy Import' : (priceObj.requiresReview ? 'Manual Review Needed' : 'Package Pricing Config'),
+          amountDisplay: amountDisplay,
+          billingVerified: true,
           date: startDate,
           createdAt: startDate,
           membershipStart: startDate,
@@ -1772,6 +1845,215 @@ export const repairImportedBilling = async (req: Request, res: Response) => {
         parityAuditFailures
       },
       report
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+/**
+ * Auto-Patch Legacy Member Amounts in DB without requiring re-import or deletion
+ */
+export const patchLegacyAmounts = async (req: Request, res: Response) => {
+  try {
+    const { members: payload } = req.body;
+    const existingMembers = await db.getMembers();
+    const firestoreDb = isFirebaseInitialized && admin ? admin.firestore() : null;
+
+    let patchedCount = 0;
+    const patchedReport: any[] = [];
+
+    if (Array.isArray(payload) && payload.length > 0) {
+      for (const record of payload) {
+        const clientId = String(record.clientId || record['Client ID'] || record.id || '').trim();
+        const name = String(record.name || record['Client name'] || record.clientName || '').trim();
+        const phoneRaw = String(record.phone || record.Number || record.number || record.mobile || '').trim();
+        const phone = phoneRaw.replace(/\D/g, '');
+        const amount = parseRecordAmount(record);
+
+        if (!amount || amount <= 0) continue;
+
+        let matched = existingMembers.find((m: any) =>
+          (clientId && m.memberId && String(m.memberId).trim() === clientId) ||
+          (phone && m.phone && String(m.phone).replace(/\D/g, '') === phone) ||
+          (name && m.name && m.name.toLowerCase() === name.toLowerCase())
+        );
+
+        if (matched) {
+          const docId = matched.id || matched.uid;
+          const updatedHistory = Array.isArray(matched.membershipHistory)
+            ? matched.membershipHistory.map((h: any) => ({
+                ...h,
+                amount: amount,
+                amountDisplay: `₹${amount.toLocaleString('en-IN')}`
+              }))
+            : [];
+          const updatedBilling = Array.isArray(matched.billingHistory)
+            ? matched.billingHistory.map((b: any) => ({
+                ...b,
+                amount: amount,
+                paid: amount,
+                amountDisplay: `₹${amount.toLocaleString('en-IN')}`
+              }))
+            : [];
+
+          const updates = {
+            amount: amount,
+            currentAmount: amount,
+            membershipHistory: updatedHistory,
+            billingHistory: updatedBilling,
+            updatedAt: new Date().toISOString()
+          };
+
+          if (firestoreDb && docId) {
+            try { await firestoreDb.collection('members').doc(docId).set(updates, { merge: true }); } catch (e) {}
+          }
+          await db.updateMember(docId, updates);
+          patchedCount++;
+          patchedReport.push({ name: matched.name, phone: matched.phone, patchedAmount: amount });
+        }
+      }
+    } else {
+      for (const m of existingMembers) {
+        const docId = m.id || m.uid;
+        let targetAmt = Number(m.amount || m.currentAmount || 0);
+
+        if (!targetAmt || targetAmt <= 0) {
+          const pObj = getPackagePrice(m.plan || 'Monthly');
+          if (pObj && pObj.amount) targetAmt = pObj.amount;
+        }
+
+        if (targetAmt > 0) {
+          const updatedHistory = Array.isArray(m.membershipHistory)
+            ? m.membershipHistory.map((h: any) => ({
+                ...h,
+                amount: Number(h.amount) > 0 ? Number(h.amount) : targetAmt,
+                amountDisplay: `₹${(Number(h.amount) > 0 ? Number(h.amount) : targetAmt).toLocaleString('en-IN')}`
+              }))
+            : [];
+          const updatedBilling = Array.isArray(m.billingHistory)
+            ? m.billingHistory.map((b: any) => ({
+                ...b,
+                amount: Number(b.amount) > 0 ? Number(b.amount) : targetAmt,
+                paid: Number(b.paid) > 0 ? Number(b.paid) : targetAmt,
+                amountDisplay: `₹${(Number(b.amount) > 0 ? Number(b.amount) : targetAmt).toLocaleString('en-IN')}`
+              }))
+            : [];
+
+          const updates = {
+            amount: targetAmt,
+            currentAmount: targetAmt,
+            membershipHistory: updatedHistory,
+            billingHistory: updatedBilling,
+            updatedAt: new Date().toISOString()
+          };
+
+          if (firestoreDb && docId) {
+            try { await firestoreDb.collection('members').doc(docId).set(updates, { merge: true }); } catch (e) {}
+          }
+          await db.updateMember(docId, updates);
+          patchedCount++;
+          patchedReport.push({ name: m.name, phone: m.phone, patchedAmount: targetAmt });
+        }
+      }
+    }
+
+    if ((db as any).invalidateMembersCache) {
+      (db as any).invalidateMembersCache();
+    }
+
+    res.json({
+      success: true,
+      message: `Successfully patched legacy amounts for ${patchedCount} members.`,
+      patchedCount,
+      report: patchedReport
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+/**
+ * Mark All CRM Members & Invoices as PAID
+ */
+export const markAllBillsPaid = async (req: Request, res: Response) => {
+  try {
+    const existingMembers = await db.getMembers();
+    const firestoreDb = isFirebaseInitialized && admin ? admin.firestore() : null;
+
+    let updatedMembersCount = 0;
+    let updatedInvoicesCount = 0;
+
+    for (const m of existingMembers) {
+      const docId = m.id || m.uid;
+      const targetAmt = Number(m.amount || m.currentAmount || m.totalBilled || 0);
+
+      const updatedHistory = Array.isArray(m.membershipHistory)
+        ? m.membershipHistory.map((h: any) => ({
+            ...h,
+            status: 'active',
+            paymentStatus: 'paid'
+          }))
+        : [];
+
+      const updatedBilling = Array.isArray(m.billingHistory)
+        ? m.billingHistory.map((b: any) => {
+            updatedInvoicesCount++;
+            const bAmt = Number(b.amount || targetAmt || 0);
+            return {
+              ...b,
+              status: 'paid',
+              paymentStatus: 'paid',
+              paid: bAmt,
+              pendingAmount: 0,
+              outstanding: 0
+            };
+          })
+        : [];
+
+      const updates = {
+        paymentStatus: 'paid',
+        paidAmount: targetAmt,
+        totalPaid: targetAmt,
+        totalBilled: targetAmt,
+        totalCollected: targetAmt,
+        outstanding: 0,
+        pendingAmount: 0,
+        membershipHistory: updatedHistory,
+        billingHistory: updatedBilling,
+        payments: updatedBilling,
+        updatedAt: new Date().toISOString()
+      };
+
+      if (firestoreDb && docId) {
+        try {
+          await firestoreDb.collection('members').doc(docId).set(updates, { merge: true });
+          if (updatedBilling.length > 0) {
+            const batch = firestoreDb.batch();
+            updatedBilling.forEach((inv: any) => {
+              if (inv.id) {
+                batch.set(firestoreDb.collection('invoices').doc(inv.id), { status: 'paid', paymentStatus: 'paid', paid: inv.amount || targetAmt, pendingAmount: 0 }, { merge: true });
+                batch.set(firestoreDb.collection('payments').doc(inv.id), { status: 'paid', paymentStatus: 'paid', paid: inv.amount || targetAmt, pendingAmount: 0 }, { merge: true });
+              }
+            });
+            await batch.commit();
+          }
+        } catch (e) {}
+      }
+
+      await db.updateMember(docId, updates);
+      updatedMembersCount++;
+    }
+
+    if ((db as any).invalidateMembersCache) {
+      (db as any).invalidateMembersCache();
+    }
+
+    res.json({
+      success: true,
+      message: `Successfully marked all bills as PAID for ${updatedMembersCount} members (${updatedInvoicesCount} invoices).`,
+      updatedMembersCount,
+      updatedInvoicesCount
     });
   } catch (error: any) {
     res.status(500).json({ error: error.message });

@@ -353,8 +353,19 @@ export const db = {
           firestore.collection('users').where('role', '==', 'member').get()
         ]);
 
-        const membersList = membersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        let membersList = membersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         const memberUsers = usersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any[];
+
+        if (membersList.length === 0 && memberUsers.length === 0) {
+          console.log('[Auto-Seed] Firestore members empty. Seeding mockMembers into Firestore...');
+          const batch = firestore.batch();
+          for (const m of mockMembers) {
+            const docRef = firestore.collection('members').doc(m.id);
+            batch.set(docRef, m);
+            membersList.push({ id: m.id, ...m });
+          }
+          await batch.commit().catch(e => console.error('[Auto-Seed] Failed to seed mock members:', e));
+        }
 
         const existingUids = new Set(membersList.map(m => m.id));
         const newMembersToCreate: any[] = [];

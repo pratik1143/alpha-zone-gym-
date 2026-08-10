@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Upload, FileSpreadsheet, CheckCircle2, AlertTriangle, XCircle,
   RefreshCw, Zap, ShieldAlert, ArrowRight, Download, Printer,
-  FileText, Check, Cpu, Clock, Terminal, Filter, Eye, Info, Trash2
+  FileText, Check, Cpu, Clock, Terminal, Filter, Eye, Info, Trash2, X, Search, Table
 } from 'lucide-react';
 import { useGymStore } from '@/store';
 import toast from 'react-hot-toast';
@@ -22,6 +22,7 @@ const FIELD_MAP: Record<string, string[]> = {
   registrationDate: ['registration', 'registration date', 'registrationdate', 'join date', 'joining date', 'start date'],
   membershipPackage: ['package', 'membershippackage', 'plan', 'membership', 'membership plan'],
   membershipExpiry: ['expiration', 'expiry', 'expiry date', 'expirydate', 'membershipexpiry', 'expiration date'],
+  amount:     ['amount', 'fee', 'price', 'cost', 'paid', 'amount paid', 'paid amount', 'total', 'amt', 'amount (₹)', 'fees'],
   photoUrl:   ['photo (url)', 'photo', 'photo url', 'photourl', 'avatar', 'avatarurl', 'avatar url', 'image', 'image url', 'imageurl', 'picture', 'client photo', 'member photo', 'profile photo', 'photo link', 'url']
 };
 
@@ -83,6 +84,8 @@ export default function SmartAutoMappingEngine({
   const [executionLogs, setExecutionLogs] = useState<string[]>([]);
   const [reportData, setReportData] = useState<any | null>(null);
   const [isPurging, setIsPurging] = useState(false);
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [previewSearch, setPreviewSearch] = useState('');
 
   const handlePurgeAll = async () => {
     if (!window.confirm('⚠️ WARNING: Are you sure you want to DELETE ALL MEMBERS AND MIGRATED DATA?\n\nThis will purge all imported members, history, and invoices to give you a clean slate.')) {
@@ -180,6 +183,11 @@ export default function SmartAutoMappingEngine({
     // Build payload array
     const payload = rows.map(r => {
       const record: Record<string, string> = {};
+      headers.forEach((h, i) => {
+        if (h && r[i] !== undefined) {
+          record[h] = r[i]?.trim() || '';
+        }
+      });
       Object.entries(columnMap).forEach(([cIdx, field]) => {
         if (field) record[field] = r[Number(cIdx)]?.trim() || '';
       });
@@ -355,32 +363,62 @@ export default function SmartAutoMappingEngine({
     runAutoProcessing(stagedFile);
   };
 
-  // Execute Production Migration
+  // Execute Production Migration (Chunked Batches)
   const handleExecuteMigration = async () => {
     if (!stagedFile || !stagedFile.payload) return;
 
     setIsExecuting(true);
-    setExecutionProgress(10);
-    setExecutionLogs(['[Auto Engine] Starting 13-stage atomic production import...']);
+    setExecutionProgress(5);
+    setExecutionLogs(['[Auto Engine] Starting chunked atomic production import...']);
+
+    const allMembers = stagedFile.payload;
+    const chunkSize = 100;
+    const totalBatches = Math.ceil(allMembers.length / chunkSize);
+    let combinedStats = {
+      importedMembers: 0,
+      skippedIdempotent: 0,
+      duplicateMembers: 0,
+      totalRows: allMembers.length,
+      photosImported: 0,
+      sessionId: `auto_mig_${Date.now()}`
+    };
 
     try {
-      const res = await API.post('/members/migrate', {
-        members: stagedFile.payload,
-        dryRun: false,
-        excelFileName: stagedFile.fileName,
-        sessionId: `auto_mig_${Date.now()}`
-      });
+      for (let i = 0; i < totalBatches; i++) {
+        const batch = allMembers.slice(i * chunkSize, (i + 1) * chunkSize);
+        const progressPct = Math.round(((i + 1) / totalBatches) * 80);
+        setExecutionProgress(progressPct);
+        setExecutionLogs(prev => [
+          ...prev,
+          `[Batch ${i + 1}/${totalBatches}] Processing ${batch.length} members (${i * chunkSize + 1} - ${Math.min((i + 1) * chunkSize, allMembers.length)})...`
+        ]);
+
+        const res = await API.post('/members/migrate', {
+          members: batch,
+          dryRun: false,
+          excelFileName: stagedFile.fileName,
+          sessionId: combinedStats.sessionId
+        });
+
+        const s = res.data.stats || res.data;
+        if (s) {
+          combinedStats.importedMembers += (s.importedMembers || 0);
+          combinedStats.skippedIdempotent += (s.skippedIdempotent || 0);
+          combinedStats.duplicateMembers += (s.duplicateMembers || 0);
+          combinedStats.photosImported += (s.photosImported || 0);
+        }
+      }
 
       setExecutionProgress(90);
-      setExecutionLogs(prev => [...prev, '[Stage 13/13] Rebuilding Universal Search & Revenue Index...']);
+      setExecutionLogs(prev => [...prev, '[Stage Final] Rebuilding Universal Search & Revenue Index...']);
       await API.post('/members/rebuild-analytics');
 
       setExecutionProgress(100);
-      setReportData(res.data.stats || res.data);
+      setReportData(combinedStats);
       setIsExecuting(false);
       fetchMembers();
       if (onMigrationComplete) onMigrationComplete();
-      toast.success('Legacy Data Auto Migration Completed Successfully! 🎉');
+      toast.success(`Legacy Data Auto Migration Completed! ${combinedStats.importedMembers} Members Imported 🎉`);
     } catch (err: any) {
       setIsExecuting(false);
       toast.error('Migration failed: ' + (err.response?.data?.error || err.message));
@@ -581,17 +619,27 @@ export default function SmartAutoMappingEngine({
           )}
 
           {/* Action Trigger Row */}
-          <div className="flex items-center justify-between pt-4 border-t border-slate-100">
-            <button
-              onClick={() => {
-                localStorage.removeItem('alpha_zone_staged_import');
-                setStagedFile(null);
-                setValidationSummary(null);
-              }}
-              className="px-4 py-2 rounded-xl bg-slate-100 text-slate-600 text-xs font-bold hover:bg-slate-200 cursor-pointer"
-            >
-              Clear Staged File
-            </button>
+          <div className="flex items-center justify-between pt-4 border-t border-slate-100 flex-wrap gap-3">
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => {
+                  localStorage.removeItem('alpha_zone_staged_import');
+                  setStagedFile(null);
+                  setValidationSummary(null);
+                }}
+                className="px-4 py-2.5 rounded-xl bg-slate-100 text-slate-600 text-xs font-bold hover:bg-slate-200 cursor-pointer border-none"
+              >
+                Clear Staged File
+              </button>
+
+              <button
+                onClick={() => setShowPreviewModal(true)}
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 text-white text-xs font-black shadow-md hover:bg-indigo-700 transition-all cursor-pointer border-none"
+              >
+                <Eye size={15} />
+                <span>Preview Recorded Columns & Data</span>
+              </button>
+            </div>
 
             <button
               onClick={handleExecuteMigration}
@@ -604,6 +652,156 @@ export default function SmartAutoMappingEngine({
           </div>
         </div>
       )}
+
+      {/* PREVIEW MODAL FOR EXCEL PARSED COLUMNS & DATA */}
+      <AnimatePresence>
+        {showPreviewModal && stagedFile && (
+          <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-[28px] max-w-5xl w-full max-h-[90vh] overflow-hidden shadow-2xl flex flex-col border border-slate-200"
+            >
+              {/* Modal Header */}
+              <div className="bg-slate-900 text-white p-6 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 bg-indigo-600 rounded-2xl text-white">
+                    <Eye size={22} />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-black tracking-tight font-display">System Parsed Data & Column Mapping Preview</h3>
+                    <p className="text-xs text-slate-300 font-mono">File: {stagedFile.fileName} • Sheet: {stagedFile.sheetName} • Total Rows: {stagedFile.totalRows}</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowPreviewModal(false)}
+                  className="p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition-all cursor-pointer border-none"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* Modal Body */}
+              <div className="p-6 overflow-y-auto space-y-6 flex-1 text-xs">
+                {/* Detected Columns Grid */}
+                <div>
+                  <h4 className="text-xs font-black uppercase text-slate-500 tracking-wider mb-3 flex items-center gap-2">
+                    <Cpu size={14} className="text-indigo-600" /> Detected Header Mapping ({stagedFile.headers.length} Columns)
+                  </h4>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
+                    {stagedFile.headers.map((h, i) => {
+                      const mappedField = stagedFile.columnMap[i] || 'unmapped';
+                      return (
+                        <div key={i} className="p-3 bg-slate-50 rounded-xl border border-slate-200 flex flex-col justify-between gap-1 shadow-sm">
+                          <span className="font-black text-slate-800 text-[11px] truncate" title={h}>{h}</span>
+                          <div className="flex items-center justify-between mt-1">
+                            <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${
+                              mappedField !== 'unmapped' ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' : 'bg-amber-100 text-amber-700 border border-amber-200'
+                            }`}>
+                              {mappedField}
+                            </span>
+                            {mappedField !== 'unmapped' ? (
+                              <CheckCircle2 size={13} className="text-emerald-500" />
+                            ) : (
+                              <span className="text-[9px] text-slate-400">Raw Header</span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Parsed Rows Search & Table */}
+                <div className="space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-4">
+                    <h4 className="text-xs font-black uppercase text-slate-500 tracking-wider flex items-center gap-2">
+                      <FileSpreadsheet size={14} className="text-indigo-600" /> Parsed Staged Payload Preview ({stagedFile.payload.length} Records)
+                    </h4>
+                    <div className="relative w-72">
+                      <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                      <input
+                        type="text"
+                        placeholder="Search preview by name, phone, amount..."
+                        value={previewSearch}
+                        onChange={(e) => setPreviewSearch(e.target.value)}
+                        className="w-full pl-9 pr-3 py-1.5 bg-slate-100 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-indigo-500"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="border border-slate-200 rounded-2xl overflow-x-auto max-h-[380px] shadow-inner">
+                    <table className="w-full text-left text-xs whitespace-nowrap">
+                      <thead className="bg-slate-900 text-white font-bold sticky top-0">
+                        <tr>
+                          <th className="px-3 py-2.5 text-center">#</th>
+                          <th className="px-3 py-2.5">Client ID</th>
+                          <th className="px-3 py-2.5">Name</th>
+                          <th className="px-3 py-2.5">Phone</th>
+                          <th className="px-3 py-2.5">Gender</th>
+                          <th className="px-3 py-2.5">Package</th>
+                          <th className="px-3 py-2.5">Reg Date</th>
+                          <th className="px-3 py-2.5">Expiry Date</th>
+                          <th className="px-3 py-2.5 text-amber-300">Amount (₹)</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 bg-white">
+                        {stagedFile.payload
+                          .filter(r => {
+                            if (!previewSearch.trim()) return true;
+                            const query = previewSearch.toLowerCase();
+                            return (
+                              (r.name || '').toLowerCase().includes(query) ||
+                              (r.phone || '').includes(query) ||
+                              (r.clientId || '').toLowerCase().includes(query) ||
+                              (r.amount || r.Amount || '').toLowerCase().includes(query) ||
+                              (r.membershipPackage || r.Package || '').toLowerCase().includes(query)
+                            );
+                          })
+                          .slice(0, 50)
+                          .map((row, idx) => {
+                            const amt = row.amount || row.Amount || row.Fee || row.Price || '0';
+                            return (
+                              <tr key={idx} className="hover:bg-indigo-50/50 transition-colors">
+                                <td className="px-3 py-2 text-center text-slate-400 font-mono text-[10px]">{idx + 1}</td>
+                                <td className="px-3 py-2 font-mono font-bold text-slate-700">{row.clientId || row['Client ID'] || 'N/A'}</td>
+                                <td className="px-3 py-2 font-extrabold text-slate-900">{row.name || row['Client Name'] || 'Unknown'}</td>
+                                <td className="px-3 py-2 font-mono text-slate-600">{row.phone || row.Number || 'N/A'}</td>
+                                <td className="px-3 py-2 capitalize">{row.gender || row.Gender || 'N/A'}</td>
+                                <td className="px-3 py-2">
+                                  <span className="px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 font-bold text-[10px]">
+                                    {row.membershipPackage || row.Package || 'N/A'}
+                                  </span>
+                                </td>
+                                <td className="px-3 py-2 font-mono text-slate-500">{row.registrationDate || row.Registration || 'N/A'}</td>
+                                <td className="px-3 py-2 font-mono text-slate-500">{row.membershipExpiry || row.Expiration || 'N/A'}</td>
+                                <td className="px-3 py-2 font-mono font-black text-emerald-600 bg-emerald-50/40">
+                                  ₹{amt}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+
+              {/* Modal Footer */}
+              <div className="bg-slate-50 px-6 py-4 border-t border-slate-200 flex items-center justify-between">
+                <span className="text-xs text-slate-500 font-medium">Showing up to 50 preview records</span>
+                <button
+                  onClick={() => setShowPreviewModal(false)}
+                  className="px-5 py-2.5 rounded-xl bg-slate-900 text-white font-bold text-xs hover:bg-black transition-all cursor-pointer border-none"
+                >
+                  Close Preview
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* POST MIGRATION REPORT & DOWNLOADS */}
       {reportData && (

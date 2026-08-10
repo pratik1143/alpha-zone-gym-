@@ -27,16 +27,9 @@ export default function MembersKPI() {
         ptMembers++;
       }
       
-      // Estimate revenue for demo (you can map to real payments if available)
-      if (m.joinDate) {
-        const join = new Date(m.joinDate);
-        if (join.getMonth() === today.getMonth() && join.getFullYear() === today.getFullYear()) {
-          const planPrices: Record<string, number> = {
-            'Monthly': 2500, 'Quarterly': 6500, 'Semi-Annual': 11500, 'Annual Premium': 18000
-          };
-          revenueThisMonth += planPrices[m.plan] || 2500;
-        }
-      }
+      // Calculate revenue using actual member amounts
+      const amt = Number(m.amount ?? m.currentAmount ?? m.paidAmount ?? 0);
+      revenueThisMonth += amt;
     });
 
     // Calculate unique members who punched today

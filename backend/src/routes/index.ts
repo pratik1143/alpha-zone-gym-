@@ -15,7 +15,7 @@ import {
 } from '../controllers/trainer.controller';
 import { getChatHistory, sendChatMessage } from '../controllers/chat.controller';
 import { getProgressTimeline, addProgressRecord, getReferralsByMember, createReferralInvitation } from '../controllers/progress.controller';
-import { nextBiometricId, migrateMembers, dryRunMigration, resumeMigration, rebuildAnalyticsAndIndex, auditVerification, rollbackMigration, mapBiometricUser, getDeviceUsers, getMigrations, seedDeviceUsers, purgeCRMData, repairImportedPhotos, repairImportedBilling } from '../controllers/migration.controller';
+import { nextBiometricId, migrateMembers, dryRunMigration, resumeMigration, rebuildAnalyticsAndIndex, auditVerification, rollbackMigration, mapBiometricUser, getDeviceUsers, getMigrations, seedDeviceUsers, purgeCRMData, repairImportedPhotos, repairImportedBilling, patchLegacyAmounts, markAllBillsPaid } from '../controllers/migration.controller';
 import { getSmtpConfig, saveSmtpConfig, getTemplates, saveTemplatesController, sendTestEmail, getInvoicePreview } from '../controllers/automation.controller';
 import { getPlansController, createPlanController, updatePlanController, deletePlanController } from '../controllers/plan.controller';
 import { getEmployees, createEmployee, updateEmployee, deleteEmployee, getEmployeeAttendance } from '../controllers/employee.controller';
@@ -44,6 +44,8 @@ router.post('/members/migrate', migrateMembers);
 router.post('/members/dry-run-migration', dryRunMigration);
 router.post('/members/repair-photos', repairImportedPhotos);
 router.post('/members/repair-billing', repairImportedBilling);
+router.post('/members/patch-legacy-amounts', patchLegacyAmounts);
+router.post('/members/mark-all-paid', markAllBillsPaid);
 router.post('/members/resume-migration', resumeMigration);
 router.post('/members/rebuild-analytics', rebuildAnalyticsAndIndex);
 router.get('/members/audit-verification', auditVerification);
