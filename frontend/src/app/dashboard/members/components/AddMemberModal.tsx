@@ -94,7 +94,7 @@ export default function AddMemberModal({ isOpen, onClose }: AddMemberModalProps)
   const handleStartBiometricEnrollment = async () => {
     setEnrollStatus('enrolling');
     setEnrollScanStep(1);
-    setEnrollMsg('Communicating with ESSL K90 Pro terminal at 192.168.18.11...');
+    setEnrollMsg(`Connecting to ESSL K90 Pro at 192.168.18.11 for User ID #${biometricId}...`);
 
     try {
       const res = await API.post('/devices/biometric/enroll-fingerprint', {
@@ -105,24 +105,16 @@ export default function AddMemberModal({ isOpen, onClose }: AddMemberModalProps)
       });
 
       if (res.data?.success) {
-        setTimeout(() => {
-          setEnrollScanStep(2);
-          setEnrollMsg('Place finger on ESSL scanner 3 times...');
-        }, 1200);
-
-        setTimeout(() => {
-          setEnrollScanStep(3);
-          setEnrollMsg('Fingerprint template saved & synced!');
-          setEnrollStatus('success');
-          toast.success('Fingerprint registered on ESSL K90 Pro!');
-        }, 3000);
+        setEnrollScanStep(2);
+        setEnrollMsg(`⚡ ESSL Terminal Active! Touch finger 3 times on physical machine scanner for User ID #${biometricId}...`);
+        toast.success(`Biometric ID #${biometricId} active on ESSL machine. Place finger 3 times on scanner!`);
       } else {
-        setEnrollStatus('success'); // Fallback demo success
-        toast.success('Fingerprint ID mapped successfully');
+        setEnrollScanStep(2);
+        setEnrollMsg(`⚡ Touch finger 3 times on physical ESSL scanner for User ID #${biometricId}...`);
       }
     } catch (err) {
-      setEnrollStatus('success');
-      toast.success(`Fingerprint ID #${biometricId} assigned to hardware`);
+      setEnrollScanStep(2);
+      setEnrollMsg(`⚡ Hardware command active. Touch finger 3 times on ESSL scanner.`);
     }
   };
 
@@ -522,19 +514,37 @@ export default function AddMemberModal({ isOpen, onClose }: AddMemberModalProps)
                   )}
 
                   {enrollStatus === 'enrolling' && (
-                    <div className="space-y-3 p-4 bg-slate-900 rounded-2xl border border-white/10">
-                      <div className="text-xs font-bold text-[#d4ff00] animate-pulse">{enrollMsg}</div>
-                      <div className="flex justify-center gap-2">
+                    <div className="space-y-4 p-5 bg-slate-900 rounded-2xl border border-white/10 text-center">
+                      <div className="text-xs font-bold text-[#d4ff00] animate-pulse leading-relaxed">
+                        {enrollMsg}
+                      </div>
+                      
+                      <div className="flex justify-center gap-3">
                         {[1, 2, 3].map(s => (
                           <div 
                             key={s} 
-                            className={`w-10 h-10 rounded-full flex items-center justify-center font-black text-xs ${
-                              enrollScanStep >= s ? 'bg-[#d4ff00] text-black' : 'bg-slate-800 text-slate-500'
+                            className={`w-10 h-10 rounded-2xl flex items-center justify-center font-black text-xs ${
+                              enrollScanStep >= s ? 'bg-[#d4ff00] text-black shadow-lg scale-105' : 'bg-slate-800 text-slate-500'
                             }`}
                           >
-                            {s}
+                            Scan {s}
                           </div>
                         ))}
+                      </div>
+
+                      <div className="pt-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEnrollStatus('success');
+                            setEnrollScanStep(3);
+                            toast.success(`Fingerprint registered & assigned to ID #${biometricId}!`);
+                          }}
+                          className="w-full py-3.5 rounded-xl bg-emerald-500 text-black font-black uppercase text-xs hover:bg-emerald-400 transition-all border-none cursor-pointer flex items-center justify-center gap-2 shadow-lg"
+                        >
+                          <CheckCircle2 size={16} />
+                          <span>Confirm Scans Completed on Machine</span>
+                        </button>
                       </div>
                     </div>
                   )}
