@@ -1,6 +1,8 @@
 import { Request, Response } from 'express';
 import { db, admin, isFirebaseInitialized, getFirestoreDb, disableFirestore } from '../firebase';
 import { simulateManualTap } from '../services/deviceSync.service';
+import { exec } from 'child_process';
+import path from 'path';
 
 /**
  * Get all devices, including calculated summary stats for the dashboard.
@@ -558,6 +560,84 @@ export const getLatestPunch = async (req: Request, res: Response) => {
     res.json({ latestPunch });
   } catch (error: any) {
     res.json({ latestPunch: null });
+  }
+};
+
+/**
+ * 1-Click Auto Map All Members with ESSL K90 Pro Machine Users
+ */
+export const autoMapAllBiometrics = async (req: Request, res: Response) => {
+  try {
+    const scriptPath = path.resolve(__dirname, '../../../device-service/auto_map_device_users.py');
+
+    exec(`python "${scriptPath}"`, async (err, stdout, stderr) => {
+      let deviceUsers: any[] = [];
+      if (!err && stdout) {
+        try {
+          const parsed = JSON.parse(stdout);
+          if (parsed.success && Array.isArray(parsed.users)) {
+            deviceUsers = parsed.users;
+          }
+        } catch (e) {}
+      }
+
+      const members = await db.getMembers();
+      let newlyMapped = 0;
+      let alreadyMapped = 0;
+      const missingMembers: any[] = [];
+
+      for (const m of members) {
+        const mName = String(m.name || m.fullName || '').toLowerCase().trim();
+        const mPhone = String(m.phone || m.mobile || '').replace(/\D/g, '');
+        const mBioId = String(m.biometricId || m.deviceUserId || m.customId || m.memberId || '').trim();
+
+        // Try matching against device users
+        const matched = deviceUsers.find(u => {
+          const uId = String(u.user_id).trim();
+          const uName = String(u.name || '').toLowerCase().trim();
+          if (mBioId && (uId === mBioId || `AZ-${uId}` === mBioId || uId === m.id)) return true;
+          if (uName && mName && (uName === mName || uName.includes(mName) || mName.includes(uName))) return true;
+          return false;
+        });
+
+        if (matched) {
+          const targetBioId = matched.user_id;
+          if (m.biometricId === targetBioId && m.deviceUserId === targetBioId) {
+            alreadyMapped++;
+          } else {
+            await db.updateMember(m.id, {
+              biometricId: targetBioId,
+              deviceUserId: targetBioId
+            });
+            newlyMapped++;
+          }
+        } else {
+          missingMembers.push({
+            id: m.id,
+            name: m.name,
+            phone: m.phone,
+            memberId: m.memberId || m.id,
+            plan: m.plan || 'Standard',
+            status: m.status || 'active'
+          });
+        }
+      }
+
+      const totalMapped = alreadyMapped + newlyMapped;
+      res.json({
+        success: true,
+        totalCrmMembers: members.length,
+        totalDeviceUsers: deviceUsers.length,
+        mappedCount: totalMapped,
+        alreadyMapped,
+        newlyMapped,
+        missingCount: missingMembers.length,
+        missingMembers,
+        message: `Successfully auto-mapped ${totalMapped} members with ESSL machine! (${newlyMapped} newly mapped, ${missingMembers.length} missing on machine)`
+      });
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
   }
 };
 

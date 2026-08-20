@@ -4,7 +4,7 @@ import whatsappRoutes from './whatsapp.routes';
 import { loginUser } from '../controllers/auth.controller';
 import { getMembers, createMember, updateMember, deleteMember, toggleFreezeMember, resetMemberPassword, sendMemberCredentials } from '../controllers/member.controller';
 import { getAttendanceFeed, createCheckIn, checkoutLog, triggerGateUnlock, getAccessLogs, getDoorStatus, getDashboardAnalyticsFeed, getAttendanceSummaryFeed } from '../controllers/attendance.controller';
-import { getDevices, createDevice, updateDevice, deleteDevice, getDeviceLogs, triggerSimulationTap, restartDevice, queueConnectionTest, queueReadUsers, queueReadAttendance, getTesterStatus, queueSyncFirebase, queueImportUsers, startEnrollFingerprint, deleteEnrollment, syncMemberToDevice, getEnrollmentStatus, getPythonStatus, getLatestPunch } from '../controllers/device.controller';
+import { getDevices, createDevice, updateDevice, deleteDevice, getDeviceLogs, triggerSimulationTap, restartDevice, queueConnectionTest, queueReadUsers, queueReadAttendance, getTesterStatus, queueSyncFirebase, queueImportUsers, startEnrollFingerprint, deleteEnrollment, syncMemberToDevice, getEnrollmentStatus, getPythonStatus, getLatestPunch, autoMapAllBiometrics } from '../controllers/device.controller';
 import { getInvoices, createInvoice, markPaymentPaid } from '../controllers/billing.controller';
 import { 
   getWorkoutPlan, saveWorkoutPlan, getDietPlan, saveDietPlan,
