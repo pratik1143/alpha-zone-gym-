@@ -79,7 +79,7 @@ export default function BillingTab({ member }: { member: any }) {
 
       // If no invoices exist in database, auto-generate initial invoice from member package
       if (combinedMap.size === 0 && member) {
-        const baseAmt = Number(member.totalBilled) || Number(member.paid) || 2500;
+        const baseAmt = Number(member.totalBilled) || Number(member.paid) || Number(member.amount) || 2500;
         const autoInv = {
           id: `inv_auto_${Date.now()}`,
           invoiceNumber: member.memberId ? member.memberId.replace('AZ-2026-', '') : '670',
@@ -88,7 +88,7 @@ export default function BillingTab({ member }: { member: any }) {
           amount: baseAmt,
           paid: Number(member.totalPaid) || baseAmt,
           discount: 0,
-          method: member.paymentMethod || 'First payment',
+          method: member.paymentMethod || member.method || 'Cash',
           status: 'paid',
           date: member.joinDate || new Date().toISOString().split('T')[0],
           startDate: member.joinDate || new Date().toISOString().split('T')[0],
@@ -190,42 +190,6 @@ export default function BillingTab({ member }: { member: any }) {
     window.print();
   };
 
-  // Save Edit Bill
-  const handleSaveEdit = async () => {
-    if (!editInvoice) return;
-    try {
-      const docId = editInvoice.id || `inv_${Date.now()}`;
-      const updatedData = {
-        ...editInvoice,
-        invoiceNumber: editForm.invoiceNumber,
-        invoice: editForm.invoiceNumber,
-        plan: editForm.plan,
-        amount: Number(editForm.amount),
-        paid: Number(editForm.paid),
-        method: editForm.method,
-        status: editForm.status,
-        date: editForm.date,
-        startDate: editForm.startDate,
-        expiryDate: editForm.expiryDate,
-        updatedAt: new Date().toISOString(),
-      };
-
-      await setDoc(doc(db, 'payments', docId), updatedData, { merge: true });
-
-      await updateDoc(doc(db, 'members', member.id), {
-        plan: editForm.plan,
-        expiryDate: editForm.expiryDate,
-        updatedAt: new Date().toISOString(),
-      });
-
-      toast.success('Invoice updated successfully!');
-      setEditInvoice(null);
-      fetchMembers();
-    } catch (err: any) {
-      toast.error('Failed to update invoice: ' + err.message);
-    }
-  };
-
   // Handle Save New Bill
   const handleSaveNewBill = async () => {
     try {
@@ -268,79 +232,79 @@ export default function BillingTab({ member }: { member: any }) {
     <div className="space-y-6">
       {/* ── KPI Cards Header ─────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm">
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">Total Billed</p>
+        <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm">
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">TOTAL BILLED</p>
           <p className="text-2xl font-black text-slate-900">{fmt(totalBilled)}</p>
           <p className="text-[10px] text-slate-400 mt-0.5">{invoices.length} billing entry</p>
         </div>
-        <div className="bg-white rounded-2xl p-4 border border-emerald-100 shadow-sm">
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">Total Collected</p>
+        <div className="bg-white rounded-2xl p-4 border border-emerald-200 shadow-sm">
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">TOTAL COLLECTED</p>
           <p className="text-2xl font-black text-emerald-600">{fmt(totalPaid)}</p>
-          <p className="text-[10px] text-emerald-500 mt-0.5">Amount Paid</p>
+          <p className="text-[10px] text-emerald-600 font-bold mt-0.5">Amount Paid</p>
         </div>
-        <div className={`rounded-2xl p-4 border shadow-sm ${totalOutstanding > 0 ? 'border-red-100 bg-red-50/50' : 'border-slate-100 bg-white'}`}>
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">Outstanding</p>
+        <div className={`rounded-2xl p-4 border shadow-sm ${totalOutstanding > 0 ? 'border-red-200 bg-red-50/50' : 'border-slate-200 bg-white'}`}>
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">OUTSTANDING</p>
           <p className={`text-2xl font-black ${totalOutstanding > 0 ? 'text-red-600' : 'text-emerald-600'}`}>
             {fmt(totalOutstanding)}
           </p>
-          <p className={`text-[10px] mt-0.5 font-bold ${totalOutstanding > 0 ? 'text-red-500' : 'text-emerald-500'}`}>
+          <p className={`text-[10px] mt-0.5 font-bold ${totalOutstanding > 0 ? 'text-red-500' : 'text-emerald-600'}`}>
             {totalOutstanding > 0 ? 'Pending Balance' : 'Fully Paid ✅'}
           </p>
         </div>
 
-        {/* Create New Bill Button */}
+        {/* Create New Bill Button Card */}
         <div className="bg-gradient-to-br from-blue-600 to-indigo-700 rounded-2xl p-4 text-white shadow-md flex flex-col justify-between">
           <div>
-            <span className="text-[10px] font-black uppercase tracking-widest text-blue-200 block">Billing Actions</span>
+            <span className="text-[10px] font-black uppercase tracking-widest text-blue-200 block">BILLING ACTIONS</span>
             <p className="text-sm font-black mt-1">Generate / Renew Bill</p>
           </div>
           <button
             onClick={() => setShowNewBillModal(true)}
-            className="mt-3 py-2 px-3 bg-white text-blue-700 hover:bg-blue-50 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-sm border-none cursor-pointer"
+            className="mt-3 py-2.5 px-4 bg-white text-blue-700 hover:bg-blue-50 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-sm border-none cursor-pointer"
           >
-            <Plus size={14} /> Create New Bill
+            <Plus size={15} /> Create New Bill
           </button>
         </div>
       </div>
 
-      {/* ── Official Billing History Table Module ────────────────────────── */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-        {/* Table Title Bar */}
-        <div className="bg-[#0b5cbe] text-white px-5 py-3 flex items-center justify-between">
+      {/* ── Official Billing History Table Module (Aligned & Scrollable) ── */}
+      <div className="bg-white rounded-2xl border border-slate-300 shadow-md overflow-hidden">
+        {/* Table Top Blue Header */}
+        <div className="bg-[#0b5cbe] text-white px-6 py-3.5 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Receipt size={18} />
-            <h3 className="font-bold text-sm tracking-wide">Billing history</h3>
+            <Receipt size={20} />
+            <h3 className="font-extrabold text-base tracking-wide">Billing history</h3>
           </div>
-          <span className="text-xs bg-white/20 px-2.5 py-0.5 rounded-full font-bold">
+          <span className="text-xs bg-white/20 text-white font-bold px-3 py-1 rounded-full">
             {member.name}
           </span>
         </div>
 
-        {/* Responsive Table Wrapper */}
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs border-collapse">
+        {/* Scrollable Container with Minimum Width for Perfect Alignment */}
+        <div className="overflow-x-auto custom-scrollbar">
+          <table className="w-full text-left text-xs border-collapse min-w-[1250px]">
             <thead>
-              <tr className="bg-[#0e68d6] text-white font-bold text-[11px] uppercase border-b border-blue-700">
-                <th className="p-3 whitespace-nowrap">Date</th>
-                <th className="p-3 whitespace-nowrap">Invoice No</th>
-                <th className="p-3 whitespace-nowrap min-w-[200px]">Item</th>
-                <th className="p-3 text-right whitespace-nowrap">Item amount</th>
-                <th className="p-3 text-right whitespace-nowrap">Other Charges</th>
-                <th className="p-3 text-right whitespace-nowrap">Discount</th>
-                <th className="p-3 text-right whitespace-nowrap">Tax</th>
-                <th className="p-3 text-right whitespace-nowrap">Reward Points</th>
-                <th className="p-3 text-right whitespace-nowrap">Net payable</th>
-                <th className="p-3 text-right whitespace-nowrap">Amount paid</th>
-                <th className="p-3 text-right whitespace-nowrap">Pending</th>
-                <th className="p-3 whitespace-nowrap">Payment type</th>
-                <th className="p-3 whitespace-nowrap">Status</th>
-                <th className="p-3 text-center whitespace-nowrap">Action</th>
+              <tr className="bg-[#0e68d6] text-white font-extrabold text-[11px] uppercase tracking-wider border-b border-blue-700">
+                <th className="px-4 py-3.5 whitespace-nowrap">Date</th>
+                <th className="px-4 py-3.5 whitespace-nowrap">Invoice No</th>
+                <th className="px-4 py-3.5 whitespace-nowrap min-w-[240px]">Item</th>
+                <th className="px-4 py-3.5 text-right whitespace-nowrap">Item amount</th>
+                <th className="px-4 py-3.5 text-right whitespace-nowrap">Other Charges</th>
+                <th className="px-4 py-3.5 text-right whitespace-nowrap">Discount</th>
+                <th className="px-4 py-3.5 text-right whitespace-nowrap">Tax</th>
+                <th className="px-4 py-3.5 text-right whitespace-nowrap">Reward Points</th>
+                <th className="px-4 py-3.5 text-right whitespace-nowrap">Net payable</th>
+                <th className="px-4 py-3.5 text-right whitespace-nowrap">Amount paid</th>
+                <th className="px-4 py-3.5 text-right whitespace-nowrap">Pending</th>
+                <th className="px-4 py-3.5 whitespace-nowrap">Payment type</th>
+                <th className="px-4 py-3.5 whitespace-nowrap">Status</th>
+                <th className="px-4 py-3.5 text-center whitespace-nowrap">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200 text-slate-800 font-medium">
               {invoices.length === 0 ? (
                 <tr>
-                  <td colSpan={14} className="py-10 text-center text-slate-400 font-bold">
+                  <td colSpan={14} className="py-12 text-center text-slate-400 font-bold text-sm">
                     No billing history recorded yet. Click "Create New Bill" to add an entry.
                   </td>
                 </tr>
@@ -357,83 +321,83 @@ export default function BillingTab({ member }: { member: any }) {
                   const planTitle = inv.plan || member.plan || 'Gym membership : 2 months';
 
                   return (
-                    <tr key={inv.id || idx} className="hover:bg-blue-50/40 transition-colors">
+                    <tr key={inv.id || idx} className="hover:bg-blue-50/50 transition-colors border-b border-slate-100">
                       {/* Date */}
-                      <td className="p-3 whitespace-nowrap font-mono text-slate-700">
+                      <td className="px-4 py-4 whitespace-nowrap font-mono text-slate-700 font-bold">
                         {inv.date || formatDate(member.joinDate)}
                       </td>
 
                       {/* Invoice No */}
-                      <td className="p-3 whitespace-nowrap font-mono font-bold text-blue-700">
+                      <td className="px-4 py-4 whitespace-nowrap font-mono font-black text-blue-700">
                         {invNum}
                       </td>
 
-                      {/* Item */}
-                      <td className="p-3 min-w-[200px]">
-                        <div className="font-semibold text-slate-900">{planTitle}</div>
-                        <div className="text-[10px] text-slate-500 font-mono">({startDate} to {expiryDate})</div>
+                      {/* Item Description & Validity Period */}
+                      <td className="px-4 py-4 min-w-[240px]">
+                        <div className="font-extrabold text-slate-900">{planTitle}</div>
+                        <div className="text-[11px] text-slate-500 font-mono mt-0.5">({startDate} to {expiryDate})</div>
                       </td>
 
                       {/* Item amount */}
-                      <td className="p-3 text-right font-mono font-bold">{itemAmt.toFixed(2)}</td>
+                      <td className="px-4 py-4 text-right font-mono font-bold text-slate-900">{itemAmt.toFixed(2)}</td>
 
                       {/* Other Charges */}
-                      <td className="p-3 text-right font-mono text-slate-500">0.00</td>
+                      <td className="px-4 py-4 text-right font-mono text-slate-400">0.00</td>
 
                       {/* Discount */}
-                      <td className="p-3 text-right font-mono text-slate-500">{discountAmt.toFixed(2)}</td>
+                      <td className="px-4 py-4 text-right font-mono text-slate-400">{discountAmt.toFixed(2)}</td>
 
                       {/* Tax */}
-                      <td className="p-3 text-right font-mono text-slate-500">0.00</td>
+                      <td className="px-4 py-4 text-right font-mono text-slate-400">0.00</td>
 
                       {/* Reward Points */}
-                      <td className="p-3 text-right font-mono text-slate-500">0.00</td>
+                      <td className="px-4 py-4 text-right font-mono text-slate-400">0.00</td>
 
                       {/* Net payable */}
-                      <td className="p-3 text-right font-mono font-black text-slate-900">{netPayable.toFixed(2)}</td>
+                      <td className="px-4 py-4 text-right font-mono font-black text-slate-900">{netPayable.toFixed(2)}</td>
 
                       {/* Amount paid */}
-                      <td className="p-3 text-right font-mono font-black text-emerald-600">{paidAmt.toFixed(2)}</td>
+                      <td className="px-4 py-4 text-right font-mono font-black text-emerald-600">{paidAmt.toFixed(2)}</td>
 
                       {/* Pending */}
-                      <td className="p-3 text-right font-mono font-bold text-red-500">{pendingAmt.toFixed(2)}</td>
+                      <td className="px-4 py-4 text-right font-mono font-bold text-red-500">{pendingAmt.toFixed(2)}</td>
 
                       {/* Payment type */}
-                      <td className="p-3 whitespace-nowrap font-semibold text-slate-700">
+                      <td className="px-4 py-4 whitespace-nowrap font-bold text-slate-700">
                         {inv.method || 'First payment'}
                       </td>
 
                       {/* Status */}
-                      <td className="p-3 whitespace-nowrap">
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${
-                          pendingAmt <= 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+                      <td className="px-4 py-4 whitespace-nowrap">
+                        <span className={`px-2.5 py-1 rounded text-[10px] font-black uppercase tracking-wider ${
+                          pendingAmt <= 0 ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-amber-100 text-amber-800 border border-amber-300'
                         }`}>
-                          {pendingAmt <= 0 ? 'New' : 'Pending'}
+                          {pendingAmt <= 0 ? 'NEW' : 'PENDING'}
                         </span>
                       </td>
 
-                      {/* Action Dropdown Menu */}
-                      <td className="p-3 text-center whitespace-nowrap relative">
+                      {/* Action Dropdown Menu Button */}
+                      <td className="px-4 py-4 text-center whitespace-nowrap relative">
                         <button
                           type="button"
                           onClick={() => setActiveDropdownIndex(activeDropdownIndex === idx ? null : idx)}
-                          className="px-3 py-1.5 bg-[#e53935] hover:bg-[#d32f2f] text-white font-bold rounded text-xs uppercase tracking-wider transition-all flex items-center gap-1 mx-auto cursor-pointer border-none shadow-sm"
+                          className="px-3.5 py-1.5 bg-[#d32f2f] hover:bg-[#c62828] text-white font-black rounded text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1 mx-auto cursor-pointer border-none shadow-md"
                         >
                           <span>ACTION</span>
-                          <ChevronDown size={12} />
+                          <ChevronDown size={14} />
                         </button>
 
                         {/* Action Dropdown Options */}
                         {activeDropdownIndex === idx && (
-                          <div className="absolute right-2 top-11 bg-white border border-slate-200 rounded-xl shadow-xl z-50 w-44 py-1 text-left text-xs font-semibold text-slate-800 animate-in fade-in">
+                          <div className="absolute right-4 top-12 bg-white border border-slate-200 rounded-2xl shadow-2xl z-[100] w-48 py-1.5 text-left text-xs font-bold text-slate-800 animate-in fade-in">
                             <button
                               onClick={() => {
                                 setShowUpgradeModal(true);
                                 setActiveDropdownIndex(null);
                               }}
-                              className="w-full px-4 py-2 hover:bg-slate-100 flex items-center gap-2 text-left border-none bg-transparent cursor-pointer"
+                              className="w-full px-4 py-2.5 hover:bg-slate-100 flex items-center gap-2 text-left border-none bg-transparent cursor-pointer"
                             >
-                              <RefreshCw size={13} className="text-blue-600" />
+                              <RefreshCw size={14} className="text-blue-600" />
                               <span>Renew</span>
                             </button>
 
@@ -442,9 +406,9 @@ export default function BillingTab({ member }: { member: any }) {
                                 setShowUpgradeModal(true);
                                 setActiveDropdownIndex(null);
                               }}
-                              className="w-full px-4 py-2 hover:bg-slate-100 flex items-center gap-2 text-left border-none bg-transparent cursor-pointer"
+                              className="w-full px-4 py-2.5 hover:bg-slate-100 flex items-center gap-2 text-left border-none bg-transparent cursor-pointer"
                             >
-                              <ArrowUpRight size={13} className="text-indigo-600" />
+                              <ArrowUpRight size={14} className="text-indigo-600" />
                               <span>Upgrade</span>
                             </button>
 
@@ -453,9 +417,9 @@ export default function BillingTab({ member }: { member: any }) {
                                 setViewInvoice(inv);
                                 setActiveDropdownIndex(null);
                               }}
-                              className="w-full px-4 py-2 hover:bg-slate-100 flex items-center gap-2 text-left border-none bg-transparent cursor-pointer"
+                              className="w-full px-4 py-2.5 hover:bg-slate-100 flex items-center gap-2 text-left border-none bg-transparent cursor-pointer"
                             >
-                              <Eye size={13} className="text-slate-600" />
+                              <Eye size={14} className="text-slate-600" />
                               <span>View</span>
                             </button>
 
@@ -464,9 +428,9 @@ export default function BillingTab({ member }: { member: any }) {
                                 handlePrint(inv);
                                 setActiveDropdownIndex(null);
                               }}
-                              className="w-full px-4 py-2 hover:bg-slate-100 flex items-center gap-2 text-left border-none bg-transparent cursor-pointer"
+                              className="w-full px-4 py-2.5 hover:bg-slate-100 flex items-center gap-2 text-left border-none bg-transparent cursor-pointer"
                             >
-                              <Printer size={13} className="text-slate-600" />
+                              <Printer size={14} className="text-slate-600" />
                               <span>Print bill</span>
                             </button>
 
@@ -475,9 +439,9 @@ export default function BillingTab({ member }: { member: any }) {
                                 handleWhatsApp(inv);
                                 setActiveDropdownIndex(null);
                               }}
-                              className="w-full px-4 py-2 hover:bg-slate-100 flex items-center gap-2 text-left border-none bg-transparent cursor-pointer text-emerald-700 font-bold"
+                              className="w-full px-4 py-2.5 hover:bg-slate-100 flex items-center gap-2 text-left border-none bg-transparent cursor-pointer text-emerald-700 font-extrabold"
                             >
-                              <MessageSquare size={13} className="text-emerald-600" />
+                              <MessageSquare size={14} className="text-emerald-600" />
                               <span>Whatsapp Bill</span>
                             </button>
                           </div>
@@ -491,23 +455,23 @@ export default function BillingTab({ member }: { member: any }) {
           </table>
         </div>
 
-        {/* Bottom Export Bar (EXCEL & PDF) */}
-        <div className="bg-slate-50 px-5 py-3 border-t border-slate-200 flex items-center justify-start gap-3">
+        {/* Bottom Export Bar (EXCEL & PDF Buttons) */}
+        <div className="bg-slate-50 px-6 py-4 border-t border-slate-200 flex items-center justify-start gap-3">
           <button
             type="button"
             onClick={handleExportCSV}
-            className="px-4 py-2 bg-[#d32f2f] hover:bg-[#c62828] text-white font-bold rounded-lg text-xs uppercase tracking-wider flex items-center gap-1.5 transition-all cursor-pointer border-none shadow-sm"
+            className="px-5 py-2.5 bg-[#d32f2f] hover:bg-[#c62828] text-white font-black rounded-xl text-xs uppercase tracking-wider flex items-center gap-2 transition-all cursor-pointer border-none shadow-md"
           >
-            <FileSpreadsheet size={14} />
+            <FileSpreadsheet size={15} />
             <span>EXCEL</span>
           </button>
 
           <button
             type="button"
             onClick={handleExportPDF}
-            className="px-4 py-2 bg-[#d32f2f] hover:bg-[#c62828] text-white font-bold rounded-lg text-xs uppercase tracking-wider flex items-center gap-1.5 transition-all cursor-pointer border-none shadow-sm"
+            className="px-5 py-2.5 bg-[#d32f2f] hover:bg-[#c62828] text-white font-black rounded-xl text-xs uppercase tracking-wider flex items-center gap-2 transition-all cursor-pointer border-none shadow-md"
           >
-            <FileCode size={14} />
+            <FileCode size={15} />
             <span>PDF</span>
           </button>
         </div>
