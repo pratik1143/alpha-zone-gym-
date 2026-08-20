@@ -27,15 +27,22 @@ try {
 if (typeof window !== 'undefined') {
   const originalError = console.error;
   console.error = (...args: any[]) => {
-    const msg = String(args[0] || '');
-    if (msg.includes('Could not reach Cloud Firestore backend') || msg.includes('code=unavailable')) {
-      console.warn('[Firestore Offline Mode Warning]', ...args);
+    const msg = String(args[0] || '') + ' ' + String((args[0] && (args[0] as any).message) || '') + ' ' + String((args[1] && (args[1] as any).message) || '');
+    if (
+      msg.includes('Could not reach Cloud Firestore backend') ||
+      msg.includes('code=unavailable') ||
+      msg.includes('Missing or insufficient permissions') ||
+      msg.includes('permission-denied') ||
+      msg.includes('FirebaseError')
+    ) {
+      console.warn('[Firestore Fallback Warning]', ...args);
       return;
     }
     originalError.apply(console, args);
   };
 }
 
-const isFirebaseReady = true;
+// Default to false so frontend cleanly uses Node Express REST API backend
+const isFirebaseReady = false;
 
 export { app, auth, db, storage, isFirebaseReady };

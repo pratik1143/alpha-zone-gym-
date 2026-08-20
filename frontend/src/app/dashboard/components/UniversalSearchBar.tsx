@@ -5,19 +5,17 @@ import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Search, X, User, Phone, MessageSquare, Crown, Sparkles,
-  ChevronRight, ArrowRight, UserPlus, Shield, Activity, Clock, Command
+  ChevronRight, ArrowRight, UserPlus, Shield, Activity, Clock, Command, MapPin, Calendar, Hash
 } from 'lucide-react';
 import { useGymStore } from '@/store';
-import { getInitials } from '@/lib/utils';
+import { getInitials, calculateAge } from '@/lib/utils';
 import { membershipEngine } from '@/lib/engines/membershipEngine';
-import MemberDrawer from '../members/components/MemberDrawer';
 
 export default function UniversalSearchBar() {
   const router = useRouter();
   const { members, fetchMembers } = useGymStore();
   const [query, setQuery] = useState('');
   const [isFocused, setIsFocused] = useState(false);
-  const [selectedMember, setSelectedMember] = useState<any | null>(null);
   const [selectedIndex, setSelectedIndex] = useState<number>(-1);
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -50,7 +48,7 @@ export default function UniversalSearchBar() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Filter members by ID, Name, or Phone
+  // Filter members by ID, Name, Phone, Address, Age, Email, Gender
   const filteredMembers = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return [];
@@ -64,28 +62,58 @@ export default function UniversalSearchBar() {
         : (m.phone ? `phone_${m.phone.replace(/\D/g, '')}` : `id_${m.id}`);
       if (seenKeys.has(key)) return false;
 
+      // 1. Name match
       const nameMatch = (m.name || m.fullName || '').toLowerCase().includes(q);
+
+      // 2. ID match (memberId, customId, clientId, biometricId, code, etc.)
       const idMatch = (
         (m.memberId || '').toLowerCase().includes(q) ||
         (m.id || '').toLowerCase().includes(q) ||
         (m.customId || '').toLowerCase().includes(q) ||
+        (m.clientId || '').toLowerCase().includes(q) ||
         (m.biometricId || '').toLowerCase().includes(q) ||
-        (m.code || '').toLowerCase().includes(q)
+        (m.code || '').toLowerCase().includes(q) ||
+        (m.uid || '').toLowerCase().includes(q)
       );
-      const emailMatch = (m.email || '').toLowerCase().includes(q);
-      
+
+      // 3. Address / Location match
+      const addressStr = `${m.address || ''} ${m.city || ''} ${m.locality || ''} ${m.location || ''} ${m.state || ''} ${m.branch || ''} ${m.pincode || ''}`.toLowerCase();
+      const addressMatch = addressStr.includes(q);
+
+      // 4. Age match (m.age or calculated from dob/dateOfBirth)
+      const computedAge = m.age ?? calculateAge(m.dob || m.dateOfBirth);
+      let ageMatch = false;
+      if (computedAge !== null && computedAge !== undefined) {
+        const ageStr = String(computedAge);
+        if (q === ageStr || q.startsWith(`age ${ageStr}`) || q.includes(`${ageStr} yr`) || q.includes(`${ageStr} year`)) {
+          ageMatch = true;
+        } else if (digitsOnly.length > 0 && digitsOnly.length <= 3 && digitsOnly === ageStr) {
+          ageMatch = true;
+        }
+      }
+
+      // 5. Phone match
       let phoneMatch = false;
       if (digitsOnly.length >= 2) {
         const rawPhone = (m.phone || m.mobile || m.whatsapp || m.emergencyContact || '').replace(/\D/g, '');
         phoneMatch = rawPhone.includes(digitsOnly);
       }
 
-      const matches = nameMatch || idMatch || phoneMatch || emailMatch;
+      // 6. Email match
+      const emailMatch = (m.email || '').toLowerCase().includes(q);
+
+      // 7. Gender match
+      const genderMatch = (m.gender || '').toLowerCase().includes(q);
+
+      // 8. Plan match
+      const planMatch = (m.plan || '').toLowerCase().includes(q);
+
+      const matches = nameMatch || idMatch || addressMatch || ageMatch || phoneMatch || emailMatch || genderMatch || planMatch;
       if (matches) {
         seenKeys.add(key);
       }
       return matches;
-    }).slice(0, 8); // top 8 results
+    }).slice(0, 10); // top 10 results
   }, [query, members]);
 
   // Reset keyboard index on query change
@@ -113,8 +141,10 @@ export default function UniversalSearchBar() {
   };
 
   const handleMemberClick = (member: any) => {
-    setSelectedMember(member);
+    const targetId = member.id || member.memberId;
     setIsFocused(false);
+    setQuery('');
+    router.push(`/dashboard/members/${targetId}`);
   };
 
   const getStatusBadge = (member: any) => {
@@ -152,7 +182,7 @@ export default function UniversalSearchBar() {
           onChange={(e) => setQuery(e.target.value)}
           onFocus={() => setIsFocused(true)}
           onKeyDown={handleKeyDown}
-          placeholder="Search member by ID, Name, Phone Number..."
+          placeholder="Search by Name, ID, Address, Age, Phone..."
           className="w-full py-3 pl-3 pr-24 bg-transparent text-sm font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none"
         />
 
@@ -203,6 +233,8 @@ export default function UniversalSearchBar() {
                   const isSelected = index === selectedIndex;
                   const safePhone = member.phone || member.mobile || member.whatsapp || 'No Phone';
                   const safeId = member.clientId || member.customId || (member.memberId && !member.memberId.startsWith('AZ-2026-') ? member.memberId : null) || member.biometricId || member.id;
+                  const safeAge = member.age ?? calculateAge(member.dob || member.dateOfBirth);
+                  const safeAddress = member.address || member.locality || member.location || member.city || (member.branch && member.branch !== 'Mohali, Punjab' ? member.branch : null);
 
                   return (
                     <div
@@ -213,7 +245,7 @@ export default function UniversalSearchBar() {
                         isSelected ? 'bg-[#0052FF]/5 border-l-4 border-[#0052FF]' : 'hover:bg-slate-50'
                       }`}
                     >
-                      <div className="flex items-center gap-3 min-w-0">
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
                         {/* Member Avatar */}
                         <div className="relative shrink-0">
                           {member.avatar ? (
@@ -231,22 +263,44 @@ export default function UniversalSearchBar() {
 
                         {/* Member Info */}
                         <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <span className="text-sm font-extrabold text-slate-900 truncate">
                               {member.name || 'Unnamed Member'}
                             </span>
-                            <span className="text-[10px] font-mono font-bold bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded border border-slate-200 shrink-0">
-                              {safeId}
-                            </span>
+                            
+                            {/* Member ID Tag */}
+                            {safeId && (
+                              <span className="text-[10px] font-mono font-bold bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded border border-slate-200 shrink-0">
+                                ID: {safeId}
+                              </span>
+                            )}
+
+                            {/* Member Age & Gender Badge */}
+                            {(safeAge || member.gender) && (
+                              <span className="text-[10px] font-bold bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded border border-indigo-100/80 shrink-0">
+                                {safeAge ? `${safeAge} Yrs` : ''}{safeAge && member.gender ? ` • ` : ''}{member.gender || ''}
+                              </span>
+                            )}
                           </div>
 
-                          <div className="flex items-center gap-3 text-xs text-slate-500 mt-0.5">
-                            <span className="flex items-center gap-1 truncate font-mono">
+                          <div className="flex items-center gap-3 text-xs text-slate-500 mt-1 flex-wrap">
+                            {/* Phone */}
+                            <span className="flex items-center gap-1 font-mono shrink-0">
                               <Phone size={11} className="text-slate-400 shrink-0" />
                               {safePhone}
                             </span>
+
+                            {/* Address */}
+                            {safeAddress && (
+                              <span className="flex items-center gap-1 text-slate-600 truncate max-w-[200px]">
+                                <MapPin size={11} className="text-slate-400 shrink-0" />
+                                <span className="truncate">{safeAddress}</span>
+                              </span>
+                            )}
+
+                            {/* Plan */}
                             {member.plan && (
-                              <span className="hidden sm:inline-flex items-center gap-1 text-[11px] font-medium text-slate-600 truncate">
+                              <span className="hidden sm:inline-flex items-center gap-1 text-[11px] font-medium text-slate-500 truncate">
                                 • {member.plan}
                               </span>
                             )}
@@ -285,7 +339,7 @@ export default function UniversalSearchBar() {
                 </div>
                 <p className="text-sm font-bold text-slate-700">No member found</p>
                 <p className="text-xs text-slate-400 mt-1 max-w-xs mx-auto">
-                  No matching ID, name, or phone number found for <span className="font-semibold text-slate-700">"{query}"</span>.
+                  No matching ID, name, phone, address, or age found for <span className="font-semibold text-slate-700">"{query}"</span>.
                 </p>
                 <button
                   onClick={() => {
@@ -302,27 +356,6 @@ export default function UniversalSearchBar() {
           </motion.div>
         )}
       </AnimatePresence>
-
-      {/* Member Drawer Popover on Selection */}
-      {selectedMember && (
-        <MemberDrawer
-          member={selectedMember}
-          onClose={() => setSelectedMember(null)}
-          onViewProfile={(m) => {
-            setSelectedMember(null);
-            router.push(`/dashboard/members/${m.id || m.memberId}`);
-          }}
-          onCall={(m) => {
-            if (m.phone) window.open(`tel:${m.phone}`, '_self');
-          }}
-          onMessage={(m) => {
-            if (m.phone) {
-              const cleanPhone = m.phone.replace(/\D/g, '');
-              window.open(`https://wa.me/${cleanPhone}`, '_blank');
-            }
-          }}
-        />
-      )}
     </div>
   );
 }

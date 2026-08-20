@@ -24,18 +24,16 @@ import { authenticateToken } from '../middleware/auth';
 
 const router = Router();
 
-// Auth Endpoints (Public)
+// Public Endpoints
 router.post('/auth/login', loginUser);
+router.get('/python/status', getPythonStatus);
+router.get('/system/health', getPythonStatus);
 
 // Protect all CRM / dashboard operations
 router.use(authenticateToken);
 
 router.use('/enquiries', enquiryRoutes);
 router.use('/whatsapp', whatsappRoutes);
-
-// System Health & Python Bridge Probes
-router.get('/python/status', getPythonStatus);
-router.get('/system/health', getPythonStatus);
 
 // Member CRUD & Actions
 router.get('/members', getMembers);

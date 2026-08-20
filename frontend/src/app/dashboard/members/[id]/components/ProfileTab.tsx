@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { Camera, Edit2, MapPin, Phone, Mail, Droplet, Activity, User, Briefcase, HeartPulse, CreditCard, Calendar, Clock, Star, Dumbbell, Shield, BadgeCheck, CheckCircle2, AlertCircle, Snowflake, Repeat } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { cleanPlanName, parsePlanSegments } from '@/lib/utils';
 
 export default function ProfileTab({ member }: { member: any }) {
   // A helper component for beautiful editable fields
@@ -34,7 +35,7 @@ export default function ProfileTab({ member }: { member: any }) {
             <div className="flex justify-between items-start mb-8">
               <div>
                 <span className="px-3 py-1 bg-white/10 border border-white/20 rounded-full text-[10px] font-black uppercase tracking-widest backdrop-blur-md">Active Plan</span>
-                <h3 className="text-3xl font-black mt-3 tracking-tight">{member.plan || 'Standard Membership'}</h3>
+                <h3 className="text-3xl font-black mt-3 tracking-tight">{cleanPlanName(member.plan)}</h3>
                 {member.amount ? (
                   <div className="text-xl font-bold text-amber-400 mt-1">₹{Number(member.amount).toLocaleString('en-IN')}</div>
                 ) : null}
@@ -55,25 +56,37 @@ export default function ProfileTab({ member }: { member: any }) {
               </div>
             </div>
 
-            {member.membershipHistory && member.membershipHistory.length > 0 && (
-              <div className="mb-6 pt-4 border-t border-white/10">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-3">Membership History ({member.membershipHistory.length})</span>
-                <div className="space-y-2 max-h-[140px] overflow-y-auto pr-1">
-                  {member.membershipHistory.map((h: any, idx: number) => (
-                    <div key={idx} className="p-2.5 bg-white/10 backdrop-blur-md rounded-xl flex justify-between items-center text-xs">
-                      <div>
-                        <div className="font-bold text-white">{h.packageName}</div>
-                        <div className="text-[10px] text-slate-300">{h.startDate} → {h.expiryDate || 'Active'}</div>
+            {(() => {
+              const historyList = (member.membershipHistory && member.membershipHistory.length > 0)
+                ? member.membershipHistory.map((h: any) => ({ ...h, packageName: cleanPlanName(h.packageName) }))
+                : parsePlanSegments(member.plan).map((seg: string, idx: number) => ({
+                    packageName: seg,
+                    startDate: member.joinDate || 'N/A',
+                    expiryDate: member.expiryDate || 'Active',
+                    amount: member.amount || 2500,
+                    invoiceNumber: `LEG-00000${idx + 1}`
+                  }));
+
+              return (
+                <div className="mb-6 pt-4 border-t border-white/10">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-3">Membership History ({historyList.length})</span>
+                  <div className="space-y-2 max-h-[140px] overflow-y-auto pr-1">
+                    {historyList.map((h: any, idx: number) => (
+                      <div key={idx} className="p-2.5 bg-white/10 backdrop-blur-md rounded-xl flex justify-between items-center text-xs">
+                        <div>
+                          <div className="font-bold text-white">{h.packageName}</div>
+                          <div className="text-[10px] text-slate-300">{h.startDate} → {h.expiryDate || 'Active'}</div>
+                        </div>
+                        <div className="text-right">
+                          <div className="font-black text-amber-400">₹{(h.amount || 0).toLocaleString('en-IN')}</div>
+                          <div className="text-[9px] uppercase font-bold text-slate-300">{h.invoiceNumber || 'Paid'}</div>
+                        </div>
                       </div>
-                      <div className="text-right">
-                        <div className="font-black text-amber-400">₹{(h.amount || 0).toLocaleString('en-IN')}</div>
-                        <div className="text-[9px] uppercase font-bold text-slate-300">{h.invoiceNumber || 'Paid'}</div>
-                      </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
 
             <div className="flex gap-3">
               <button className="flex-1 py-3 bg-white text-slate-900 rounded-xl text-xs font-black transition-all hover:bg-slate-100 flex items-center justify-center gap-2">

@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { Search, Filter, MoreHorizontal, Phone, MessageSquare, MapPin, Edit, RefreshCw, Snowflake, Trash2, Eye } from 'lucide-react';
 import { membershipEngine } from '@/lib/engines/membershipEngine';
 import { paymentEngine } from '@/lib/engines/paymentEngine';
-import { calculateRealAttendance, formatDaysLeft } from '@/lib/utils';
+import { calculateRealAttendance, formatDaysLeft, calculateAge } from '@/lib/utils';
 import { useGymStore } from '@/store';
 import toast from 'react-hot-toast';
 import { useRouter } from 'next/navigation';
@@ -53,7 +53,41 @@ export default function MembersTable({
   };
 
   const filtered = members.filter(m => {
-    const ms = m.name.toLowerCase().includes(search.toLowerCase()) || m.phone.includes(search) || (m.memberId || m.id).toLowerCase().includes(search.toLowerCase());
+    const q = search.trim().toLowerCase();
+    if (!q) return true;
+
+    const digitsOnly = q.replace(/\D/g, '');
+    const nameMatch = (m.name || m.fullName || '').toLowerCase().includes(q);
+    const idMatch = (
+      (m.memberId || '').toLowerCase().includes(q) ||
+      (m.id || '').toLowerCase().includes(q) ||
+      (m.customId || '').toLowerCase().includes(q) ||
+      (m.clientId || '').toLowerCase().includes(q) ||
+      (m.biometricId || '').toLowerCase().includes(q)
+    );
+    const addressStr = `${m.address || ''} ${m.city || ''} ${m.locality || ''} ${m.location || ''} ${m.branch || ''}`.toLowerCase();
+    const addressMatch = addressStr.includes(q);
+
+    const computedAge = m.age ?? calculateAge(m.dob || m.dateOfBirth);
+    let ageMatch = false;
+    if (computedAge !== null && computedAge !== undefined) {
+      const ageStr = String(computedAge);
+      if (q === ageStr || q.startsWith(`age ${ageStr}`) || q.includes(`${ageStr} yr`) || q.includes(`${ageStr} year`)) {
+        ageMatch = true;
+      } else if (digitsOnly.length > 0 && digitsOnly.length <= 3 && digitsOnly === ageStr) {
+        ageMatch = true;
+      }
+    }
+
+    let phoneMatch = false;
+    if (digitsOnly.length >= 2) {
+      const rawPhone = (m.phone || m.mobile || m.whatsapp || '').replace(/\D/g, '');
+      phoneMatch = rawPhone.includes(digitsOnly);
+    }
+    const emailMatch = (m.email || '').toLowerCase().includes(q);
+    const genderMatch = (m.gender || '').toLowerCase().includes(q);
+
+    const ms = nameMatch || idMatch || addressMatch || ageMatch || phoneMatch || emailMatch || genderMatch;
     const dynStatus = getDynamicStatus(m);
     
     let st = statusFilter === 'all';

@@ -4,6 +4,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import { collection, query, orderBy, limit, onSnapshot } from 'firebase/firestore';
 import { db as fDb, isFirebaseReady } from '@/lib/firebase';
+import API from '@/services/api';
 import { useGymStore } from '@/store';
 import toast from 'react-hot-toast';
 
@@ -64,11 +65,82 @@ export default function AttendancePopupManager() {
     }
   };
 
+  const processPunchItem = (data: any, docId: string) => {
+    if (!docId || docId === lastDocId.current) return;
+    lastDocId.current = docId;
+
+    const members = useGymStore.getState().members;
+    const match = members.find((m: any) =>
+      m.id === data.memberId ||
+      m.memberId === data.memberCode ||
+      (m.name && data.memberName && m.name.toLowerCase() === data.memberName.toLowerCase())
+    );
+
+    let type: PopupData['type'] = 'success';
+
+    if (data.status === 'duplicate') type = 'duplicate';
+    else if (data.status === 'unknown') type = 'unknown';
+    else if (data.status === 'denied') {
+      if (data.reason?.toLowerCase().includes('blacklisted')) type = 'blacklisted';
+      else if (data.reason?.toLowerCase().includes('frozen')) type = 'frozen';
+      else type = 'expired';
+    }
+
+    const days = match?.expiryDate
+      ? Math.ceil((new Date(match.expiryDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+      : 30;
+
+    if (type === 'success' && days <= 0 && match) {
+      type = 'expired';
+    }
+
+    const popupData: PopupData = {
+      id: docId,
+      type,
+      data: {
+        memberName: match?.name || data.memberName || 'Athlete',
+        memberCode: match?.memberId || data.memberCode || data.memberId || 'AZ-2026-0001',
+        timestamp: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
+        deviceName: data.deviceName || 'ESSL K90 Pro',
+        branch: match?.branch || data.branch || 'Mohali, Punjab',
+        avatarUrl: match?.avatarUrl || match?.avatar || data.avatarUrl || data.avatar || '',
+        plan: match?.plan || 'Monthly Standard',
+        trainer: match?.trainer || 'No PT Assigned',
+        remainingDays: days > 0 ? days : 0,
+        expiredDays: days < 0 ? Math.abs(days) : 0,
+        workout: 'Push Day',
+        reason: data.reason
+      }
+    };
+
+    setQueue(prev => [...prev, popupData]);
+  };
+
+  // REST API Polling for latest punch event
+  useEffect(() => {
+    let isMounted = true;
+    const pollLatestPunch = async () => {
+      try {
+        const res = await API.get('/attendance/latest-punch');
+        const latest = res.data?.latestPunch;
+        if (latest && isMounted) {
+          const docId = latest.id || `${latest.memberId}_${latest.checkIn || latest.createdAt}`;
+          processPunchItem(latest, docId);
+        }
+      } catch (err) {}
+    };
+
+    const interval = setInterval(pollLatestPunch, 1500);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, []);
+
+  // Firestore Realtime Listener (when Firebase ready)
   useEffect(() => {
     if (!isFirebaseReady || !fDb) return;
 
-    // Use a cutoff timestamp so we only receive NEW docs from this point forward.
-    // This avoids orderBy+limit which requires a Firestore composite index (missing = silent failure).
     const startTime = new Date().toISOString();
     const attCollection = collection(fDb, 'attendance_logs');
     const qPop = query(attCollection, orderBy('createdAt', 'asc'), limit(50));
@@ -78,82 +150,21 @@ export default function AttendancePopupManager() {
       qPop,
       (snapshot) => {
         if (isInitialLoad) {
-          // Skip all docs that existed before we started listening
           isInitialLoad = false;
           return;
         }
-
         snapshot.docChanges().forEach((change) => {
           if (change.type !== 'added') return;
-
           const data = change.doc.data();
           const docId = change.doc.id;
-
-          // Skip docs older than our session start (could arrive due to index lag)
           const createdAt = data.createdAt || '';
           if (createdAt && createdAt < startTime) return;
-
-          if (docId === lastDocId.current) return;
           if (data.status === 'auto_checkout') return;
 
-          lastDocId.current = docId;
-
-          const members = useGymStore.getState().members;
-          const match = members.find((m: any) =>
-            m.id === data.memberId ||
-            m.memberId === data.memberCode ||
-            (m.name && data.memberName && m.name.toLowerCase() === data.memberName.toLowerCase())
-          );
-
-          let type: PopupData['type'] = 'success';
-
-          if (data.status === 'duplicate') type = 'duplicate';
-          else if (data.status === 'unknown') type = 'unknown';
-          else if (data.status === 'denied') {
-            if (data.reason?.toLowerCase().includes('blacklisted')) type = 'blacklisted';
-            else if (data.reason?.toLowerCase().includes('frozen')) type = 'frozen';
-            else type = 'expired';
-          }
-
-          // Check days remaining
-          const days = match?.expiryDate
-            ? Math.ceil((new Date(match.expiryDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
-            : 0;
-
-          if (type === 'success' && days <= 0 && match) {
-            type = 'expired';
-          }
-
-          const toJsDate = (val: any) => {
-            if (!val) return new Date();
-            if (typeof val.toDate === 'function') return val.toDate();
-            return new Date(val);
-          };
-
-          const popupData: PopupData = {
-            id: docId,
-            type,
-            data: {
-              memberName: match?.name || data.memberName || 'Unknown Athlete',
-              memberCode: match?.memberId || data.memberCode || data.memberId || 'UNKNOWN-ID',
-              timestamp: toJsDate(data.createdAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
-              deviceName: data.deviceName || 'Biometric Terminal',
-              branch: match?.branch || data.branch || 'Mohali, Punjab',
-              avatarUrl: match?.avatarUrl || match?.avatar || data.avatarUrl || data.avatar || '',
-              plan: match?.plan || 'Unknown Plan',
-              trainer: match?.trainer || 'No PT Coach',
-              remainingDays: days > 0 ? days : 0,
-              expiredDays: days < 0 ? Math.abs(days) : 0,
-              workout: 'Push Day',
-              reason: data.reason
-            }
-          };
-
-          setQueue(prev => [...prev, popupData]);
+          processPunchItem(data, docId);
         });
       },
       (error) => {
-        // Log Firestore listener errors so they are visible in browser console
         console.warn('[AttendancePopupManager] Firestore listener error:', error);
       }
     );

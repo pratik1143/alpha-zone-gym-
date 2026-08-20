@@ -96,15 +96,72 @@ export const calculateRealAttendance = (joinDateString: string, attendanceCount:
   return Math.min(100, percentage);
 };
 
-export const getMembershipName = (planName: string): string => {
-  const plan = (planName || '').toLowerCase();
-  if (plan.includes('trial')) return 'Trial';
-  if (plan.includes('1 month') || plan.includes('monthly') || plan.includes('30 day')) return '1 Month';
-  if (plan.includes('3 month') || plan.includes('quarterly') || plan.includes('90 day') || plan.includes('2+1')) return '3 Months (Quarterly)';
-  if (plan.includes('6 month') || plan.includes('semi') || plan.includes('180 day')) return '6 Months (Semi-Annual)';
-  if (plan.includes('12 month') || plan.includes('annual') || plan.includes('365 day') || plan.includes('year')) return '12 Months (Annual)';
-  if (plan.includes('lifetime')) return 'Lifetime Membership';
-  if (plan.includes('pt') || plan.includes('personal training')) return 'Personal Training';
-  if (plan.includes('premium')) return 'Premium Membership';
-  return 'Custom Plan';
+export const formatCanonicalPlanName = (planStr: string): string => {
+  if (!planStr) return 'Standard Membership';
+  const p = planStr.trim().toLowerCase();
+  if (p.includes('12 month') || p.includes('1 year') || p.includes('annual') || p.includes('yearly') || p.includes('365 day')) {
+    return '12 Months (Annual)';
+  }
+  if (p.includes('6 month') || p.includes('semi') || p.includes('180 day')) {
+    return '6 Months (Semi-Annual)';
+  }
+  if (p.includes('3 month') || p.includes('quarter') || p.includes('90 day') || p.includes('3+1') || p.includes('3 + 1')) {
+    return '3 Months (Quarterly)';
+  }
+  if (p.includes('1 month') || p.includes('monthly') || p.includes('30 day')) {
+    return '1 Month Standard';
+  }
+  if (p.includes('lifetime')) return 'Lifetime Membership';
+  if (p.includes('pt') || p.includes('personal training')) return 'Personal Training';
+  if (p.includes('vip') || p.includes('premium')) return 'Premium VIP';
+  return planStr.trim();
 };
+
+export const cleanPlanName = (rawPlan?: string | null): string => {
+  if (!rawPlan || typeof rawPlan !== 'string') return 'Standard Membership';
+  const trimmed = rawPlan.trim();
+  if (!trimmed) return 'Standard Membership';
+
+  const planPattern = /(?:\d+\s*\+\s*\d+|\d+\s*(?:month|months|m|day|days|d|year|years|y)|quarterly|semi-annual|annual|yearly|monthly|lifetime|pt|personal training|vip|premium)/gi;
+  const matches = trimmed.match(planPattern);
+
+  if (matches && matches.length > 0) {
+    const lastMatch = matches[matches.length - 1].trim();
+    return formatCanonicalPlanName(lastMatch);
+  }
+
+  return formatCanonicalPlanName(trimmed);
+};
+
+export const parsePlanSegments = (rawPlan?: string | null): string[] => {
+  if (!rawPlan || typeof rawPlan !== 'string') return ['Standard Membership'];
+  const trimmed = rawPlan.trim();
+  if (!trimmed) return ['Standard Membership'];
+
+  const planPattern = /(?:\d+\s*\+\s*\d+|\d+\s*(?:month|months|m|day|days|d|year|years|y)|quarterly|semi-annual|annual|yearly|monthly|lifetime|pt|personal training|vip|premium)/gi;
+  const matches = trimmed.match(planPattern);
+
+  if (matches && matches.length > 1) {
+    return matches.map(m => formatCanonicalPlanName(m.trim()));
+  }
+
+  return [formatCanonicalPlanName(trimmed)];
+};
+
+export const getMembershipName = (planName: string): string => {
+  return cleanPlanName(planName);
+};
+
+export const calculateAge = (dobString?: string | Date | null): number | null => {
+  if (!dobString) return null;
+  const dob = new Date(dobString);
+  if (isNaN(dob.getTime())) return null;
+  const today = new Date();
+  let age = today.getFullYear() - dob.getFullYear();
+  const m = today.getMonth() - dob.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < dob.getDate())) {
+    age--;
+  }
+  return age >= 0 && age < 120 ? age : null;
+};
+

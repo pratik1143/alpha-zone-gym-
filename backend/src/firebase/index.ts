@@ -320,6 +320,14 @@ if (serviceAccountJsonRaw) {
     });
     isFirebaseInitialized = true;
     console.log('Firebase Admin SDK initialized successfully from file path:', serviceAccountPath);
+    
+    // Proactively verify Cloud Firestore API availability
+    admin.firestore().collection('system_config').doc('test').get()
+      .then(() => console.log('✅ Cloud Firestore API connection verified.'))
+      .catch((err: any) => {
+        console.warn('⚠️ Cloud Firestore API disabled or unreachable. Switching backend to Local Database mode.');
+        disableFirestore();
+      });
   } catch (error) {
     console.error('Failed to initialize Firebase Admin SDK from file path:', error);
   }
@@ -327,8 +335,15 @@ if (serviceAccountJsonRaw) {
   console.log('No Firebase config file or JSON found. Using memory-backed Mock Database.');
 }
 
+let firestoreApiDisabled = false;
+
+export const disableFirestore = () => {
+  firestoreApiDisabled = true;
+};
+
 export const getFirestoreDb = () => {
-  return isFirebaseInitialized ? admin.firestore() : null;
+  if (!isFirebaseInitialized || firestoreApiDisabled) return null;
+  return admin.firestore();
 };
 
 let membersCache: any[] | null = null;
@@ -445,10 +460,20 @@ export const db = {
 
         membersCache = deduplicatedList;
         return membersCache;
-      } catch (error) {
-        console.error('Error fetching/healing members:', error);
-        // fallback to whatever is loaded in cache or empty
-        return membersCache || [];
+      } catch (error: any) {
+        console.warn('[Firestore] Error fetching members, falling back to local database:', error?.message);
+        if (error?.message?.includes('PERMISSION_DENIED') || error?.message?.includes('disabled')) {
+          disableFirestore();
+        }
+        const seenMockKeys = new Set<string>();
+        return mockMembers.filter((m: any) => {
+          const key = (m.memberId && m.memberId !== 'AZ-2026-0000')
+            ? `mid_${m.memberId.trim()}`
+            : (m.phone ? `phone_${m.phone.replace(/\D/g, '')}` : `id_${m.id}`);
+          if (seenMockKeys.has(key)) return false;
+          seenMockKeys.add(key);
+          return true;
+        });
       }
     }
     const seenMockKeys = new Set<string>();

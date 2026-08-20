@@ -3,6 +3,8 @@ import sys
 import time
 import socket
 import logging
+import json
+import urllib.request
 from datetime import datetime, date, timedelta
 import threading
 import subprocess
@@ -837,24 +839,24 @@ def make_enrollment_listener():
     return enrollment_snapshot_listener
 
 
-def trigger_door_relay(conn, device_name, duration_seconds=5):
+def trigger_door_relay(conn, device_name="Main Gate", duration_seconds=3):
     """
-    Relay control - unlocks the turnstile gate relay for the given duration.
-    Triggered automatically when a valid active member punches biometric.
+    Sends door lock relay pulse to hardware terminal using pyzk unlock command.
     """
-    logging.info(f"[Relay Control] Sending unlock command to {device_name}. Duration: {duration_seconds}s.")
     try:
-        conn.unlock(duration_seconds * 10)  # ZK Protocol: duration in 100ms units (50 = 5s)
-        logging.info(f"[Relay Control] Gate unlocked successfully on {device_name} for {duration_seconds} seconds.")
-        
-        # Log successful unlock to Firestore
-        db.collection('deviceLogs').add({
-            'deviceId': 'dev_k90_main',
-            'deviceName': device_name,
-            'level': 'SUCCESS',
-            'message': f'[Gate Control] Auto-unlock executed on {device_name}. Gate opened for {duration_seconds}s.',
-            'timestamp': datetime.utcnow().isoformat() + 'Z'
-        })
+        logging.info(f"[Relay Control] Sending unlock signal to {device_name} for {duration_seconds}s...")
+        conn.unlock(duration_seconds * 10)
+        logging.info(f"🟢 [Relay Control Success] Gate opened for {duration_seconds}s on {device_name}.")
+        try:
+            db.collection('deviceLogs').add({
+                'deviceId': 'dev_k90_main',
+                'deviceName': device_name,
+                'level': 'SUCCESS',
+                'message': f'[Gate Control] Auto-unlock executed on {device_name}. Gate opened for {duration_seconds}s.',
+                'timestamp': datetime.utcnow().isoformat() + 'Z'
+            })
+        except Exception:
+            pass
     except Exception as e:
         logging.error(f"[Relay Control] Failed to send unlock signal to {device_name}: {e}")
         db.collection('deviceLogs').add({
@@ -867,499 +869,32 @@ def trigger_door_relay(conn, device_name, duration_seconds=5):
 
 def run_membership_validation(user_id, device_id, device_name, branch, timestamp_iso):
     """
-    Validates a biometric card/fingerprint swipe and writes results directly to Firestore.
-    Verifies that the member is active and hasn't expired.
+    Validates a biometric card/fingerprint swipe via Express REST API & Local Roster.
+    Returns True if access is granted (triggers gate relay unlock), False if denied/unknown.
     """
+    user_id_str = str(user_id)
+    logging.info(f"[Live Swipe] Processing Biometric UserID={user_id_str} at {device_name}")
+    
+    # 1. Primary: Post Checkin Request to Local Express API Backend (/api/attendance/checkin)
     try:
-        # 1. Look up the member matching the biometric ID or Device User ID
-        members_ref = db.collection('members')
-        member_doc = None
+        req_data = json.dumps({
+            'memberId': user_id_str,
+            'method': 'ESSL K90 Pro Biometric',
+            'branch': branch
+        }).encode('utf-8')
         
-        # Check deviceUserId (string)
-        query = members_ref.where('deviceUserId', '==', str(user_id)).limit(1).stream()
-        for doc in query:
-            member_doc = doc
-            break
-            
-        if not member_doc:
-            # Check biometricId (string)
-            query = members_ref.where('biometricId', '==', str(user_id)).limit(1).stream()
-            for doc in query:
-                member_doc = doc
-                break
-                
-        if not member_doc:
-            # Try parsing as integer fallback for deviceUserId
-            try:
-                query_int = members_ref.where('deviceUserId', '==', int(user_id)).limit(1).stream()
-                for doc in query_int:
-                    member_doc = doc
-                    break
-            except ValueError:
-                pass
-
-        if not member_doc:
-            # Try parsing as integer fallback for biometricId
-            try:
-                query_int = members_ref.where('biometricId', '==', int(user_id)).limit(1).stream()
-                for doc in query_int:
-                    member_doc = doc
-                    break
-            except ValueError:
-                pass
-
-        if not member_doc:
-            # Check in employees collection if not found in members
-            # Use a full scan + Python-side match to avoid Firestore index requirement issues
-            employees_ref = db.collection('employees')
-            employee_doc = None
-            
-            user_id_str = str(user_id)
-            try:
-                user_id_int = int(user_id)
-            except (ValueError, TypeError):
-                user_id_int = None
-
-            logging.info(f"[Employee Lookup] Scanning employees collection for UserID={user_id_str}")
-            all_employees = list(employees_ref.stream())
-            logging.info(f"[Employee Lookup] Total employees in collection: {len(all_employees)}")
-            
-            for doc in all_employees:
-                emp_data = doc.to_dict()
-                emp_bio = emp_data.get('biometricId')
-                emp_dev = emp_data.get('deviceUserId')
-                
-                # Match by deviceUserId (any type)
-                if str(emp_dev) == user_id_str:
-                    employee_doc = doc
-                    logging.info(f"[Employee Lookup] Matched via deviceUserId: {emp_data.get('name')} | deviceUserId={emp_dev}")
-                    break
-                # Match by biometricId (any type)
-                if str(emp_bio) == user_id_str:
-                    employee_doc = doc
-                    logging.info(f"[Employee Lookup] Matched via biometricId: {emp_data.get('name')} | biometricId={emp_bio}")
-                    break
-                if user_id_int is not None and emp_bio == user_id_int:
-                    employee_doc = doc
-                    logging.info(f"[Employee Lookup] Matched via biometricId(int): {emp_data.get('name')} | biometricId={emp_bio}")
-                    break
-
-
-            if employee_doc:
-                employee = employee_doc.to_dict()
-                emp_id = employee_doc.id
-                emp_name = employee.get('name', 'Employee')
-                emp_role = employee.get('role', 'Staff')
-                emp_branch = employee.get('branch', branch)
-                emp_biometric_id = employee.get('biometricId', user_id)
-                avatar_url = employee.get('avatarUrl', f"https://api.dicebear.com/7.x/adventurer/svg?seed={emp_name.replace(' ', '')}")
-
-                # Check if already punched today
-                now_date = date.today()
-                today_str = now_date.isoformat()
-                emp_att_ref = db.collection('employeeAttendance')
-                
-                # Look for today's checkin
-                today_punches = list(emp_att_ref.where('employeeId', '==', emp_id).stream())
-                
-                # Filter punches from today
-                today_checkin_doc = None
-                for doc in today_punches:
-                    chk_in = doc.to_dict().get('checkIn', '')
-                    if chk_in.startswith(today_str):
-                        today_checkin_doc = doc
-                        break
-                
-                punch_type = 'checkin'
-                worked_today = None
-                att_doc_id = f"emp_att_{device_id}_{user_id}_{timestamp_iso.replace(':', '-').replace('.', '-')}"
-                
-                if today_checkin_doc:
-                    punch_type = 'checkout'
-                    checkin_time_str = today_checkin_doc.to_dict().get('checkIn', '')
-                    
-                    try:
-                        in_dt = datetime.fromisoformat(checkin_time_str.rstrip('Z'))
-                        out_dt = datetime.fromisoformat(timestamp_iso.rstrip('Z'))
-                        delta = out_dt - in_dt
-                        hours = delta.total_seconds() / 3600
-                        worked_today = f"{hours:.1f} hrs"
-                    except Exception:
-                        worked_today = "8.0 hrs"
-                    
-                    today_checkin_doc.reference.update({
-                        'checkOut': timestamp_iso,
-                        'workedToday': worked_today,
-                        'status': 'Present',
-                        'currentStatus': 'Outside'
-                    })
-                    
-                    employee_doc.reference.update({
-                        'currentStatus': 'Outside',
-                        'lastPunch': timestamp_iso,
-                        'todayStatus': 'Present'
-                    })
-                else:
-                    db.collection('employeeAttendance').document(att_doc_id).set({
-                        'attendanceId': att_doc_id,
-                        'employeeId': emp_id,
-                        'biometricId': str(emp_biometric_id),
-                        'employeeName': emp_name,
-                        'role': emp_role,
-                        'branch': emp_branch,
-                        'avatarUrl': avatar_url,
-                        'deviceId': device_id,
-                        'deviceName': device_name,
-                        'timestamp': timestamp_iso,
-                        'checkIn': timestamp_iso,
-                        'checkOut': None,
-                        'status': 'Present',
-                        'currentStatus': 'Inside'
-                    })
-                    
-                    employee_doc.reference.update({
-                        'currentStatus': 'Inside',
-                        'lastPunch': timestamp_iso,
-                        'todayStatus': 'Present'
-                    })
-
-                db.collection('employeeNotifications').add({
-                    'employeeId': emp_id,
-                    'employeeName': emp_name,
-                    'role': emp_role,
-                    'biometricId': str(emp_biometric_id),
-                    'deviceName': device_name,
-                    'punchTime': datetime.now().strftime('%I:%M %p'),
-                    'branch': emp_branch,
-                    'type': punch_type,
-                    'workedToday': worked_today,
-                    'avatarUrl': avatar_url,
-                    'createdAt': datetime.utcnow().isoformat() + 'Z'
-                })
-                
-                trigger_gate_unlock_relay(device_name, 3)
+        req = urllib.request.Request(
+            'http://localhost:5000/api/attendance/checkin',
+            data=req_data,
+            headers={'Content-Type': 'application/json'}
+        )
+        
+        with urllib.request.urlopen(req, timeout=3) as resp:
+            res_json = json.loads(resp.read().decode('utf-8'))
+            if res_json.get('success'):
+                memberName = res_json.get('memberName') or 'Gym Member'
+                logging.info(f"🟢 [ACCESS GRANTED] Member '{memberName}' (ID: {user_id_str}) checkin registered via API!")
                 return True
-
-        if not member_doc:
-            # Unknown user on device - Access Denied!
-            msg = f"[Membership Validation] Rejected access for unknown biometric ID: {user_id} at {device_name}."
-            logging.warning(msg)
-            
-            db.collection('deviceLogs').add({
-                'deviceId': device_id,
-                'deviceName': device_name,
-                'level': 'WARNING',
-                'message': msg,
-                'timestamp': datetime.utcnow().isoformat() + 'Z'
-            })
-            
-            db.collection('accessLogs').add({
-                'memberId': f"unknown_biometric_{user_id}",
-                'memberName': "Unknown User",
-                'timestamp': timestamp_iso,
-                'branch': branch,
-                'device': device_name,
-                'granted': False,
-                'reason': "Unknown Biometric ID mapping",
-                'createdAt': datetime.utcnow().isoformat() + 'Z'
-            })
-
-            # Also write to attendance collection so it displays on the CRM dashboard in real-time
-            att_doc_id = f"att_{device_id}_{user_id}_{timestamp_iso.replace(':', '-').replace('.', '-')}"
-            db.collection('attendance').document(att_doc_id).set({
-                'attendanceId': att_doc_id,
-                'memberId': f"unknown_biometric_{user_id}",
-                'biometricId': str(user_id),
-                'deviceUserId': str(user_id),
-                'memberName': f"Unknown User",
-                'memberCode': f"ID {user_id}",
-                'avatarUrl': f"https://api.dicebear.com/7.x/adventurer/svg?seed={user_id}",
-                'deviceId': device_id,
-                'deviceName': device_name,
-                'branch': branch,
-                'timestamp': timestamp_iso,
-                'checkIn': timestamp_iso,
-                'checkOut': None,
-                'status': 'denied',
-                'granted': False,
-                'reason': "Unknown Biometric ID mapping",
-                'membership': "No Plan",
-                'trainer': "No Coach",
-                'createdAt': datetime.utcnow().isoformat() + 'Z'
-            })
-
-            # Also write unknown punch to attendance_logs for Live Feed popup
-            db.collection('attendance_logs').document(att_doc_id).set({
-                'memberId': f"unknown_biometric_{user_id}",
-                'memberName': f"Unknown User",
-                'branch': branch,
-                'checkIn': timestamp_iso,
-                'method': 'biometric',
-                'status': 'unknown',
-                'reason': "Unknown Biometric ID",
-                'createdAt': datetime.utcnow().isoformat() + 'Z'
-            })
-
-            return False
-
-        member = member_doc.to_dict()
-        member_db_id = member_doc.id
-        member_name = member.get('name', 'Unknown')
-        member_code = member.get('memberId', 'N/A')
-        membership_plan = member.get('plan', 'Monthly')
-        avatar_url = member.get('avatar', '') or member.get('avatarUrl', '')
-        if not avatar_url:
-            avatar_url = f"https://api.dicebear.com/7.x/adventurer/svg?seed={member_name.replace(' ', '')}"
-            
-        # Parse timestamp_iso to datetime object for Firestore Timestamp checkIn
-        try:
-            dt_str = timestamp_iso.rstrip('Z')
-            checkin_dt = datetime.fromisoformat(dt_str)
-        except Exception:
-            checkin_dt = datetime.utcnow()
-
-        # Check membership validation parameters
-        status = member.get('status', 'active')
-        expiry_date_str = member.get('expiryDate', '')
-        
-        is_expired = False
-        today_str = date.today().isoformat()
-        
-        if expiry_date_str and expiry_date_str < today_str:
-            is_expired = True
-
-        if status == 'expired' or is_expired:
-            granted = False
-            reason = "Membership Expired"
-        elif status == 'frozen':
-            granted = False
-            reason = "Membership Frozen"
-        elif status == 'inactive':
-            granted = False
-            reason = "Membership Inactive"
-        else:
-            granted = True
-            reason = "Attendance Synced"
-
-        # 5. Process Validation Output
-        if granted:
-            success_msg = f"[Membership Validation] Access Granted: Athlete {member_name} ({member_code}) authenticated. Active Plan."
-            logging.info(success_msg)
-
-            # Write Success Log
-            db.collection('deviceLogs').add({
-                'deviceId': device_id,
-                'deviceName': device_name,
-                'level': 'SUCCESS',
-                'message': success_msg,
-                'timestamp': datetime.utcnow().isoformat() + 'Z'
-            })
-
-            # Check for double check-in today to avoid duplicate streaks
-            now_date = date.today()
-            today_str = now_date.isoformat()
-            attendance_ref = db.collection('attendance')
-            duplicates = attendance_ref.where('memberId', '==', member_db_id).where('status', '==', 'granted').stream()
-            already_checked_in = False
-            for doc in duplicates:
-                chk_in = doc.to_dict().get('checkIn', '')
-                if chk_in.startswith(today_str):
-                    already_checked_in = True
-                    break
-
-            # Deterministic document ID to prevent duplicate logs
-            att_doc_id = f"att_{device_id}_{user_id}_{timestamp_iso.replace(':', '-').replace('.', '-')}"
-
-            if not already_checked_in:
-                # Add attendance checkin record (Store required Phase B fields)
-                db.collection('attendance').document(att_doc_id).set({
-                    'attendanceId': att_doc_id,
-                    'memberId': member_db_id,
-                    'biometricId': member.get('biometricId', ''),
-                    'deviceUserId': member.get('deviceUserId', ''),
-                    'memberName': member_name,
-                    'memberCode': member_code,
-                    'avatarUrl': avatar_url,
-                    'deviceId': device_id,
-                    'deviceName': device_name,
-                    'branch': branch,
-                    'timestamp': timestamp_iso,
-                    'checkIn': timestamp_iso,
-                    'checkOut': None,
-                    'status': 'granted',
-                    'method': 'biometric',
-                    'membership': membership_plan,
-                    'createdAt': datetime.utcnow().isoformat() + 'Z'
-                })
-
-                # Also write to attendance_logs for the Frontend Live Feed Popup
-                db.collection('attendance_logs').document(att_doc_id).set({
-                    'memberId': member_db_id,
-                    'memberName': member_name,
-                    'branch': branch,
-                    'checkIn': timestamp_iso,
-                    'method': 'biometric',
-                    'status': 'granted',
-                    'createdAt': datetime.utcnow().isoformat() + 'Z'
-                })
-
-                # Update gym_presence for 'Members Inside'
-                expected_exit = (datetime.utcnow() + timedelta(hours=2)).isoformat() + 'Z'
-                db.collection('gym_presence').document(member_db_id).set({
-                    'memberId': member_db_id,
-                    'memberName': member_name,
-                    'branch': branch,
-                    'avatarUrl': avatar_url,
-                    'inside': True,
-                    'entryTime': timestamp_iso,
-                    'expectedExit': expected_exit,
-                    'lastPunch': timestamp_iso
-                }, merge=True)
-
-
-                # Increment attendance streak/counts on member document (matching CRM and Flutter App formats)
-                member_doc_ref = db.collection('members').document(member_db_id)
-                member_doc_ref.update({
-                    'attendanceCount': firestore.Increment(1),
-                    'streak': firestore.Increment(1),
-                    'attendanceStreak': firestore.Increment(1),
-                    'lastActive': timestamp_iso
-                })
-                
-                # Push checkin notification trigger
-                db.collection('notifications').add({
-                    'title': 'Check-In Recorded ⚡',
-                    'body': f'Welcome back to Alpha Zone, {member_name}! Streak incremented.',
-                    'memberId': member_db_id,
-                    'type': 'checkin',
-                    'timestamp': datetime.utcnow().isoformat() + 'Z',
-                    'read': False
-                })
-            else:
-                # Only write an entry tap without incrementing stats
-                db.collection('attendance').document(att_doc_id).set({
-                    'attendanceId': att_doc_id,
-                    'memberId': member_db_id,
-                    'biometricId': member.get('biometricId', ''),
-                    'deviceUserId': member.get('deviceUserId', ''),
-                    'memberName': member_name,
-                    'memberCode': member_code,
-                    'avatarUrl': avatar_url,
-                    'deviceId': device_id,
-                    'deviceName': device_name,
-                    'branch': branch,
-                    'timestamp': timestamp_iso,
-                    'checkIn': timestamp_iso,
-                    'checkOut': None,
-                    'status': 'granted',
-                    'method': 'biometric',
-                    'membership': membership_plan,
-                    'createdAt': datetime.utcnow().isoformat() + 'Z'
-                })
-
-                # Also write duplicate tap to attendance_logs
-                db.collection('attendance_logs').document(att_doc_id).set({
-                    'memberId': member_db_id,
-                    'memberName': member_name,
-                    'branch': branch,
-                    'checkIn': timestamp_iso,
-                    'method': 'biometric',
-                    'status': 'duplicate',
-                    'createdAt': datetime.utcnow().isoformat() + 'Z'
-                })
-
-                # Update gym_presence lastPunch
-                db.collection('gym_presence').document(member_db_id).set({
-                    'lastPunch': timestamp_iso,
-                    'inside': True
-                }, merge=True)
-
-                logging.info(f"[Sync Service] Member {member_name} already checked in today. Registered access tap only.")
-
-            # Record in Access Logs
-            db.collection('accessLogs').add({
-                'memberId': member_db_id,
-                'memberName': member_name,
-                'timestamp': timestamp_iso,
-                'branch': branch,
-                'device': device_name,
-                'granted': True,
-                'reason': reason,
-                'createdAt': datetime.utcnow().isoformat() + 'Z'
-            })
-
-            # Update Door status last activity
-            db.collection('doorStatus').document(device_id).set({
-                'doorId': device_id,
-                'doorName': f"{device_name} Lock",
-                'status': 'locked',
-                'lastOpen': timestamp_iso,
-                'lastUser': member_name,
-                'lastEvent': 'Access Granted'
-            }, merge=True)
-
-            return True
-        else:
-            denied_msg = f"[Membership Validation] Access Denied: Athlete {member_name} ({member_code}) rejected. Reason: {reason}."
-            logging.warning(denied_msg)
-            
-            # Write Denied Log
-            db.collection('deviceLogs').add({
-                'deviceId': device_id,
-                'deviceName': device_name,
-                'level': 'ERROR',
-                'message': denied_msg,
-                'timestamp': datetime.utcnow().isoformat() + 'Z'
-            })
-            
-            # Write denied check-in log
-            att_doc_id = f"att_{device_id}_{user_id}_{timestamp_iso.replace(':', '-').replace('.', '-')}"
-            db.collection('attendance').document(att_doc_id).set({
-                'attendanceId': att_doc_id,
-                'memberId': member_db_id,
-                'biometricId': member.get('biometricId', ''),
-                'deviceUserId': member.get('deviceUserId', ''),
-                'memberName': member_name,
-                'memberCode': member_code,
-                'avatarUrl': avatar_url,
-                'deviceId': device_id,
-                'deviceName': device_name,
-                'branch': branch,
-                'timestamp': timestamp_iso,
-                'checkIn': timestamp_iso,
-                'checkOut': None,
-                'status': 'denied',
-                'granted': False,
-                'reason': reason,
-                'membership': membership_plan,
-                'trainer': member.get('trainer', 'No PT Assigned'),
-                'createdAt': datetime.utcnow().isoformat() + 'Z'
-            })
-            
-            # Also write denied punch to attendance_logs for Live Feed popup
-            db.collection('attendance_logs').document(att_doc_id).set({
-                'memberId': member_db_id,
-                'memberName': member_name,
-                'branch': branch,
-                'checkIn': timestamp_iso,
-                'method': 'biometric',
-                'status': 'denied',
-                'reason': reason,
-                'createdAt': datetime.utcnow().isoformat() + 'Z'
-            })
-
-            
-            # Record in Access Logs
-            db.collection('accessLogs').add({
-                'memberId': member_db_id,
-                'memberName': member_name,
-                'timestamp': timestamp_iso,
-                'branch': branch,
-                'device': device_name,
-                'granted': False,
-                'reason': reason,
-                'createdAt': datetime.utcnow().isoformat() + 'Z'
-            })
             
             return False
 
