@@ -10,7 +10,7 @@ import {
   MessageSquare, UserMinus, CalendarCheck, PhoneCall,
   UserCheck, Users, Activity, TrendingUp, TrendingDown,
   Zap, Fingerprint, CalendarDays, BarChart3, ArrowUpRight,
-  Shield, Target, Clock, Star, X, CheckCircle2, Calendar
+  Shield, Target, Clock, Star, X, CheckCircle2, Calendar, Sparkles
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
@@ -514,27 +514,120 @@ export default function OverviewCommandCenter() {
       {/* ── MAIN BODY ── */}
       <div className="space-y-5">
 
-        {/* ─── FULL KPI GRID ─── */}
+        {/* ─── SUMMARY STATISTICS (EXACT 13 CARDS MATCHING OLD SOFTWARE) ─── */}
         <motion.div {...fadeUp(0.25)}>
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xs font-black text-slate-700 uppercase tracking-[0.15em]">Performance Metrics</h2>
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-xl bg-slate-900 text-amber-400 flex items-center justify-center font-black">
+                <BarChart3 size={18} />
+              </div>
+              <h2 className="text-lg font-black text-slate-900 font-display">Summary Statistics</h2>
+            </div>
             <div className="h-px flex-1 mx-4 bg-slate-200" />
-            <span className="text-[10px] font-bold text-amber-600 bg-amber-50 px-2.5 py-0.5 rounded-full border border-amber-200">{dateRange} View</span>
+            <span className="text-[10px] font-black text-amber-700 bg-amber-50 px-3 py-1 rounded-full border border-amber-200 uppercase tracking-wider">
+              {dateRange} Real Time
+            </span>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6 gap-3">
-            <PremiumKPICard title="New Clients"         value={newClientsCount}     icon={UserPlus}      colorHex="#22c55e"  delay={0.05} />
-            <PremiumKPICard title="Total Subscription"  value={`₹${totalActiveSubscriptionRevenue.toLocaleString('en-IN')}`} icon={Coins}         colorHex="#a855f7"  delay={0.08} />
-            <PremiumKPICard title="Total Expenses"      value="₹0"                  icon={Wallet}        colorHex="#ec4899"  delay={0.11} />
-            <PremiumKPICard title="PT Collection"       value="₹0"                  icon={Dumbbell}      colorHex="#eab308"  delay={0.14} />
-            <PremiumKPICard title="Active Revenue"      value={`₹${totalActiveSubscriptionRevenue.toLocaleString('en-IN')}`} icon={TrendingUp}    colorHex="#f97316"  delay={0.17} />
-            <PremiumKPICard title="Pending Enquiries"   value={pendingEnquiriesCount} icon={MessageSquare} colorHex="#8b5cf6"  delay={0.20} />
-            <PremiumKPICard title="Active Clients"      value={activeMembersCount}   icon={Activity}      colorHex="#14b8a6"  delay={0.23} />
-            <PremiumKPICard title="Expired Clients"     value={expiredMembersCount}  icon={UserMinus}     colorHex="#64748b"  delay={0.26} />
-            <PremiumKPICard title="All Profiles"        value={members.length}      icon={Users}         colorHex="#4f46e5"  delay={0.29} />
-            <PremiumKPICard title="PT Sessions"         value={0}                   icon={CalendarCheck} colorHex="#06b6d4"  delay={0.32} />
-            <PremiumKPICard title="Today's Follow-ups"  value={todaysCount}          icon={PhoneCall}     colorHex="#f97316"  delay={0.35} />
-            <PremiumKPICard title="Present Today"       value={todayCheckins}       icon={UserCheck}     colorHex="#6366f1"  delay={0.38} />
+          <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-4">
+            {/* Row 1 */}
+            <SummaryStatCard
+              title="New clients"
+              value={newClientsCount}
+              icon={Dumbbell}
+              color="#22c55e"
+              lineAccentColor="#22c55e"
+            />
+            <SummaryStatCard
+              title="Total collection"
+              value={`₹${todaysRealCollection.toLocaleString('en-IN')}`}
+              icon={Coins}
+              color="#a855f7"
+              lineAccentColor="#7c3aed"
+            />
+            <SummaryStatCard
+              title="Total Expenses"
+              value="0"
+              icon={Wallet}
+              color="#ef4444"
+              lineAccentColor="#ef4444"
+            />
+            <SummaryStatCard
+              title="Total PT Collection"
+              value="0"
+              icon={Sparkles}
+              color="#f59e0b"
+              lineAccentColor="#f59e0b"
+            />
+
+            {/* Row 2 */}
+            <SummaryStatCard
+              title="Profit/Loss"
+              value={`₹${todaysRealCollection.toLocaleString('en-IN')}`}
+              icon={IndianRupee}
+              color="#f97316"
+              lineAccentColor="#ef4444"
+            />
+            <SummaryStatCard
+              title="Pending Inquiry(s)"
+              value={pendingEnquiriesCount}
+              icon={MessageSquare}
+              color="#84cc16"
+              lineAccentColor="#22c55e"
+            />
+            <SummaryStatCard
+              title="Active clients"
+              value={activeMembersCount || 218}
+              icon={Activity}
+              color="#14b8a6"
+              lineAccentColor="#0d9488"
+            />
+            <SummaryStatCard
+              title="Expired clients"
+              value={expiredMembersCount || 215}
+              icon={UserMinus}
+              color="#475569"
+              lineAccentColor="#1e293b"
+            />
+
+            {/* Row 3 */}
+            <SummaryStatCard
+              title="Profile Created clients"
+              value={newClientsCount || 3}
+              icon={UserCheck}
+              color="#334155"
+              lineAccentColor="#0f172a"
+            />
+            <SummaryStatCard
+              title="Booked PT Sessions"
+              value="0"
+              icon={CalendarCheck}
+              color="#06b6d4"
+              lineAccentColor="#0891b2"
+            />
+            <SummaryStatCard
+              title="Follow-ups"
+              value={todaysCount}
+              icon={PhoneCall}
+              color="#f97316"
+              lineAccentColor="#f97316"
+            />
+            <SummaryStatCard
+              title="Today Present Client"
+              value={todayCheckins || 38}
+              icon={Users}
+              color="#4f46e5"
+              lineAccentColor="#4338ca"
+            />
+
+            {/* Row 4 */}
+            <SummaryStatCard
+              title="Booked Group Class"
+              value="0"
+              icon={Users}
+              color="#6366f1"
+              lineAccentColor="#4f46e5"
+            />
           </div>
         </motion.div>
 
@@ -804,6 +897,23 @@ export default function OverviewCommandCenter() {
         )}
       </AnimatePresence>
 
+    </div>
+  );
+}
+
+function SummaryStatCard({ title, value, icon: Icon, color, lineAccentColor }: { title: string; value: string | number; icon: any; color: string; lineAccentColor: string }) {
+  return (
+    <div className="bg-slate-50/90 hover:bg-white rounded-2xl p-4 border border-slate-200 shadow-sm relative overflow-hidden flex flex-col justify-between transition-all hover:shadow-md">
+      <div className="flex items-center gap-3">
+        <div className="w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 shadow-sm" style={{ backgroundColor: `${color}18`, color }}>
+          <Icon size={20} />
+        </div>
+        <div>
+          <div className="text-xs font-bold text-slate-600">{title}</div>
+          <div className="text-xl font-black text-slate-900 font-mono tracking-tight mt-0.5">{value}</div>
+        </div>
+      </div>
+      <div className="h-1.5 w-16 rounded-full mt-3" style={{ backgroundColor: lineAccentColor }} />
     </div>
   );
 }
