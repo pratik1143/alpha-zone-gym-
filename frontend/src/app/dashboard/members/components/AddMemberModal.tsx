@@ -90,6 +90,15 @@ export default function AddMemberModal({ isOpen, onClose }: AddMemberModalProps)
     }
   }, [selectedPlan, discount]);
 
+  // Reset enrollment status state whenever Step 3 is opened
+  useEffect(() => {
+    if (step === 3) {
+      setEnrollStatus('idle');
+      setEnrollScanStep(0);
+      setEnrollMsg('');
+    }
+  }, [step, isOpen]);
+
   // Trigger Machine Fingerprint Enrollment
   const handleStartBiometricEnrollment = async () => {
     setEnrollStatus('enrolling');

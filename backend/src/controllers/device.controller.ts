@@ -353,7 +353,7 @@ export const startEnrollFingerprint = async (req: Request, res: Response) => {
     const docId = `enroll_${memberId || 'm'}_${Date.now()}`;
 
     // Execute direct ZK socket enrollment command to physical ESSL K90 Pro hardware
-    const scriptPath = path.resolve(__dirname, '../../../device-service/enroll_hardware.py');
+    const scriptPath = path.resolve(process.cwd(), 'device-service/enroll_hardware.py');
     exec(`python "${scriptPath}" ${bioId} "${nameStr}"`, (err, stdout, stderr) => {
       if (err) {
         console.warn('[Biometric Enrollment] Hardware socket error:', err.message);
@@ -568,9 +568,9 @@ export const getLatestPunch = async (req: Request, res: Response) => {
  */
 export const autoMapAllBiometrics = async (req: Request, res: Response) => {
   try {
-    const scriptPath = path.resolve(__dirname, '../../../device-service/auto_map_device_users.py');
+    const scriptPath = path.resolve(process.cwd(), 'device-service/auto_map_device_users.py');
 
-    exec(`python "${scriptPath}"`, async (err, stdout, stderr) => {
+    exec(`python "${scriptPath}"`, { cwd: path.resolve(process.cwd(), 'device-service'), maxBuffer: 10 * 1024 * 1024 }, async (err, stdout, stderr) => {
       let deviceUsers: any[] = [];
       if (!err && stdout) {
         try {

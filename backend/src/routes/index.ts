@@ -90,6 +90,7 @@ router.get('/migrations', getMigrations);
 router.post('/devices/biometric/enroll-fingerprint', startEnrollFingerprint);
 router.post('/devices/biometric/delete', deleteEnrollment);
 router.post('/devices/biometric/sync', syncMemberToDevice);
+router.post('/devices/biometric/auto-map-all', autoMapAllBiometrics);
 router.get('/devices/biometric/status/:memberId', getEnrollmentStatus);
 
 // Invoices & Billing
