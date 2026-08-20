@@ -113,12 +113,28 @@ export default function AttendancePopupManager() {
       }
     };
 
+    const memberName = match?.name || data.memberName || 'Athlete';
+    toast(`⚡ Entry Recorded: ${memberName}`, {
+      icon: type === 'success' ? '🟢' : '🔴',
+      duration: 5000,
+      style: { background: '#0F172A', color: '#fff', border: type === 'success' ? '1px solid #22C55E' : '1px solid #EF4444', borderRadius: '16px', fontWeight: 'bold', fontSize: '13px' }
+    });
+
     setQueue(prev => [...prev, popupData]);
   };
 
   // REST API Polling for latest punch event
   useEffect(() => {
     let isMounted = true;
+    
+    // Set initial baseline punch on mount
+    API.get('/attendance/latest-punch').then(res => {
+      const latest = res.data?.latestPunch;
+      if (latest && isMounted) {
+        lastDocId.current = latest.id || `${latest.memberId}_${latest.checkIn || latest.createdAt}`;
+      }
+    }).catch(() => {});
+
     const pollLatestPunch = async () => {
       try {
         const res = await API.get('/attendance/latest-punch');
@@ -200,7 +216,6 @@ export default function AttendancePopupManager() {
   const handleRegister = () => {
     handleClose();
     toast('Open Add Member Wizard here...');
-    // We would integrate with the actual AddMemberWizard state
   };
 
   const handleMap = () => {
@@ -209,7 +224,7 @@ export default function AttendancePopupManager() {
   };
 
   return (
-    <div className="fixed top-8 right-8 z-[100] flex flex-col gap-4 pointer-events-none">
+    <div className="fixed top-6 right-6 z-[9999] flex flex-col gap-4 pointer-events-none">
       <AnimatePresence>
         {activePopup && (
           <div className="pointer-events-auto">

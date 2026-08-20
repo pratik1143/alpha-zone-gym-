@@ -577,10 +577,6 @@ export default function DashboardLayout({
         </aside>
         )}
 
-      {/* Top Right Live Attendance Popups - Redesigned Signature Manager */}
-      <AttendancePopupManager />
-      <EmployeePopupManager />
-
       {/* AI Gym Copilot Helper */}
       {(() => {
         // We define the getRenewalPrediction function in a self-executing helper scope or just invoke it
@@ -933,6 +929,10 @@ export default function DashboardLayout({
       </AnimatePresence>
 
     {pathname !== '/dashboard' && <NotificationCenter hideIcon={true} />}
+
+    {/* Top Right Live Attendance Popups - Unclipped Viewport Level */}
+    <AttendancePopupManager />
+    <EmployeePopupManager />
     </div>
   </div>
   );
