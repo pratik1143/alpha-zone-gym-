@@ -297,7 +297,7 @@ export default function ClientProfileSystem() {
         ))}
       </div>
 
-      {/* 3. MAIN CONTENT GRID */}
+      {/* 3. MAIN CONTENT GRID (CLEAN 3+1 COLUMN LAYOUT) */}
       <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
         <div className="xl:col-span-3">
           <AnimatePresence mode="wait">

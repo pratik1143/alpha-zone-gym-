@@ -267,10 +267,10 @@ export default function BillingTab({ member }: { member: any }) {
         </div>
       </div>
 
-      {/* ── Official Billing History Table Module (Aligned & Scrollable) ── */}
-      <div className="bg-white rounded-2xl border border-slate-300 shadow-md overflow-hidden">
+      {/* ── Official Billing History Table Module (Clean Elevated Structure) ── */}
+      <div className="bg-white rounded-2xl border border-slate-300 shadow-sm relative">
         {/* Table Top Blue Header */}
-        <div className="bg-[#0b5cbe] text-white px-6 py-3.5 flex items-center justify-between">
+        <div className="bg-[#0b5cbe] text-white px-6 py-3.5 flex items-center justify-between rounded-t-2xl">
           <div className="flex items-center gap-2">
             <Receipt size={20} />
             <h3 className="font-extrabold text-base tracking-wide">Billing history</h3>
@@ -282,7 +282,7 @@ export default function BillingTab({ member }: { member: any }) {
 
         {/* Scrollable Container with Minimum Width for Perfect Alignment */}
         <div className="overflow-x-auto custom-scrollbar">
-          <table className="w-full text-left text-xs border-collapse min-w-[1250px]">
+          <table className="w-full text-left text-xs border-collapse min-w-[1100px]">
             <thead>
               <tr className="bg-[#0e68d6] text-white font-extrabold text-[11px] uppercase tracking-wider border-b border-blue-700">
                 <th className="px-4 py-3.5 whitespace-nowrap">Date</th>
@@ -387,9 +387,9 @@ export default function BillingTab({ member }: { member: any }) {
                           <ChevronDown size={14} />
                         </button>
 
-                        {/* Action Dropdown Options */}
+                        {/* Action Dropdown Options (High Elevation z-200) */}
                         {activeDropdownIndex === idx && (
-                          <div className="absolute right-4 top-12 bg-white border border-slate-200 rounded-2xl shadow-2xl z-[100] w-48 py-1.5 text-left text-xs font-bold text-slate-800 animate-in fade-in">
+                          <div className="absolute right-4 top-12 bg-white border border-slate-300 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.2)] z-[200] w-48 py-2 text-left text-xs font-bold text-slate-800 animate-in fade-in">
                             <button
                               onClick={() => {
                                 setShowUpgradeModal(true);

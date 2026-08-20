@@ -80,14 +80,31 @@ export default function BillingPage() {
     const unsub = onSnapshot(q, (snap) => {
       const data = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any[];
       const fallbacks = getFallbackPayments();
-      
       const combinedMap = new Map<string, any>();
       fallbacks.forEach(item => combinedMap.set(item.invoice || item.id, item));
       data.forEach(item => combinedMap.set(item.invoice || item.id, item));
 
-      const merged = Array.from(combinedMap.values()).sort((a, b) =>
-        new Date(b.date || b.createdAt || 0).getTime() - new Date(a.date || a.createdAt || 0).getTime()
-      );
+      const todayYMD = new Date().toISOString().split('T')[0];
+      const todayLocal = new Date().toLocaleDateString('en-CA');
+
+      const merged = Array.from(combinedMap.values()).sort((a: any, b: any) => {
+        const aDate = String(a.date || a.createdAt || '').split('T')[0];
+        const bDate = String(b.date || b.createdAt || '').split('T')[0];
+
+        const aIsToday = a.isRealTimeToday === true || aDate === todayYMD || aDate === todayLocal || aDate === todayStr;
+        const bIsToday = b.isRealTimeToday === true || bDate === todayYMD || bDate === todayLocal || bDate === todayStr;
+
+        if (aIsToday && !bIsToday) return -1;
+        if (!aIsToday && bIsToday) return 1;
+
+        // Cap future legacy dates to today for recency sorting
+        const validADate = aDate > todayYMD ? todayYMD : aDate;
+        const validBDate = bDate > todayYMD ? todayYMD : bDate;
+
+        const timeA = new Date(a.createdAt || validADate || 0).getTime();
+        const timeB = new Date(b.createdAt || validBDate || 0).getTime();
+        return timeB - timeA;
+      });
 
       setPayments(merged.length > 0 ? merged : fallbacks);
       setLoading(false);
@@ -471,8 +488,11 @@ export default function BillingPage() {
                         </span>
                       </td>
 
-                      <td className="py-3.5 px-4 text-slate-500 font-medium">
-                        {p.date || todayStr}
+                      <td className="py-3.5 px-4 font-mono text-slate-700">
+                        <div className="font-bold text-slate-900">{formatDate(p.date || p.createdAt || todayStr)}</div>
+                        <div className="text-[10px] text-slate-400 font-sans font-medium">
+                          {p.createdAt ? new Date(p.createdAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true }) : 'Live Sync'}
+                        </div>
                       </td>
 
                       <td className="py-3.5 px-4">
