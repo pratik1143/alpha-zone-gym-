@@ -192,17 +192,19 @@ export default function OverviewCommandCenter() {
     }).length;
   }, [attendance, dateRange, todayStr]);
 
-  // New Clients registered strictly TODAY (starts at 0 unless new member added)
+  // New Clients registered strictly TODAY (date matching today)
   const newClientsCount = useMemo(() => {
-    const fromMembers = members.filter(m => {
+    const todayYMD = new Date().toISOString().split('T')[0];
+    const todayLocal = new Date().toLocaleDateString('en-CA');
+
+    const count = members.filter(m => {
       if (m.isLegacyImport || m.importedAt || m.isSample || m.isMock || m.source === 'migration') return false;
       const joined = String(m.joinDate || m.createdAt || '').split('T')[0];
-      if (dateRange === "Today") return joined === todayStr && m.isRealTimeToday;
-      return joined && isWithinRange(joined, dateRange);
+      return joined === todayYMD || joined === todayLocal || joined === todayStr || m.isRealTimeToday;
     }).length;
 
-    return fromMembers + sessionNewClients;
-  }, [members, dateRange, todayStr, sessionNewClients]);
+    return count > 0 ? count : sessionNewClients;
+  }, [members, todayStr, sessionNewClients]);
 
   const activeMembersCount = useMemo(() => members.filter(m => m.status === "active").length, [members]);
   const expiredMembersCount = useMemo(() => members.filter(m => m.status === "expired" || m.status === "inactive").length, [members]);
