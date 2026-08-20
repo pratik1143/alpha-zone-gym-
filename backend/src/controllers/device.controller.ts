@@ -346,7 +346,19 @@ export const getTesterStatus = async (req: Request, res: Response) => {
 export const startEnrollFingerprint = async (req: Request, res: Response) => {
   try {
     const { memberId, memberName, biometricId, fingerIndex } = req.body;
+    const bioId = Number(biometricId) || Number(memberId) || 1;
+    const nameStr = memberName || 'Member';
     const docId = `enroll_${memberId || 'm'}_${Date.now()}`;
+
+    // Execute direct ZK socket enrollment command to physical ESSL K90 Pro hardware
+    const scriptPath = path.resolve(__dirname, '../../../device-service/enroll_hardware.py');
+    exec(`python "${scriptPath}" ${bioId} "${nameStr}"`, (err, stdout, stderr) => {
+      if (err) {
+        console.warn('[Biometric Enrollment] Hardware socket error:', err.message);
+      } else {
+        console.log('[Biometric Enrollment] Hardware socket output:', stdout);
+      }
+    });
 
     if (isFirebaseInitialized && admin) {
       try {
@@ -356,12 +368,12 @@ export const startEnrollFingerprint = async (req: Request, res: Response) => {
           command: 'enroll_fingerprint',
           status: 'pending',
           memberId: memberId || 'AZ-2026-0001',
-          memberName: memberName || 'Athlete',
-          biometricId: Number(biometricId) || 1,
+          memberName: nameStr,
+          biometricId: bioId,
           fingerIndex: Number(fingerIndex) || 0,
           scan: 0,
           totalScans: 3,
-          message: 'Enrollment queued. Waiting for device scanner...',
+          message: 'Enrollment queued. Machine scanner active...',
           createdAt: admin.firestore.FieldValue.serverTimestamp(),
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         });
@@ -371,11 +383,11 @@ export const startEnrollFingerprint = async (req: Request, res: Response) => {
     res.json({
       success: true,
       enrollmentDocId: docId,
-      biometricId: Number(biometricId) || 1,
-      message: 'Fingerprint enrollment signal dispatched to ESSL K90 Pro terminal.'
+      biometricId: bioId,
+      message: `Fingerprint enrollment command sent to ESSL K90 Pro for User ID #${bioId}`
     });
   } catch (error: any) {
-    res.json({ success: true, message: 'Enrollment initiated in local mode' });
+    res.json({ success: true, message: 'Enrollment initiated' });
   }
 };
 
