@@ -215,12 +215,17 @@ export default function ClientProfileSystem() {
               </span>
             </div>
             
-            <p className="text-sm font-semibold text-slate-500 flex items-center gap-2 mb-6">
-              <span className="text-slate-400">ID:</span> {member.memberId || member.id}
+            <p className="text-sm font-semibold text-slate-500 flex items-center gap-2 mb-6 flex-wrap">
+              <span className="text-slate-400">Bio ID:</span> 
+              <span className="font-mono font-black text-indigo-600 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-lg">
+                #{member.biometricId || member.deviceUserId || member.clientId || member.customId || member.memberId || member.id}
+              </span>
               <span className="text-slate-300">|</span>
-              <span className="text-slate-400">Plan:</span> {member.plan || 'Standard'}
+              <span className="text-slate-400">Ref Code:</span> <span className="font-mono font-bold text-slate-800">{member.memberId || member.id}</span>
               <span className="text-slate-300">|</span>
-              <span className="text-slate-400">Branch:</span> {member.branch || 'Main Branch'}
+              <span className="text-slate-400">Plan:</span> <span className="font-bold text-slate-800">{member.plan || 'Standard'}</span>
+              <span className="text-slate-300">|</span>
+              <span className="text-slate-400">Branch:</span> <span className="font-bold text-slate-800">{member.branch || 'Mohali, Punjab'}</span>
             </p>
 
             <div className="flex flex-wrap items-center gap-8">

@@ -81,8 +81,11 @@ export default function MemberDrawer({ member, onClose, onCall, onMessage, onChe
                 </div>
                 <div>
                   <h2 className="text-xl font-black text-slate-900 leading-tight">{member.name}</h2>
-                  <p className="text-xs font-bold text-indigo-600 font-mono mt-0.5 tracking-wider">
-                    ID: {member.clientId || member.customId || (member.memberId && !member.memberId.startsWith('AZ-2026-') ? member.memberId : null) || member.biometricId || member.id}
+                  <p className="text-xs font-bold text-indigo-600 font-mono mt-0.5 tracking-wider flex items-center gap-1.5">
+                    <span>Bio ID:</span>
+                    <span className="bg-indigo-100 text-indigo-800 px-1.5 py-0.5 rounded text-[11px] font-black">
+                      #{member.biometricId || member.deviceUserId || member.clientId || member.customId || member.memberId || member.id}
+                    </span>
                   </p>
                   <div className="flex items-center gap-2 mt-1.5">
                     <span className="px-2 py-0.5 bg-amber-100 text-amber-700 text-[10px] font-bold rounded-md uppercase tracking-wider flex items-center gap-1">
