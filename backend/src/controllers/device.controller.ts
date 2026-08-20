@@ -587,21 +587,44 @@ export const autoMapAllBiometrics = async (req: Request, res: Response) => {
       const missingMembers: any[] = [];
 
       for (const m of members) {
-        const mName = String(m.name || m.fullName || '').toLowerCase().trim();
-        const mPhone = String(m.phone || m.mobile || '').replace(/\D/g, '');
-        const mBioId = String(m.biometricId || m.deviceUserId || m.customId || m.memberId || '').trim();
+        let targetBioId: string | null = null;
 
-        // Try matching against device users
-        const matched = deviceUsers.find(u => {
-          const uId = String(u.user_id).trim();
-          const uName = String(u.name || '').toLowerCase().trim();
-          if (mBioId && (uId === mBioId || `AZ-${uId}` === mBioId || uId === m.id)) return true;
-          if (uName && mName && (uName === mName || uName.includes(mName) || mName.includes(uName))) return true;
-          return false;
-        });
+        // 1. Extract numeric ID from direct member fields (clientId, customId, biometricId, memberId, id)
+        const candidates = [m.clientId, m.customId, m.biometricId, m.deviceUserId, m.memberId, m.id];
+        for (const c of candidates) {
+          if (!c) continue;
+          const strC = String(c).trim();
+          if (/^\d+$/.test(strC) && Number(strC) > 0 && Number(strC) < 100000) {
+            targetBioId = strC;
+            break;
+          }
+          const mDigits = strC.match(/\d+/g);
+          if (mDigits && mDigits.length > 0) {
+            const lastDigits = mDigits[mDigits.length - 1];
+            const num = parseInt(lastDigits, 10);
+            if (num > 0 && num < 100000) {
+              targetBioId = num.toString();
+              break;
+            }
+          }
+        }
 
-        if (matched) {
-          const targetBioId = matched.user_id;
+        // 2. If not found by candidate ID, try matching against ESSL device users by name or card
+        if (!targetBioId && deviceUsers.length > 0) {
+          const mName = String(m.name || m.fullName || '').toLowerCase().trim();
+          const matched = deviceUsers.find(u => {
+            const uId = String(u.user_id).trim();
+            const uName = String(u.name || '').toLowerCase().trim();
+            if (m.phone && u.card && String(u.card) === String(m.phone)) return true;
+            if (uName && mName && (uName === mName || uName.includes(mName) || mName.includes(uName))) return true;
+            return false;
+          });
+          if (matched) {
+            targetBioId = String(matched.user_id);
+          }
+        }
+
+        if (targetBioId) {
           if (m.biometricId === targetBioId && m.deviceUserId === targetBioId) {
             alreadyMapped++;
           } else {

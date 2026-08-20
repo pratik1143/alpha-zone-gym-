@@ -39,16 +39,26 @@ export const createCheckIn = async (req: Request, res: Response) => {
     const { memberId, method, branch } = req.body;
     const members = await db.getMembers();
     
-    // Find member by ID, biometricId, deviceUserId, phone, or name
+    // Find member by biometricId, deviceUserId, clientId, customId, memberId, phone, or name
     const mStr = String(memberId).toLowerCase().trim();
-    let member = members.find(m => 
-      m.id === memberId || 
-      m.memberId === memberId || 
-      String(m.biometricId) === mStr || 
-      String(m.deviceUserId) === mStr ||
-      m.phone === memberId || 
-      (m.name && m.name.toLowerCase() === mStr)
-    );
+    let member = members.find(m => {
+      const bioId = String(m.biometricId || '').toLowerCase().trim();
+      const devId = String(m.deviceUserId || '').toLowerCase().trim();
+      const cId = String(m.clientId || '').toLowerCase().trim();
+      const custId = String(m.customId || '').toLowerCase().trim();
+      const mId = String(m.memberId || '').toLowerCase().trim();
+      const id = String(m.id || '').toLowerCase().trim();
+
+      if (bioId && bioId === mStr) return true;
+      if (devId && devId === mStr) return true;
+      if (cId && cId === mStr) return true;
+      if (custId && custId === mStr) return true;
+      if (mId && (mId === mStr || mId.endsWith(`-${mStr}`) || mId.endsWith(`0${mStr}`))) return true;
+      if (id && id === mStr) return true;
+      if (m.phone && m.phone === mStr) return true;
+      if (m.name && m.name.toLowerCase().trim() === mStr) return true;
+      return false;
+    });
     
     if (!member) {
       const log = await db.addAttendance({
