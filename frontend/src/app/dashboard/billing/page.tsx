@@ -67,7 +67,7 @@ export default function BillingPage() {
             paid: Number(inv.paid) || Number(inv.amount) || 2500,
             pendingAmount: 0,
             status: inv.status || 'paid',
-            method: inv.paymentMethod || inv.method || 'UPI',
+            method: inv.method || inv.paymentMethod || inv.paymentMode || m.paymentMethod || m.method || 'Cash',
             date: inv.date || inv.createdAt || m.joinDate || todayStr,
             isRealTimeToday: inv.isRealTimeToday || false
           });
@@ -102,12 +102,16 @@ export default function BillingPage() {
   // Derived stats
   const paidPayments = useMemo(() => payments.filter(p => (p.status || '').toLowerCase() === 'paid'), [payments]);
   
+  // Today's Real Collections (includes cash, UPI, card payments collected today)
   const todaysRealCollection = useMemo(() => {
+    const todayYMD = new Date().toISOString().split('T')[0];
+    const todayLocal = new Date().toLocaleDateString('en-CA');
+
     return paidPayments
       .filter(p => {
         if (p.isLegacyImport || p.isHistorical || p.isSample || p.isMock) return false;
         const pDate = String(p.date || p.createdAt || '').split('T')[0];
-        return pDate === todayStr && p.isRealTimeToday;
+        return pDate === todayYMD || pDate === todayLocal || pDate === todayStr || p.isRealTimeToday;
       })
       .reduce((s, p) => s + (Number(p.paid) || Number(p.amount) || 0), 0);
   }, [paidPayments, todayStr]);
