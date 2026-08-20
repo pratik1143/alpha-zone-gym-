@@ -321,10 +321,11 @@ export const useGymStore = create<GymStore>((set, get) => ({
     }
   },
   addMember: async (member) => {
-    await API.post('/members', member);
+    const res = await API.post('/members', member);
     // Always re-fetch from server to avoid duplicates from optimistic local appends
     await get().fetchMembers();
     get().fetchPayments(); // refresh invoices ledger
+    return res.data;
   },
   updateMember: async (id, updates) => {
     const res = await API.put(`/members/${id}`, updates);
