@@ -165,15 +165,19 @@ export default function OverviewCommandCenter() {
   const [sessionCollection, setSessionCollection] = useState(0);
   const [sessionNewClients, setSessionNewClients] = useState(0);
 
-  // Today's Real Collections (strictly 0 unless new payment is collected today)
+  // Today's Real Collections (includes cash, UPI, card payments collected today)
   const todaysRealCollection = useMemo(() => {
+    const todayYMD = new Date().toISOString().split('T')[0];
+    const todayLocal = new Date().toLocaleDateString('en-CA');
+
     const fromPayments = payments
       .filter(p => {
         if (p.isLegacyImport || p.isHistorical || p.isSample || p.isMock) return false;
         const status = String(p.status || p.paymentStatus || 'paid').toLowerCase();
-        if (status !== 'paid') return false;
+        if (status !== 'paid' && status !== 'partial') return false;
+
         const pDate = String(p.date || p.createdAt || '').split('T')[0];
-        return pDate === todayStr && p.isRealTimeToday;
+        return pDate === todayYMD || pDate === todayLocal || p.isRealTimeToday || pDate === todayStr;
       })
       .reduce((sum, p) => sum + (Number(p.paid) || Number(p.amount) || 0), 0);
 

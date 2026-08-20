@@ -20,7 +20,7 @@ interface AddMemberModalProps {
 }
 
 export default function AddMemberModal({ isOpen, onClose }: AddMemberModalProps) {
-  const { addMember, plans, fetchPlans, members } = useGymStore();
+  const { plans, fetchPlans, addMember, addPayment, fetchPayments, members } = useGymStore();
 
   useEffect(() => {
     fetchPlans();
@@ -189,8 +189,13 @@ export default function AddMemberModal({ isOpen, onClose }: AddMemberModalProps)
       };
 
       try {
-        await API.post('/billing', paymentPayload);
-      } catch (e) {}
+        await addPayment(paymentPayload);
+      } catch (e) {
+        try {
+          await API.post('/billing', paymentPayload);
+        } catch (err) {}
+      }
+      fetchPayments();
 
       setCreatedMember(newMember || memberPayload);
       setCreatedInvoice(paymentPayload);
