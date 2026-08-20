@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Search, Filter, MoreHorizontal, Phone, MessageSquare, MapPin, Edit, RefreshCw, Snowflake, Trash2, Eye } from 'lucide-react';
+import { Search, Filter, MoreHorizontal, Phone, MessageSquare, MapPin, Edit, RefreshCw, Snowflake, Trash2, Eye, Fingerprint } from 'lucide-react';
 import { membershipEngine } from '@/lib/engines/membershipEngine';
 import { paymentEngine } from '@/lib/engines/paymentEngine';
 import { calculateRealAttendance, formatDaysLeft, calculateAge } from '@/lib/utils';
@@ -22,11 +22,12 @@ interface MembersTableProps {
   onRenew?: (m: any) => void;
   onFreeze?: (m: any) => void;
   onDelete?: (m: any) => void;
+  onMapBiometric?: (m: any) => void;
 }
 
 export default function MembersTable({ 
   members, search, setSearch, statusFilter, setStatusFilter, onSelectMember, selectedMemberId,
-  onEdit, onRenew, onFreeze, onDelete
+  onEdit, onRenew, onFreeze, onDelete, onMapBiometric
 }: MembersTableProps) {
   const router = useRouter();
 
@@ -367,6 +368,15 @@ export default function MembersTable({
                         className="p-1.5 text-emerald-600 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition-colors cursor-pointer border-0"
                       >
                         <MessageSquare size={14} />
+                      </button>
+
+                      {/* Map Biometric ID Button */}
+                      <button 
+                        title={`Map Biometric ID (Current: #${member.biometricId || 'Unmapped'})`}
+                        onClick={() => onMapBiometric ? onMapBiometric(member) : null}
+                        className="p-1.5 text-purple-600 bg-purple-50 hover:bg-purple-100 rounded-lg transition-colors cursor-pointer border-0"
+                      >
+                        <Fingerprint size={14} />
                       </button>
 
                       {/* Edit Button */}

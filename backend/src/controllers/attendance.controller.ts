@@ -50,21 +50,36 @@ export const createCheckIn = async (req: Request, res: Response) => {
       (m.name && m.name.toLowerCase() === mStr)
     );
     
-    if (!member && members.length > 0) {
-      // Fallback to first active member for unmapped demo cards/fingerprints
-      member = members.find(m => m.status === 'active') || members[0];
-    }
-
     if (!member) {
-      latestPunchEvent = {
-        id: 'punch_' + Date.now(),
-        memberId: memberId || 'UNKNOWN',
-        memberName: 'Unknown Athlete',
+      const log = await db.addAttendance({
+        memberId: `unmapped_bio_${memberId}`,
+        memberName: `Unmapped Biometric User #${memberId}`,
+        checkIn: new Date().toISOString(),
+        checkOut: null,
+        method: method || 'biometric',
+        branch: branch || 'Mohali, Punjab',
         status: 'unknown',
+        reason: `Biometric User ID #${memberId} is not mapped to a member profile yet`,
+        createdAt: new Date().toISOString()
+      });
+
+      latestPunchEvent = {
+        id: log.id || 'punch_' + Date.now(),
+        memberId: `unmapped_bio_${memberId}`,
+        memberName: `Unmapped Biometric User #${memberId}`,
+        memberCode: `ID #${memberId}`,
+        status: 'unknown',
+        reason: `Biometric ID #${memberId} needs mapping`,
         checkIn: new Date().toISOString(),
         createdAt: new Date().toISOString()
       };
-      return res.status(404).json({ error: 'Member not found on this branch roster' });
+
+      return res.status(200).json({
+        success: true,
+        log,
+        memberName: `Unmapped Biometric User #${memberId}`,
+        unmapped: true
+      });
     }
 
     let status = 'granted';
