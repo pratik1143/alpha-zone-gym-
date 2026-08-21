@@ -56,10 +56,10 @@ export default function DashboardPage() {
       console.warn("Firestore employeeAttendance listener error:", err);
     });
 
-    const unsubAtt = onSnapshot(collection(fDb, 'attendance'), (snap) => {
+    const unsubAtt = onSnapshot(collection(fDb, 'attendance_logs'), (snap) => {
       setMemberAttendance(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     }, (err) => {
-      console.warn("Firestore attendance listener error:", err);
+      console.warn("Firestore attendance_logs listener error:", err);
     });
 
     const unsubMembers = onSnapshot(collection(fDb, 'members'), (snap) => {
@@ -105,18 +105,40 @@ export default function DashboardPage() {
     fetchDashboardAnalytics();
   }, [fetchMembers, fetchAttendance, fetchPayments, fetchDashboardAnalytics]);
 
-  // Derive live occupancy count from real gymPresence
+  // Derive live occupancy count from real memberAttendance logs + gymPresence
   useEffect(() => {
-    if (!gymPresence) return;
+    const logs = (memberAttendance && memberAttendance.length > 0) ? memberAttendance : (attendance || []);
     const now = new Date().getTime();
-    const activeNow = gymPresence.filter((p: any) => {
+
+    const presenceInside = (gymPresence || []).filter((p: any) => {
       if (!p.inside) return false;
-      // Auto checkout after 1 hour (3600000 ms)
       const checkInTime = new Date(p.checkIn || p.timestamp || new Date()).getTime();
-      return (now - checkInTime) <= 3600000;
+      return (now - checkInTime) <= 4 * 3600 * 1000;
     }).length;
-    setLiveCount(activeNow);
-  }, [gymPresence]);
+
+    const todayStr = new Date().toISOString().split('T')[0];
+    const insideMap = new Map();
+
+    logs.forEach((a: any) => {
+      const rawDate = a.checkIn || a.timestamp || a.createdAt || '';
+      if (!rawDate) return;
+      const checkInDate = new Date(rawDate);
+      if (checkInDate.toISOString().split('T')[0] !== todayStr && checkInDate.toDateString() !== new Date().toDateString()) return;
+
+      const memberKey = a.memberId || a.memberName;
+      if (!memberKey || a.status === 'denied' || a.status === 'unknown') return;
+
+      const isCheckedOut = !!a.checkOut || a.autoCheckedOut === true || a.status === 'auto_checkout';
+      const checkInTime = checkInDate.getTime();
+
+      if (!isCheckedOut && (now - checkInTime) <= 4 * 3600 * 1000) {
+        insideMap.set(memberKey, true);
+      }
+    });
+
+    const activeCount = Math.max(presenceInside, insideMap.size);
+    setLiveCount(activeCount);
+  }, [gymPresence, memberAttendance, attendance]);
 
   const handleManualUnlock = async () => {
     setGateUnlocked(true);
