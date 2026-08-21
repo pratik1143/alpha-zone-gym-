@@ -112,6 +112,7 @@ export default function RenewalWizardModal({ isOpen, member, onClose }: RenewalW
     whatsapp: 'pending',
     push: 'pending',
   });
+  const [generatedInvoiceData, setGeneratedInvoiceData] = useState<any>(null);
 
   useEffect(() => {
     API.get('/trainers')
@@ -166,8 +167,6 @@ export default function RenewalWizardModal({ isOpen, member, onClose }: RenewalW
   const handlePrevStep = () => {
     setStep(prev => prev - 1);
   };
-
-  const [generatedInvoiceData, setGeneratedInvoiceData] = useState<any>(null);
 
   const handleFinish = async () => {
     setIsCompleting(true);
