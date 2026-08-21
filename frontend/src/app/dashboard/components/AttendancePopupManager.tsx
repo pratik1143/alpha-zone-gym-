@@ -127,11 +127,12 @@ export default function AttendancePopupManager() {
       }
     };
 
-    const memberName = match?.name || data.memberName || 'Athlete';
-    toast(`⚡ ${type === 'duplicate' ? 'Already Inside' : 'Attendance Marked'}: ${memberName}`, {
-      icon: type === 'success' ? '🟢' : type === 'duplicate' ? '🔵' : '🔴',
+    const memberName = match?.name || data.memberName || `ID #${data.biometricId || data.memberId || '1145'}`;
+    const toastTitle = type === 'unknown' ? 'Unmapped Biometric Punch' : (type === 'duplicate' ? 'Already Inside' : 'Attendance Marked');
+    toast(`⚡ ${toastTitle}: ${memberName}`, {
+      icon: type === 'success' ? '🟢' : type === 'duplicate' ? '🔵' : type === 'unknown' ? '🟡' : '🔴',
       duration: 5000,
-      style: { background: '#0F172A', color: '#fff', border: type === 'success' ? '1px solid #22C55E' : type === 'duplicate' ? '1px solid #3B82F6' : '1px solid #EF4444', borderRadius: '16px', fontWeight: 'bold', fontSize: '13px' }
+      style: { background: '#0F172A', color: '#fff', border: type === 'success' ? '1px solid #22C55E' : type === 'duplicate' ? '1px solid #3B82F6' : type === 'unknown' ? '1px solid #F59E0B' : '1px solid #EF4444', borderRadius: '16px', fontWeight: 'bold', fontSize: '13px' }
     });
 
     setQueue(prev => [...prev, popupData]);
