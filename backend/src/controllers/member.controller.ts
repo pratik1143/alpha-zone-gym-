@@ -86,7 +86,8 @@ export const createMember = async (req: Request, res: Response) => {
       joinDate, expiryDate, bloodGroup, emergencyContact, maritalStatus, anniversaryDate, 
       birthdayDate, medicalConditions, fitnessGoal, occupation, address, password, avatarUrl,
       biometricId,
-      paymentStatus, paymentMethod
+      paymentStatus, paymentMethod,
+      price, amount, totalBilled, totalPaid
     } = req.body;
 
     if (!name || !phone) {
@@ -137,9 +138,23 @@ export const createMember = async (req: Request, res: Response) => {
       finalExpiry = calculateBackendPlanExpiry(plan || 'Monthly', startJoinDate, plansList);
     }
 
+    const matchedPlan = plansList.find(p => {
+      const dbName = String(p.name || '').toLowerCase();
+      const dbId = String(p.id || '').toLowerCase();
+      const reqName = String(plan || '').toLowerCase();
+      return dbName === reqName || dbId === reqName;
+    });
+
+    const billedAmount = Number(price || amount || totalBilled || (matchedPlan ? matchedPlan.price : 1000));
+    const paidAmount = Number(totalPaid !== undefined ? totalPaid : (req.body.paid !== undefined ? req.body.paid : billedAmount));
+
     const member = await db.addMember({
       uid, // align document ID with Auth UID
       name, phone, email: loginEmail, plan: plan || 'Monthly',
+      price: billedAmount,
+      amount: billedAmount,
+      totalBilled: billedAmount,
+      totalPaid: paidAmount,
       joinDate: startJoinDate,
       expiryDate: finalExpiry,
       status: 'active', branch: branch || 'Mohali, Punjab', trainer: trainer || '',
@@ -161,21 +176,9 @@ export const createMember = async (req: Request, res: Response) => {
     });
 
     // Also auto-generate an invoice for new member
-    const matchedPlan = plansList.find(p => {
-      const dbName = String(p.name || '').toLowerCase();
-      const dbId = String(p.id || '').toLowerCase();
-      const reqName = String(plan || '').toLowerCase();
-      return (
-        dbName === reqName ||
-        dbId === reqName ||
-        dbName.includes(reqName) ||
-        reqName.includes(dbName)
-      );
-    });
-    const amt = matchedPlan ? matchedPlan.price : 2500;
     const payment = await db.addPayment({
       memberId: member.id, memberName: member.name,
-      amount: amt, plan: plan || 'Monthly',
+      amount: billedAmount, paid: paidAmount, plan: plan || 'Monthly',
       method: paymentMethod || 'UPI',
       status: paymentStatus || 'paid'
     });
