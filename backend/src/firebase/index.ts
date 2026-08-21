@@ -10,6 +10,8 @@ export let mockBranches = [
   { id: 'b1', name: 'Alpha Gym - Mohali', city: 'Mohali', members: 0, revenue: 0, attendance: 0, status: 'active', manager: 'Karan Verma', capacity: 500 },
 ];
 
+const pendingInvoicesMap = new Map<string, Promise<any>>();
+
 export let mockMembers: any[] = [
   {
     id: 'm1',
@@ -523,6 +525,7 @@ export const db = {
     const newMember = {
       ...member,
       memberId,
+      startDate: member.startDate || member.joinDate || new Date().toISOString().split('T')[0],
       daysLeft: Number(member.daysLeft) || 30,
       attendanceCount: Number(member.attendanceCount) || 0,
       avatar: member.avatar || '',
@@ -863,71 +866,86 @@ export const db = {
 
     const idempotencyKey = payment.idempotencyKey || `pay_${payment.memberId}_${payment.plan}_${payment.date || todayStr}`;
 
-    const newPayment = {
-      ...payment,
-      idempotencyKey,
-      invoice: payment.invoiceNumber || payment.invoice || ('INV-' + Math.floor(100000 + Math.random() * 900000)),
-      invoiceNumber: payment.invoiceNumber || payment.invoice || ('INV-' + Math.floor(100000 + Math.random() * 900000)),
-      date: payment.date || todayStr,
-      originalAmount: origAmt,
-      discountAmount: discAmt,
-      discount: discAmt,
-      taxAmount: taxAmt,
-      gst: taxAmt,
-      otherCharges: othAmt,
-      netPayable: netPayable,
-      amount: netPayable,
-      amountPaid: amountPaid,
-      paid: amountPaid,
-      outstandingAmount: outstanding,
-      pendingAmount: outstanding,
-      status: status,
-      createdAt: payment.createdAt || new Date().toISOString()
-    };
+    if (pendingInvoicesMap.has(idempotencyKey)) {
+      console.log(`[Concurrent Lock Protection] Duplicate concurrent call locked for member ${payment.memberId}, awaiting original result...`);
+      return await pendingInvoicesMap.get(idempotencyKey);
+    }
 
-    const firestore = getFirestoreDb();
-    if (firestore) {
-      // Idempotency check: verify if an invoice with same idempotencyKey or matching memberId + plan + date exists
-      const existingSnap = await firestore.collection('payments')
-        .where('memberId', '==', payment.memberId)
-        .where('date', '==', newPayment.date)
-        .get();
+    const processPayment = async () => {
+      const newPayment = {
+        ...payment,
+        idempotencyKey,
+        invoice: payment.invoiceNumber || payment.invoice || ('INV-' + Math.floor(100000 + Math.random() * 900000)),
+        invoiceNumber: payment.invoiceNumber || payment.invoice || ('INV-' + Math.floor(100000 + Math.random() * 900000)),
+        date: payment.date || todayStr,
+        originalAmount: origAmt,
+        discountAmount: discAmt,
+        discount: discAmt,
+        taxAmount: taxAmt,
+        gst: taxAmt,
+        otherCharges: othAmt,
+        netPayable: netPayable,
+        amount: netPayable,
+        amountPaid: amountPaid,
+        paid: amountPaid,
+        outstandingAmount: outstanding,
+        pendingAmount: outstanding,
+        status: status,
+        createdAt: payment.createdAt || new Date().toISOString()
+      };
 
-      const duplicate = existingSnap.docs.find(doc => {
-        const d = doc.data();
-        if (d.idempotencyKey && d.idempotencyKey === idempotencyKey) return true;
-        const planMatch = String(d.plan || '').toLowerCase() === String(payment.plan || '').toLowerCase();
-        const timeDiff = Math.abs(new Date(d.createdAt || 0).getTime() - new Date(newPayment.createdAt).getTime());
-        return planMatch && timeDiff < 300000; // created within 5 minutes
-      });
+      const firestore = getFirestoreDb();
+      if (firestore) {
+        // Idempotency check: verify if an invoice with same idempotencyKey or matching memberId + plan + date exists
+        const existingSnap = await firestore.collection('payments')
+          .where('memberId', '==', payment.memberId)
+          .where('date', '==', newPayment.date)
+          .get();
 
-      if (duplicate) {
-        console.log(`[Idempotency Protection] Duplicate invoice blocked for member ${payment.memberId}, returning existing invoice ${duplicate.id}`);
-        return { id: duplicate.id, ...duplicate.data() };
+        const duplicate = existingSnap.docs.find(doc => {
+          const d = doc.data();
+          if (d.idempotencyKey && d.idempotencyKey === idempotencyKey) return true;
+          const planMatch = String(d.plan || '').toLowerCase() === String(payment.plan || '').toLowerCase();
+          const timeDiff = Math.abs(new Date(d.createdAt || 0).getTime() - new Date(newPayment.createdAt).getTime());
+          return planMatch && timeDiff < 300000; // created within 5 minutes
+        });
+
+        if (duplicate) {
+          console.log(`[Idempotency Protection] Duplicate invoice blocked for member ${payment.memberId}, returning existing invoice ${duplicate.id}`);
+          return { id: duplicate.id, ...duplicate.data() };
+        }
+
+        const docRef = await firestore.collection('payments').add(newPayment);
+        return { id: docRef.id, ...newPayment };
       }
 
-      const docRef = await firestore.collection('payments').add(newPayment);
-      return { id: docRef.id, ...newPayment };
+      // Mock Mode fallback
+      const mockDuplicate = mockPayments.find(p => {
+        if (p.idempotencyKey && p.idempotencyKey === idempotencyKey) return true;
+        const sameMember = p.memberId === payment.memberId;
+        const samePlan = String(p.plan || '').toLowerCase() === String(payment.plan || '').toLowerCase();
+        const sameDate = p.date === newPayment.date;
+        return sameMember && samePlan && sameDate;
+      });
+
+      if (mockDuplicate) {
+        console.log(`[Mock Idempotency Protection] Duplicate invoice blocked, returning existing mock invoice ${mockDuplicate.invoice}`);
+        return mockDuplicate;
+      }
+
+      const mockItem = { id: 'p_' + Date.now(), ...newPayment };
+      mockPayments.unshift(mockItem);
+      saveMockDb();
+      return mockItem;
+    };
+
+    const promise = processPayment();
+    pendingInvoicesMap.set(idempotencyKey, promise);
+    try {
+      return await promise;
+    } finally {
+      pendingInvoicesMap.delete(idempotencyKey);
     }
-
-    // Mock Mode fallback
-    const mockDuplicate = mockPayments.find(p => {
-      if (p.idempotencyKey && p.idempotencyKey === idempotencyKey) return true;
-      const sameMember = p.memberId === payment.memberId;
-      const samePlan = String(p.plan || '').toLowerCase() === String(payment.plan || '').toLowerCase();
-      const sameDate = p.date === newPayment.date;
-      return sameMember && samePlan && sameDate;
-    });
-
-    if (mockDuplicate) {
-      console.log(`[Mock Idempotency Protection] Duplicate invoice blocked, returning existing mock invoice ${mockDuplicate.invoice}`);
-      return mockDuplicate;
-    }
-
-    const mockItem = { id: 'p_' + Date.now(), ...newPayment };
-    mockPayments.unshift(mockItem);
-    saveMockDb();
-    return mockItem;
   },
 
   cleanupDuplicateInvoices: async (): Promise<any> => {

@@ -207,7 +207,7 @@ export const membershipEngine = {
 
     const effectiveExpiry = updates.expiryDate || member.expiryDate;
     const computedDaysLeft = membershipEngine.calculateDaysLeft(effectiveExpiry);
-    const computedStatus = membershipEngine.calculateMembershipStatus(computedDaysLeft, member.status);
+    const computedStatus = membershipEngine.calculateMembershipStatus(effectiveExpiry, member.startDate || member.joinDate, member.status);
 
     if (!member.ai || member.ai.daysLeft !== computedDaysLeft) {
       if (!updates.ai) updates.ai = { ...(member.ai || {}) };

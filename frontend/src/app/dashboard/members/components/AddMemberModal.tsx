@@ -34,6 +34,7 @@ export default function AddMemberModal({ isOpen, onClose }: AddMemberModalProps)
   const [fullName, setFullName] = useState('');
   const [mobile, setMobile] = useState('');
   const [email, setEmail] = useState('');
+  const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
 
   const activePlans = plans && plans.length > 0 ? plans : [
@@ -371,19 +372,32 @@ export default function AddMemberModal({ isOpen, onClose }: AddMemberModalProps)
                       </div>
                     </div>
 
-                    {/* Trainer Selector */}
-                    <div>
-                      <label className="block text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1.5">Personal Trainer (Optional)</label>
-                      <select 
-                        value={trainer} 
-                        onChange={(e) => setTrainer(e.target.value)}
-                        className="w-full h-12 bg-slate-50 border border-slate-300 rounded-xl px-4 text-sm font-bold text-slate-900 focus:outline-none focus:border-blue-600 focus:bg-white transition-all cursor-pointer"
-                      >
-                        <option value="">No PT Assigned</option>
-                        <option value="Karan Verma">Karan Verma (Master Coach)</option>
-                        <option value="Sneha Kapoor">Sneha Kapoor (Fitness Trainer)</option>
-                        <option value="Vikram Singh">Vikram Singh (Bodybuilding Spec)</option>
-                      </select>
+                    <div className="grid grid-cols-2 gap-4">
+                      {/* Start Date Selector */}
+                      <div>
+                        <label className="block text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1.5">Membership Start Date *</label>
+                        <input 
+                          type="date"
+                          value={startDate}
+                          onChange={(e) => setStartDate(e.target.value)}
+                          className="w-full h-12 bg-slate-50 border border-slate-300 rounded-xl px-4 text-sm font-bold text-slate-900 focus:outline-none focus:border-blue-600 focus:bg-white transition-all cursor-pointer"
+                        />
+                      </div>
+
+                      {/* Trainer Selector */}
+                      <div>
+                        <label className="block text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1.5">Personal Trainer (Optional)</label>
+                        <select 
+                          value={trainer} 
+                          onChange={(e) => setTrainer(e.target.value)}
+                          className="w-full h-12 bg-slate-50 border border-slate-300 rounded-xl px-4 text-sm font-bold text-slate-900 focus:outline-none focus:border-blue-600 focus:bg-white transition-all cursor-pointer"
+                        >
+                          <option value="">No PT Assigned</option>
+                          <option value="Karan Verma">Karan Verma (Master Coach)</option>
+                          <option value="Sneha Kapoor">Sneha Kapoor (Fitness Trainer)</option>
+                          <option value="Vikram Singh">Vikram Singh (Bodybuilding Spec)</option>
+                        </select>
+                      </div>
                     </div>
                   </div>
                 </div>

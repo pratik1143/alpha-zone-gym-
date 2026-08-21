@@ -103,6 +103,8 @@ export default function RenewalWizardModal({ isOpen, member, onClose }: RenewalW
   const [gst, setGst] = useState(0);
   const [admissionFee, setAdmissionFee] = useState(0);
   const [outstanding, setOutstanding] = useState(member?.outstandingBalance || 0);
+  const [startDateOption, setStartDateOption] = useState<'extend' | 'today' | 'custom'>('extend');
+  const [customStartDate, setCustomStartDate] = useState<string>(new Date().toISOString().split('T')[0]);
 
   // Step 3 states
   const [assignedTrainer, setAssignedTrainer] = useState(member?.trainer || '');
@@ -153,8 +155,14 @@ export default function RenewalWizardModal({ isOpen, member, onClose }: RenewalW
   const totalAmount = Math.max(0, Number(planPrice) + Number(admissionFee) + Number(outstanding) - totalDiscount + gstAmount);
 
   const getRenewalStartDate = () => {
-    const curExpiry = member?.expiryDate;
     const today = new Date().toISOString().split('T')[0];
+    const curExpiry = member?.expiryDate;
+    if (startDateOption === 'custom' && customStartDate) {
+      return customStartDate;
+    }
+    if (startDateOption === 'today') {
+      return today;
+    }
     if (curExpiry && curExpiry >= today) {
       const eDate = new Date(curExpiry);
       eDate.setDate(eDate.getDate() + 1);
@@ -360,6 +368,67 @@ export default function RenewalWizardModal({ isOpen, member, onClose }: RenewalW
               >
                 <h4 className="text-sm font-black text-slate-800">Payment Configuration</h4>
                 
+                {/* Renewal Start Date Option */}
+                <div>
+                  <label className="text-[9px] font-bold text-slate-500 uppercase block mb-1">Renewal Start Date Option</label>
+                  <div className="grid grid-cols-3 gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setStartDateOption('extend')}
+                      className={`py-2 px-2 text-[10px] font-bold rounded-xl border text-left transition-all ${
+                        startDateOption === 'extend'
+                          ? 'border-indigo-600 bg-indigo-50 text-indigo-900 font-extrabold shadow-sm'
+                          : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-600'
+                      }`}
+                    >
+                      <div className="truncate">📅 Extend Expiry</div>
+                      <div className="text-[9px] opacity-70 font-normal mt-0.5 truncate">{member?.expiryDate || 'Expiry'}</div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setStartDateOption('today')}
+                      className={`py-2 px-2 text-[10px] font-bold rounded-xl border text-left transition-all ${
+                        startDateOption === 'today'
+                          ? 'border-indigo-600 bg-indigo-50 text-indigo-900 font-extrabold shadow-sm'
+                          : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-600'
+                      }`}
+                    >
+                      <div className="truncate">⚡ Start Today</div>
+                      <div className="text-[9px] opacity-70 font-normal mt-0.5 truncate">{new Date().toISOString().split('T')[0]}</div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setStartDateOption('custom')}
+                      className={`py-2 px-2 text-[10px] font-bold rounded-xl border text-left transition-all ${
+                        startDateOption === 'custom'
+                          ? 'border-indigo-600 bg-indigo-50 text-indigo-900 font-extrabold shadow-sm'
+                          : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-600'
+                      }`}
+                    >
+                      <div className="truncate">✏️ Custom Date</div>
+                      <div className="text-[9px] opacity-70 font-normal mt-0.5 truncate">{customStartDate || 'Pick Date'}</div>
+                    </button>
+                  </div>
+
+                  {startDateOption === 'custom' && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: 'auto', opacity: 1 }}
+                      className="mt-2 p-2.5 bg-indigo-50/60 border border-indigo-100 rounded-xl space-y-1"
+                    >
+                      <label className="text-[9px] font-bold text-indigo-900 uppercase block">Select Custom Start Date</label>
+                      <input 
+                        type="date"
+                        value={customStartDate}
+                        onChange={e => setCustomStartDate(e.target.value)}
+                        className="w-full px-3 py-1.5 bg-white border border-indigo-200 rounded-lg text-xs font-mono font-bold text-slate-900 focus:outline-none focus:border-indigo-500"
+                      />
+                    </motion.div>
+                  )}
+                </div>
+
                 {/* Method selector */}
                 <div>
                   <label className="text-[9px] font-bold text-slate-500 uppercase block mb-1.5">Payment Method</label>

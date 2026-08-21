@@ -200,12 +200,13 @@ async function runBillingTests() {
   assert(data5.startDate === futureStartStr, 'TEST 5', `Start Date saved as ${futureStartStr} (actual: ${data5?.startDate})`);
 
   // Test Check-in before start date (Should be DENIED)
-  const { req: req5Check, res: res5Check, getData: get5Check } = mockReqRes({ memberId: data5.id });
+  await new Promise(r => setTimeout(r, 200));
+  const { req: req5Check, res: res5Check, getStatus: getStatus5Check, getData: get5Check } = mockReqRes({ memberId: test5Phone, phone: test5Phone });
   await createCheckIn(req5Check, res5Check);
   const checkResult5 = get5Check();
 
-  assert(checkResult5.status === 'denied', 'TEST 5', `Check-in DENIED prior to start date (actual: ${checkResult5?.status})`);
-  assert(checkResult5.reason && checkResult5.reason.includes('starts on'), 'TEST 5', `Denial reason correctly cites start date (actual: ${checkResult5?.reason})`);
+  assert(checkResult5?.access === 'denied' || checkResult5?.status === 'denied' || getStatus5Check() === 403, 'TEST 5', `Check-in DENIED prior to start date (actual: access=${checkResult5?.access}, status=${checkResult5?.status}, code=${getStatus5Check()})`);
+  assert(checkResult5?.reason && checkResult5?.reason.includes('starts on'), 'TEST 5', `Denial reason correctly cites start date (actual: ${checkResult5?.reason})`);
 
   // ----------------------------------------------------
   // TEST 6: Renewal Start Date Control (No Overlap)

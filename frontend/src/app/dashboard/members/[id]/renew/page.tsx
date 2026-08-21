@@ -54,7 +54,8 @@ export default function RenewMembershipPage() {
   const [gst, setGst] = useState(0);
   const [admissionFee, setAdmissionFee] = useState(0);
   const [outstanding, setOutstanding] = useState(0);
-  const [startDateOption, setStartDateOption] = useState<'extend' | 'today'>('extend');
+  const [startDateOption, setStartDateOption] = useState<'extend' | 'today' | 'custom'>('extend');
+  const [customStartDate, setCustomStartDate] = useState<string>(new Date().toISOString().split('T')[0]);
 
   // Step 3 states
   const [assignedTrainer, setAssignedTrainer] = useState('');
@@ -148,11 +149,21 @@ export default function RenewMembershipPage() {
   const gstAmount = Number(gst);
   const totalAmount = Math.max(0, Number(planPrice) + Number(admissionFee) + Number(outstanding) - totalDiscount + gstAmount);
 
-  // Live Expiry Date calculation
-  const calculateNewExpiry = () => {
+  const getEffectiveStartDate = () => {
     const today = new Date().toISOString().split('T')[0];
     const curExpiry = member?.expiryDate;
-    const startBase = (startDateOption === 'extend' && curExpiry && curExpiry > today) ? curExpiry : today;
+    if (startDateOption === 'custom' && customStartDate) {
+      return customStartDate;
+    }
+    if (startDateOption === 'extend' && curExpiry && curExpiry > today) {
+      return curExpiry;
+    }
+    return today;
+  };
+
+  // Live Expiry Date calculation
+  const calculateNewExpiry = () => {
+    const startBase = getEffectiveStartDate();
     const planName = selectedPlanId === 'custom' ? `${customDuration} Months` : currentPlan.name;
     return membershipEngine.calculatePlanExpiryDate(planName, startBase, PLANS);
   };
@@ -167,7 +178,7 @@ export default function RenewMembershipPage() {
       const todayStr = new Date().toISOString().split('T')[0];
       const planName = selectedPlanId === 'custom' ? `Custom (${customDuration}m)` : currentPlan.name;
       const daysLeftCount = membershipEngine.calculateDaysLeft(newExpiryString);
-      const startDateVal = (startDateOption === 'extend' && member?.expiryDate && member.expiryDate > todayStr) ? member.expiryDate : todayStr;
+      const startDateVal = getEffectiveStartDate();
 
       const invoiceData = {
         memberId: member.id,
@@ -418,33 +429,68 @@ export default function RenewMembershipPage() {
 
                   <div>
                     <label className="text-[10px] font-black text-slate-500 uppercase block mb-1.5">Renewal Start Date Option</label>
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-3 gap-2.5">
                       <button
                         type="button"
                         onClick={() => setStartDateOption('extend')}
-                        className={`p-3.5 rounded-2xl border text-xs font-bold text-left cursor-pointer transition-all ${
+                        className={`p-3 rounded-2xl border text-xs font-bold text-left cursor-pointer transition-all ${
                           startDateOption === 'extend'
                             ? 'bg-blue-50 border-2 border-blue-600 text-blue-900 shadow-sm'
                             : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
                         }`}
                       >
-                        <div className="font-extrabold">📅 Extend from Expiry</div>
-                        <div className="text-[10px] opacity-70 font-normal mt-0.5">{member?.expiryDate || 'Current Expiry'}</div>
+                        <div className="font-extrabold truncate">📅 Extend Expiry</div>
+                        <div className="text-[10px] opacity-70 font-normal mt-0.5 truncate">{member?.expiryDate || 'Current Expiry'}</div>
                       </button>
 
                       <button
                         type="button"
                         onClick={() => setStartDateOption('today')}
-                        className={`p-3.5 rounded-2xl border text-xs font-bold text-left cursor-pointer transition-all ${
+                        className={`p-3 rounded-2xl border text-xs font-bold text-left cursor-pointer transition-all ${
                           startDateOption === 'today'
                             ? 'bg-blue-50 border-2 border-blue-600 text-blue-900 shadow-sm'
                             : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
                         }`}
                       >
-                        <div className="font-extrabold">⚡ Start Today</div>
-                        <div className="text-[10px] opacity-70 font-normal mt-0.5">{new Date().toISOString().split('T')[0]}</div>
+                        <div className="font-extrabold truncate">⚡ Start Today</div>
+                        <div className="text-[10px] opacity-70 font-normal mt-0.5 truncate">{new Date().toISOString().split('T')[0]}</div>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setStartDateOption('custom')}
+                        className={`p-3 rounded-2xl border text-xs font-bold text-left cursor-pointer transition-all ${
+                          startDateOption === 'custom'
+                            ? 'bg-blue-50 border-2 border-blue-600 text-blue-900 shadow-sm'
+                            : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                        }`}
+                      >
+                        <div className="font-extrabold truncate">✏️ Custom Date</div>
+                        <div className="text-[10px] opacity-70 font-normal mt-0.5 truncate">{customStartDate || 'Pick Date'}</div>
                       </button>
                     </div>
+
+                    {startDateOption === 'custom' && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        className="mt-3 p-3.5 bg-blue-50/70 border border-blue-200 rounded-2xl space-y-2"
+                      >
+                        <div className="flex items-center justify-between">
+                          <label className="text-[10px] font-black text-blue-900 uppercase tracking-wider block">Custom Membership Start Date</label>
+                          <span className="text-[10px] font-bold text-blue-600">Auto Calculates Below</span>
+                        </div>
+                        <input 
+                          type="date"
+                          value={customStartDate}
+                          onChange={(e) => setCustomStartDate(e.target.value)}
+                          className="w-full p-2.5 bg-white border border-blue-300 rounded-xl text-xs font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                        />
+                        <p className="text-[10px] text-blue-700 font-medium">
+                          Starts on <span className="font-bold font-mono">{customStartDate}</span>. Expiry and days left update instantly.
+                        </p>
+                      </motion.div>
+                    )}
                   </div>
 
                   <div>
