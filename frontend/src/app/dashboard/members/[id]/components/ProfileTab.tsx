@@ -30,9 +30,14 @@ export default function ProfileTab({ member }: { member: any }) {
 
       await updateDoc(doc(db, 'members', member.id), {
         expiryDate: targetDateStr,
+        daysLeft: diffDays,
         status: newStatus,
         updatedAt: new Date().toISOString(),
       });
+
+      member.expiryDate = targetDateStr;
+      member.daysLeft = diffDays;
+      member.status = newStatus;
 
       toast.success(`Expiry date updated to ${targetDateStr}! (${diffDays > 0 ? `${diffDays} days remaining` : 'Expired'})`);
       setShowEditExpiryModal(false);

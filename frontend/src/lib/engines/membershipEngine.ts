@@ -20,7 +20,7 @@ export const membershipEngine = {
     if (manualStatus === 'Blocked') return 'Blocked';
     if (manualStatus === 'Frozen') return 'Frozen';
     
-    if (daysLeft < 0) return 'Expired';
+    if (daysLeft <= 0) return 'Expired';
     if (daysLeft <= 15) return 'Expiring Soon';
     return 'Active';
   },

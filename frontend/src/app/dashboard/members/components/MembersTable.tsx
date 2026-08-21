@@ -36,7 +36,7 @@ export default function MembersTable({
     if (m.status === 'frozen') return 'frozen';
     // ── SSOT: Always use membershipEngine ────────────────────────────
     const days = membershipEngine.calculateDaysLeft(m.expiryDate);
-    if (days < 0) return 'expired';
+    if (days <= 0) return 'expired';
     if (days <= 7) return 'urgent';
     if (days <= 30) return 'expiring_soon';
     return 'active';
