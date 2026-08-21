@@ -15,6 +15,7 @@ import { formatCurrency, formatDate, getInitials } from '@/lib/utils';
 import { useGymStore } from '@/store';
 import toast from 'react-hot-toast';
 import InvoiceBuilderModal from './components/InvoiceBuilderModal';
+import OfficialInvoiceReceipt from '../components/OfficialInvoiceReceipt';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -543,62 +544,40 @@ export default function BillingPage() {
         members={members}
       />
 
-      {/* ── MODAL 2: PRINTABLE RECEIPT PREVIEW MODAL ── */}
+      {/* ── MODAL 2: UNIVERSAL OFFICIAL INVOICE PREVIEW MODAL ── */}
       <AnimatePresence>
         {selectedReceipt && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setSelectedReceipt(null)} />
-            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="relative bg-white rounded-3xl shadow-2xl border border-slate-200 w-full max-w-md overflow-hidden text-left z-10">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setSelectedReceipt(null)} />
+            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="relative bg-white rounded-3xl shadow-2xl border border-slate-200 w-full max-w-3xl overflow-hidden text-left z-10 p-6 space-y-4 max-h-[92vh] overflow-y-auto">
               
-              {/* Receipt Header */}
-              <div className="bg-slate-900 p-6 text-white text-center relative">
-                <button onClick={() => setSelectedReceipt(null)} className="absolute right-4 top-4 text-white/80 hover:text-white border-none cursor-pointer bg-transparent"><X size={18}/></button>
-                <div className="w-12 h-12 bg-amber-400 text-slate-900 rounded-2xl flex items-center justify-center font-black text-xl mx-auto mb-2">AZ</div>
-                <h3 className="font-extrabold text-lg tracking-tight">ALPHA ZONE GYM</h3>
-                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">Official Payment Receipt</p>
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <h3 className="font-extrabold text-slate-900 text-base">Official Tax Invoice &amp; Receipt</h3>
+                <button onClick={() => setSelectedReceipt(null)} className="text-slate-400 hover:text-slate-700 border-none cursor-pointer bg-transparent"><X size={20}/></button>
               </div>
 
-              {/* Receipt Body */}
-              <div className="p-6 space-y-4 text-xs font-semibold text-slate-700">
-                <div className="flex justify-between border-b border-slate-100 pb-3">
-                  <span className="text-slate-400 uppercase tracking-wider text-[10px] font-bold">Invoice Number</span>
-                  <span className="font-mono font-black text-slate-900">{selectedReceipt.invoice || 'INV-000000'}</span>
-                </div>
+              {/* Universal Official Invoice Receipt Template */}
+              <OfficialInvoiceReceipt 
+                invoice={selectedReceipt} 
+                member={members.find((m: any) => m.id === selectedReceipt.memberId || m.memberId === selectedReceipt.memberId) || {
+                  name: selectedReceipt.memberName,
+                  phone: selectedReceipt.memberPhone,
+                  memberId: selectedReceipt.memberId,
+                  biometricId: selectedReceipt.memberId,
+                  plan: selectedReceipt.plan,
+                  joinDate: selectedReceipt.date
+                }}
+              />
 
-                <div className="flex justify-between border-b border-slate-100 pb-3">
-                  <span className="text-slate-400 uppercase tracking-wider text-[10px] font-bold">Client Name</span>
-                  <span className="font-bold text-slate-900">{selectedReceipt.memberName || 'Member'}</span>
-                </div>
-
-                <div className="flex justify-between border-b border-slate-100 pb-3">
-                  <span className="text-slate-400 uppercase tracking-wider text-[10px] font-bold">Plan Description</span>
-                  <span className="font-bold text-slate-900">{selectedReceipt.plan || 'Monthly Standard'}</span>
-                </div>
-
-                <div className="flex justify-between border-b border-slate-100 pb-3">
-                  <span className="text-slate-400 uppercase tracking-wider text-[10px] font-bold">Payment Method</span>
-                  <span className="font-bold text-slate-900">{selectedReceipt.method || 'UPI'}</span>
-                </div>
-
-                <div className="flex justify-between border-b border-slate-100 pb-3">
-                  <span className="text-slate-400 uppercase tracking-wider text-[10px] font-bold">Date &amp; Time</span>
-                  <span className="font-bold text-slate-900">{selectedReceipt.date || todayStr}</span>
-                </div>
-
-                <div className="bg-slate-50 rounded-2xl p-4 flex justify-between items-center border border-slate-200/80">
-                  <span className="font-extrabold text-slate-900 text-sm">Total Paid</span>
-                  <span className="text-2xl font-black text-emerald-600">₹{(Number(selectedReceipt.paid) || Number(selectedReceipt.amount) || 0).toLocaleString('en-IN')}</span>
-                </div>
-
-                <div className="pt-2 flex gap-3">
-                  <button onClick={() => window.print()} className="flex-1 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer border-none">
-                    <Printer size={14} /> Print Receipt
-                  </button>
-                  <button onClick={() => handleShareWhatsApp(selectedReceipt)} className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer border-none shadow-md shadow-emerald-600/30">
-                    <Share2 size={14} /> WhatsApp
-                  </button>
-                </div>
+              <div className="pt-2 flex gap-3 max-w-[800px] mx-auto">
+                <button onClick={() => window.print()} className="flex-1 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs flex items-center justify-center gap-1.5 cursor-pointer border-none shadow-md">
+                  <Printer size={15} /> Print Official Invoice
+                </button>
+                <button onClick={() => handleShareWhatsApp(selectedReceipt)} className="py-3 px-6 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-extrabold text-xs flex items-center justify-center gap-1.5 cursor-pointer border border-emerald-200">
+                  <Share2 size={15} /> Share WhatsApp
+                </button>
               </div>
+
             </motion.div>
           </div>
         )}

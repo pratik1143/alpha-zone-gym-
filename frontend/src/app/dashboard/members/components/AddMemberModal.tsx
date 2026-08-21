@@ -11,6 +11,7 @@ import {
 import toast from 'react-hot-toast';
 import { useGymStore } from '@/store';
 import SmartPhotoCapture from '@/app/dashboard/components/SmartPhotoCapture';
+import OfficialInvoiceReceipt from '@/app/dashboard/components/OfficialInvoiceReceipt';
 import API from '@/services/api';
 import { membershipEngine } from '@/lib/engines/membershipEngine';
 
@@ -647,78 +648,37 @@ export default function AddMemberModal({ isOpen, onClose }: AddMemberModalProps)
               </div>
             )}
 
-            {/* STEP 5: Invoice & Printable Receipt */}
+            {/* STEP 5: Official Invoice & Printable Receipt */}
             {step === 5 && (
-              <div className="max-w-2xl mx-auto space-y-6 animate-fade-in">
+              <div className="max-w-3xl mx-auto space-y-6 animate-fade-in">
                 <div className="text-center mb-4">
                   <span className="px-3.5 py-1 bg-emerald-50 border border-emerald-200 text-emerald-700 text-[10px] font-extrabold uppercase tracking-widest rounded-full inline-block mb-2">
                     Registration Completed! 🎉
                   </span>
-                  <h3 className="text-2xl font-black text-slate-900 tracking-tight">Official Receipt & Member Invoice</h3>
+                  <h3 className="text-2xl font-black text-slate-900 tracking-tight">Official Tax Invoice &amp; Payment Receipt</h3>
                   <p className="text-xs text-slate-500 mt-1">Invoice registered in Today's Collection. Print or download PDF below.</p>
                 </div>
 
-                {/* Printable Invoice Card */}
-                <div id="printable-invoice" className="bg-white text-slate-900 p-8 rounded-3xl shadow-xl border border-slate-200 space-y-6">
-                  {/* Header */}
-                  <div className="flex justify-between items-start border-b border-slate-200 pb-4">
-                    <div>
-                      <img src="/gymlogo.png" alt="Alpha Zone" className="h-10 w-auto object-contain mb-1" />
-                      <div className="text-[10px] font-extrabold text-slate-500 uppercase tracking-widest">Main Branch · Mohali, Punjab</div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-lg font-black text-blue-700 font-mono">{createdInvoice?.invoice || 'INV-849201'}</div>
-                      <div className="text-[10px] font-bold text-slate-400 uppercase">Date: {createdInvoice?.date || new Date().toLocaleDateString()}</div>
-                    </div>
-                  </div>
-
-                  {/* Member & Plan Info */}
-                  <div className="grid grid-cols-2 gap-4 text-xs">
-                    <div>
-                      <span className="text-[9px] font-black uppercase text-slate-400 block">Billed To</span>
-                      <span className="font-extrabold text-sm text-slate-900">{createdMember?.name || fullName}</span>
-                      <span className="block text-slate-500 font-medium">{createdMember?.phone || mobile}</span>
-                    </div>
-                    <div className="text-right">
-                      <span className="text-[9px] font-black uppercase text-slate-400 block">Biometric ID</span>
-                      <span className="font-mono font-black text-blue-700 text-sm">#{createdMember?.biometricId || biometricId}</span>
-                    </div>
-                  </div>
-
-                  {/* Itemized Breakdown Table */}
-                  <table className="w-full text-xs text-left border-collapse">
-                    <thead>
-                      <tr className="border-b border-slate-200 text-[9px] font-black uppercase text-slate-400">
-                        <th className="py-2">Description</th>
-                        <th className="py-2 text-right">Amount</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr className="border-b border-slate-100">
-                        <td className="py-3 font-bold text-slate-900">
-                          {createdInvoice?.plan || selectedPlan?.name} Membership
-                          <span className="block text-[9px] font-normal text-slate-500">Valid: {createdMember?.joinDate} to {createdMember?.expiryDate}</span>
-                        </td>
-                        <td className="py-3 text-right font-mono font-bold text-slate-900">₹{createdInvoice?.amount || amountPaid}</td>
-                      </tr>
-                    </tbody>
-                  </table>
-
-                  {/* Summary Total */}
-                  <div className="flex justify-between items-center bg-slate-50 p-4 rounded-2xl border border-slate-200">
-                    <div>
-                      <span className="text-[9px] font-black uppercase text-slate-400 block">Payment Method</span>
-                      <span className="font-black text-slate-900 uppercase text-xs">{createdInvoice?.method || paymentMethod}</span>
-                    </div>
-                    <div className="text-right">
-                      <span className="text-[9px] font-black uppercase text-slate-400 block">Total Paid</span>
-                      <span className="text-xl font-black text-emerald-600 font-mono">₹{createdInvoice?.paid || amountPaid}</span>
-                    </div>
-                  </div>
-                </div>
+                {/* Universal Official Invoice Template */}
+                <OfficialInvoiceReceipt 
+                  invoice={createdInvoice} 
+                  member={createdMember || {
+                    memberId: biometricId,
+                    biometricId: biometricId,
+                    name: fullName,
+                    phone: mobile,
+                    email: email,
+                    plan: selectedPlan?.name,
+                    joinDate: new Date().toISOString().split('T')[0],
+                    expiryDate: new Date(Date.now() + 90*24*60*60*1000).toISOString().split('T')[0],
+                    totalBilled: amountPaid,
+                    totalPaid: amountPaid,
+                    paymentMethod: paymentMethod
+                  }} 
+                />
 
                 {/* Print & Download Action Buttons */}
-                <div className="flex gap-4">
+                <div className="flex gap-4 max-w-[800px] mx-auto">
                   <button
                     type="button"
                     onClick={handlePrintReceipt}

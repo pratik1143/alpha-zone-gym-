@@ -293,3 +293,34 @@ select option {
   border-bottom-right-radius: 16px;
   z-index: 50;
 }
+
+/* ─── OFFICIAL UNIVERSAL INVOICE PRINT STYLES ───────────────────────── */
+@media print {
+  body * {
+    visibility: hidden !important;
+  }
+  #printable-official-invoice, 
+  #printable-official-invoice *,
+  .official-invoice-print-area,
+  .official-invoice-print-area * {
+    visibility: visible !important;
+  }
+  #printable-official-invoice,
+  .official-invoice-print-area {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    box-shadow: none !important;
+    border: none !important;
+    margin: 0 !important;
+    padding: 20px !important;
+    background: white !important;
+    color: black !important;
+  }
+  @page {
+    size: A4 portrait;
+    margin: 10mm;
+  }
+}

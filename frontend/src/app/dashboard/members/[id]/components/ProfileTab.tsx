@@ -2,11 +2,49 @@
 
 import React, { useState } from 'react';
 import { Camera, Edit2, MapPin, Phone, Mail, Droplet, Activity, User, Briefcase, HeartPulse, CreditCard, Calendar, Clock, Star, Dumbbell, Shield, BadgeCheck, CheckCircle2, AlertCircle, Snowflake, Repeat } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { cleanPlanName, parsePlanSegments } from '@/lib/utils';
+import { db } from '@/lib/firebase';
+import { doc, updateDoc } from 'firebase/firestore';
+import { useGymStore } from '@/store';
+import toast from 'react-hot-toast';
 
 export default function ProfileTab({ member }: { member: any }) {
-  // A helper component for beautiful editable fields
+  const { fetchMembers } = useGymStore();
+  const [showEditExpiryModal, setShowEditExpiryModal] = useState(false);
+  const [customExpiryDate, setCustomExpiryDate] = useState(member.expiryDate || new Date().toISOString().split('T')[0]);
+  const [savingExpiry, setSavingExpiry] = useState(false);
+
+  const handleUpdateExpiry = async (targetDateStr: string) => {
+    setSavingExpiry(true);
+    try {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      const targetDate = new Date(targetDateStr);
+      targetDate.setHours(0, 0, 0, 0);
+
+      const diffTime = targetDate.getTime() - today.getTime();
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      const newStatus = diffDays > 0 ? 'active' : 'expired';
+
+      await updateDoc(doc(db, 'members', member.id), {
+        expiryDate: targetDateStr,
+        status: newStatus,
+        updatedAt: new Date().toISOString(),
+      });
+
+      toast.success(`Expiry date updated to ${targetDateStr}! (${diffDays > 0 ? `${diffDays} days remaining` : 'Expired'})`);
+      setShowEditExpiryModal(false);
+      fetchMembers();
+    } catch (err: any) {
+      toast.error('Failed to update expiry date: ' + err.message);
+    } finally {
+      setSavingExpiry(false);
+    }
+  };
+
+  // Helper component for editable fields
   const Field = ({ icon: Icon, label, value, isEditing = false }: any) => (
     <div className="flex items-center gap-4 py-3 border-b border-slate-50 last:border-0 group">
       <div className="w-8 h-8 rounded-xl bg-slate-50 text-slate-400 flex items-center justify-center shrink-0">
@@ -51,8 +89,19 @@ export default function ProfileTab({ member }: { member: any }) {
                 <span className="text-sm font-semibold">{member.joinDate ? new Date(member.joinDate).toLocaleDateString() : 'N/A'}</span>
               </div>
               <div>
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Expiry Date</span>
-                <span className="text-sm font-semibold">{member.expiryDate ? new Date(member.expiryDate).toLocaleDateString() : 'N/A'}</span>
+                <div className="flex items-center gap-1.5 mb-1">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Expiry Date</span>
+                  <button
+                    onClick={() => setShowEditExpiryModal(true)}
+                    className="p-1 rounded bg-white/10 hover:bg-amber-400 hover:text-slate-900 text-amber-400 transition-all border-none cursor-pointer"
+                    title="Edit Expiry Date"
+                  >
+                    <Edit2 size={12} />
+                  </button>
+                </div>
+                <span className="text-sm font-black text-amber-400 cursor-pointer" onClick={() => setShowEditExpiryModal(true)}>
+                  {member.expiryDate ? new Date(member.expiryDate).toLocaleDateString() : 'N/A'} ✏️
+                </span>
               </div>
             </div>
 
@@ -196,6 +245,130 @@ export default function ProfileTab({ member }: { member: any }) {
         </div>
 
       </div>
+
+      {/* ── EDIT EXPIRY DATE MODAL ── */}
+      <AnimatePresence>
+        {showEditExpiryModal && (
+          <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+              onClick={() => setShowEditExpiryModal(false)}
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 15 }}
+              className="relative bg-white rounded-3xl shadow-2xl border border-slate-200 w-full max-w-md p-6 z-10 text-slate-900 space-y-5"
+            >
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div className="flex items-center gap-2">
+                  <Calendar className="text-amber-500" size={20} />
+                  <h3 className="font-extrabold text-slate-900 text-lg">Edit Membership Expiry Date</h3>
+                </div>
+                <button
+                  onClick={() => setShowEditExpiryModal(false)}
+                  className="p-1 text-slate-400 hover:text-slate-700 bg-transparent border-none cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div>
+                <p className="text-xs text-slate-500 font-medium mb-3">
+                  Select a quick preset or pick a custom date to update <span className="font-bold text-slate-800">{member.name}'s</span> membership validity.
+                </p>
+
+                {/* Quick Presets */}
+                <div className="grid grid-cols-2 gap-2 mb-4">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const d2 = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+                      setCustomExpiryDate(d2);
+                      handleUpdateExpiry(d2);
+                    }}
+                    className="p-3 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-xl text-amber-900 font-extrabold text-xs text-left transition-all cursor-pointer flex flex-col gap-0.5"
+                  >
+                    <span>⚡ Expires in 2 Days</span>
+                    <span className="text-[10px] text-amber-700 font-medium">Quick 48h Testing</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const d30 = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+                      setCustomExpiryDate(d30);
+                      handleUpdateExpiry(d30);
+                    }}
+                    className="p-3 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-xl text-blue-900 font-extrabold text-xs text-left transition-all cursor-pointer flex flex-col gap-0.5"
+                  >
+                    <span>📅 +1 Month</span>
+                    <span className="text-[10px] text-blue-700 font-medium">30 Days Expiry</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const d90 = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+                      setCustomExpiryDate(d90);
+                      handleUpdateExpiry(d90);
+                    }}
+                    className="p-3 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-xl text-indigo-900 font-extrabold text-xs text-left transition-all cursor-pointer flex flex-col gap-0.5"
+                  >
+                    <span>📅 +3 Months</span>
+                    <span className="text-[10px] text-indigo-700 font-medium">90 Days Expiry</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const expToday = new Date().toISOString().split('T')[0];
+                      setCustomExpiryDate(expToday);
+                      handleUpdateExpiry(expToday);
+                    }}
+                    className="p-3 bg-red-50 hover:bg-red-100 border border-red-200 rounded-xl text-red-900 font-extrabold text-xs text-left transition-all cursor-pointer flex flex-col gap-0.5"
+                  >
+                    <span>🚫 Expire Today</span>
+                    <span className="text-[10px] text-red-700 font-medium">Set Status to Expired</span>
+                  </button>
+                </div>
+
+                {/* Custom Date Input */}
+                <div>
+                  <label className="block text-[10px] font-black uppercase text-slate-500 mb-1.5">Or Choose Custom Expiry Date</label>
+                  <input
+                    type="date"
+                    value={customExpiryDate}
+                    onChange={(e) => setCustomExpiryDate(e.target.value)}
+                    className="w-full h-12 bg-slate-50 border border-slate-300 rounded-xl px-4 font-extrabold text-slate-900 text-sm focus:outline-none focus:border-amber-500 cursor-pointer"
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowEditExpiryModal(false)}
+                  className="flex-1 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs border-none cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleUpdateExpiry(customExpiryDate)}
+                  disabled={savingExpiry}
+                  className="flex-1 py-3 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-xs border-none cursor-pointer shadow-md disabled:opacity-50"
+                >
+                  {savingExpiry ? 'Saving...' : 'Save Expiry Date'}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

@@ -13,6 +13,7 @@ import { cleanPlanName, formatDate } from '@/lib/utils';
 import { useGymStore } from '@/store';
 import toast from 'react-hot-toast';
 import RenewalWizardModal from '../../components/RenewalWizardModal';
+import OfficialInvoiceReceipt from '@/app/dashboard/components/OfficialInvoiceReceipt';
 
 export default function BillingTab({ member }: { member: any }) {
   const { fetchMembers } = useGymStore();
@@ -477,81 +478,33 @@ export default function BillingTab({ member }: { member: any }) {
         </div>
       </div>
 
-      {/* ── 1. VIEW INVOICE MODAL (Printable Document View) ───────────────────── */}
+      {/* ── 1. VIEW INVOICE MODAL (Official Document View) ───────────────────── */}
       {viewInvoice && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-          <div className="bg-white rounded-3xl shadow-2xl max-w-xl w-full p-8 space-y-6 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+          <div className="bg-white rounded-3xl shadow-2xl max-w-3xl w-full p-6 space-y-6 max-h-[92vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2">
                 <FileText size={20} className="text-blue-600" />
-                <h3 className="text-lg font-black text-slate-900">Official Invoice Receipt</h3>
+                <h3 className="text-lg font-black text-slate-900">Official Tax Invoice &amp; Receipt</h3>
               </div>
               <button onClick={() => setViewInvoice(null)} className="p-2 rounded-full text-slate-400 hover:bg-slate-100 border-none bg-transparent cursor-pointer">
                 <X size={18} />
               </button>
             </div>
 
-            <div className="border border-slate-200 rounded-2xl p-6 bg-slate-50/50 space-y-6 text-slate-800">
-              <div className="flex justify-between items-start border-b border-slate-200 pb-4">
-                <div>
-                  <h2 className="text-xl font-black text-slate-900">ALPHA ZONE GYM</h2>
-                  <p className="text-xs text-slate-500">Sohana, Landran Road, Mohali, Punjab</p>
-                  <p className="text-xs text-slate-500">Phone: +91 99362 86837</p>
-                </div>
-                <div className="text-right">
-                  <span className="font-mono text-sm font-black text-blue-600 block">{viewInvoice.invoiceNumber || viewInvoice.invoice || 'INV-001'}</span>
-                  <span className="text-xs font-bold text-slate-500">Date: {viewInvoice.date ? formatDate(viewInvoice.date) : formatDate(new Date().toISOString())}</span>
-                </div>
-              </div>
+            {/* Universal Official Invoice Receipt Template */}
+            <OfficialInvoiceReceipt invoice={viewInvoice} member={member} />
 
-              <div className="grid grid-cols-2 gap-4 text-xs">
-                <div>
-                  <span className="font-bold text-slate-400 uppercase block text-[10px]">Billed To:</span>
-                  <p className="font-black text-slate-900 text-sm mt-0.5">{member.name}</p>
-                  <p className="text-slate-600">{member.phone}</p>
-                  <p className="text-slate-600">{member.email || 'N/A'}</p>
-                </div>
-                <div>
-                  <span className="font-bold text-slate-400 uppercase block text-[10px]">Membership Period:</span>
-                  <p className="font-semibold text-slate-800 mt-0.5">Start: {formatDate(viewInvoice.startDate || member.joinDate)}</p>
-                  <p className="font-semibold text-indigo-600">Expiry: {formatDate(viewInvoice.expiryDate || member.expiryDate)}</p>
-                </div>
-              </div>
-
-              <table className="w-full text-xs text-left">
-                <thead>
-                  <tr className="border-b border-slate-200 text-slate-400 font-bold uppercase text-[10px]">
-                    <th className="py-2">Description</th>
-                    <th className="py-2 text-right">Amount</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 font-semibold text-slate-800">
-                  <tr>
-                    <td className="py-3">
-                      <div>{cleanPlanName(viewInvoice.plan || member.plan)}</div>
-                      <div className="text-[10px] text-slate-400">Payment Mode: {viewInvoice.method || 'UPI'}</div>
-                    </td>
-                    <td className="py-3 text-right font-black">₹{Number(viewInvoice.amount || 0).toLocaleString('en-IN')}</td>
-                  </tr>
-                </tbody>
-              </table>
-
-              <div className="border-t border-slate-200 pt-4 flex justify-between items-center text-sm font-black">
-                <span>Total Amount Paid</span>
-                <span className="text-emerald-600 text-lg">₹{Number(viewInvoice.amount || 0).toLocaleString('en-IN')}</span>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 max-w-[800px] mx-auto">
               <button
                 onClick={() => window.print()}
-                className="flex-1 py-3 bg-blue-600 text-white rounded-xl text-xs font-black hover:bg-blue-700 transition-all flex items-center justify-center gap-2 border-none cursor-pointer"
+                className="flex-1 py-3.5 bg-blue-600 text-white rounded-xl text-xs font-black hover:bg-blue-700 transition-all flex items-center justify-center gap-2 border-none cursor-pointer shadow-md"
               >
-                <Printer size={15} /> Print Invoice
+                <Printer size={16} /> Print Official Invoice
               </button>
               <button
                 onClick={() => setViewInvoice(null)}
-                className="py-3 px-5 bg-slate-100 text-slate-700 rounded-xl text-xs font-bold hover:bg-slate-200 transition-all border-none cursor-pointer"
+                className="py-3.5 px-6 bg-slate-100 text-slate-700 rounded-xl text-xs font-bold hover:bg-slate-200 transition-all border-none cursor-pointer"
               >
                 Close
               </button>
