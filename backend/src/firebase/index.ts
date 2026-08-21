@@ -626,11 +626,66 @@ export const db = {
   getDashboardAnalytics: async (): Promise<any> => {
     const firestore = getFirestoreDb();
     if (firestore) {
-      const doc = await firestore.collection('analytics').doc('dashboard').get();
-      if (doc.exists) return { id: doc.id, ...doc.data() };
-      return { totalMembers: 0, todayAttendance: 0, activeMembers: 0, revenue: 0 };
+      const todayStr = new Date().toISOString().split('T')[0];
+
+      // 1. Members
+      const membersSnap = await firestore.collection('members').get();
+      const membersList = membersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const totalMembers = membersList.length;
+      const activeMembers = membersList.filter((m: any) => {
+        const startDate = m.startDate || m.joinDate;
+        if (startDate && startDate > todayStr) return false;
+        if (m.status === 'frozen' || m.status === 'Frozen' || m.status === 'blocked' || m.status === 'Blocked') return false;
+        return m.status === 'active' || m.status === 'Active' || (m.expiryDate && m.expiryDate >= todayStr);
+      }).length;
+
+      // 2. Today's Deduplicated Revenue
+      const paymentsSnap = await firestore.collection('payments').get();
+      const seen = new Set<string>();
+      let todayRevenue = 0;
+
+      paymentsSnap.docs.forEach(doc => {
+        const p = doc.data() as any;
+        if (!p || p.isSample || p.isMock) return;
+        const status = String(p.status || p.paymentStatus || 'paid').toLowerCase();
+        if (status !== 'paid' && status !== 'partial') return;
+
+        const pDate = String(p.date || p.paymentDate || p.createdAt || '').split('T')[0];
+        if (pDate !== todayStr && !p.isRealTimeToday) return;
+
+        const idKey = String(doc.id || p.paymentId || p.invoiceNumber || p.invoice || p.idempotencyKey || '').trim();
+        if (idKey && seen.has(idKey)) return;
+        if (idKey) seen.add(idKey);
+
+        const val = Number(p.amountPaid !== undefined ? p.amountPaid : (p.paid !== undefined ? p.paid : (p.amount || 0)));
+        todayRevenue += (isNaN(val) ? 0 : val);
+      });
+
+      // 3. Today's Unique Attendance
+      const attendanceSnap = await firestore.collection('attendance_logs').get();
+      const uniqueAttendance = new Set<string>();
+      attendanceSnap.docs.forEach(doc => {
+        const a = doc.data() as any;
+        if (!a) return;
+        const checkInDate = String(a.checkIn || a.timestamp || a.createdAt || '').split('T')[0];
+        if (checkInDate === todayStr) {
+          const mKey = a.memberId || a.biometricId || a.deviceUserId || a.memberName;
+          if (mKey && String(mKey).trim() && !String(mKey).includes('unmapped')) {
+            uniqueAttendance.add(String(mKey).trim().toLowerCase());
+          }
+        }
+      });
+
+      return {
+        totalMembers,
+        activeMembers,
+        todayAttendance: uniqueAttendance.size,
+        revenue: todayRevenue,
+        todayCollection: todayRevenue,
+        lastUpdated: new Date().toISOString()
+      };
     }
-    return { totalMembers: 0, todayAttendance: 0, activeMembers: 0, revenue: 0 };
+    return { totalMembers: 0, todayAttendance: 0, activeMembers: 0, revenue: 0, todayCollection: 0 };
   },
 
   addAttendance: async (log: any): Promise<any> => {

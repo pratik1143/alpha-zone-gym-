@@ -24,6 +24,7 @@ import MembershipWidget from "./components/MembershipWidget";
 import FinancialAnalytics from "./components/FinancialAnalytics";
 import AIInsights from "./components/AIInsights";
 import PresentMembersModal from "./components/PresentMembersModal";
+import KPIInspectorModal from "./components/KPIInspectorModal";
 import { useFollowups } from "@/hooks/useFollowups";
 
 const fadeUp = (delay = 0) => ({
@@ -163,54 +164,92 @@ export default function OverviewCommandCenter() {
       }, 0);
   }, [members]);
 
-  // Session Real-Time metrics (starts at 0 today)
+  // Session Real-Time metrics
   const [sessionCollection, setSessionCollection] = useState(0);
   const [sessionNewClients, setSessionNewClients] = useState(0);
 
-  // Today's Real Collections (includes cash, UPI, card payments collected today)
+  // Today's Real Collections (strictly today's date, deduplicated by payment/invoice ID)
   const todaysRealCollection = useMemo(() => {
     const todayYMD = new Date().toISOString().split('T')[0];
-    const todayLocal = new Date().toLocaleDateString('en-CA');
+    const seen = new Set<string>();
 
     const fromPayments = payments
       .filter(p => {
-        if (p.isLegacyImport || p.isHistorical || p.isSample || p.isMock) return false;
+        if (!p || p.isSample || p.isMock) return false;
         const status = String(p.status || p.paymentStatus || 'paid').toLowerCase();
         if (status !== 'paid' && status !== 'partial') return false;
 
-        const pDate = String(p.date || p.createdAt || '').split('T')[0];
-        return pDate === todayYMD || pDate === todayLocal || p.isRealTimeToday || pDate === todayStr;
+        const pDate = String(p.date || p.paymentDate || p.createdAt || '').split('T')[0];
+        if (pDate !== todayYMD && !p.isRealTimeToday) return false;
+
+        const idKey = String(p.id || p.paymentId || p.invoiceNumber || p.invoice || p.idempotencyKey || '').trim();
+        if (idKey && seen.has(idKey)) return false;
+        if (idKey) seen.add(idKey);
+        return true;
       })
-      .reduce((sum, p) => sum + (Number(p.paid) || Number(p.amount) || 0), 0);
+      .reduce((sum, p) => {
+        const val = Number(p.amountPaid !== undefined ? p.amountPaid : (p.paid !== undefined ? p.paid : (p.amount || 0)));
+        return sum + (isNaN(val) ? 0 : val);
+      }, 0);
 
     return fromPayments + sessionCollection;
-  }, [payments, todayStr, sessionCollection]);
+  }, [payments, sessionCollection]);
 
+  // Dynamic Date-Range Filtered Collection (deduplicated)
+  const filteredRangeCollection = useMemo(() => {
+    const seen = new Set<string>();
+    return payments
+      .filter(p => {
+        if (!p || p.isSample || p.isMock) return false;
+        const status = String(p.status || p.paymentStatus || 'paid').toLowerCase();
+        if (status !== 'paid' && status !== 'partial') return false;
+
+        const pDate = p.date || p.paymentDate || p.createdAt;
+        if (!isWithinRange(pDate, dateRange)) return false;
+
+        const idKey = String(p.id || p.paymentId || p.invoiceNumber || p.invoice || p.idempotencyKey || '').trim();
+        if (idKey && seen.has(idKey)) return false;
+        if (idKey) seen.add(idKey);
+        return true;
+      })
+      .reduce((sum, p) => {
+        const val = Number(p.amountPaid !== undefined ? p.amountPaid : (p.paid !== undefined ? p.paid : (p.amount || 0)));
+        return sum + (isNaN(val) ? 0 : val);
+      }, 0);
+  }, [payments, dateRange, fromDate, toDate]);
+
+  // Unique Members Present in the selected date range
   const todayCheckins = useMemo(() => {
-    return attendance.filter(a => {
-      const checkInDate = (a.checkIn || a.timestamp || '').split('T')[0];
-      if (dateRange === "Today") return checkInDate === todayStr;
-      return isWithinRange(a.checkIn || a.timestamp, dateRange);
-    }).length;
-  }, [attendance, dateRange, todayStr]);
+    const uniqueMembers = new Set<string>();
+    attendance.forEach(a => {
+      if (!a) return;
+      const checkInDate = a.checkIn || a.timestamp || a.createdAt;
+      if (isWithinRange(checkInDate, dateRange)) {
+        const mKey = a.memberId || a.biometricId || a.deviceUserId || a.memberName;
+        if (mKey && String(mKey).trim() && !String(mKey).includes('unmapped')) {
+          uniqueMembers.add(String(mKey).trim().toLowerCase());
+        }
+      }
+    });
+    return uniqueMembers.size;
+  }, [attendance, dateRange, fromDate, toDate]);
 
-  // New Clients registered strictly TODAY (date matching today)
+  // New Clients registered strictly within selected date range
   const newClientsCount = useMemo(() => {
-    const todayYMD = new Date().toISOString().split('T')[0];
-    const todayLocal = new Date().toLocaleDateString('en-CA');
-
     const count = members.filter(m => {
-      if (m.isLegacyImport || m.importedAt || m.isSample || m.isMock || m.source === 'migration') return false;
-      const joined = String(m.joinDate || m.createdAt || '').split('T')[0];
-      return joined === todayYMD || joined === todayLocal || joined === todayStr || m.isRealTimeToday;
+      if (!m || m.isSample || m.isMock) return false;
+      const joined = m.joinDate || m.registrationDate || m.createdAt;
+      return isWithinRange(joined, dateRange);
     }).length;
 
-    return count > 0 ? count : sessionNewClients;
-  }, [members, todayStr, sessionNewClients]);
+    return count + (dateRange === "Today" ? sessionNewClients : 0);
+  }, [members, dateRange, fromDate, toDate, sessionNewClients]);
 
+  // Active Members (strictly valid date range & status)
   const activeMembersCount = useMemo(() => {
     const today = new Date().toISOString().split('T')[0];
     return members.filter(m => {
+      if (!m) return false;
       const startDate = m.startDate || m.joinDate;
       if (startDate && startDate > today) return false;
       if (m.status === 'frozen' || m.status === 'Frozen' || m.status === 'blocked' || m.status === 'Blocked') return false;
@@ -218,22 +257,28 @@ export default function OverviewCommandCenter() {
     }).length;
   }, [members]);
 
+  // Upcoming Members (membership starts in future)
   const upcomingMembersCount = useMemo(() => {
     const today = new Date().toISOString().split('T')[0];
     return members.filter(m => {
+      if (!m) return false;
       const startDate = m.startDate || m.joinDate;
       return (startDate && startDate > today) || m.status === 'upcoming' || m.status === 'Upcoming';
     }).length;
   }, [members]);
 
+  // Expired Members (expired & not covered by future membership)
   const expiredMembersCount = useMemo(() => {
     const today = new Date().toISOString().split('T')[0];
     return members.filter(m => {
+      if (!m) return false;
       const startDate = m.startDate || m.joinDate;
       if (startDate && startDate > today) return false;
       return m.status === 'expired' || m.status === 'Expired' || (m.expiryDate && m.expiryDate < today);
     }).length;
   }, [members]);
+
+  // Pending Enquiries Count
   const pendingEnquiriesCount = useMemo(() => enquiries.filter(e => e.status !== "Converted" && e.status !== "Lost").length, [enquiries]);
 
   // Submit Handlers for Popups
@@ -570,21 +615,21 @@ export default function OverviewCommandCenter() {
             />
             <SummaryStatCard
               title="Total collection"
-              value={`₹${todaysRealCollection.toLocaleString('en-IN')}`}
+              value={`₹${filteredRangeCollection.toLocaleString('en-IN')}`}
               icon={Coins}
               color="#a855f7"
               lineAccentColor="#7c3aed"
             />
             <SummaryStatCard
               title="Total Expenses"
-              value="0"
+              value="₹0"
               icon={Wallet}
               color="#ef4444"
               lineAccentColor="#ef4444"
             />
             <SummaryStatCard
               title="Total PT Collection"
-              value="0"
+              value="₹0"
               icon={Sparkles}
               color="#f59e0b"
               lineAccentColor="#f59e0b"
@@ -593,7 +638,7 @@ export default function OverviewCommandCenter() {
             {/* Row 2 */}
             <SummaryStatCard
               title="Profit/Loss"
-              value={`₹${todaysRealCollection.toLocaleString('en-IN')}`}
+              value={`₹${filteredRangeCollection.toLocaleString('en-IN')}`}
               icon={IndianRupee}
               color="#f97316"
               lineAccentColor="#ef4444"
@@ -607,14 +652,14 @@ export default function OverviewCommandCenter() {
             />
             <SummaryStatCard
               title="Active clients"
-              value={activeMembersCount || 218}
+              value={activeMembersCount}
               icon={Activity}
               color="#14b8a6"
               lineAccentColor="#0d9488"
             />
             <SummaryStatCard
               title="Expired clients"
-              value={expiredMembersCount || 215}
+              value={expiredMembersCount}
               icon={UserMinus}
               color="#475569"
               lineAccentColor="#1e293b"
@@ -623,7 +668,7 @@ export default function OverviewCommandCenter() {
             {/* Row 3 */}
             <SummaryStatCard
               title="Profile Created clients"
-              value={newClientsCount || 3}
+              value={newClientsCount}
               icon={UserCheck}
               color="#334155"
               lineAccentColor="#0f172a"
@@ -644,7 +689,7 @@ export default function OverviewCommandCenter() {
             />
             <SummaryStatCard
               title="Today Present Client"
-              value={todayCheckins || 38}
+              value={todayCheckins}
               icon={Users}
               color="#4f46e5"
               lineAccentColor="#4338ca"
