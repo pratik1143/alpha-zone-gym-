@@ -73,27 +73,30 @@ export default function DuplicatePopup({ data, onClose }: { data: any, onClose: 
 
         {/* Right: Message & Details */}
         <div className="w-2/3 flex flex-col gap-3 justify-center">
-           <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-100/50">
+           <div className="bg-blue-50 p-4 rounded-2xl border border-blue-100">
               <div className="flex gap-3">
-                 <ShieldAlert className="text-blue-500 shrink-0 mt-0.5" />
+                 <ShieldAlert className="text-blue-600 shrink-0 mt-0.5" size={20} />
                  <div>
-                    <h4 className="font-bold text-slate-900">Member is already inside the gym.</h4>
-                    <p className="text-xs text-slate-600 mt-1 leading-relaxed">
-                      Duplicate punch detected for <strong>{data.memberName}</strong>. 
-                      Attendance log has been updated but the inside count remains unchanged.
+                    <h4 className="font-extrabold text-slate-900 text-sm">Member is Already Inside</h4>
+                    <p className="text-xs text-slate-600 mt-1 leading-relaxed font-medium">
+                      Duplicate punch for <strong className="text-slate-900 font-extrabold">{data.memberName}</strong> recorded at <span className="font-mono font-bold text-blue-600">{data.timestamp}</span>. Member is already marked active inside the gym.
                     </p>
                  </div>
               </div>
            </div>
 
-           <div className="grid grid-cols-2 gap-3 mt-2">
-             <div className="bg-white/80 p-3 rounded-xl border border-white space-y-1">
-               <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">Member ID</span>
-               <span className="text-sm font-black text-slate-900 font-mono block">{data.memberCode}</span>
+           <div className="grid grid-cols-3 gap-2 mt-1">
+             <div className="bg-white/80 p-2.5 rounded-xl border border-slate-100 space-y-0.5">
+               <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400 block">Bio / Ref ID</span>
+               <span className="text-xs font-black text-slate-900 font-mono block truncate">{data.memberCode}</span>
              </div>
-             <div className="bg-white/80 p-3 rounded-xl border border-white space-y-1">
-               <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">Device ID</span>
-               <span className="text-sm font-black text-slate-900 font-mono block">{data.deviceName}</span>
+             <div className="bg-white/80 p-2.5 rounded-xl border border-slate-100 space-y-0.5">
+               <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400 block">Plan</span>
+               <span className="text-xs font-black text-blue-600 block truncate">{data.plan || 'Standard'}</span>
+             </div>
+             <div className="bg-white/80 p-2.5 rounded-xl border border-slate-100 space-y-0.5">
+               <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400 block">Days Left</span>
+               <span className="text-xs font-black text-emerald-600 block truncate">{data.remainingDays} Days</span>
              </div>
            </div>
         </div>

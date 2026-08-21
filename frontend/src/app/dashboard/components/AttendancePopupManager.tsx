@@ -6,6 +6,7 @@ import { collection, query, orderBy, limit, onSnapshot } from 'firebase/firestor
 import { db as fDb, isFirebaseReady } from '@/lib/firebase';
 import API from '@/services/api';
 import { useGymStore } from '@/store';
+import { membershipEngine } from '@/lib/engines/membershipEngine';
 import toast from 'react-hot-toast';
 
 import SuccessPopup from './popups/SuccessPopup';
@@ -71,39 +72,52 @@ export default function AttendancePopupManager() {
 
     const members = useGymStore.getState().members;
     const match = members.find((m: any) =>
-      m.id === data.memberId ||
-      m.memberId === data.memberCode ||
-      (m.name && data.memberName && m.name.toLowerCase() === data.memberName.toLowerCase())
+      (m.id && data.memberId && m.id === data.memberId) ||
+      (m.uid && data.memberId && m.uid === data.memberId) ||
+      (m.memberId && data.memberId && m.memberId === data.memberId) ||
+      (m.memberId && data.memberCode && m.memberId === data.memberCode) ||
+      (m.biometricId && data.biometricId && m.biometricId === data.biometricId) ||
+      (m.biometricId && data.deviceUserId && m.biometricId === data.deviceUserId) ||
+      (m.deviceUserId && data.biometricId && m.deviceUserId === data.biometricId) ||
+      (m.phone && data.phone && String(m.phone).replace(/\D/g, '') === String(data.phone).replace(/\D/g, '')) ||
+      (m.name && data.memberName && m.name.trim().toLowerCase() === String(data.memberName).trim().toLowerCase())
     );
 
     let type: PopupData['type'] = 'success';
 
-    if (data.status === 'duplicate') type = 'duplicate';
-    else if (data.status === 'unknown') type = 'unknown';
-    else if (data.status === 'denied') {
+    if (data.status === 'duplicate' || data.method === 'duplicate' || data.isDuplicate) {
+      type = 'duplicate';
+    } else if (data.status === 'unknown' || (data.memberName && String(data.memberName).toLowerCase().includes('unmapped'))) {
+      type = 'unknown';
+    } else if (data.status === 'denied') {
       if (data.reason?.toLowerCase().includes('blacklisted')) type = 'blacklisted';
-      else if (data.reason?.toLowerCase().includes('frozen')) type = 'frozen';
+      else if (data.reason?.toLowerCase().includes('frozen') || match?.status === 'frozen') type = 'frozen';
       else type = 'expired';
     }
 
     const days = match?.expiryDate
-      ? Math.ceil((new Date(match.expiryDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+      ? membershipEngine.calculateDaysLeft(match.expiryDate)
       : 30;
 
     if (type === 'success' && days <= 0 && match) {
       type = 'expired';
     }
 
+    const rawTime = data.checkIn || data.timestamp || data.createdAt;
+    const formattedTime = rawTime
+      ? new Date(rawTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })
+      : new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+
     const popupData: PopupData = {
       id: docId,
       type,
       data: {
         memberName: match?.name || data.memberName || 'Athlete',
-        memberCode: match?.memberId || data.memberCode || data.memberId || 'AZ-2026-0001',
-        timestamp: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
-        deviceName: data.deviceName || 'ESSL K90 Pro',
+        memberCode: match?.biometricId || match?.deviceUserId || match?.clientId || match?.customId || match?.memberId || data.memberCode || data.memberId || 'AZ-2026-0001',
+        timestamp: formattedTime,
+        deviceName: data.deviceName || data.method || 'ESSL K90 Pro',
         branch: match?.branch || data.branch || 'Mohali, Punjab',
-        avatarUrl: match?.avatarUrl || match?.avatar || data.avatarUrl || data.avatar || '',
+        avatarUrl: match?.photo || match?.avatarUrl || match?.avatar || data.avatarUrl || data.photo || '',
         plan: match?.plan || 'Monthly Standard',
         trainer: match?.trainer || 'No PT Assigned',
         remainingDays: days > 0 ? days : 0,
@@ -114,10 +128,10 @@ export default function AttendancePopupManager() {
     };
 
     const memberName = match?.name || data.memberName || 'Athlete';
-    toast(`⚡ Entry Recorded: ${memberName}`, {
-      icon: type === 'success' ? '🟢' : '🔴',
+    toast(`⚡ ${type === 'duplicate' ? 'Already Inside' : 'Attendance Marked'}: ${memberName}`, {
+      icon: type === 'success' ? '🟢' : type === 'duplicate' ? '🔵' : '🔴',
       duration: 5000,
-      style: { background: '#0F172A', color: '#fff', border: type === 'success' ? '1px solid #22C55E' : '1px solid #EF4444', borderRadius: '16px', fontWeight: 'bold', fontSize: '13px' }
+      style: { background: '#0F172A', color: '#fff', border: type === 'success' ? '1px solid #22C55E' : type === 'duplicate' ? '1px solid #3B82F6' : '1px solid #EF4444', borderRadius: '16px', fontWeight: 'bold', fontSize: '13px' }
     });
 
     setQueue(prev => [...prev, popupData]);
@@ -157,9 +171,8 @@ export default function AttendancePopupManager() {
   useEffect(() => {
     if (!isFirebaseReady || !fDb) return;
 
-    const startTime = new Date().toISOString();
     const attCollection = collection(fDb, 'attendance_logs');
-    const qPop = query(attCollection, orderBy('createdAt', 'asc'), limit(50));
+    const qPop = query(attCollection, orderBy('createdAt', 'desc'), limit(15));
     let isInitialLoad = true;
 
     const unsubscribe = onSnapshot(
@@ -173,8 +186,6 @@ export default function AttendancePopupManager() {
           if (change.type !== 'added') return;
           const data = change.doc.data();
           const docId = change.doc.id;
-          const createdAt = data.createdAt || '';
-          if (createdAt && createdAt < startTime) return;
           if (data.status === 'auto_checkout') return;
 
           processPunchItem(data, docId);
