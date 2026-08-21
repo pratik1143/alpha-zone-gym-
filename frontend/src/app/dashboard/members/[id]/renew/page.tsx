@@ -65,22 +65,65 @@ export default function RenewMembershipPage() {
   const [completeDone, setCompleteDone] = useState(false);
   const [generatedInvoiceData, setGeneratedInvoiceData] = useState<any>(null);
 
-  // Fetch Member from Firestore
+  // Robust Self-Healing Member Fetching (Firestore + API + Store Fallback)
   useEffect(() => {
     if (!id) return;
+    setLoading(true);
+    let isMounted = true;
+
+    const fetchFallbackMember = async () => {
+      // 1. Check Gym Store
+      const storeMembers = useGymStore.getState().members || [];
+      const foundInStore = storeMembers.find((m: any) => m.id === id || m.uid === id || m.memberId === id);
+      if (foundInStore && isMounted) {
+        setMember(foundInStore);
+        setOutstanding(foundInStore.outstandingBalance || 0);
+        setAssignedTrainer(foundInStore.trainer || '');
+        setLoading(false);
+        return;
+      }
+
+      // 2. Check Backend REST API
+      try {
+        const res = await API.get('/members');
+        const list = res.data || [];
+        const found = list.find((m: any) => m.id === id || m.uid === id || m.memberId === id);
+        if (found && isMounted) {
+          setMember(found);
+          setOutstanding(found.outstandingBalance || 0);
+          setAssignedTrainer(found.trainer || '');
+          setLoading(false);
+          return;
+        }
+      } catch (e) {
+        console.warn('API fallback fetch failed:', e);
+      }
+
+      if (isMounted) {
+        setLoading(false);
+      }
+    };
+
     const unsub = onSnapshot(doc(db, 'members', id), (docSnap) => {
+      if (!isMounted) return;
       if (docSnap.exists()) {
         const data: any = { id: docSnap.id, ...(docSnap.data() as any) };
         setMember(data);
         setOutstanding(data.outstandingBalance || 0);
         setAssignedTrainer(data.trainer || '');
+        setLoading(false);
       } else {
-        toast.error('Member not found');
+        fetchFallbackMember();
       }
-      setLoading(false);
+    }, (err) => {
+      console.warn('Firestore onSnapshot notice:', err);
+      if (isMounted) fetchFallbackMember();
     });
 
-    return () => unsub();
+    return () => {
+      isMounted = false;
+      unsub();
+    };
   }, [id]);
 
   // Fetch Trainers
