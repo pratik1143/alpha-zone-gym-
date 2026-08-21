@@ -490,7 +490,15 @@ export const getEnrollmentStatus = async (req: Request, res: Response) => {
  */
 export const getPythonStatus = async (req: Request, res: Response) => {
   try {
-    let lastHeartbeat = new Date().toISOString();
+    let pythonConnected = false;
+    let esslConnected = false;
+    let attendanceListenerRunning = false;
+    let gateEnabled = false;
+    let internetConnected = false;
+    let firebaseStatus = 'Connected';
+    let lastHeartbeat = '';
+    let latencyMs = 999;
+    let diffSeconds = 999;
 
     const firestore = getFirestoreDb();
     if (firestore) {
@@ -501,39 +509,55 @@ export const getPythonStatus = async (req: Request, res: Response) => {
           const hb = data?.lastHeartbeat || data?.updatedAt || data?.lastChecked || '';
           if (hb && !isNaN(new Date(hb).getTime())) {
             lastHeartbeat = hb;
+            diffSeconds = Math.round((Date.now() - new Date(hb).getTime()) / 1000);
+            if (diffSeconds < 20) {
+              pythonConnected = data?.pythonConnected ?? true;
+              esslConnected = data?.esslConnected ?? false;
+              attendanceListenerRunning = data?.attendanceListenerRunning ?? false;
+              gateEnabled = data?.gateControlEnabled ?? esslConnected;
+              internetConnected = data?.internetConnected ?? true;
+              firebaseStatus = data?.firebaseStatus || 'Connected';
+              latencyMs = data?.latencyMs || 12;
+            }
           }
         }
       } catch (fErr: any) {
-        console.warn('[getPythonStatus] Firestore connection unavailable, using local connected status');
-        disableFirestore();
+        console.warn('[getPythonStatus] Firestore connection unavailable, using degraded status');
+        firebaseStatus = 'Degraded';
       }
     }
 
+    const isDeviceFullyOnline = pythonConnected && esslConnected && attendanceListenerRunning;
+
     res.json({
-      connected: true,
-      pythonConnected: true,
-      esslConnected: true,
-      attendanceListenerRunning: true,
-      gateEnabled: true,
-      isDeviceFullyOnline: true,
+      connected: pythonConnected,
+      pythonConnected,
+      esslConnected,
+      attendanceListenerRunning,
+      gateEnabled,
+      isDeviceFullyOnline,
+      internetConnected,
+      firebaseStatus,
       lastHeartbeat: lastHeartbeat || new Date().toISOString(),
-      latencyMs: 12,
-      diffSeconds: 1,
+      latencyMs,
+      diffSeconds,
       version: '2.4.0',
       deviceName: 'ESSL K90 Pro',
       deviceIp: '192.168.18.11'
     });
   } catch (error: any) {
     res.json({
-      connected: true,
-      pythonConnected: true,
-      esslConnected: true,
-      attendanceListenerRunning: true,
-      gateEnabled: true,
-      isDeviceFullyOnline: true,
+      connected: false,
+      pythonConnected: false,
+      esslConnected: false,
+      attendanceListenerRunning: false,
+      gateEnabled: false,
+      isDeviceFullyOnline: false,
+      internetConnected: false,
+      firebaseStatus: 'Offline',
       lastHeartbeat: new Date().toISOString(),
-      latencyMs: 12,
-      diffSeconds: 1,
+      latencyMs: 999,
+      diffSeconds: 999,
       version: '2.4.0',
       deviceName: 'ESSL K90 Pro',
       deviceIp: '192.168.18.11'

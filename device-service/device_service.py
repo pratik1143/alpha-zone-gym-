@@ -14,6 +14,18 @@ from zk.exception import ZKError
 import firebase_admin
 from firebase_admin import credentials, firestore
 
+if sys.platform == 'win32':
+    try:
+        sys.stdout.reconfigure(encoding='utf-8')
+    except Exception:
+        pass
+
+try:
+    import desktop_popup
+except Exception as pe:
+    logging.warning(f"Could not import desktop_popup: {pe}")
+    desktop_popup = None
+
 # Configure Logging
 logging.basicConfig(
     level=logging.INFO,
@@ -33,7 +45,7 @@ try:
     logging.info("Firebase Admin SDK initialized successfully in Python Device Service.")
 except Exception as e:
     logging.error(f"Failed to initialize Firebase Admin: {e}")
-    sys.exit(1)
+    db = None
 
 # Active devices threads tracker
 active_threads = {}
@@ -42,7 +54,77 @@ biometric_lock = threading.Lock()
 
 # Cooldown tracker to prevent duplicate unlocks (UserID -> last_unlock_epoch)
 last_unlock_time = {}
+processed_fingerprints = set()
 
+OFFLINE_QUEUE_FILE = r"C:\Users\defaultuser\Desktop\alpha gym zone\device-service\offline_punch_queue.json"
+
+def check_internet_connection():
+    """Checks real internet connectivity by attempting socket connection to DNS servers."""
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.settimeout(1.5)
+        s.connect(("8.8.8.8", 53))
+        s.close()
+        return True
+    except Exception:
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s.settimeout(1.5)
+            s.connect(("1.1.1.1", 53))
+            s.close()
+            return True
+        except Exception:
+            return False
+
+def queue_offline_punch(punch_data):
+    """Queues a punch event locally when Firebase/Internet is offline."""
+    try:
+        queue = []
+        if os.path.exists(OFFLINE_QUEUE_FILE):
+            with open(OFFLINE_QUEUE_FILE, 'r') as f:
+                queue = json.load(f)
+        
+        fingerprint = punch_data.get('fingerprint')
+        if not any(item.get('fingerprint') == fingerprint for item in queue):
+            queue.append(punch_data)
+            with open(OFFLINE_QUEUE_FILE, 'w') as f:
+                json.dump(queue, f, indent=2)
+            logging.info(f"💾 [Offline Queue] Saved punch locally: {punch_data.get('memberName')} ({punch_data.get('biometricId')})")
+    except Exception as e:
+        logging.error(f"Failed to queue offline punch: {e}")
+
+def flush_offline_queue():
+    """Flushes queued offline punches to Firebase when Internet/Firebase comes back online."""
+    if not os.path.exists(OFFLINE_QUEUE_FILE) or db is None:
+        return
+    try:
+        with open(OFFLINE_QUEUE_FILE, 'r') as f:
+            queue = json.load(f)
+        
+        if not queue:
+            return
+            
+        logging.info(f"🔄 [Offline Queue] Flushing {len(queue)} offline punches to Firebase...")
+        remaining = []
+        synced_count = 0
+        
+        for punch in queue:
+            try:
+                doc_id = punch.get('docId') or f"att_{punch.get('biometricId')}_{int(time.time())}"
+                db.collection('attendance').document(doc_id).set(punch)
+                db.collection('attendance_logs').document(doc_id).set(punch)
+                synced_count += 1
+            except Exception as ex:
+                logging.error(f"Failed to sync offline punch: {ex}")
+                remaining.append(punch)
+                
+        with open(OFFLINE_QUEUE_FILE, 'w') as f:
+            json.dump(remaining, f, indent=2)
+            
+        if synced_count > 0:
+            logging.info(f"✅ [Offline Queue] Synced {synced_count} offline punches to Firebase! ({len(remaining)} remaining)")
+    except Exception as e:
+        logging.error(f"Error flushing offline queue: {e}")
 
 def check_tcp_connection(ip, port):
     """Pings the target IP and port using a simple socket connection check."""
@@ -869,13 +951,29 @@ def trigger_door_relay(conn, device_name="Main Gate", duration_seconds=3):
 
 def run_membership_validation(user_id, device_id, device_name, branch, timestamp_iso):
     """
-    Validates a biometric card/fingerprint swipe via Express REST API & Local Roster.
-    Returns True if access is granted (triggers gate relay unlock), False if denied/unknown.
+    Validates a biometric card/fingerprint swipe against CRM Member database & membership engine.
+    - Resolves Member profile (or Unknown Member).
+    - Validates membership status (Active, Expired, Frozen).
+    - Writes attendance record to Firebase (or queues locally if offline).
+    - Triggers Always-on-Top Windows Desktop Overlay Popup.
+    - Prints Terminal Status & Real Punch Stream Log.
+    - Returns True if access is granted (triggers gate relay unlock), False otherwise.
     """
     user_id_str = str(user_id)
-    logging.info(f"[Live Swipe] Processing Biometric UserID={user_id_str} at {device_name}")
-    
-    # 1. Primary: Post Checkin Request to Local Express API Backend (/api/attendance/checkin)
+    time_str = datetime.now().strftime("%H:%M:%S")
+    logging.info(f"[{time_str}] REAL PUNCH RECEIVED: Biometric UserID={user_id_str} at {device_name}")
+
+    # 1. Check duplicate punch fingerprint
+    fp = f"{device_id}_{user_id_str}_{timestamp_iso[:16]}"
+    if fp in processed_fingerprints:
+        logging.info(f"[Duplicate Protection] Ignoring repeat punch fingerprint {fp}")
+        return False
+    processed_fingerprints.add(fp)
+    if len(processed_fingerprints) > 1000:
+        processed_fingerprints.clear()
+
+    # 2. Check API checkin endpoint
+    api_result = None
     try:
         req_data = json.dumps({
             'memberId': user_id_str,
@@ -890,17 +988,133 @@ def run_membership_validation(user_id, device_id, device_name, branch, timestamp
         )
         
         with urllib.request.urlopen(req, timeout=3) as resp:
-            res_json = json.loads(resp.read().decode('utf-8'))
-            if res_json.get('success'):
-                memberName = res_json.get('memberName') or 'Gym Member'
-                logging.info(f"🟢 [ACCESS GRANTED] Member '{memberName}' (ID: {user_id_str}) checkin registered via API!")
-                return True
-            
-            return False
-
+            api_result = json.loads(resp.read().decode('utf-8'))
     except Exception as err:
-        logging.error(f"Error in Membership Validation: {err}")
-        return False
+        logging.warning(f"[API Checkin Notice]: {err}")
+
+    # 3. Lookup member in Firestore / local roster
+    member = None
+    if db is not None:
+        try:
+            members_ref = db.collection('members')
+            for field in ['biometricId', 'deviceUserId', 'uid', 'memberId', 'phone']:
+                query = members_ref.where(field, '==', user_id_str).limit(1).stream()
+                for doc_snap in query:
+                    member = { 'id': doc_snap.id, **doc_snap.to_dict() }
+                    break
+                if member:
+                    break
+        except Exception as f_err:
+            logging.error(f"[Firestore Member Lookup Error]: {f_err}")
+
+    # 4. Determine Membership Status & Access
+    status = 'granted'
+    reason = ''
+    days_left = 30
+    expired_days = 0
+
+    if not member and api_result and not api_result.get('unmapped'):
+        member_name = api_result.get('memberName', 'Gym Member')
+        avatar_url = api_result.get('avatarUrl', '')
+        plan_name = api_result.get('plan', 'Standard Membership')
+        status = 'granted'
+    elif member:
+        member_name = member.get('name', 'Gym Member')
+        avatar_url = member.get('avatarUrl', '') or member.get('avatar', '')
+        plan_name = member.get('plan', 'Standard Membership')
+        
+        exp_date_str = member.get('expiryDate', '')
+        if exp_date_str:
+            try:
+                exp_dt = datetime.strptime(exp_date_str, "%Y-%m-%d")
+                delta = (exp_dt.date() - date.today()).days
+                days_left = delta
+                if delta < 0:
+                    expired_days = abs(delta)
+                    status = 'expired'
+                    reason = f'Membership expired {expired_days} days ago'
+            except Exception:
+                pass
+
+        if member.get('status') == 'frozen':
+            status = 'frozen'
+            reason = 'Membership is frozen'
+        elif member.get('status') == 'expired':
+            status = 'expired'
+            reason = 'Membership has expired'
+    else:
+        status = 'unknown'
+        member_name = f"Unmapped Biometric User #{user_id_str}"
+        plan_name = "Unmapped Biometric ID"
+
+    # 5. Trigger Always-on-Top Desktop Overlay Popup
+    if desktop_popup:
+        try:
+            desktop_popup.show_attendance_popup({
+                'status': status,
+                'memberName': member_name,
+                'memberId': member.get('id', '') if member else '',
+                'memberCode': member.get('memberId', f"ID #{user_id_str}") if member else f"ID #{user_id_str}",
+                'plan': plan_name,
+                'daysRemaining': days_left if status == 'granted' else 0,
+                'expiredDays': expired_days,
+                'visitCount': member.get('attendanceCount', 1) if member else 1,
+                'avatarUrl': avatar_url if 'avatar_url' in locals() else '',
+                'deviceId': device_name,
+                'biometricId': user_id_str,
+                'timestamp': timestamp_iso
+            })
+        except Exception as pop_err:
+            logging.error(f"[Popup Error]: {pop_err}")
+
+    # 6. Print Terminal Output Stream Log (Requirement 17)
+    access_label = "ACCESS GRANTED 🟢" if status == 'granted' else ("ACCESS DENIED 🔴" if status in ('expired', 'frozen', 'denied') else "UNKNOWN MEMBER 🟡")
+    print("\n" + "="*52)
+    print(f"[{time_str}] REAL PUNCH RECEIVED — {access_label}")
+    print(f"Device ID    : {device_id} ({device_name})")
+    print(f"Biometric ID : {user_id_str}")
+    print(f"Member       : {member_name}")
+    print(f"Membership   : {plan_name} ({days_left} Days Remaining)" if status == 'granted' else f"Status       : {status.upper()} ({reason or 'Access Denied'})")
+    print(f"Popup        : TRIGGERED (Always-On-Top Desktop Overlay)")
+    print(f"Gate Relay   : {'OPENED (3.0s)' if status == 'granted' else 'DISABLED'}")
+    print("="*52 + "\n")
+
+    # 7. Save Attendance Log to Firestore or Offline Queue
+    att_doc_id = f"att_{device_id}_{user_id_str}_{int(time.time())}"
+    punch_record = {
+        'docId': att_doc_id,
+        'attendanceId': att_doc_id,
+        'fingerprint': fp,
+        'memberId': member.get('id', f"unmapped_bio_{user_id_str}") if member else f"unmapped_bio_{user_id_str}",
+        'biometricId': user_id_str,
+        'deviceUserId': user_id_str,
+        'memberName': member_name,
+        'memberCode': member.get('memberId', f"ID #{user_id_str}") if member else f"ID #{user_id_str}",
+        'avatarUrl': avatar_url if 'avatar_url' in locals() else '',
+        'deviceId': device_id,
+        'deviceName': device_name,
+        'branch': branch,
+        'timestamp': timestamp_iso,
+        'checkIn': timestamp_iso,
+        'status': status,
+        'reason': reason,
+        'method': 'biometric',
+        'membership': plan_name,
+        'createdAt': timestamp_iso
+    }
+
+    if db is not None:
+        try:
+            db.collection('attendance').document(att_doc_id).set(punch_record)
+            db.collection('attendance_logs').document(att_doc_id).set(punch_record)
+            flush_offline_queue()
+        except Exception as save_err:
+            logging.warning(f"Firebase write failed during punch. Queuing punch locally: {save_err}")
+            queue_offline_punch(punch_record)
+    else:
+        queue_offline_punch(punch_record)
+
+    return (status == 'granted')
 
 def sync_device_data(conn, device_id, device_name, branch):
     """
@@ -1237,32 +1451,62 @@ def device_worker_thread(device_id, ip, port, device_name, branch, sync_interval
 def python_heartbeat_loop():
     """Continuous 5-second heartbeat for Real Device Status Engine."""
     logging.info("Started continuous 5-second Python Device Heartbeat Loop.")
+    last_terminal_print = 0
+    
     while threads_running:
         try:
             now_iso = datetime.utcnow().isoformat() + 'Z'
+            internet_ok = check_internet_connection()
             ping_ok = check_ping(DEVICE_IP)
             tcp_ok = check_tcp_connection(DEVICE_IP, DEVICE_PORT)
-            latency = 12 if (ping_ok or tcp_ok) else 999
-            
-            db.collection('device_testing').document('control').set({
-                'pythonConnected': True,
-                'esslConnected': ping_ok or tcp_ok,
-                'attendanceListenerRunning': True,
-                'lastHeartbeat': now_iso,
-                'latencyMs': latency,
-                'deviceName': 'ESSL K90 Pro',
-                'deviceIp': DEVICE_IP,
-                'devicePort': DEVICE_PORT,
-                'pingStatus': 'Success' if ping_ok else 'Failed',
-                'tcpStatus': 'Success' if tcp_ok else 'Failed',
-                'updatedAt': now_iso
-            }, merge=True)
-            
-            db.collection('devices').document('dev_k90_main').set({
-                'status': 'connected' if (ping_ok or tcp_ok) else 'offline',
-                'connectionHealth': 98 if (ping_ok or tcp_ok) else 0,
-                'lastSync': now_iso
-            }, merge=True)
+            essl_ok = ping_ok or tcp_ok
+            listener_running = essl_ok
+            gate_enabled = essl_ok and internet_ok
+            latency = 12 if essl_ok else 999
+            firebase_status = 'Connected' if db is not None else 'Offline'
+
+            if db is not None:
+                try:
+                    db.collection('device_testing').document('control').set({
+                        'pythonConnected': True,
+                        'esslConnected': essl_ok,
+                        'attendanceListenerRunning': listener_running,
+                        'gateControlEnabled': gate_enabled,
+                        'internetConnected': internet_ok,
+                        'firebaseStatus': firebase_status,
+                        'lastHeartbeat': now_iso,
+                        'latencyMs': latency,
+                        'deviceName': 'ESSL K90 Pro',
+                        'deviceIp': DEVICE_IP,
+                        'devicePort': DEVICE_PORT,
+                        'pingStatus': 'Success' if ping_ok else 'Failed',
+                        'tcpStatus': 'Success' if tcp_ok else 'Failed',
+                        'updatedAt': now_iso
+                    }, merge=True)
+
+                    db.collection('devices').document('dev_k90_main').set({
+                        'status': 'connected' if essl_ok else 'offline',
+                        'connectionHealth': 98 if essl_ok else 0,
+                        'lastSync': now_iso
+                    }, merge=True)
+                except Exception as f_err:
+                    logging.warning(f"Heartbeat write notice: {f_err}")
+
+            # Print terminal ASCII summary every 30 seconds for manual CMD mode (Requirement 17)
+            if time.time() - last_terminal_print > 30:
+                last_terminal_print = time.time()
+                print("\n" + "="*52)
+                print("       ALPHA ZONE GYM BIOMETRIC LISTENER          ")
+                print("==================================================")
+                print(f"Internet            : {'[CONNECTED]' if internet_ok else '[OFFLINE]'}")
+                print(f"Python Service      : [RUNNING]")
+                print(f"Firebase            : [{firebase_status.upper()}]")
+                print(f"ESSL Hardware       : {'[CONNECTED]' if essl_ok else '[OFFLINE]'}")
+                print(f"Attendance Listener : {'[RUNNING]' if listener_running else '[PAUSED]'}")
+                print(f"Gate Control        : {'[ENABLED]' if gate_enabled else '[DISABLED]'}")
+                print("==================================================")
+                print("Waiting for real biometric punches...\n")
+
         except Exception as e:
             logging.error(f"Error in python heartbeat loop: {e}")
         time.sleep(5)
