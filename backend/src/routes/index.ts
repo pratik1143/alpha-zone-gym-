@@ -2,7 +2,10 @@ import { Router } from 'express';
 import enquiryRoutes from './enquiry.routes';
 import whatsappRoutes from './whatsapp.routes';
 import { loginUser } from '../controllers/auth.controller';
-import { getMembers, createMember, updateMember, deleteMember, toggleFreezeMember, resetMemberPassword, sendMemberCredentials } from '../controllers/member.controller';
+import { 
+  getMembers, getMembersPaginated, getMemberById, createMember, updateMember, 
+  deleteMember, toggleFreezeMember, resetMemberPassword, sendMemberCredentials 
+} from '../controllers/member.controller';
 import { getAttendanceFeed, createCheckIn, checkoutLog, triggerGateUnlock, getAccessLogs, getDoorStatus, getDashboardAnalyticsFeed, getAttendanceSummaryFeed } from '../controllers/attendance.controller';
 import { getDevices, createDevice, updateDevice, deleteDevice, getDeviceLogs, triggerSimulationTap, restartDevice, queueConnectionTest, queueReadUsers, queueReadAttendance, getTesterStatus, queueSyncFirebase, queueImportUsers, startEnrollFingerprint, deleteEnrollment, syncMemberToDevice, getEnrollmentStatus, getPythonStatus, getLatestPunch, autoMapAllBiometrics } from '../controllers/device.controller';
 import { getInvoices, createInvoice, markPaymentPaid, cleanupDuplicateInvoicesController } from '../controllers/billing.controller';
@@ -37,6 +40,7 @@ router.use('/whatsapp', whatsappRoutes);
 
 // Member CRUD & Actions
 router.get('/members', getMembers);
+router.get('/members/paginated', getMembersPaginated);
 router.get('/members/next-biometric-id', nextBiometricId);
 router.post('/members/migrate', migrateMembers);
 router.post('/members/dry-run-migration', dryRunMigration);
@@ -50,6 +54,7 @@ router.get('/members/audit-verification', auditVerification);
 router.post('/members/rollback-migration', rollbackMigration);
 router.post('/members/purge-all', purgeCRMData);
 router.post('/members/map-biometric', mapBiometricUser);
+router.get('/members/:id', getMemberById);
 router.post('/members', createMember);
 router.put('/members/:id', updateMember);
 router.delete('/members/:id', deleteMember);

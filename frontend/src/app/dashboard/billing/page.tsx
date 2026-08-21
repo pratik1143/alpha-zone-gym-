@@ -5,7 +5,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   CreditCard, DollarSign, Receipt, AlertCircle, Plus, Download, Search, 
   TrendingUp, X, RefreshCw, Printer, Mail, MessageSquare, Share2, 
-  CheckCircle2, Phone, Calendar, ArrowUpRight, Shield, Filter, Check, Wallet, Smartphone, Banknote
+  CheckCircle2, Phone, Calendar, ArrowUpRight, Shield, Filter, Check, Wallet, Smartphone, Banknote,
+  ChevronLeft, ChevronRight
 } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { db } from '@/lib/firebase';
@@ -37,11 +38,22 @@ export default function BillingPage() {
   const [payments, setPayments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [localSearch, setLocalSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'paid' | 'pending'>('all');
   const [methodFilter, setMethodFilter] = useState<string>('all');
   const [selectedReceipt, setSelectedReceipt] = useState<any | null>(null);
   const [showInvoiceModal, setShowInvoiceModal] = useState<string | null>(null);
   const [markingPaid, setMarkingPaid] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setSearch(localSearch);
+      setPage(1);
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [localSearch]);
 
   const todayStr = useMemo(() => {
     const d = new Date();
@@ -221,6 +233,13 @@ export default function BillingPage() {
     });
   }, [payments, search, statusFilter, methodFilter]);
 
+  const totalPages = Math.max(1, Math.ceil(filteredPayments.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const paginatedPayments = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredPayments.slice(start, start + pageSize);
+  }, [filteredPayments, currentPage, pageSize]);
+
   return (
     <div className="w-full space-y-6 pb-12 text-left">
 
@@ -371,12 +390,12 @@ export default function BillingPage() {
           <input
             type="text"
             placeholder="Search Member Name, Phone, or Invoice #..."
-            value={search}
-            onChange={e => setSearch(e.target.value)}
+            value={localSearch}
+            onChange={e => setLocalSearch(e.target.value)}
             className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 text-xs font-bold text-slate-800 outline-none focus:border-pink-500 transition-all"
           />
-          {search && (
-            <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 border-none cursor-pointer bg-transparent">
+          {localSearch && (
+            <button onClick={() => { setLocalSearch(''); setSearch(''); }} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 border-none cursor-pointer bg-transparent">
               <X size={14} />
             </button>
           )}
@@ -388,7 +407,7 @@ export default function BillingPage() {
             {(['all', 'paid', 'pending'] as const).map(mode => (
               <button
                 key={mode}
-                onClick={() => setStatusFilter(mode)}
+                onClick={() => { setStatusFilter(mode); setPage(1); }}
                 className={`px-3 py-1.5 rounded-lg text-xs font-bold capitalize transition-all cursor-pointer border-none ${
                   statusFilter === mode ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'
                 }`}
@@ -398,9 +417,9 @@ export default function BillingPage() {
             ))}
           </div>
 
-          {(methodFilter !== 'all' || statusFilter !== 'all' || search) && (
+          {(methodFilter !== 'all' || statusFilter !== 'all' || localSearch) && (
             <button
-              onClick={() => { setSearch(''); setStatusFilter('all'); setMethodFilter('all'); }}
+              onClick={() => { setLocalSearch(''); setSearch(''); setStatusFilter('all'); setMethodFilter('all'); setPage(1); }}
               className="px-3 py-1.5 text-xs font-bold text-rose-600 hover:bg-rose-50 rounded-xl transition-all border border-rose-200 cursor-pointer shrink-0"
             >
               Clear Filters
@@ -448,7 +467,7 @@ export default function BillingPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-xs font-semibold text-slate-700">
-                {filteredPayments.map((p, idx) => {
+                {paginatedPayments.map((p, idx) => {
                   const isPaid = (p.status || 'paid').toLowerCase() === 'paid';
                   const methodNorm = String(p.method || 'UPI');
                   const MethodIcon = methodNorm.includes('Cash') ? Banknote : methodNorm.includes('Card') ? CreditCard : Smartphone;
@@ -535,6 +554,71 @@ export default function BillingPage() {
                 })}
               </tbody>
             </table>
+          </div>
+        )}
+
+        {/* ── PAGINATION FOOTER ── */}
+        {!loading && filteredPayments.length > 0 && (
+          <div className="p-4 border-t border-slate-100 flex flex-wrap items-center justify-between gap-4 text-xs text-slate-500 bg-slate-50/30">
+            <div>
+              Showing {filteredPayments.length === 0 ? 0 : (currentPage - 1) * pageSize + 1} to {Math.min(currentPage * pageSize, filteredPayments.length)} of {filteredPayments.length} transactions
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-1">
+                <button 
+                  disabled={currentPage <= 1}
+                  onClick={() => setPage(p => Math.max(1, p - 1))}
+                  className="p-1.5 border border-slate-200 rounded text-slate-600 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                >
+                  <ChevronLeft size={14} />
+                </button>
+
+                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                  let pageNum = i + 1;
+                  if (totalPages > 5 && currentPage > 3) {
+                    pageNum = currentPage - 3 + i;
+                    if (pageNum > totalPages) pageNum = totalPages - (4 - i);
+                  }
+                  return (
+                    <button
+                      key={pageNum}
+                      onClick={() => setPage(pageNum)}
+                      className={`px-2.5 py-1 text-xs font-bold rounded transition-colors ${
+                        currentPage === pageNum
+                          ? 'bg-slate-900 text-white'
+                          : 'border border-slate-200 text-slate-600 hover:bg-slate-50'
+                      }`}
+                    >
+                      {pageNum}
+                    </button>
+                  );
+                })}
+
+                <button 
+                  disabled={currentPage >= totalPages}
+                  onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                  className="p-1.5 border border-slate-200 rounded text-slate-600 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                >
+                  <ChevronRight size={14} />
+                </button>
+              </div>
+              <div className="flex items-center gap-2 text-xs">
+                <span>Per page:</span>
+                <select 
+                  value={pageSize}
+                  onChange={e => {
+                    setPageSize(Number(e.target.value));
+                    setPage(1);
+                  }}
+                  className="px-2 py-1 border border-slate-200 rounded bg-white font-medium text-slate-700 focus:outline-none"
+                >
+                  <option value={10}>10</option>
+                  <option value={25}>25</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                </select>
+              </div>
+            </div>
           </div>
         )}
       </motion.div>

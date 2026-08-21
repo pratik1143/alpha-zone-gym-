@@ -131,16 +131,14 @@ export default function ClientProfileSystem() {
 
     const fetchFallbackMember = async () => {
       try {
-        const res = await API.get('/members');
-        const list = res.data || [];
-        const found = list.find((m: any) => m.id === id || m.uid === id || m.memberId === id);
-        if (found && isMounted) {
-          setMember(found);
+        const res = await API.get(`/members/${id}`);
+        if (res.data && isMounted) {
+          setMember(res.data);
           setLoading(false);
           return;
         }
       } catch (e) {
-        console.warn('API fallback fetch failed:', e);
+        console.warn('API single member fetch failed, checking local store:', e);
       }
 
       const storeMembers = useGymStore.getState().members;
@@ -188,10 +186,9 @@ export default function ClientProfileSystem() {
 
     const fetchFallbackInvoices = async () => {
       try {
-        const res = await API.get('/billing');
+        const res = await API.get(`/billing?memberId=${id}`);
         const list = res.data || [];
-        const invs = list.filter((inv: any) => inv.memberId === id || inv.memberUid === id);
-        if (isMounted) setMemberInvoices(invs);
+        if (isMounted) setMemberInvoices(list);
       } catch (e) {
         console.warn('API fallback invoices fetch failed:', e);
       }

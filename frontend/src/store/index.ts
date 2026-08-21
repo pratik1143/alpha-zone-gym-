@@ -120,17 +120,10 @@ export const useAuthStore = create<AuthStore>((set) => ({
   }
 }));
 
-// 2. GYM MANAGEMENT STORE
-interface GymStore {
-  members: any[];
-  attendance: any[];
-  payments: any[];
-  selectedBranch: string;
-  sidebarCollapsed: boolean;
+// 2A. DEVICE STATUS STORE (isolated — updates here do NOT rerender member tables)
+interface DeviceStore {
   deviceStatus: 'connected' | 'syncing' | 'offline';
   setDeviceStatus: (status: 'connected' | 'syncing' | 'offline') => void;
-  
-  // Real Device Status Engine
   internetStatus: 'online' | 'offline';
   pythonStatus: 'connected' | 'offline';
   firebaseStatus: 'connected' | 'offline';
@@ -143,12 +136,87 @@ interface GymStore {
   eventsTodayCount: number;
   latestPunchEvent: any | null;
   checkRealDeviceHealth: () => Promise<void>;
+}
+
+export const useDeviceStore = create<DeviceStore>((set) => ({
+  deviceStatus: 'connected',
+  setDeviceStatus: (deviceStatus) => set({ deviceStatus }),
+  internetStatus: typeof navigator !== 'undefined' && navigator.onLine ? 'online' : 'offline',
+  pythonStatus: 'connected',
+  firebaseStatus: 'connected',
+  esslStatus: 'connected',
+  attendanceListenerStatus: 'listening',
+  gateStatus: 'enabled',
+  isDeviceFullyOnline: true,
+  lastHeartbeat: new Date().toISOString(),
+  latencyMs: 12,
+  eventsTodayCount: 0,
+  latestPunchEvent: null,
+
+  checkRealDeviceHealth: async () => {
+    const isNavOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+    if (!isNavOnline) {
+      set({
+        internetStatus: 'offline', pythonStatus: 'offline', esslStatus: 'offline',
+        attendanceListenerStatus: 'stopped', gateStatus: 'disabled',
+        isDeviceFullyOnline: false, deviceStatus: 'offline'
+      });
+      return;
+    }
+    try {
+      const res = await API.get('/python/status');
+      const data = res.data;
+      const pythonConnected = !!data.pythonConnected;
+      const esslConnected = !!data.esslConnected;
+      const listenerRunning = !!data.attendanceListenerRunning;
+      const lastHb = data.lastHeartbeat || new Date().toISOString();
+      const diffSec = data.diffSeconds !== undefined ? data.diffSeconds : 1;
+      const isFullyOnline = isNavOnline && pythonConnected && esslConnected && listenerRunning && diffSec <= 10;
+      set({
+        internetStatus: 'online',
+        pythonStatus: pythonConnected ? 'connected' : 'offline',
+        firebaseStatus: 'connected',
+        esslStatus: esslConnected ? 'connected' : 'offline',
+        attendanceListenerStatus: listenerRunning ? 'listening' : 'stopped',
+        gateStatus: isFullyOnline ? 'enabled' : 'disabled',
+        isDeviceFullyOnline: isFullyOnline,
+        deviceStatus: isFullyOnline ? 'connected' : 'offline',
+        lastHeartbeat: lastHb,
+        latencyMs: data.latencyMs || 12
+      });
+    } catch (err) {
+      set({
+        internetStatus: 'online', pythonStatus: 'connected', firebaseStatus: 'connected',
+        esslStatus: 'connected', attendanceListenerStatus: 'listening', gateStatus: 'enabled',
+        isDeviceFullyOnline: true, deviceStatus: 'connected',
+        lastHeartbeat: new Date().toISOString(), latencyMs: 12
+      });
+    }
+  },
+}));
+
+// 2B. GYM MANAGEMENT STORE (members, attendance, payments, plans)
+// Stale-time caches to prevent redundant full-collection fetches on navigation
+let _membersCacheTs = 0;
+let _attendanceCacheTs = 0;
+let _paymentsCacheTs = 0;
+const STALE_MS = 30_000; // 30 seconds
+
+interface GymStore {
+  members: any[];
+  attendance: any[];
+  payments: any[];
+  selectedBranch: string;
+  sidebarCollapsed: boolean;
+  // Backward compat — proxied to useDeviceStore
+  deviceStatus: 'connected' | 'syncing' | 'offline';
+  setDeviceStatus: (status: 'connected' | 'syncing' | 'offline') => void;
 
   gymPresence: any[];
   setGymPresence: (presence: any[]) => void;
   isLoading: boolean;
   
-  fetchMembers: () => Promise<void>;
+  fetchMembers: (force?: boolean) => Promise<void>;
   addMember: (member: any) => Promise<void>;
   updateMember: (id: string, updates: any) => Promise<void>;
   deleteMember: (id: string) => Promise<void>;
@@ -159,7 +227,7 @@ interface GymStore {
   deleteBiometric: (memberId: string) => Promise<void>;
   syncMemberBiometric: (memberId: string) => Promise<void>;
   
-  fetchAttendance: () => Promise<void>;
+  fetchAttendance: (force?: boolean) => Promise<void>;
   triggerCheckIn: (payload: { memberId: string; method?: string; branch?: string }) => Promise<void>;
   checkoutAttendance: (id: string) => Promise<void>;
   syncLogs: () => Promise<void>;
@@ -170,7 +238,7 @@ interface GymStore {
   attendanceSummary: Record<string, any>;
   fetchAttendanceSummary: (memberId: string) => Promise<void>;
 
-  fetchPayments: () => Promise<void>;
+  fetchPayments: (force?: boolean) => Promise<void>;
   addPayment: (payment: any) => Promise<void>;
   markPaymentPaid: (memberId: string) => Promise<void>;
   setSelectedBranch: (branch: string) => void;
@@ -191,81 +259,11 @@ export const useGymStore = create<GymStore>((set, get) => ({
   setGymPresence: (presence) => set({ gymPresence: presence }),
   selectedBranch: 'Mohali, Punjab',
   sidebarCollapsed: false,
-  deviceStatus: 'connected',
-  setDeviceStatus: (deviceStatus) => set({ deviceStatus }),
-
-  // Real Device Status Engine initial values
-  internetStatus: typeof navigator !== 'undefined' && navigator.onLine ? 'online' : 'offline',
-  pythonStatus: 'connected',
-  firebaseStatus: 'connected',
-  esslStatus: 'connected',
-  attendanceListenerStatus: 'listening',
-  gateStatus: 'enabled',
-  isDeviceFullyOnline: true,
-  lastHeartbeat: new Date().toISOString(),
-  latencyMs: 12,
-  eventsTodayCount: 0,
-  latestPunchEvent: null,
-
-  checkRealDeviceHealth: async () => {
-    const isNavOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
-
-    if (!isNavOnline) {
-      set({
-        internetStatus: 'offline',
-        pythonStatus: 'offline',
-        esslStatus: 'offline',
-        attendanceListenerStatus: 'stopped',
-        gateStatus: 'disabled',
-        isDeviceFullyOnline: false,
-        deviceStatus: 'offline'
-      });
-      return;
-    }
-
-    try {
-      const res = await API.get('/python/status');
-      const data = res.data;
-
-      const pythonConnected = !!data.pythonConnected;
-      const esslConnected = !!data.esslConnected;
-      const listenerRunning = !!data.attendanceListenerRunning;
-      const lastHb = data.lastHeartbeat || new Date().toISOString();
-      const diffSec = data.diffSeconds !== undefined ? data.diffSeconds : 1;
-
-      const isFullyOnline =
-        isNavOnline &&
-        pythonConnected &&
-        esslConnected &&
-        listenerRunning &&
-        diffSec <= 10;
-
-      set({
-        internetStatus: 'online',
-        pythonStatus: pythonConnected ? 'connected' : 'offline',
-        firebaseStatus: 'connected',
-        esslStatus: esslConnected ? 'connected' : 'offline',
-        attendanceListenerStatus: listenerRunning ? 'listening' : 'stopped',
-        gateStatus: isFullyOnline ? 'enabled' : 'disabled',
-        isDeviceFullyOnline: isFullyOnline,
-        deviceStatus: isFullyOnline ? 'connected' : 'offline',
-        lastHeartbeat: lastHb,
-        latencyMs: data.latencyMs || 12
-      });
-    } catch (err) {
-      set({
-        internetStatus: 'online',
-        pythonStatus: 'connected',
-        firebaseStatus: 'connected',
-        esslStatus: 'connected',
-        attendanceListenerStatus: 'listening',
-        gateStatus: 'enabled',
-        isDeviceFullyOnline: true,
-        deviceStatus: 'connected',
-        lastHeartbeat: new Date().toISOString(),
-        latencyMs: 12
-      });
-    }
+  // Backward compat — consumers should migrate to useDeviceStore
+  deviceStatus: 'connected' as 'connected' | 'syncing' | 'offline',
+  setDeviceStatus: (status) => {
+    useDeviceStore.getState().setDeviceStatus(status);
+    set({ deviceStatus: status });
   },
 
   isLoading: false,
@@ -296,7 +294,9 @@ export const useGymStore = create<GymStore>((set, get) => ({
     }
   },
 
-  fetchMembers: async () => {
+  fetchMembers: async (force = false) => {
+    const now = Date.now();
+    if (!force && get().members.length > 0 && (now - _membersCacheTs) < STALE_MS) return;
     try {
       const res = await API.get('/members');
       const rawData = (res.data && Array.isArray(res.data) && res.data.length > 0) ? res.data : [
@@ -316,6 +316,7 @@ export const useGymStore = create<GymStore>((set, get) => ({
         return true;
       });
       set({ members: unique });
+      _membersCacheTs = Date.now();
     } catch (err) {
       console.error('Failed to fetch members:', err);
     }
@@ -355,10 +356,13 @@ export const useGymStore = create<GymStore>((set, get) => ({
     await API.post('/devices/biometric/sync', { memberId });
   },
 
-  fetchAttendance: async () => {
+  fetchAttendance: async (force = false) => {
+    const now = Date.now();
+    if (!force && get().attendance.length > 0 && (now - _attendanceCacheTs) < STALE_MS) return;
     try {
       const res = await API.get('/attendance');
       set({ attendance: res.data });
+      _attendanceCacheTs = Date.now();
     } catch (err) {
       console.error('Failed to fetch attendance:', err);
     }
@@ -421,10 +425,13 @@ export const useGymStore = create<GymStore>((set, get) => ({
     }
   },
 
-  fetchPayments: async () => {
+  fetchPayments: async (force = false) => {
+    const now = Date.now();
+    if (!force && get().payments.length > 0 && (now - _paymentsCacheTs) < STALE_MS) return;
     try {
       const res = await API.get('/billing');
       set({ payments: res.data });
+      _paymentsCacheTs = Date.now();
     } catch (err) {
       console.error('Failed to fetch invoices:', err);
     }

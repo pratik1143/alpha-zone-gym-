@@ -33,17 +33,18 @@ export default function DashboardPage() {
   const [realtimeMembers, setRealtimeMembers] = useState<any[]>([]);
   const [enquiriesCount, setEnquiriesCount] = useState<number>(0);
 
-  // Fallback sync with store
+  // Sync store members to local state
   useEffect(() => {
-    if (members && members.length > 0 && realtimeMembers.length === 0) {
+    if (members && members.length > 0) {
       setRealtimeMembers(members);
     }
   }, [members]);
 
-  // Setup real-time listeners
+  // Setup real-time listeners — ONLY for data that genuinely needs realtime
   useEffect(() => {
     if (!isFirebaseReady || !fDb) return;
     
+    // Employees — small collection, OK to snapshot
     const unsubEmployees = onSnapshot(collection(fDb, 'employees'), (snap) => {
       setEmployees(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     }, (err) => {
@@ -56,44 +57,22 @@ export default function DashboardPage() {
       console.warn("Firestore employeeAttendance listener error:", err);
     });
 
-    const unsubAtt = onSnapshot(collection(fDb, 'attendance_logs'), (snap) => {
-      setMemberAttendance(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    }, (err) => {
-      console.warn("Firestore attendance_logs listener error:", err);
-    });
-
-    const unsubMembers = onSnapshot(collection(fDb, 'members'), (snap) => {
-      setRealtimeMembers(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    }, (err) => {
-      console.warn("Firestore members listener error:", err);
-    });
-
+    // Enquiries — single lightweight listener (replaces both onSnapshot + 5s polling)
     const unsubEnq = onSnapshot(collection(fDb, 'enquiries'), (snap) => {
       setEnquiriesCount(snap.size);
     }, (err) => {
       console.warn("Enquiries listener notice:", err);
+      // Fallback single fetch if listener fails
+      API.get('/enquiries').then(res => {
+        if (Array.isArray(res.data)) setEnquiriesCount(res.data.length);
+      }).catch(() => {});
     });
 
     return () => {
       unsubEmployees();
       unsubEmpAtt();
-      unsubAtt();
-      unsubMembers();
       unsubEnq();
     };
-  }, []);
-
-  useEffect(() => {
-    const loadCounts = async () => {
-      try {
-        const enqRes = await API.get('/enquiries');
-        if (Array.isArray(enqRes.data)) setEnquiriesCount(enqRes.data.length);
-      } catch (_) {}
-    };
-
-    loadCounts();
-    const interval = setInterval(loadCounts, 5000);
-    return () => clearInterval(interval);
   }, []);
 
   // Load real data from backend API

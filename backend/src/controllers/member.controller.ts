@@ -11,6 +11,34 @@ export const getMembers = async (req: Request, res: Response) => {
   }
 };
 
+export const getMembersPaginated = async (req: Request, res: Response) => {
+  try {
+    const { page, limit, search, status } = req.query;
+    const result = await db.getMembersPaginated({
+      page: page ? Number(page) : 1,
+      limit: limit ? Number(limit) : 50,
+      search: typeof search === 'string' ? search : '',
+      status: typeof status === 'string' ? status : 'all'
+    });
+    res.json(result);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+export const getMemberById = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const member = await db.getMemberById(id);
+    if (!member) {
+      return res.status(404).json({ error: 'Member not found' });
+    }
+    res.json(member);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
 function calculateBackendPlanExpiry(planOrObject: any, startDateStr?: string, plansList: any[] = []): string {
   const startDate = startDateStr ? new Date(startDateStr) : new Date();
   const validStart = isNaN(startDate.getTime()) ? new Date() : startDate;

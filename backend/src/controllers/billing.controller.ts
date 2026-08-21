@@ -4,7 +4,11 @@ import { triggerPaymentEmail } from '../services/automation.service';
 
 export const getInvoices = async (req: Request, res: Response) => {
   try {
-    const list = await db.getPayments();
+    const { memberId, limit } = req.query;
+    const list = await db.getPayments({
+      memberId: typeof memberId === 'string' ? memberId : undefined,
+      limit: limit ? Number(limit) : undefined
+    });
     res.json(list);
   } catch (error: any) {
     res.status(500).json({ error: error.message });

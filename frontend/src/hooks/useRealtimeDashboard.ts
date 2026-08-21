@@ -18,6 +18,7 @@ import {
 import { db, isFirebaseReady } from '@/lib/firebase';
 import API from '@/services/api';
 import toast from 'react-hot-toast';
+import { useGymStore } from '@/store';
 
 export interface LiveActivity {
   id: string;
@@ -212,21 +213,41 @@ export function useRealtimeDashboard() {
       console.warn("Firestore realtime dashboard attendance query error:", err);
     }));
 
-    // onSnapshot: payments
-    unsubs.push(onSnapshot(collection(db, 'payments'), snap => {
+    // onSnapshot: payments — limit to recent / this month for dashboard revenue stats
+    const startOfMonth = new Date();
+    startOfMonth.setDate(1);
+    startOfMonth.setHours(0, 0, 0, 0);
+    const payQ = query(
+      collection(db, 'payments'),
+      where('createdAt', '>=', startOfMonth.toISOString().split('T')[0]),
+      limit(100)
+    );
+    unsubs.push(onSnapshot(payQ, snap => {
       payments = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       recalculate();
     }, err => {
       console.warn("Firestore realtime dashboard payments query error:", err);
+      // Fallback: use store payments if listener has indexing/permission issue
+      payments = useGymStore.getState().payments || [];
+      recalculate();
     }));
 
-    // onSnapshot: members
-    unsubs.push(onSnapshot(collection(db, 'members'), snap => {
-      members = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      recalculate();
-    }, err => {
-      console.warn("Firestore realtime dashboard members query error:", err);
-    }));
+    // For members, derive stats from useGymStore instead of full-collection onSnapshot
+    const syncMembersFromStore = () => {
+      const storeMembers = useGymStore.getState().members;
+      if (storeMembers && storeMembers.length > 0) {
+        members = storeMembers;
+        recalculate();
+      }
+    };
+    syncMembersFromStore();
+    const unsubStore = useGymStore.subscribe((state: any) => {
+      if (state.members !== members && state.members.length > 0) {
+        members = state.members;
+        recalculate();
+      }
+    });
+    unsubs.push(unsubStore);
 
     // onSnapshot: notifications — show toast for new checkin/alert events
     const notifQ = query(

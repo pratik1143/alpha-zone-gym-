@@ -7,7 +7,7 @@ import {
   RefreshCw, Zap, ShieldAlert, ArrowRight, Download, Printer,
   FileText, Check, Cpu, Clock, Terminal, Filter, Eye, Info, Trash2, X, Search, Table
 } from 'lucide-react';
-import { useGymStore } from '@/store';
+import { useGymStore, useDeviceStore } from '@/store';
 import toast from 'react-hot-toast';
 import API from '@/services/api';
 import * as XLSX from 'xlsx';
@@ -70,7 +70,8 @@ export default function SmartAutoMappingEngine({
 }: {
   onMigrationComplete?: () => void;
 }) {
-  const { fetchMembers, isDeviceFullyOnline } = useGymStore();
+  const { fetchMembers } = useGymStore();
+  const { isDeviceFullyOnline } = useDeviceStore();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [stagedFile, setStagedFile] = useState<SmartStagedFile | null>(null);

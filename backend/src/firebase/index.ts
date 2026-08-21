@@ -489,6 +489,86 @@ export const db = {
     });
   },
 
+  getMemberById: async (id: string): Promise<any | null> => {
+    if (!id) return null;
+    const firestore = getFirestoreDb();
+    if (firestore) {
+      try {
+        // Direct doc lookup by document ID (O(1) read)
+        const docRef = firestore.collection('members').doc(id);
+        const docSnap = await docRef.get();
+        if (docSnap.exists) {
+          return { id: docSnap.id, ...docSnap.data() };
+        }
+
+        // Secondary lookup by memberId
+        const midSnap = await firestore.collection('members').where('memberId', '==', id).limit(1).get();
+        if (!midSnap.empty) {
+          const doc = midSnap.docs[0];
+          return { id: doc.id, ...doc.data() };
+        }
+
+        // Secondary lookup by uid
+        const uidSnap = await firestore.collection('members').where('uid', '==', id).limit(1).get();
+        if (!uidSnap.empty) {
+          const doc = uidSnap.docs[0];
+          return { id: doc.id, ...doc.data() };
+        }
+      } catch (err: any) {
+        console.warn(`[Firestore] getMemberById error for ${id}:`, err?.message);
+      }
+    }
+    const found = mockMembers.find(m => m.id === id || m.uid === id || m.memberId === id);
+    return found || null;
+  },
+
+  getMembersPaginated: async (params: { page?: number; limit?: number; search?: string; status?: string }): Promise<{ members: any[]; total: number; page: number; limit: number; totalPages: number }> => {
+    const page = Math.max(1, Number(params.page) || 1);
+    const limit = Math.max(1, Math.min(200, Number(params.limit) || 50));
+    const search = (params.search || '').trim().toLowerCase();
+    const status = (params.status || 'all').trim().toLowerCase();
+
+    // Use full getMembers list (with its self-healing and deduplication) for correctness
+    const allMembers = await db.getMembers();
+
+    let filtered = allMembers;
+
+    if (status && status !== 'all') {
+      filtered = filtered.filter(m => {
+        const mStatus = (m.status || '').toLowerCase();
+        if (status === 'active') return mStatus === 'active' || mStatus === 'expiring soon' || mStatus === 'expiring';
+        if (status === 'expired') return mStatus === 'expired';
+        if (status === 'frozen') return mStatus === 'frozen';
+        if (status === 'pt') return !!m.trainer;
+        return mStatus === status;
+      });
+    }
+
+    if (search) {
+      const digitsOnly = search.replace(/\D/g, '');
+      filtered = filtered.filter(m => {
+        const nameMatch = (m.name || '').toLowerCase().includes(search);
+        const idMatch = (m.memberId || '').toLowerCase().includes(search) || (m.id || '').toLowerCase().includes(search) || (m.biometricId || '').toLowerCase().includes(search);
+        const phoneMatch = digitsOnly.length >= 3 && (m.phone || '').replace(/\D/g, '').includes(digitsOnly);
+        const emailMatch = (m.email || '').toLowerCase().includes(search);
+        return nameMatch || idMatch || phoneMatch || emailMatch;
+      });
+    }
+
+    const total = filtered.length;
+    const totalPages = Math.ceil(total / limit) || 1;
+    const offset = (page - 1) * limit;
+    const paginatedMembers = filtered.slice(offset, offset + limit);
+
+    return {
+      members: paginatedMembers,
+      total,
+      page,
+      limit,
+      totalPages
+    };
+  },
+
   addMember: async (member: any): Promise<any> => {
     const firestore = getFirestoreDb();
     
@@ -897,13 +977,33 @@ export const db = {
     }
   },
 
-  getPayments: async (): Promise<any[]> => {
+  getPayments: async (options?: { memberId?: string; limit?: number }): Promise<any[]> => {
     const firestore = getFirestoreDb();
     if (firestore) {
-      const snapshot = await firestore.collection('payments').orderBy('date', 'desc').get();
-      return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      let q: admin.firestore.Query = firestore.collection('payments');
+      if (options?.memberId) {
+        q = q.where('memberId', '==', options.memberId);
+      }
+      // If no memberId filter, order by date
+      if (!options?.memberId) {
+        q = q.orderBy('date', 'desc');
+      }
+      if (options?.limit && options.limit > 0) {
+        q = q.limit(options.limit);
+      }
+      const snapshot = await q.get();
+      const list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      return list.sort((a: any, b: any) => new Date(b.date || b.createdAt || 0).getTime() - new Date(a.date || a.createdAt || 0).getTime());
     }
-    return mockPayments.sort((a, b) => new Date(b.date || b.createdAt || 0).getTime() - new Date(a.date || a.createdAt || 0).getTime());
+    let list = mockPayments;
+    if (options?.memberId) {
+      list = list.filter(p => p.memberId === options.memberId || p.memberUid === options.memberId);
+    }
+    list = list.sort((a, b) => new Date(b.date || b.createdAt || 0).getTime() - new Date(a.date || a.createdAt || 0).getTime());
+    if (options?.limit && options.limit > 0) {
+      list = list.slice(0, options.limit);
+    }
+    return list;
   },
 
   addPayment: async (payment: any): Promise<any> => {

@@ -12,7 +12,7 @@ import {
   Upload, Mail, BarChart2, AlertTriangle, UserPlus, UserX, Apple as AppleIcon,
   Wifi, UserCheck, Sparkles, Cpu, Phone, MessageSquare, ShieldAlert, Gift, Briefcase
 } from 'lucide-react';
-import { useAuthStore, useGymStore } from '@/store';
+import { useAuthStore, useGymStore, useDeviceStore } from '@/store';
 import { getInitials } from '@/lib/utils';
 import toast from 'react-hot-toast';
 import { collection, query, orderBy, limit, onSnapshot } from 'firebase/firestore';
@@ -192,6 +192,7 @@ export default function DashboardLayout({
         status = 'connected';
       }
       
+      useDeviceStore.getState().setDeviceStatus(status);
       useGymStore.setState({ deviceStatus: status });
     }, (err) => {
       console.warn("Firestore dashboard devices listener error:", err);

@@ -6,7 +6,7 @@ import {
   Wifi, Cpu, Database, Activity, Shield, Unlock, Lock,
   AlertTriangle, RefreshCw, CheckCircle2, XCircle, Clock
 } from 'lucide-react';
-import { useGymStore } from '@/store';
+import { useDeviceStore } from '@/store';
 
 /**
  * Top Header 6-Pill Health Status Component
@@ -21,7 +21,7 @@ export function RealDeviceHeaderBadges() {
     gateStatus,
     isDeviceFullyOnline,
     checkRealDeviceHealth
-  } = useGymStore();
+  } = useDeviceStore();
 
   useEffect(() => {
     checkRealDeviceHealth();
@@ -82,7 +82,7 @@ export function RealDeviceHeaderBadges() {
  * Sticky Red Disconnect Banner (shows when offline or disconnected)
  */
 export function RealDeviceDisconnectBanner() {
-  const { isDeviceFullyOnline, checkRealDeviceHealth } = useGymStore();
+  const { isDeviceFullyOnline, checkRealDeviceHealth } = useDeviceStore();
 
   if (isDeviceFullyOnline) return null;
 
@@ -129,7 +129,7 @@ export default function RealDeviceStatusCard() {
     latencyMs,
     eventsTodayCount,
     checkRealDeviceHealth
-  } = useGymStore();
+  } = useDeviceStore();
 
   const getHeartbeatAge = () => {
     if (!lastHeartbeat) return 'N/A';
