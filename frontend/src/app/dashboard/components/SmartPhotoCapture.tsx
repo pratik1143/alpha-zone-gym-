@@ -322,32 +322,30 @@ export default function SmartPhotoCapture({ value, onCaptureComplete, label = 'M
         let photoURL = '';
         let thumbnailURL = '';
 
-        const uploadToFirebase = async () => {
-          // Upload Main Photo
-          const mainRef = ref(storage, `${folder}/photo_${id}.webp`);
-          await uploadBytes(mainRef, mainBlob);
-          const pUrl = await getDownloadURL(mainRef);
-
-          // Upload Thumbnail
-          const thumbRef = ref(storage, `${folder}/thumb_${id}.webp`);
-          await uploadBytes(thumbRef, thumbBlob);
-          const tUrl = await getDownloadURL(thumbRef);
-          
-          return { pUrl, tUrl };
-        };
-
-        const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Firebase upload timeout')), 2500)
-        );
-
         try {
-          const result = await Promise.race([uploadToFirebase(), timeoutPromise]) as { pUrl: string, tUrl: string };
+          // Attempt Firebase Storage Upload with 2.5s timeout
+          const uploadPromise = (async () => {
+            const mainRef = ref(storage, `${folder}/photo_${id}.webp`);
+            await uploadBytes(mainRef, mainBlob);
+            const pUrl = await getDownloadURL(mainRef);
+
+            const thumbRef = ref(storage, `${folder}/thumb_${id}.webp`);
+            await uploadBytes(thumbRef, thumbBlob);
+            const tUrl = await getDownloadURL(thumbRef);
+            return { pUrl, tUrl };
+          })();
+
+          const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Firebase upload timeout')), 2500)
+          );
+
+          const result = await Promise.race([uploadPromise, timeoutPromise]) as { pUrl: string, tUrl: string };
           photoURL = result.pUrl;
           thumbnailURL = result.tUrl;
         } catch (firebaseErr) {
-          console.warn('Firebase upload failed or timed out, falling back to base64 encoding:', firebaseErr);
+          console.warn('Firebase storage rules unconfigured/unauthorized, using instant Base64 WebP encoding:', firebaseErr);
           
-          // Convert mainBlob to base64 Data URL
+          // Convert mainBlob to compressed Base64 Data URL
           const reader = new FileReader();
           const base64Promise = new Promise<string>((resolve) => {
             reader.onloadend = () => resolve(reader.result as string);

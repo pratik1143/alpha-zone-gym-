@@ -62,19 +62,30 @@ export default function ClientProfileSystem() {
   const handleSavePhoto = async (photoUrl: string) => {
     if (!member || !member.id) return;
     try {
-      await updateDoc(doc(db, 'members', member.id), {
-        photo: photoUrl,
-        avatarUrl: photoUrl,
-        avatar: photoUrl,
-        updatedAt: new Date().toISOString()
-      });
+      try {
+        await updateDoc(doc(db, 'members', member.id), {
+          photo: photoUrl,
+          avatarUrl: photoUrl,
+          avatar: photoUrl,
+          updatedAt: new Date().toISOString()
+        });
+      } catch (fErr) {
+        console.warn('Direct Firestore update doc notice, calling API fallback:', fErr);
+        await API.put(`/members/${member.id}`, {
+          photo: photoUrl,
+          avatarUrl: photoUrl,
+          avatar: photoUrl,
+          updatedAt: new Date().toISOString()
+        });
+      }
 
-      setMember({ ...member, photo: photoUrl, avatarUrl: photoUrl, avatar: photoUrl });
+      setMember((prev: any) => ({ ...prev, photo: photoUrl, avatarUrl: photoUrl, avatar: photoUrl }));
       toast.success('Member profile photo updated successfully!');
       setShowPhotoModal(false);
       useGymStore.getState().fetchMembers();
     } catch (err: any) {
-      toast.error('Failed to update photo: ' + err.message);
+      console.error('Error saving photo:', err);
+      toast.error('Failed to update photo: ' + (err.message || 'Unknown error'));
     }
   };
 
