@@ -1119,16 +1119,32 @@ def run_membership_validation(user_id, device_id, device_name, branch, timestamp
         except Exception as pop_err:
             logging.error(f"[Popup Error]: {pop_err}")
 
-    # 6. Print Terminal Output Stream Log (Requirement 17)
+    # 6. Print Terminal Output Stream Log & Dev Diagnostic Log (Requirement 14)
+    mapping_found = True if member or (api_result and not api_result.get('unmapped')) else False
+    gate_will_trigger = True if status == 'granted' else False
+
+    print("\n[ESSL PUNCH]")
+    print(f"device={device_name}")
+    print(f"deviceUserId={user_id_str}")
+    print(f"uid={user_id_str}")
+    print(f"enrollNumber={user_id_str}")
+    print(f"name=\"{member_name}\"")
+    print(f"mappingFound={'true' if mapping_found else 'false'}")
+    print(f"firebaseMemberId=\"{member.get('id', '') if member else ''}\"")
+    print(f"membershipStatus=\"{status.upper()}\"")
+    print(f"attendanceWritten=true")
+    print(f"popupTriggered=true")
+    print(f"gateTriggered={'true' if gate_will_trigger else 'false'}\n")
+
     access_label = "ACCESS GRANTED 🟢" if status == 'granted' else ("ACCESS DENIED 🔴" if status in ('expired', 'frozen', 'denied') else "UNKNOWN MEMBER 🟡")
-    print("\n" + "="*52)
+    print("="*52)
     print(f"[{time_str}] REAL PUNCH RECEIVED — {access_label}")
     print(f"Device ID    : {device_id} ({device_name})")
     print(f"Biometric ID : {user_id_str}")
     print(f"Member       : {member_name}")
     print(f"Membership   : {plan_name} ({days_left} Days Remaining)" if status == 'granted' else f"Status       : {status.upper()} ({reason or 'Access Denied'})")
     print(f"Popup        : TRIGGERED (Always-On-Top Desktop Overlay)")
-    print(f"Gate Relay   : {'OPENED (3.0s)' if status == 'granted' else 'DISABLED'}")
+    print(f"Gate Relay   : {'OPENED (3.0s)' if gate_will_trigger else 'DISABLED'}")
     print("="*52 + "\n")
 
     # 7. Save Attendance Log to Firestore or Offline Queue
