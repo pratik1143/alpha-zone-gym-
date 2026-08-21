@@ -25,12 +25,10 @@ interface PopupData {
 export default function AttendancePopupManager() {
   const [queue, setQueue] = useState<PopupData[]>([]);
   const [activePopup, setActivePopup] = useState<PopupData | null>(null);
-  const lastDocId = useRef<string>('');
+  const processedDocIds = useRef<Set<string>>(new Set());
 
   // Audio elements or synthesized sounds can be triggered here
   const playSound = (type: string) => {
-    // Basic beep synthesizer for demo purposes. 
-    // In production, real .mp3 files would be played.
     try {
       const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
       if (!AudioContext) return;
@@ -67,16 +65,16 @@ export default function AttendancePopupManager() {
   };
 
   const processPunchItem = (data: any, docId: string) => {
-    if (!docId || docId === lastDocId.current) return;
-    lastDocId.current = docId;
+    if (!docId || processedDocIds.current.has(docId)) return;
+    processedDocIds.current.add(docId);
 
-    // Suppress Web Overlay Popups and Toasts for historical punches (>120s old)
+    // Strictly suppress popups for punches older than 15 seconds
     const rawTimeStr = data.checkIn || data.timestamp || data.createdAt;
     if (rawTimeStr) {
       const punchMs = new Date(rawTimeStr).getTime();
       const nowMs = Date.now();
       const ageSec = (nowMs - punchMs) / 1000;
-      if (ageSec > 120) {
+      if (ageSec > 15 || ageSec < -5) {
         return;
       }
     }
@@ -153,11 +151,12 @@ export default function AttendancePopupManager() {
   useEffect(() => {
     let isMounted = true;
     
-    // Set initial baseline punch on mount
+    // Set initial baseline punch on mount to prevent stale popups
     API.get('/attendance/latest-punch').then(res => {
       const latest = res.data?.latestPunch;
       if (latest && isMounted) {
-        lastDocId.current = latest.id || `${latest.memberId}_${latest.checkIn || latest.createdAt}`;
+        const id = latest.id || `${latest.memberId}_${latest.checkIn || latest.createdAt}`;
+        processedDocIds.current.add(id);
       }
     }).catch(() => {});
 
@@ -172,7 +171,7 @@ export default function AttendancePopupManager() {
       } catch (err) {}
     };
 
-    const interval = setInterval(pollLatestPunch, 1500);
+    const interval = setInterval(pollLatestPunch, 2500);
     return () => {
       isMounted = false;
       clearInterval(interval);
@@ -192,6 +191,8 @@ export default function AttendancePopupManager() {
       (snapshot) => {
         if (isInitialLoad) {
           isInitialLoad = false;
+          // Baseline: mark all historical docs in snapshot as already processed
+          snapshot.docs.forEach(doc => processedDocIds.current.add(doc.id));
           return;
         }
         snapshot.docChanges().forEach((change) => {

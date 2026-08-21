@@ -162,7 +162,7 @@ export const createCheckIn = async (req: Request, res: Response) => {
     };
 
     if (status === 'denied') {
-      return res.status(403).json({ error: `Access Denied: ${reason}` });
+      return res.status(403).json({ success: false, access: 'denied', status: 'denied', reason, error: `Access Denied: ${reason}` });
     }
 
     // Direct hardware relay unlock signal for verified check-in

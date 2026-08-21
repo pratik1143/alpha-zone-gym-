@@ -297,44 +297,47 @@ export default function BillingTab({ member }: { member: any }) {
         </div>
       </div>
 
-      {/* ── Official Billing History Table Module (Clean Elevated Structure) ── */}
-      <div className="bg-white rounded-2xl border border-slate-300 shadow-sm relative">
-        {/* Table Top Blue Header */}
-        <div className="bg-[#0b5cbe] text-white px-6 py-3.5 flex items-center justify-between rounded-t-2xl">
-          <div className="flex items-center gap-2">
-            <Receipt size={20} />
-            <h3 className="font-extrabold text-base tracking-wide">Billing history</h3>
+      {/* ── Official Billing History Table Module (Spacious & Clean Layout) ── */}
+      <div className="bg-white rounded-3xl border border-slate-300 shadow-md relative min-h-[480px] overflow-hidden">
+        {/* Table Top Header */}
+        <div className="bg-[#0b5cbe] text-white px-6 py-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <Receipt size={22} className="text-blue-200" />
+            <div>
+              <h3 className="font-extrabold text-base tracking-wide">Billing History</h3>
+              <p className="text-[11px] text-blue-100 font-medium">Complete payment records, invoices, and transaction breakdown</p>
+            </div>
           </div>
-          <span className="text-xs bg-white/20 text-white font-bold px-3 py-1 rounded-full">
-            {member.name}
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="text-xs bg-white/20 text-white font-black px-3.5 py-1.5 rounded-full border border-white/20">
+              {member.name} ({invoices.length} Entries)
+            </span>
+          </div>
         </div>
 
-        {/* Scrollable Container with Minimum Width for Perfect Alignment */}
-        <div className="overflow-x-auto custom-scrollbar">
-          <table className="w-full text-left text-xs border-collapse min-w-[1100px]">
+        {/* Scrollable Container with Extra Bottom Padding to Prevent Dropdown Clipping */}
+        <div className="overflow-x-auto custom-scrollbar pb-24">
+          <table className="w-full text-left text-xs border-collapse min-w-[1200px]">
             <thead>
               <tr className="bg-[#0e68d6] text-white font-extrabold text-[11px] uppercase tracking-wider border-b border-blue-700">
-                <th className="px-4 py-3.5 whitespace-nowrap">Date</th>
-                <th className="px-4 py-3.5 whitespace-nowrap">Invoice No</th>
-                <th className="px-4 py-3.5 whitespace-nowrap min-w-[240px]">Item</th>
-                <th className="px-4 py-3.5 text-right whitespace-nowrap">Item amount</th>
-                <th className="px-4 py-3.5 text-right whitespace-nowrap">Other Charges</th>
-                <th className="px-4 py-3.5 text-right whitespace-nowrap">Discount</th>
-                <th className="px-4 py-3.5 text-right whitespace-nowrap">Tax</th>
-                <th className="px-4 py-3.5 text-right whitespace-nowrap">Reward Points</th>
-                <th className="px-4 py-3.5 text-right whitespace-nowrap">Net payable</th>
-                <th className="px-4 py-3.5 text-right whitespace-nowrap">Amount paid</th>
-                <th className="px-4 py-3.5 text-right whitespace-nowrap">Pending</th>
-                <th className="px-4 py-3.5 whitespace-nowrap">Payment type</th>
-                <th className="px-4 py-3.5 whitespace-nowrap">Status</th>
-                <th className="px-4 py-3.5 text-center whitespace-nowrap">Action</th>
+                <th className="px-4 py-4 whitespace-nowrap">Date</th>
+                <th className="px-4 py-4 whitespace-nowrap">Invoice No</th>
+                <th className="px-4 py-4 whitespace-nowrap min-w-[250px]">Package / Description</th>
+                <th className="px-4 py-4 text-right whitespace-nowrap">Original Amount</th>
+                <th className="px-4 py-4 text-right whitespace-nowrap">Discount</th>
+                <th className="px-4 py-4 text-right whitespace-nowrap">Tax</th>
+                <th className="px-4 py-4 text-right whitespace-nowrap font-black">Net Payable</th>
+                <th className="px-4 py-4 text-right whitespace-nowrap font-black">Amount Paid</th>
+                <th className="px-4 py-4 text-right whitespace-nowrap">Pending</th>
+                <th className="px-4 py-4 whitespace-nowrap">Method</th>
+                <th className="px-4 py-4 text-center whitespace-nowrap">Status</th>
+                <th className="px-4 py-4 text-center whitespace-nowrap">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200 text-slate-800 font-medium">
               {invoices.length === 0 ? (
                 <tr>
-                  <td colSpan={14} className="py-12 text-center text-slate-400 font-bold text-sm">
+                  <td colSpan={12} className="py-16 text-center text-slate-400 font-bold text-sm">
                     No billing history recorded yet. Click "Create New Bill" to add an entry.
                   </td>
                 </tr>
@@ -357,7 +360,7 @@ export default function BillingTab({ member }: { member: any }) {
                   const displayStatus = pendingAmt <= 0 ? 'PAID' : (paidAmt > 0 ? 'PARTIAL' : 'PENDING');
 
                   return (
-                    <tr key={inv.id || idx} className="hover:bg-blue-50/50 transition-colors border-b border-slate-100">
+                    <tr key={inv.id || idx} className="hover:bg-blue-50/60 transition-colors border-b border-slate-100">
                       {/* Date */}
                       <td className="px-4 py-4 whitespace-nowrap font-mono text-slate-700 font-bold">
                         {inv.date || formatDate(member.joinDate)}
@@ -369,43 +372,39 @@ export default function BillingTab({ member }: { member: any }) {
                       </td>
 
                       {/* Item Description & Validity Period */}
-                      <td className="px-4 py-4 min-w-[240px]">
+                      <td className="px-4 py-4 min-w-[250px]">
                         <div className="font-extrabold text-slate-900">{planTitle}</div>
                         <div className="text-[11px] text-slate-500 font-mono mt-0.5">({startDate} to {expiryDate})</div>
                       </td>
 
-                      {/* Item amount */}
-                      <td className="px-4 py-4 text-right font-mono font-bold text-slate-900">{origItemAmt.toFixed(2)}</td>
-
-                      {/* Other Charges */}
-                      <td className="px-4 py-4 text-right font-mono text-slate-400">{otherAmt.toFixed(2)}</td>
+                      {/* Original Amount */}
+                      <td className="px-4 py-4 text-right font-mono font-bold text-slate-900">₹{origItemAmt.toLocaleString('en-IN')}</td>
 
                       {/* Discount */}
-                      <td className="px-4 py-4 text-right font-mono text-slate-400">{discountAmt.toFixed(2)}</td>
+                      <td className="px-4 py-4 text-right font-mono text-emerald-600 font-bold">{discountAmt > 0 ? `- ₹${discountAmt.toLocaleString('en-IN')}` : '₹0'}</td>
 
                       {/* Tax */}
-                      <td className="px-4 py-4 text-right font-mono text-slate-400">{taxAmt.toFixed(2)}</td>
-
-                      {/* Reward Points */}
-                      <td className="px-4 py-4 text-right font-mono text-slate-400">0.00</td>
+                      <td className="px-4 py-4 text-right font-mono text-slate-500">{taxAmt > 0 ? `₹${taxAmt.toLocaleString('en-IN')}` : '₹0'}</td>
 
                       {/* Net payable */}
-                      <td className="px-4 py-4 text-right font-mono font-black text-slate-900">{netPayable.toFixed(2)}</td>
+                      <td className="px-4 py-4 text-right font-mono font-black text-slate-900">₹{netPayable.toLocaleString('en-IN')}</td>
 
                       {/* Amount paid */}
-                      <td className="px-4 py-4 text-right font-mono font-black text-emerald-600">{paidAmt.toFixed(2)}</td>
+                      <td className="px-4 py-4 text-right font-mono font-black text-emerald-600">₹{paidAmt.toLocaleString('en-IN')}</td>
 
                       {/* Pending */}
-                      <td className="px-4 py-4 text-right font-mono font-bold text-red-500">{pendingAmt.toFixed(2)}</td>
+                      <td className="px-4 py-4 text-right font-mono font-bold text-red-500">{pendingAmt > 0 ? `₹${pendingAmt.toLocaleString('en-IN')}` : '₹0'}</td>
 
                       {/* Payment type */}
                       <td className="px-4 py-4 whitespace-nowrap font-bold text-slate-700">
-                        {inv.method || 'First payment'}
+                        <span className="px-2 py-1 bg-slate-100 rounded text-[11px] font-bold text-slate-700">
+                          {inv.method || 'Cash'}
+                        </span>
                       </td>
 
                       {/* Status */}
-                      <td className="px-4 py-4 whitespace-nowrap">
-                        <span className={`px-2.5 py-1 rounded text-[10px] font-black uppercase tracking-wider ${
+                      <td className="px-4 py-4 whitespace-nowrap text-center">
+                        <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider inline-block ${
                           displayStatus === 'PAID' ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' :
                           displayStatus === 'PARTIAL' ? 'bg-amber-100 text-amber-800 border border-amber-300' :
                           'bg-red-100 text-red-800 border border-red-300'
@@ -414,76 +413,105 @@ export default function BillingTab({ member }: { member: any }) {
                         </span>
                       </td>
 
-                      {/* Action Dropdown Menu Button */}
-                      <td className="px-4 py-4 text-center whitespace-nowrap relative">
-                        <button
-                          type="button"
-                          onClick={() => setActiveDropdownIndex(activeDropdownIndex === idx ? null : idx)}
-                          className="px-3.5 py-1.5 bg-[#d32f2f] hover:bg-[#c62828] text-white font-black rounded text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1 mx-auto cursor-pointer border-none shadow-md"
-                        >
-                          <span>ACTION</span>
-                          <ChevronDown size={14} />
-                        </button>
+                      {/* Actions & Dropdown */}
+                      <td className="px-4 py-4 text-center whitespace-nowrap">
+                        <div className="flex items-center justify-center gap-1.5 relative">
+                          {/* Quick Icon Actions */}
+                          <button
+                            type="button"
+                            title="View Invoice"
+                            onClick={() => setViewInvoice(inv)}
+                            className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-all border-none cursor-pointer"
+                          >
+                            <Eye size={15} />
+                          </button>
+                          <button
+                            type="button"
+                            title="Print Invoice"
+                            onClick={() => handlePrint(inv)}
+                            className="p-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg transition-all border-none cursor-pointer"
+                          >
+                            <Printer size={15} />
+                          </button>
+                          <button
+                            type="button"
+                            title="Send WhatsApp Bill"
+                            onClick={() => handleWhatsApp(inv)}
+                            className="p-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-lg transition-all border-none cursor-pointer"
+                          >
+                            <MessageSquare size={15} />
+                          </button>
 
-                        {/* Action Dropdown Options (High Elevation z-200) */}
-                        {activeDropdownIndex === idx && (
-                          <div className="absolute right-4 top-12 bg-white border border-slate-300 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.2)] z-[200] w-48 py-2 text-left text-xs font-bold text-slate-800 animate-in fade-in">
-                            <button
-                              onClick={() => {
-                                setShowUpgradeModal(true);
-                                setActiveDropdownIndex(null);
-                              }}
-                              className="w-full px-4 py-2.5 hover:bg-slate-100 flex items-center gap-2 text-left border-none bg-transparent cursor-pointer"
-                            >
-                              <RefreshCw size={14} className="text-blue-600" />
-                              <span>Renew</span>
-                            </button>
+                          {/* ACTION Dropdown Button */}
+                          <button
+                            type="button"
+                            onClick={() => setActiveDropdownIndex(activeDropdownIndex === idx ? null : idx)}
+                            className="px-3 py-1.5 bg-[#d32f2f] hover:bg-[#c62828] text-white font-black rounded-lg text-xs uppercase tracking-wider transition-all flex items-center gap-1 cursor-pointer border-none shadow-md active:scale-95"
+                          >
+                            <span>ACTION</span>
+                            <ChevronDown size={14} />
+                          </button>
 
-                            <button
-                              onClick={() => {
-                                setShowUpgradeModal(true);
-                                setActiveDropdownIndex(null);
-                              }}
-                              className="w-full px-4 py-2.5 hover:bg-slate-100 flex items-center gap-2 text-left border-none bg-transparent cursor-pointer"
-                            >
-                              <ArrowUpRight size={14} className="text-indigo-600" />
-                              <span>Upgrade</span>
-                            </button>
+                          {/* Action Dropdown Menu (Positioned cleanly) */}
+                          {activeDropdownIndex === idx && (
+                            <div className="absolute right-0 bottom-full mb-1 bg-white border border-slate-300 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.25)] z-[300] w-48 py-2 text-left text-xs font-bold text-slate-800 animate-in fade-in">
+                              <button
+                                onClick={() => {
+                                  setShowUpgradeModal(true);
+                                  setActiveDropdownIndex(null);
+                                }}
+                                className="w-full px-4 py-2.5 hover:bg-slate-100 flex items-center gap-2 text-left border-none bg-transparent cursor-pointer"
+                              >
+                                <RefreshCw size={14} className="text-blue-600" />
+                                <span>Renew</span>
+                              </button>
 
-                            <button
-                              onClick={() => {
-                                setViewInvoice(inv);
-                                setActiveDropdownIndex(null);
-                              }}
-                              className="w-full px-4 py-2.5 hover:bg-slate-100 flex items-center gap-2 text-left border-none bg-transparent cursor-pointer"
-                            >
-                              <Eye size={14} className="text-slate-600" />
-                              <span>View</span>
-                            </button>
+                              <button
+                                onClick={() => {
+                                  setShowUpgradeModal(true);
+                                  setActiveDropdownIndex(null);
+                                }}
+                                className="w-full px-4 py-2.5 hover:bg-slate-100 flex items-center gap-2 text-left border-none bg-transparent cursor-pointer"
+                              >
+                                <ArrowUpRight size={14} className="text-indigo-600" />
+                                <span>Upgrade</span>
+                              </button>
 
-                            <button
-                              onClick={() => {
-                                handlePrint(inv);
-                                setActiveDropdownIndex(null);
-                              }}
-                              className="w-full px-4 py-2.5 hover:bg-slate-100 flex items-center gap-2 text-left border-none bg-transparent cursor-pointer"
-                            >
-                              <Printer size={14} className="text-slate-600" />
-                              <span>Print bill</span>
-                            </button>
+                              <button
+                                onClick={() => {
+                                  setViewInvoice(inv);
+                                  setActiveDropdownIndex(null);
+                                }}
+                                className="w-full px-4 py-2.5 hover:bg-slate-100 flex items-center gap-2 text-left border-none bg-transparent cursor-pointer"
+                              >
+                                <Eye size={14} className="text-slate-600" />
+                                <span>View Receipt</span>
+                              </button>
 
-                            <button
-                              onClick={() => {
-                                handleWhatsApp(inv);
-                                setActiveDropdownIndex(null);
-                              }}
-                              className="w-full px-4 py-2.5 hover:bg-slate-100 flex items-center gap-2 text-left border-none bg-transparent cursor-pointer text-emerald-700 font-extrabold"
-                            >
-                              <MessageSquare size={14} className="text-emerald-600" />
-                              <span>Whatsapp Bill</span>
-                            </button>
-                          </div>
-                        )}
+                              <button
+                                onClick={() => {
+                                  handlePrint(inv);
+                                  setActiveDropdownIndex(null);
+                                }}
+                                className="w-full px-4 py-2.5 hover:bg-slate-100 flex items-center gap-2 text-left border-none bg-transparent cursor-pointer"
+                              >
+                                <Printer size={14} className="text-slate-600" />
+                                <span>Print Bill</span>
+                              </button>
+
+                              <button
+                                onClick={() => {
+                                  handleWhatsApp(inv);
+                                  setActiveDropdownIndex(null);
+                                }}
+                                className="w-full px-4 py-2.5 hover:bg-slate-100 flex items-center gap-2 text-left border-none bg-transparent cursor-pointer text-emerald-700 font-extrabold"
+                              >
+                                <MessageSquare size={14} className="text-emerald-600" />
+                                <span>WhatsApp Bill</span>
+                              </button>
+                            </div>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );
@@ -494,24 +522,30 @@ export default function BillingTab({ member }: { member: any }) {
         </div>
 
         {/* Bottom Export Bar (EXCEL & PDF Buttons) */}
-        <div className="bg-slate-50 px-6 py-4 border-t border-slate-200 flex items-center justify-start gap-3">
-          <button
-            type="button"
-            onClick={handleExportCSV}
-            className="px-5 py-2.5 bg-[#d32f2f] hover:bg-[#c62828] text-white font-black rounded-xl text-xs uppercase tracking-wider flex items-center gap-2 transition-all cursor-pointer border-none shadow-md"
-          >
-            <FileSpreadsheet size={15} />
-            <span>EXCEL</span>
-          </button>
+        <div className="bg-slate-50 px-6 py-4 border-t border-slate-200 flex items-center justify-between">
+          <div className="text-xs text-slate-500 font-bold">
+            Showing <span className="font-extrabold text-slate-800">{invoices.length}</span> billing transactions
+          </div>
 
-          <button
-            type="button"
-            onClick={handleExportPDF}
-            className="px-5 py-2.5 bg-[#d32f2f] hover:bg-[#c62828] text-white font-black rounded-xl text-xs uppercase tracking-wider flex items-center gap-2 transition-all cursor-pointer border-none shadow-md"
-          >
-            <FileCode size={15} />
-            <span>PDF</span>
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={handleExportCSV}
+              className="px-5 py-2.5 bg-[#d32f2f] hover:bg-[#c62828] text-white font-black rounded-xl text-xs uppercase tracking-wider flex items-center gap-2 transition-all cursor-pointer border-none shadow-md active:scale-95"
+            >
+              <FileSpreadsheet size={15} />
+              <span>EXCEL</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleExportPDF}
+              className="px-5 py-2.5 bg-[#d32f2f] hover:bg-[#c62828] text-white font-black rounded-xl text-xs uppercase tracking-wider flex items-center gap-2 transition-all cursor-pointer border-none shadow-md active:scale-95"
+            >
+              <FileCode size={15} />
+              <span>PDF</span>
+            </button>
+          </div>
         </div>
       </div>
 
