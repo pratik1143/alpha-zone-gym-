@@ -845,23 +845,242 @@ export const db = {
       const snapshot = await firestore.collection('payments').orderBy('date', 'desc').get();
       return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     }
-    return [];
+    return mockPayments.sort((a, b) => new Date(b.date || b.createdAt || 0).getTime() - new Date(a.date || a.createdAt || 0).getTime());
   },
 
   addPayment: async (payment: any): Promise<any> => {
+    const todayStr = new Date().toISOString().split('T')[0];
+    const origAmt = Number(payment.originalAmount !== undefined ? payment.originalAmount : (payment.price || payment.amount || 0));
+    const discAmt = Number(payment.discountAmount !== undefined ? payment.discountAmount : (payment.discount || 0));
+    const taxAmt = Number(payment.taxAmount !== undefined ? payment.taxAmount : (payment.gst || payment.tax || 0));
+    const othAmt = Number(payment.otherCharges || 0);
+
+    const calculatedNet = Math.max(0, origAmt - discAmt + taxAmt + othAmt);
+    const netPayable = Number(payment.netPayable !== undefined ? payment.netPayable : (calculatedNet > 0 ? calculatedNet : (payment.amount || 0)));
+    const amountPaid = Number(payment.amountPaid !== undefined ? payment.amountPaid : (payment.paid !== undefined ? payment.paid : netPayable));
+    const outstanding = Math.max(0, netPayable - amountPaid);
+    const status = payment.status || (outstanding <= 0 ? 'paid' : (amountPaid > 0 ? 'partial' : 'pending'));
+
+    const idempotencyKey = payment.idempotencyKey || `pay_${payment.memberId}_${payment.plan}_${payment.date || todayStr}`;
+
     const newPayment = {
       ...payment,
-      invoice: 'INV-' + Math.floor(100000 + Math.random() * 900000),
-      date: new Date().toISOString().split('T')[0],
-      gst: Math.floor(payment.amount * 0.18)
+      idempotencyKey,
+      invoice: payment.invoiceNumber || payment.invoice || ('INV-' + Math.floor(100000 + Math.random() * 900000)),
+      invoiceNumber: payment.invoiceNumber || payment.invoice || ('INV-' + Math.floor(100000 + Math.random() * 900000)),
+      date: payment.date || todayStr,
+      originalAmount: origAmt,
+      discountAmount: discAmt,
+      discount: discAmt,
+      taxAmount: taxAmt,
+      gst: taxAmt,
+      otherCharges: othAmt,
+      netPayable: netPayable,
+      amount: netPayable,
+      amountPaid: amountPaid,
+      paid: amountPaid,
+      outstandingAmount: outstanding,
+      pendingAmount: outstanding,
+      status: status,
+      createdAt: payment.createdAt || new Date().toISOString()
     };
 
     const firestore = getFirestoreDb();
     if (firestore) {
+      // Idempotency check: verify if an invoice with same idempotencyKey or matching memberId + plan + date exists
+      const existingSnap = await firestore.collection('payments')
+        .where('memberId', '==', payment.memberId)
+        .where('date', '==', newPayment.date)
+        .get();
+
+      const duplicate = existingSnap.docs.find(doc => {
+        const d = doc.data();
+        if (d.idempotencyKey && d.idempotencyKey === idempotencyKey) return true;
+        const planMatch = String(d.plan || '').toLowerCase() === String(payment.plan || '').toLowerCase();
+        const timeDiff = Math.abs(new Date(d.createdAt || 0).getTime() - new Date(newPayment.createdAt).getTime());
+        return planMatch && timeDiff < 300000; // created within 5 minutes
+      });
+
+      if (duplicate) {
+        console.log(`[Idempotency Protection] Duplicate invoice blocked for member ${payment.memberId}, returning existing invoice ${duplicate.id}`);
+        return { id: duplicate.id, ...duplicate.data() };
+      }
+
       const docRef = await firestore.collection('payments').add(newPayment);
       return { id: docRef.id, ...newPayment };
     }
-    return newPayment;
+
+    // Mock Mode fallback
+    const mockDuplicate = mockPayments.find(p => {
+      if (p.idempotencyKey && p.idempotencyKey === idempotencyKey) return true;
+      const sameMember = p.memberId === payment.memberId;
+      const samePlan = String(p.plan || '').toLowerCase() === String(payment.plan || '').toLowerCase();
+      const sameDate = p.date === newPayment.date;
+      return sameMember && samePlan && sameDate;
+    });
+
+    if (mockDuplicate) {
+      console.log(`[Mock Idempotency Protection] Duplicate invoice blocked, returning existing mock invoice ${mockDuplicate.invoice}`);
+      return mockDuplicate;
+    }
+
+    const mockItem = { id: 'p_' + Date.now(), ...newPayment };
+    mockPayments.unshift(mockItem);
+    saveMockDb();
+    return mockItem;
+  },
+
+  cleanupDuplicateInvoices: async (): Promise<any> => {
+    const firestore = getFirestoreDb();
+    const cleanedReport: any[] = [];
+
+    if (firestore) {
+      const snap = await firestore.collection('payments').get();
+      const docs = snap.docs.map((d: any) => ({ docId: d.id, ...d.data() })) as any[];
+
+      // Group payments by memberId
+      const groups: Record<string, any[]> = {};
+      docs.forEach((p: any) => {
+        const key = p.memberId || p.memberName || 'unknown';
+        if (!groups[key]) groups[key] = [];
+        groups[key].push(p);
+      });
+
+      for (const [memberId, items] of Object.entries(groups)) {
+        if (items.length <= 1) continue;
+
+        // Find duplicates matching same plan & date
+        const processed = new Set<string>();
+        for (let i = 0; i < items.length; i++) {
+          if (processed.has(items[i].docId)) continue;
+          
+          for (let j = i + 1; j < items.length; j++) {
+            if (processed.has(items[j].docId)) continue;
+
+            const a = items[i];
+            const b = items[j];
+
+            const dateA = String(a.date || a.createdAt || '').split('T')[0];
+            const dateB = String(b.date || b.createdAt || '').split('T')[0];
+            const planA = String(a.plan || '').toLowerCase().trim();
+            const planB = String(b.plan || '').toLowerCase().trim();
+
+            if (dateA === dateB && (planA === planB || planA.includes(planB) || planB.includes(planA))) {
+              // Found duplicate pair! Determine master and duplicate
+              let master = a;
+              let duplicate = b;
+
+              // If one doc has full original price (e.g. 9500) and the other has discounted amount (8200)
+              const amtA = Number(a.amount || 0);
+              const amtB = Number(b.amount || 0);
+
+              const origAmt = Math.max(amtA, amtB);
+              const netAmt = Math.min(amtA, amtB);
+              const discAmt = origAmt - netAmt;
+
+              // Keep master doc and update fields cleanly
+              const mergedMaster = {
+                originalAmount: origAmt,
+                discountAmount: discAmt > 0 ? discAmt : Number(master.discountAmount || master.discount || 0),
+                discount: discAmt > 0 ? discAmt : Number(master.discountAmount || master.discount || 0),
+                taxAmount: Number(master.taxAmount || master.gst || 0),
+                otherCharges: Number(master.otherCharges || 0),
+                netPayable: netAmt > 0 ? netAmt : origAmt,
+                amount: netAmt > 0 ? netAmt : origAmt,
+                amountPaid: netAmt > 0 ? netAmt : origAmt,
+                paid: netAmt > 0 ? netAmt : origAmt,
+                outstandingAmount: 0,
+                pendingAmount: 0,
+                status: 'paid'
+              };
+
+              await firestore.collection('payments').doc(master.docId).update(mergedMaster);
+              await firestore.collection('payments').doc(duplicate.docId).delete();
+
+              processed.add(duplicate.docId);
+
+              // Update member document totals
+              try {
+                await firestore.collection('members').doc(memberId).update({
+                  totalBilled: mergedMaster.netPayable,
+                  totalPaid: mergedMaster.amountPaid,
+                  outstandingBalance: 0,
+                  paymentStatus: 'paid'
+                });
+              } catch (_) {}
+
+              cleanedReport.push({
+                memberId,
+                memberName: master.memberName,
+                retainedInvoice: master.invoiceNumber || master.invoice,
+                deletedInvoice: duplicate.invoiceNumber || duplicate.invoice,
+                originalAmount: origAmt,
+                discountAmount: discAmt,
+                finalPayable: netAmt
+              });
+            }
+          }
+        }
+      }
+    } else {
+      // Mock DB Cleanup
+      const groups: Record<string, any[]> = {};
+      mockPayments.forEach(p => {
+        const key = p.memberId || p.memberName || 'unknown';
+        if (!groups[key]) groups[key] = [];
+        groups[key].push(p);
+      });
+
+      for (const [memberId, items] of Object.entries(groups)) {
+        if (items.length <= 1) continue;
+        
+        for (let i = 0; i < items.length; i++) {
+          for (let j = i + 1; j < items.length; j++) {
+            const a = items[i];
+            const b = items[j];
+
+            if (!a || !b) continue;
+
+            const dateA = String(a.date || a.createdAt || '').split('T')[0];
+            const dateB = String(b.date || b.createdAt || '').split('T')[0];
+
+            if (dateA === dateB && a.plan === b.plan) {
+              const amtA = Number(a.amount || 0);
+              const amtB = Number(b.amount || 0);
+              const origAmt = Math.max(amtA, amtB);
+              const netAmt = Math.min(amtA, amtB);
+              const discAmt = origAmt - netAmt;
+
+              a.originalAmount = origAmt;
+              a.discountAmount = discAmt;
+              a.discount = discAmt;
+              a.netPayable = netAmt;
+              a.amount = netAmt;
+              a.amountPaid = netAmt;
+              a.paid = netAmt;
+              a.outstandingAmount = 0;
+              a.pendingAmount = 0;
+              a.status = 'paid';
+
+              mockPayments = mockPayments.filter(m => m.id !== b.id);
+
+              cleanedReport.push({
+                memberId,
+                memberName: a.memberName,
+                retainedInvoice: a.invoice,
+                deletedInvoice: b.invoice,
+                originalAmount: origAmt,
+                discountAmount: discAmt,
+                finalPayable: netAmt
+              });
+            }
+          }
+        }
+      }
+      saveMockDb();
+    }
+
+    return cleanedReport;
   },
 
   getWorkoutsByMember: async (memberId: string): Promise<any[]> => {

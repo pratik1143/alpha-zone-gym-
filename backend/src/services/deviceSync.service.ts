@@ -60,7 +60,11 @@ const processDeviceAttendanceLog = async (memberId: string, device: any) => {
     }
 
     // Check membership validation
+    const todayStr = new Date().toISOString().split('T')[0];
+    const startDateStr = member.startDate || member.joinDate || todayStr;
     const now = new Date();
+
+    let isUpcoming = startDateStr > todayStr;
     let isExpired = false;
     let isFrozen = member.status === 'frozen' || member.membershipStatus === 'frozen';
     
@@ -69,6 +73,17 @@ const processDeviceAttendanceLog = async (memberId: string, device: any) => {
       if (expiry < now) {
         isExpired = true;
       }
+    }
+
+    if (isUpcoming) {
+      const daysUntil = Math.ceil((new Date(startDateStr).getTime() - new Date(todayStr).getTime()) / (1000 * 60 * 60 * 24));
+      await db.addDeviceLog({
+        deviceId: device.id || device.deviceId,
+        deviceName: device.deviceName,
+        level: 'ERROR',
+        message: `[Membership Validation] Access Denied: Member ${member.name} (${member.memberId}) membership starts on ${startDateStr} (Starts in ${daysUntil} days). Gate closed.`
+      });
+      return;
     }
 
     if (isExpired) {
@@ -108,7 +123,6 @@ const processDeviceAttendanceLog = async (memberId: string, device: any) => {
     });
 
     // Check if member is already checked in today to avoid duplicate streaks
-    const todayStr = now.toISOString().split('T')[0];
     const attendanceLogs = await db.getAttendance();
     const alreadyCheckedIn = attendanceLogs.some(a => {
       if (a.memberId !== member.id || !a.checkIn) return false;

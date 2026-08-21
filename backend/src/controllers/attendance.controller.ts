@@ -83,9 +83,20 @@ export const createCheckIn = async (req: Request, res: Response) => {
       });
     }
 
+    const todayStr = new Date().toISOString().split('T')[0];
+    const startDateStr = member.startDate || member.joinDate || todayStr;
+    const expiryDateStr = member.expiryDate || '';
+
     let status = 'granted';
     let reason = '';
-    if (member.status === 'expired') {
+
+    if (startDateStr && startDateStr > todayStr) {
+      status = 'denied';
+      const startObj = new Date(startDateStr);
+      const todayObj = new Date(todayStr);
+      const daysUntil = Math.ceil((startObj.getTime() - todayObj.getTime()) / (1000 * 60 * 60 * 24));
+      reason = `Membership starts on ${startDateStr} (Starts in ${daysUntil} ${daysUntil === 1 ? 'day' : 'days'})`;
+    } else if (member.status === 'expired' || (expiryDateStr && expiryDateStr < todayStr)) {
       status = 'denied';
       reason = 'Membership has expired';
     } else if (member.status === 'frozen') {
@@ -94,7 +105,6 @@ export const createCheckIn = async (req: Request, res: Response) => {
     }
 
     // Check Duplicate / Today Check-in for resolved member
-    const todayStr = new Date().toISOString().split('T')[0];
     const logs = await db.getAttendance();
     const existingLog = logs.find((a: any) => a.memberId === member.id && (a.status === 'granted' || a.status === 'already_inside') && a.checkIn && String(a.checkIn).startsWith(todayStr));
 

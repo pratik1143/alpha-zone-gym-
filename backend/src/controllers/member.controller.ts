@@ -131,11 +131,14 @@ export const createMember = async (req: Request, res: Response) => {
       }, { merge: true });
     }
 
-    const startJoinDate = joinDate || new Date().toISOString().split('T')[0];
+    const todayStr = new Date().toISOString().split('T')[0];
+    const startJoinDate = joinDate || todayStr;
+    const memStartDate = req.body.startDate || startJoinDate;
     const plansList = await db.getPlans();
+    
     let finalExpiry = expiryDate;
     if (!finalExpiry || finalExpiry === startJoinDate) {
-      finalExpiry = calculateBackendPlanExpiry(plan || 'Monthly', startJoinDate, plansList);
+      finalExpiry = calculateBackendPlanExpiry(plan || 'Monthly', memStartDate, plansList);
     }
 
     const matchedPlan = plansList.find(p => {
@@ -145,19 +148,37 @@ export const createMember = async (req: Request, res: Response) => {
       return dbName === reqName || dbId === reqName;
     });
 
-    const billedAmount = Number(price || amount || totalBilled || (matchedPlan ? matchedPlan.price : 1000));
-    const paidAmount = Number(totalPaid !== undefined ? totalPaid : (req.body.paid !== undefined ? req.body.paid : billedAmount));
+    const origAmount = Number(req.body.originalAmount !== undefined ? req.body.originalAmount : (price || amount || (matchedPlan ? matchedPlan.price : 2500)));
+    const discAmount = Number(req.body.discountAmount !== undefined ? req.body.discountAmount : (req.body.discount || 0));
+    const taxAmount = Number(req.body.taxAmount !== undefined ? req.body.taxAmount : (req.body.tax || req.body.gst || 0));
+    const othCharges = Number(req.body.otherCharges || 0);
+
+    const calculatedNet = Math.max(0, origAmount - discAmount + taxAmount + othCharges);
+    const netPayable = Number(req.body.netPayable !== undefined ? req.body.netPayable : (req.body.totalBilled !== undefined ? req.body.totalBilled : calculatedNet));
+    const amountPaid = Number(totalPaid !== undefined ? totalPaid : (req.body.paid !== undefined ? req.body.paid : netPayable));
+    const outstandingAmount = Math.max(0, netPayable - amountPaid);
+    const finalPaymentStatus = paymentStatus || (outstandingAmount <= 0 ? 'paid' : (amountPaid > 0 ? 'partial' : 'pending'));
+    const initialStatus = memStartDate > todayStr ? 'upcoming' : (req.body.status || 'active');
+
+    const idempotencyKey = req.body.idempotencyKey || `mem_${phone}_${plan || 'Monthly'}_${startJoinDate}`;
 
     const member = await db.addMember({
       uid, // align document ID with Auth UID
       name, phone, email: loginEmail, plan: plan || 'Monthly',
-      price: billedAmount,
-      amount: billedAmount,
-      totalBilled: billedAmount,
-      totalPaid: paidAmount,
+      price: origAmount,
+      amount: netPayable,
+      originalAmount: origAmount,
+      discountAmount: discAmount,
+      discount: discAmount,
+      netPayable: netPayable,
+      totalBilled: netPayable,
+      totalPaid: amountPaid,
+      outstandingBalance: outstandingAmount,
       joinDate: startJoinDate,
+      startDate: memStartDate,
+      createdAt: new Date().toISOString(),
       expiryDate: finalExpiry,
-      status: 'active', branch: branch || 'Mohali, Punjab', trainer: trainer || '',
+      status: initialStatus, branch: branch || 'Mohali, Punjab', trainer: trainer || '',
       gender: gender || 'Male', age: Number(age) || 25,
       weight: Number(weight) || 70, height: Number(height) || 170,
       bmi: Number(bmi) || 24.2,
@@ -172,15 +193,35 @@ export const createMember = async (req: Request, res: Response) => {
       address: address || '',
       avatarUrl: avatarUrl || '',
       biometricId: biometricId || '',
-      paymentStatus: paymentStatus || 'paid'
+      paymentStatus: finalPaymentStatus
     });
 
-    // Also auto-generate an invoice for new member
+    // Generate ONE authoritative invoice for new member
+    const invoiceNumber = req.body.invoiceNumber || `INV-${Math.floor(100000 + Math.random() * 900000)}`;
     const payment = await db.addPayment({
-      memberId: member.id, memberName: member.name,
-      amount: billedAmount, paid: paidAmount, plan: plan || 'Monthly',
+      memberId: member.id,
+      memberName: member.name,
+      memberPhone: member.phone,
+      originalAmount: origAmount,
+      discountAmount: discAmount,
+      discount: discAmount,
+      taxAmount: taxAmount,
+      otherCharges: othCharges,
+      netPayable: netPayable,
+      amount: netPayable,
+      amountPaid: amountPaid,
+      paid: amountPaid,
+      outstandingAmount: outstandingAmount,
+      pendingAmount: outstandingAmount,
+      plan: plan || 'Monthly',
       method: paymentMethod || 'UPI',
-      status: paymentStatus || 'paid'
+      status: finalPaymentStatus,
+      invoiceNumber: invoiceNumber,
+      invoice: invoiceNumber,
+      date: startJoinDate,
+      startDate: startJoinDate,
+      expiryDate: finalExpiry,
+      idempotencyKey: idempotencyKey
     });
 
     console.log(`[Credentials Notification] Sent credentials to ${name} (${loginEmail}) via simulated SMS & WhatsApp. Password: ${password || '1234567'}`);
@@ -191,7 +232,7 @@ export const createMember = async (req: Request, res: Response) => {
       triggerPaymentEmail(payment).catch(err => console.error('[Automation] Payment email failed:', err));
     }
 
-    res.status(201).json(member);
+    res.status(201).json({ ...member, invoice: payment });
   } catch (error: any) {
     console.error('Failed to create member:', error);
     res.status(500).json({ error: error.message });

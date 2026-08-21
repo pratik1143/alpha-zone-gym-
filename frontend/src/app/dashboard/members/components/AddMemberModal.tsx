@@ -130,17 +130,14 @@ export default function AddMemberModal({ isOpen, onClose }: AddMemberModalProps)
 
   // Final Registration & Invoice Generation
   const handleFinalSubmit = async () => {
-    if (!fullName || !mobile) {
-      toast.error('Name and Mobile number are required!');
-      setStep(1);
-      return;
-    }
-
+    if (isSubmitting) return;
     setIsSubmitting(true);
     try {
       const todayStr = new Date().toISOString().split('T')[0];
+      const memStartDate = startDate || todayStr;
       const planName = selectedPlan?.name || 'Monthly Standard';
-      const expiryStr = membershipEngine.calculatePlanExpiryDate(planName, todayStr, plans);
+      const expiryStr = membershipEngine.calculatePlanExpiryDate(planName, memStartDate, plans);
+      const computedStatus = membershipEngine.calculateMembershipStatus(expiryStr, memStartDate);
 
       const basePrice = Number(selectedPlan?.price) || 2500;
       const disc = Number(discount) || 0;
@@ -154,10 +151,18 @@ export default function AddMemberModal({ isOpen, onClose }: AddMemberModalProps)
         photo: photoPreview || '',
         plan: planName,
         price: basePrice,
+        originalAmount: basePrice,
+        discountAmount: disc,
+        discount: disc,
+        netPayable: finalBilled,
+        amount: finalBilled,
+        amountPaid: paidAmt,
+        paid: paidAmt,
         joinDate: todayStr,
+        startDate: memStartDate,
         createdAt: new Date().toISOString(),
         expiryDate: expiryStr,
-        status: 'active',
+        status: computedStatus,
         paymentStatus: paidAmt >= finalBilled ? 'paid' : 'partial',
         totalBilled: finalBilled,
         totalPaid: paidAmt,
@@ -165,40 +170,28 @@ export default function AddMemberModal({ isOpen, onClose }: AddMemberModalProps)
         deviceUserId: biometricId,
         trainer: trainer || 'Unassigned',
         isRealTimeToday: true,
+        paymentMethod: paymentMethod,
+        idempotencyKey: `add_mem_${mobile.replace(/\D/g, '')}_${planName.replace(/\s+/g, '_')}_${todayStr}`,
         age, height, weight, dob, maritalStatus, anniversaryDate
       };
 
       const newMember: any = await addMember(memberPayload);
-      const createdId = newMember?.id || newMember?.memberId || `mem_${Date.now()}`;
-
-      const invNumber = `INV-${Math.floor(100000 + Math.random() * 900000)}`;
-      const paymentPayload = {
-        memberId: createdId,
-        memberName: fullName,
-        memberPhone: mobile,
-        amount: finalBilled,
-        paid: paidAmt,
-        discount: disc,
-        plan: planName,
-        method: paymentMethod,
-        invoiceNumber: invNumber,
-        invoice: invNumber,
-        status: 'paid',
-        date: todayStr,
-        isRealTimeToday: true,
-        createdAt: new Date().toISOString()
-      };
-
-      try {
-        await addPayment(paymentPayload);
-      } catch (e) {
-        console.warn("Local payment add notice:", e);
-      }
 
       fetchPayments();
 
+      const createdInv = newMember?.invoice || {
+        invoiceNumber: `INV-${Math.floor(100000 + Math.random() * 900000)}`,
+        plan: planName,
+        amount: finalBilled,
+        paid: paidAmt,
+        discount: disc,
+        method: paymentMethod,
+        status: 'paid',
+        date: todayStr
+      };
+
       setCreatedMember(newMember || memberPayload);
-      setCreatedInvoice(paymentPayload);
+      setCreatedInvoice(createdInv);
       setStep(5);
       toast.success(`Member registered & ₹${paidAmt} added to Today's Collection!`);
     } catch (err: any) {
@@ -593,7 +586,16 @@ export default function AddMemberModal({ isOpen, onClose }: AddMemberModalProps)
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1.5">Membership Start Date *</label>
+                      <input 
+                        type="date" 
+                        value={startDate} 
+                        onChange={(e) => setStartDate(e.target.value)}
+                        className="w-full h-12 bg-white border border-slate-300 rounded-xl px-4 text-sm font-bold text-slate-900 focus:outline-none focus:border-blue-600"
+                      />
+                    </div>
                     <div>
                       <label className="block text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1.5">Discount Amount (₹)</label>
                       <input 

@@ -16,13 +16,77 @@ export const membershipEngine = {
     return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
   },
 
-  calculateMembershipStatus: (daysLeft: number, manualStatus?: string): string => {
-    if (manualStatus === 'Blocked') return 'Blocked';
-    if (manualStatus === 'Frozen') return 'Frozen';
+  calculateDaysUntilStart: (startDate: string | null | undefined): number => {
+    if (!startDate || startDate === 'N/A' || startDate === '—') return 0;
+    const start = new Date(startDate);
+    if (isNaN(start.getTime())) return 0;
+
+    const today = new Date();
+    const sDay = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+    const tDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const diffTime = sDay.getTime() - tDay.getTime();
     
+    return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  },
+
+  calculateMembershipStatus: (daysLeftOrExpiry: number | string | null | undefined, startDateOrManual?: string | null, manualStatus?: string): string => {
+    const statusVal = (typeof startDateOrManual === 'string' && ['Blocked', 'Frozen', 'active', 'expired', 'frozen', 'blocked', 'upcoming'].includes(startDateOrManual))
+      ? startDateOrManual 
+      : manualStatus;
+
+    if (statusVal === 'Blocked' || statusVal === 'blocked') return 'Blocked';
+    if (statusVal === 'Frozen' || statusVal === 'frozen') return 'Frozen';
+
+    const todayStr = new Date().toISOString().split('T')[0];
+    let startStr = '';
+
+    if (typeof startDateOrManual === 'string' && startDateOrManual.match(/^\d{4}-\d{2}-\d{2}/)) {
+      startStr = startDateOrManual.split('T')[0];
+    }
+
+    if (startStr && startStr > todayStr) {
+      return 'Upcoming';
+    }
+
+    let daysLeft = 0;
+    if (typeof daysLeftOrExpiry === 'number') {
+      daysLeft = daysLeftOrExpiry;
+    } else {
+      daysLeft = membershipEngine.calculateDaysLeft(daysLeftOrExpiry);
+    }
+
     if (daysLeft <= 0) return 'Expired';
     if (daysLeft <= 15) return 'Expiring Soon';
     return 'Active';
+  },
+
+  calculateAccessStatus: (startDateStr?: string | null, expiryDateStr?: string | null, manualStatus?: string): { granted: boolean; status: string; reason: string; daysUntilStart: number } => {
+    if (manualStatus === 'Blocked' || manualStatus === 'blocked') {
+      return { granted: false, status: 'Blocked', reason: 'Member account is blocked', daysUntilStart: 0 };
+    }
+    if (manualStatus === 'Frozen' || manualStatus === 'frozen') {
+      return { granted: false, status: 'Frozen', reason: 'Membership is currently frozen', daysUntilStart: 0 };
+    }
+
+    const todayStr = new Date().toISOString().split('T')[0];
+    const startStr = startDateStr ? startDateStr.split('T')[0] : todayStr;
+    const expiryStr = expiryDateStr ? expiryDateStr.split('T')[0] : '';
+
+    if (startStr > todayStr) {
+      const daysUntilStart = membershipEngine.calculateDaysUntilStart(startStr);
+      return { 
+        granted: false, 
+        status: 'Upcoming', 
+        reason: `Membership starts on ${startStr} (Starts in ${daysUntilStart} ${daysUntilStart === 1 ? 'day' : 'days'})`,
+        daysUntilStart
+      };
+    }
+
+    if (expiryStr && expiryStr < todayStr) {
+      return { granted: false, status: 'Expired', reason: 'Membership has expired', daysUntilStart: 0 };
+    }
+
+    return { granted: true, status: 'Active', reason: 'Access Granted', daysUntilStart: 0 };
   },
 
   calculateRenewalRisk: (daysLeft: number): 'Critical' | 'High' | 'Medium' | 'Low' => {

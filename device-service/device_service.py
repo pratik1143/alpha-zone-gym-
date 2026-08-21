@@ -997,19 +997,19 @@ def trigger_door_relay(conn, device_name="Main Gate", duration_seconds=3):
             'timestamp': datetime.utcnow().isoformat() + 'Z'
         })
 
-def run_membership_validation(user_id, device_id, device_name, branch, timestamp_iso):
+def run_membership_validation(user_id, device_id, device_name, branch, timestamp_iso, is_realtime=True):
     """
     Validates a biometric card/fingerprint swipe against CRM Member database & membership engine.
     - Resolves Member profile (or Unknown Member).
     - Validates membership status (Active, Expired, Frozen).
     - Writes attendance record to Firebase (or queues locally if offline).
-    - Triggers Always-on-Top Windows Desktop Overlay Popup.
+    - Triggers Always-on-Top Windows Desktop Overlay Popup ONLY for fresh real-time punches.
     - Prints Terminal Status & Real Punch Stream Log.
     - Returns True if access is granted (triggers gate relay unlock), False otherwise.
     """
     user_id_str = str(user_id)
     time_str = datetime.now().strftime("%H:%M:%S")
-    logging.info(f"[{time_str}] REAL PUNCH RECEIVED: Biometric UserID={user_id_str} at {device_name}")
+    logging.info(f"[{time_str}] PUNCH EVENT PROCESSED (Realtime={is_realtime}): Biometric UserID={user_id_str} at {device_name}")
 
     # 1. Check duplicate punch fingerprint
     fp = f"{device_id}_{user_id_str}_{timestamp_iso[:16]}"
@@ -1174,10 +1174,10 @@ def run_membership_validation(user_id, device_id, device_name, branch, timestamp
 
     mapping_found = True if member or (api_result and not api_result.get('unmapped')) else False
     attendance_written = True if (status in ('granted', 'already_inside', 'expired', 'frozen') and mapping_found) else False
-    gate_will_trigger = True if (status == 'granted' and mapping_found) else False
+    gate_will_trigger = True if (status == 'granted' and mapping_found and is_realtime) else False
 
-    # 5. Trigger Always-on-Top Desktop Overlay Popup with Canonical Member Object
-    if desktop_popup:
+    # 5. Trigger Always-on-Top Desktop Overlay Popup ONLY for fresh real-time punches
+    if desktop_popup and is_realtime:
         try:
             desktop_popup.show_attendance_popup({
                 'status': status,

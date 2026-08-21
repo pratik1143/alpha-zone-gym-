@@ -240,7 +240,22 @@ export default function ProfileTab({ member }: { member: any }) {
           <div className="relative z-10">
             <div className="flex justify-between items-start mb-8">
               <div>
-                <span className="px-3 py-1 bg-white/10 border border-white/20 rounded-full text-[10px] font-black uppercase tracking-widest backdrop-blur-md">Active Plan</span>
+                {(() => {
+                  const access = membershipEngine.calculateAccessStatus(member.startDate || member.joinDate, member.expiryDate, member.status);
+                  const isUpcoming = access.status === 'Upcoming';
+                  const isFrozen = access.status === 'Frozen';
+                  const isExpired = access.status === 'Expired';
+                  return (
+                    <span className={`px-3 py-1 border rounded-full text-[10px] font-black uppercase tracking-widest backdrop-blur-md ${
+                      isUpcoming ? 'bg-purple-500/20 border-purple-400 text-purple-300' :
+                      isFrozen ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300' :
+                      isExpired ? 'bg-red-500/20 border-red-400 text-red-300' :
+                      'bg-emerald-500/20 border-emerald-400 text-emerald-300'
+                    }`}>
+                      {isUpcoming ? `Upcoming · Starts in ${access.daysUntilStart} Days` : isFrozen ? 'Frozen' : isExpired ? 'Expired' : 'Active Plan'}
+                    </span>
+                  );
+                })()}
                 <h3 className="text-3xl font-black mt-3 tracking-tight">{cleanPlanName(member.plan)}</h3>
                 {member.amount ? (
                   <div className="text-xl font-bold text-amber-400 mt-1">₹{Number(member.amount).toLocaleString('en-IN')}</div>
@@ -254,7 +269,7 @@ export default function ProfileTab({ member }: { member: any }) {
             <div className="grid grid-cols-2 gap-6 mb-8">
               <div>
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Start Date</span>
-                <span className="text-sm font-semibold">{member.joinDate ? new Date(member.joinDate).toLocaleDateString() : 'N/A'}</span>
+                <span className="text-sm font-semibold">{member.startDate ? new Date(member.startDate).toLocaleDateString() : (member.joinDate ? new Date(member.joinDate).toLocaleDateString() : 'N/A')}</span>
               </div>
               <div>
                 <div className="flex items-center gap-1.5 mb-1">

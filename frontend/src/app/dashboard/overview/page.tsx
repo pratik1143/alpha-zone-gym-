@@ -208,8 +208,32 @@ export default function OverviewCommandCenter() {
     return count > 0 ? count : sessionNewClients;
   }, [members, todayStr, sessionNewClients]);
 
-  const activeMembersCount = useMemo(() => members.filter(m => m.status === "active").length, [members]);
-  const expiredMembersCount = useMemo(() => members.filter(m => m.status === "expired" || m.status === "inactive").length, [members]);
+  const activeMembersCount = useMemo(() => {
+    const today = new Date().toISOString().split('T')[0];
+    return members.filter(m => {
+      const startDate = m.startDate || m.joinDate;
+      if (startDate && startDate > today) return false;
+      if (m.status === 'frozen' || m.status === 'Frozen' || m.status === 'blocked' || m.status === 'Blocked') return false;
+      return m.status === 'active' || m.status === 'Active' || (m.expiryDate && m.expiryDate >= today);
+    }).length;
+  }, [members]);
+
+  const upcomingMembersCount = useMemo(() => {
+    const today = new Date().toISOString().split('T')[0];
+    return members.filter(m => {
+      const startDate = m.startDate || m.joinDate;
+      return (startDate && startDate > today) || m.status === 'upcoming' || m.status === 'Upcoming';
+    }).length;
+  }, [members]);
+
+  const expiredMembersCount = useMemo(() => {
+    const today = new Date().toISOString().split('T')[0];
+    return members.filter(m => {
+      const startDate = m.startDate || m.joinDate;
+      if (startDate && startDate > today) return false;
+      return m.status === 'expired' || m.status === 'Expired' || (m.expiryDate && m.expiryDate < today);
+    }).length;
+  }, [members]);
   const pendingEnquiriesCount = useMemo(() => enquiries.filter(e => e.status !== "Converted" && e.status !== "Lost").length, [enquiries]);
 
   // Submit Handlers for Popups
@@ -305,48 +329,46 @@ export default function OverviewCommandCenter() {
         plan: memPlan,
         status: 'active',
         joinDate: todayStr,
+        price: paidAmt,
+        originalAmount: paidAmt,
+        discountAmount: 0,
+        netPayable: paidAmt,
+        totalBilled: paidAmt,
+        totalPaid: paidAmt,
         paymentStatus: 'paid',
         paymentMethod: memMethod,
+        invoiceNumber: invoiceNumber,
+        idempotencyKey: `overview_mem_${memPhone.replace(/\D/g, '')}_${todayStr}`,
         isRealTimeToday: true,
         createdAt: new Date().toISOString()
       };
 
-      let createdMemberId = `m_${Date.now()}`;
       try {
-        const res = await API.post('/members', memberPayload);
-        if (res.data?.id) createdMemberId = res.data.id;
+        await API.post('/members', memberPayload);
       } catch (_) {
         const docRef = await addDoc(collection(db, 'members'), memberPayload);
-        createdMemberId = docRef.id;
-      }
-
-      // Automatically Generate & Record Invoice Receipt
-      const invoicePayload = {
-        memberId: createdMemberId,
-        memberName: memName,
-        amount: paidAmt,
-        plan: memPlan,
-        method: memMethod,
-        invoice: invoiceNumber,
-        status: 'paid',
-        date: todayStr,
-        isRealTimeToday: true,
-        createdAt: new Date().toISOString()
-      };
-
-      try {
-        await API.post('/billing', invoicePayload);
-      } catch (_) {
-        await addDoc(collection(db, 'invoices'), invoicePayload);
+        await addDoc(collection(db, 'payments'), {
+          memberId: docRef.id,
+          memberName: memName,
+          originalAmount: paidAmt,
+          discountAmount: 0,
+          netPayable: paidAmt,
+          amount: paidAmt,
+          amountPaid: paidAmt,
+          paid: paidAmt,
+          plan: memPlan,
+          method: memMethod,
+          invoice: invoiceNumber,
+          status: 'paid',
+          date: todayStr,
+          createdAt: new Date().toISOString()
+        });
       }
 
       // Realtime Overview Dashboard Updates
       setSessionNewClients(prev => prev + 1);
-      if (paidAmt > 0) {
-        setSessionCollection(prev => prev + paidAmt);
-      }
 
-      toast.success(`Member registered & Invoice ${invoiceNumber} (${memMethod}) sent via Email/WhatsApp! 📄✨`);
+      toast.success(`Member registered & Invoice ${invoiceNumber} (${memMethod}) issued! 📄✨`);
       setShowNewMemberModal(false);
       setMemName(''); setMemPhone(''); setMemPaid('6500');
       fetchMembers();

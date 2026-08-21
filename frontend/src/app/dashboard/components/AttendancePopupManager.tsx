@@ -70,6 +70,17 @@ export default function AttendancePopupManager() {
     if (!docId || docId === lastDocId.current) return;
     lastDocId.current = docId;
 
+    // Suppress Web Overlay Popups and Toasts for historical punches (>120s old)
+    const rawTimeStr = data.checkIn || data.timestamp || data.createdAt;
+    if (rawTimeStr) {
+      const punchMs = new Date(rawTimeStr).getTime();
+      const nowMs = Date.now();
+      const ageSec = (nowMs - punchMs) / 1000;
+      if (ageSec > 120) {
+        return;
+      }
+    }
+
     const members = useGymStore.getState().members;
     const match = members.find((m: any) =>
       (m.id && data.memberId && m.id === data.memberId) ||

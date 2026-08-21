@@ -115,9 +115,23 @@ export default function BillingTab({ member }: { member: any }) {
   }, [member]);
 
   // Derived Totals
-  const totalBilled = invoices.reduce((s, inv) => s + (Number(inv.amount) || Number(inv.total) || 0), 0) || Number(member?.totalBilled) || 0;
-  const totalPaid = invoices.reduce((s, inv) => s + (Number(inv.paid) || Number(inv.amount) || 0), 0) || Number(member?.totalPaid) || totalBilled;
-  const totalOutstanding = paymentEngine.calculateOutstandingAmount(totalBilled, totalPaid);
+  const totalBilled = invoices.reduce((s, inv) => {
+    const origAmt = Number(inv.originalAmount !== undefined ? inv.originalAmount : (inv.price || inv.amount || 0));
+    const discAmt = Number(inv.discountAmount !== undefined ? inv.discountAmount : (inv.discount || 0));
+    const taxAmt = Number(inv.taxAmount !== undefined ? inv.taxAmount : (inv.tax || inv.gst || 0));
+    const othAmt = Number(inv.otherCharges || 0);
+
+    const calculatedNet = Math.max(0, origAmt - discAmt + taxAmt + othAmt);
+    const net = Number(inv.netPayable !== undefined ? inv.netPayable : (calculatedNet > 0 ? calculatedNet : Number(inv.amount || 0)));
+    return s + (isNaN(net) ? 0 : net);
+  }, 0) || Number(member?.totalBilled) || 0;
+
+  const totalPaid = invoices.reduce((s, inv) => {
+    const paid = Number(inv.amountPaid !== undefined ? inv.amountPaid : (inv.paid !== undefined ? inv.paid : Number(inv.amount || 0)));
+    return s + (isNaN(paid) ? 0 : paid);
+  }, 0) || Number(member?.totalPaid) || totalBilled;
+
+  const totalOutstanding = Math.max(0, totalBilled - totalPaid);
 
   const fmt = (n: number) => `₹${Math.round(n).toLocaleString('en-IN')}`;
 
@@ -133,7 +147,7 @@ export default function BillingTab({ member }: { member: any }) {
   const handleWhatsApp = (inv: any) => {
     const rawPhone = (member.phone || '').replace(/\D/g, '');
     const cleanPhone = rawPhone.length === 10 ? `91${rawPhone}` : rawPhone;
-    const total = Number(inv.amount) || 0;
+    const total = Number(inv.netPayable || inv.amount || 0);
     const invNum = inv.invoiceNumber || inv.invoice || 'INV-001';
     const planTitle = cleanPlanName(inv.plan || member.plan);
     const billDate = inv.date ? formatDate(inv.date) : formatDate(new Date().toISOString());
@@ -167,11 +181,11 @@ export default function BillingTab({ member }: { member: any }) {
       inv.date || member.joinDate,
       inv.invoiceNumber || inv.invoice || '670',
       `Gym membership : ${inv.plan || member.plan}`,
-      inv.amount || 0,
-      inv.discount || 0,
-      inv.amount || 0,
-      inv.paid || inv.amount || 0,
-      (Number(inv.amount) || 0) - (Number(inv.paid) || Number(inv.amount) || 0),
+      inv.originalAmount || inv.amount || 0,
+      inv.discountAmount || inv.discount || 0,
+      inv.netPayable || inv.amount || 0,
+      inv.amountPaid || inv.paid || inv.amount || 0,
+      Math.max(0, (Number(inv.netPayable || inv.amount) || 0) - (Number(inv.amountPaid || inv.paid) || 0)),
       inv.method || 'First payment',
       inv.status || 'paid'
     ]);
@@ -195,6 +209,12 @@ export default function BillingTab({ member }: { member: any }) {
   const handleSaveNewBill = async () => {
     try {
       const invNum = `INV-${Math.floor(10000 + Math.random() * 90000)}`;
+      const origAmt = Number(newBillForm.amount);
+      const discAmt = 0;
+      const netPayable = origAmt - discAmt;
+      const paidAmt = newBillForm.status === 'paid' ? netPayable : 0;
+      const pendingAmt = Math.max(0, netPayable - paidAmt);
+
       const newBill = {
         memberId: member.id,
         memberName: member.name,
@@ -202,10 +222,19 @@ export default function BillingTab({ member }: { member: any }) {
         invoiceNumber: invNum,
         invoice: invNum,
         plan: newBillForm.plan,
-        amount: Number(newBillForm.amount),
-        paid: newBillForm.status === 'paid' ? Number(newBillForm.amount) : 0,
+        originalAmount: origAmt,
+        discountAmount: discAmt,
+        discount: discAmt,
+        taxAmount: 0,
+        otherCharges: 0,
+        netPayable: netPayable,
+        amount: netPayable,
+        amountPaid: paidAmt,
+        paid: paidAmt,
+        outstandingAmount: pendingAmt,
+        pendingAmount: pendingAmt,
         method: newBillForm.method,
-        status: newBillForm.status,
+        status: pendingAmt <= 0 ? 'paid' : (paidAmt > 0 ? 'partial' : 'pending'),
         date: newBillForm.date,
         startDate: newBillForm.startDate,
         expiryDate: newBillForm.expiryDate,
@@ -218,7 +247,7 @@ export default function BillingTab({ member }: { member: any }) {
         plan: newBillForm.plan,
         expiryDate: newBillForm.expiryDate,
         status: 'active',
-        paymentStatus: newBillForm.status,
+        paymentStatus: newBill.status,
       });
 
       toast.success(`Bill ${invNum} generated successfully!`);
@@ -312,14 +341,20 @@ export default function BillingTab({ member }: { member: any }) {
               ) : (
                 invoices.map((inv, idx) => {
                   const invNum = inv.invoiceNumber || inv.invoice || '670';
-                  const itemAmt = Number(inv.amount) || Number(inv.total) || 4500;
-                  const discountAmt = Number(inv.discount) || 0;
-                  const netPayable = itemAmt - discountAmt;
-                  const paidAmt = Number(inv.paid) || (inv.status === 'paid' ? netPayable : 0);
+                  const origItemAmt = Number(inv.originalAmount !== undefined ? inv.originalAmount : (inv.price || inv.amount || 0));
+                  const discountAmt = Number(inv.discountAmount !== undefined ? inv.discountAmount : (inv.discount || 0));
+                  const taxAmt = Number(inv.taxAmount !== undefined ? inv.taxAmount : (inv.tax || inv.gst || 0));
+                  const otherAmt = Number(inv.otherCharges || 0);
+
+                  const computedNet = Math.max(0, origItemAmt - discountAmt + taxAmt + otherAmt);
+                  const netPayable = Number(inv.netPayable !== undefined ? inv.netPayable : (computedNet > 0 ? computedNet : Number(inv.amount || 0)));
+                  const paidAmt = Number(inv.amountPaid !== undefined ? inv.amountPaid : (inv.paid !== undefined ? inv.paid : netPayable));
                   const pendingAmt = Math.max(0, netPayable - paidAmt);
                   const startDate = inv.startDate || member.joinDate || '20-08-2026';
                   const expiryDate = inv.expiryDate || member.expiryDate || '19-10-2026';
                   const planTitle = inv.plan || member.plan || 'Gym membership : 2 months';
+
+                  const displayStatus = pendingAmt <= 0 ? 'PAID' : (paidAmt > 0 ? 'PARTIAL' : 'PENDING');
 
                   return (
                     <tr key={inv.id || idx} className="hover:bg-blue-50/50 transition-colors border-b border-slate-100">
@@ -340,16 +375,16 @@ export default function BillingTab({ member }: { member: any }) {
                       </td>
 
                       {/* Item amount */}
-                      <td className="px-4 py-4 text-right font-mono font-bold text-slate-900">{itemAmt.toFixed(2)}</td>
+                      <td className="px-4 py-4 text-right font-mono font-bold text-slate-900">{origItemAmt.toFixed(2)}</td>
 
                       {/* Other Charges */}
-                      <td className="px-4 py-4 text-right font-mono text-slate-400">0.00</td>
+                      <td className="px-4 py-4 text-right font-mono text-slate-400">{otherAmt.toFixed(2)}</td>
 
                       {/* Discount */}
                       <td className="px-4 py-4 text-right font-mono text-slate-400">{discountAmt.toFixed(2)}</td>
 
                       {/* Tax */}
-                      <td className="px-4 py-4 text-right font-mono text-slate-400">0.00</td>
+                      <td className="px-4 py-4 text-right font-mono text-slate-400">{taxAmt.toFixed(2)}</td>
 
                       {/* Reward Points */}
                       <td className="px-4 py-4 text-right font-mono text-slate-400">0.00</td>
@@ -371,9 +406,11 @@ export default function BillingTab({ member }: { member: any }) {
                       {/* Status */}
                       <td className="px-4 py-4 whitespace-nowrap">
                         <span className={`px-2.5 py-1 rounded text-[10px] font-black uppercase tracking-wider ${
-                          pendingAmt <= 0 ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-amber-100 text-amber-800 border border-amber-300'
+                          displayStatus === 'PAID' ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' :
+                          displayStatus === 'PARTIAL' ? 'bg-amber-100 text-amber-800 border border-amber-300' :
+                          'bg-red-100 text-red-800 border border-red-300'
                         }`}>
-                          {pendingAmt <= 0 ? 'NEW' : 'PENDING'}
+                          {displayStatus}
                         </span>
                       </td>
 

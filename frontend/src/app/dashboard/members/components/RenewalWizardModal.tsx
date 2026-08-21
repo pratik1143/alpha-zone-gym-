@@ -152,10 +152,19 @@ export default function RenewalWizardModal({ isOpen, member, onClose }: RenewalW
   const gstAmount = Number(gst);
   const totalAmount = Math.max(0, Number(planPrice) + Number(admissionFee) + Number(outstanding) - totalDiscount + gstAmount);
 
-  const calculateNewExpiry = () => {
+  const getRenewalStartDate = () => {
     const curExpiry = member?.expiryDate;
     const today = new Date().toISOString().split('T')[0];
-    const startBase = (curExpiry && curExpiry > today) ? curExpiry : today;
+    if (curExpiry && curExpiry >= today) {
+      const eDate = new Date(curExpiry);
+      eDate.setDate(eDate.getDate() + 1);
+      return eDate.toISOString().split('T')[0];
+    }
+    return today;
+  };
+
+  const calculateNewExpiry = () => {
+    const startBase = getRenewalStartDate();
     const planName = selectedPlanId === 'custom' ? `${customDuration} Months` : currentPlan.name;
     return membershipEngine.calculatePlanExpiryDate(planName, startBase, plans);
   };
@@ -176,6 +185,7 @@ export default function RenewalWizardModal({ isOpen, member, onClose }: RenewalW
     try {
       const generatedInvoiceNum = 'INV-' + Math.floor(100000 + Math.random() * 900000);
       const todayStr = new Date().toISOString().split('T')[0];
+      const renewalStart = getRenewalStartDate();
       const planName = selectedPlanId === 'custom' ? `Custom (${customDuration}m)` : currentPlan.name;
       const daysLeftCount = membershipEngine.calculateDaysLeft(newExpiryString);
 
@@ -184,15 +194,19 @@ export default function RenewalWizardModal({ isOpen, member, onClose }: RenewalW
         memberName: member.name,
         memberPhone: member.phone || '',
         amount: totalAmount,
+        originalAmount: planPrice,
+        discountAmount: totalDiscount,
+        discount: totalDiscount,
+        netPayable: totalAmount,
+        amountPaid: totalAmount,
         paid: totalAmount,
         plan: planName,
         method: method,
-        discount: totalDiscount,
         status: 'paid',
         invoice: generatedInvoiceNum,
         invoiceNumber: generatedInvoiceNum,
         date: todayStr,
-        startDate: member.expiryDate && member.expiryDate > todayStr ? member.expiryDate : todayStr,
+        startDate: renewalStart,
         expiryDate: newExpiryString,
         createdAt: new Date().toISOString()
       };
@@ -202,7 +216,7 @@ export default function RenewalWizardModal({ isOpen, member, onClose }: RenewalW
 
       const newHistoryItem = {
         packageName: planName,
-        startDate: member.expiryDate && member.expiryDate > todayStr ? member.expiryDate : todayStr,
+        startDate: renewalStart,
         expiryDate: newExpiryString,
         amount: totalAmount,
         invoiceNumber: generatedInvoiceNum,
@@ -212,15 +226,19 @@ export default function RenewalWizardModal({ isOpen, member, onClose }: RenewalW
       const existingHistory = Array.isArray(member.membershipHistory) ? member.membershipHistory : [];
       const updatedHistory = [newHistoryItem, ...existingHistory];
 
+      // Keep current active status if current membership is active until renewalStart
+      const activeExpiry = renewalStart > todayStr ? (member.expiryDate || newExpiryString) : newExpiryString;
+      const computedMemberStatus = membershipEngine.calculateMembershipStatus(activeExpiry, member.startDate || member.joinDate || todayStr);
+
       await updateMember(member.id, {
         plan: planName,
         price: planPrice,
         amount: totalAmount,
-        totalBilled: totalAmount,
-        totalPaid: totalAmount,
+        totalBilled: (Number(member.totalBilled) || 0) + totalAmount,
+        totalPaid: (Number(member.totalPaid) || 0) + totalAmount,
         expiryDate: newExpiryString,
         daysLeft: daysLeftCount,
-        status: 'active',
+        status: computedMemberStatus,
         paymentStatus: 'paid',
         membershipHistory: updatedHistory
       });

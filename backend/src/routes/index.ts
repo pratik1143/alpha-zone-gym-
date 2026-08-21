@@ -5,7 +5,7 @@ import { loginUser } from '../controllers/auth.controller';
 import { getMembers, createMember, updateMember, deleteMember, toggleFreezeMember, resetMemberPassword, sendMemberCredentials } from '../controllers/member.controller';
 import { getAttendanceFeed, createCheckIn, checkoutLog, triggerGateUnlock, getAccessLogs, getDoorStatus, getDashboardAnalyticsFeed, getAttendanceSummaryFeed } from '../controllers/attendance.controller';
 import { getDevices, createDevice, updateDevice, deleteDevice, getDeviceLogs, triggerSimulationTap, restartDevice, queueConnectionTest, queueReadUsers, queueReadAttendance, getTesterStatus, queueSyncFirebase, queueImportUsers, startEnrollFingerprint, deleteEnrollment, syncMemberToDevice, getEnrollmentStatus, getPythonStatus, getLatestPunch, autoMapAllBiometrics } from '../controllers/device.controller';
-import { getInvoices, createInvoice, markPaymentPaid } from '../controllers/billing.controller';
+import { getInvoices, createInvoice, markPaymentPaid, cleanupDuplicateInvoicesController } from '../controllers/billing.controller';
 import { 
   getWorkoutPlan, saveWorkoutPlan, getDietPlan, saveDietPlan,
   generateAIDiet, approveDietPlan, duplicateDietPlan, archiveDietPlan,
@@ -97,6 +97,7 @@ router.get('/devices/biometric/status/:memberId', getEnrollmentStatus);
 router.get('/billing', getInvoices);
 router.post('/billing', createInvoice);
 router.post('/billing/pay/:memberId', markPaymentPaid);
+router.post('/billing/cleanup-duplicates', cleanupDuplicateInvoicesController);
 
 // Trainer Workout & Diet Builders
 router.get('/trainers/workouts/:memberId', getWorkoutPlan);
