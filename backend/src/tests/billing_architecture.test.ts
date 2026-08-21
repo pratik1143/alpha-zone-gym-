@@ -233,6 +233,21 @@ async function runBillingTests() {
 
   assert(inv6Data !== null, 'TEST 6', 'Renewal invoice recorded');
 
+  // Clean up created test documents from Firestore
+  console.log('\n🧹 Cleaning up test documents created during test run...');
+  const firestore = (db as any).getFirestoreDb ? (db as any).getFirestoreDb() : null;
+  if (firestore) {
+    const testPhones = [test1Phone, test2Phone, test3Phone, test4Phone, test5Phone];
+    for (const phone of testPhones) {
+      if (!phone) continue;
+      const mems = await firestore.collection('members').where('phone', '==', phone).get();
+      for (const d of mems.docs) await firestore.collection('members').doc(d.id).delete();
+      const pays = await firestore.collection('payments').where('memberPhone', '==', phone).get();
+      for (const d of pays.docs) await firestore.collection('payments').doc(d.id).delete();
+    }
+  }
+  console.log('✅ Test documents cleaned up!');
+
   // Summary
   console.log('\n====================================================');
   console.log(`TEST SUITE SUMMARY: ${passedCount} PASSED, ${failedCount} FAILED`);

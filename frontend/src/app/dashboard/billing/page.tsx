@@ -43,7 +43,13 @@ export default function BillingPage() {
   const [showInvoiceModal, setShowInvoiceModal] = useState<string | null>(null);
   const [markingPaid, setMarkingPaid] = useState<string | null>(null);
 
-  const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
+  const todayStr = useMemo(() => {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }, []);
 
   // Real-time Firestore listener with member billing history fallback
   useEffect(() => {
@@ -117,16 +123,13 @@ export default function BillingPage() {
   
   // Today's Real Collections (includes cash, UPI, card payments collected today)
   const todaysRealCollection = useMemo(() => {
-    const todayYMD = new Date().toISOString().split('T')[0];
-    const todayLocal = new Date().toLocaleDateString('en-CA');
-
     return paidPayments
       .filter(p => {
-        if (p.isLegacyImport || p.isHistorical || p.isSample || p.isMock) return false;
-        const pDate = String(p.date || p.createdAt || '').split('T')[0];
-        return pDate === todayYMD || pDate === todayLocal || pDate === todayStr || p.isRealTimeToday;
+        if (!p || p.isLegacyImport || p.isHistorical || p.isSample || p.isMock) return false;
+        const pDate = String(p.date || p.paymentDate || p.createdAt || '').split('T')[0];
+        return pDate === todayStr || p.isRealTimeToday;
       })
-      .reduce((s, p) => s + (Number(p.paid) || Number(p.amount) || 0), 0);
+      .reduce((s, p) => s + (Number(p.paid) || Number(p.amountPaid) || Number(p.amount) || 0), 0);
   }, [paidPayments, todayStr]);
 
   const totalCollected = useMemo(() => paidPayments.reduce((s, p) => s + (Number(p.amount) || 0), 0), [paidPayments]);

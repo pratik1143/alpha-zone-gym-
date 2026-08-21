@@ -83,66 +83,79 @@ export default function OverviewCommandCenter() {
   const [memMethod, setMemMethod] = useState('UPI');
   const [memSaving, setMemSaving] = useState(false);
 
-  const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
+  const getLocalDateStr = (d: Date = new Date()) => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  };
 
-  useEffect(() => {
-    fetchMembers();
-    fetchAttendance();
-    fetchPayments();
+  const todayStr = useMemo(() => {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }, []);
 
-    const fetchApiData = async () => {
-      try {
-        const res = await API.get('/enquiries');
-        if (res.data) setEnquiries(res.data);
-      } catch (err) {}
+  const yesterdayStr = useMemo(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 1);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }, []);
 
-      try {
-        const empRes = await API.get('/employees');
-        if (empRes.data) setEmployees(empRes.data);
-      } catch (err) {}
-    };
-    fetchApiData();
+  const isWithinRange = (dateInput: string | Date | null | undefined, range: string) => {
+    if (!dateInput || dateInput === 'N/A' || dateInput === '—') return false;
 
-    const unsubEnquiries = onSnapshot(query(collection(db, "enquiries")), (snap) => {
-      setEnquiries(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    }, (err) => {
-      fetchApiData();
-    });
+    let targetYMD = '';
+    let targetDateObj: Date;
 
-    const clockInterval = setInterval(() => setNow(new Date()), 1000);
-    const syncInterval = setInterval(() => setLastUpdated(p => p >= 60 ? 0 : p + 1), 1000);
+    if (dateInput instanceof Date) {
+      targetDateObj = dateInput;
+      targetYMD = getLocalDateStr(dateInput);
+    } else {
+      const rawStr = String(dateInput).trim();
+      targetYMD = rawStr.includes('T') ? rawStr.split('T')[0] : rawStr;
+      targetDateObj = new Date(rawStr);
+    }
 
-    return () => {
-      unsubEnquiries();
-      clearInterval(clockInterval);
-      clearInterval(syncInterval);
-    };
-  }, [fetchMembers, fetchAttendance, fetchPayments]);
+    if (range === "Today") {
+      return targetYMD === todayStr;
+    }
+    if (range === "Yesterday") {
+      return targetYMD === yesterdayStr;
+    }
+
+    if (isNaN(targetDateObj.getTime())) return false;
+    const nowLocal = new Date(); nowLocal.setHours(0, 0, 0, 0);
+
+    if (range === "7 Days") {
+      const p = new Date(nowLocal); p.setDate(p.getDate() - 7);
+      return targetDateObj >= p;
+    }
+    if (range === "30 Days") {
+      const p = new Date(nowLocal); p.setDate(p.getDate() - 30);
+      return targetDateObj >= p;
+    }
+    if (range === "Month") {
+      return targetDateObj.getMonth() === nowLocal.getMonth() && targetDateObj.getFullYear() === nowLocal.getFullYear();
+    }
+    if (range === "Custom") {
+      const s = new Date(fromDate); s.setHours(0, 0, 0, 0);
+      const e = new Date(toDate); e.setHours(23, 59, 59, 999);
+      return targetDateObj >= s && targetDateObj <= e;
+    }
+    return true;
+  };
 
   const getGreeting = () => {
     const h = new Date().getHours();
     if (h < 12) return "Good Morning";
     if (h < 17) return "Good Afternoon";
     return "Good Evening";
-  };
-
-  const isWithinRange = (dateStr: string | null | undefined, range: string) => {
-    if (!dateStr || dateStr === 'N/A' || dateStr === '—') return false;
-    const date = new Date(dateStr);
-    if (isNaN(date.getTime())) return false;
-
-    const today = new Date(); today.setHours(0, 0, 0, 0);
-    if (range === "Today") { const d = new Date(date); d.setHours(0, 0, 0, 0); return d.getTime() === today.getTime(); }
-    if (range === "Yesterday") { const y = new Date(today); y.setDate(y.getDate() - 1); const d = new Date(date); d.setHours(0, 0, 0, 0); return d.getTime() === y.getTime(); }
-    if (range === "7 Days") { const p = new Date(today); p.setDate(p.getDate() - 7); return date >= p; }
-    if (range === "30 Days") { const p = new Date(today); p.setDate(p.getDate() - 30); return date >= p; }
-    if (range === "Month") return date.getMonth() === today.getMonth() && date.getFullYear() === today.getFullYear();
-    if (range === "Custom") {
-      const s = new Date(fromDate); s.setHours(0, 0, 0, 0);
-      const e = new Date(toDate); e.setHours(23, 59, 59, 999);
-      return date >= s && date <= e;
-    }
-    return true;
   };
 
   const PLAN_RATES: Record<string, number> = {
@@ -170,7 +183,6 @@ export default function OverviewCommandCenter() {
 
   // Today's Real Collections (strictly today's date, deduplicated by payment/invoice ID)
   const todaysRealCollection = useMemo(() => {
-    const todayYMD = new Date().toISOString().split('T')[0];
     const seen = new Set<string>();
 
     const fromPayments = payments
@@ -180,7 +192,7 @@ export default function OverviewCommandCenter() {
         if (status !== 'paid' && status !== 'partial') return false;
 
         const pDate = String(p.date || p.paymentDate || p.createdAt || '').split('T')[0];
-        if (pDate !== todayYMD && !p.isRealTimeToday) return false;
+        if (pDate !== todayStr && !p.isRealTimeToday) return false;
 
         const idKey = String(p.id || p.paymentId || p.invoiceNumber || p.invoice || p.idempotencyKey || '').trim();
         if (idKey && seen.has(idKey)) return false;
@@ -193,7 +205,7 @@ export default function OverviewCommandCenter() {
       }, 0);
 
     return fromPayments + sessionCollection;
-  }, [payments, sessionCollection]);
+  }, [payments, todayStr, sessionCollection]);
 
   // Dynamic Date-Range Filtered Collection (deduplicated)
   const filteredRangeCollection = useMemo(() => {

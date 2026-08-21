@@ -18,7 +18,13 @@ export default function PresentMembersModal({ isOpen, onClose, attendanceLogs, m
   const [searchTerm, setSearchTerm] = useState('');
   const [filterMethod, setFilterMethod] = useState<'all' | 'biometric' | 'manual'>('all');
 
-  const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
+  const todayStr = useMemo(() => {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }, []);
   const todayDateStr = useMemo(() => new Date().toDateString(), []);
 
   // Filter today's attendance logs and resolve member profile objects
@@ -29,8 +35,8 @@ export default function PresentMembersModal({ isOpen, onClose, attendanceLogs, m
     const rawTodayLogs = attendanceLogs.filter(log => {
       const checkInStr = String(log.checkIn || log.timestamp || log.createdAt || '');
       if (!checkInStr) return false;
-      const checkInDate = new Date(checkInStr);
-      return checkInStr.startsWith(todayStr) || checkInDate.toDateString() === todayDateStr;
+      const checkInYMD = checkInStr.includes('T') ? checkInStr.split('T')[0] : checkInStr;
+      return checkInYMD === todayStr;
     });
 
     // Group by unique member to show clean list of present members
