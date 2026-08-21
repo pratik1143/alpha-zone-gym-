@@ -92,7 +92,10 @@ def show_attendance_popup(popup_data):
             biometric_id = popup_data.get('biometricId', popup_data.get('deviceId', 'N/A'))
             expired_days = popup_data.get('expiredDays', 0)
 
-            # Modern Color Palettes
+            # Modern Color Palettes & Status Mapping
+            first_checkin = popup_data.get('firstCheckInTime', popup_data.get('checkIn', ''))
+            current_punch = popup_data.get('currentPunchTime', popup_data.get('timestamp', ''))
+
             if status == 'granted':
                 bg_color = "#0b0f19"      # Rich Dark Slate 950
                 card_border = "#10b981"   # Emerald 500
@@ -101,6 +104,14 @@ def show_attendance_popup(popup_data):
                 status_fg = "#34d399"     # Emerald 400
                 badge_bg = "#064e3b"
                 message = "Welcome Back! 💪"
+            elif status == 'already_inside':
+                bg_color = "#0b0f19"
+                card_border = "#0284c7"   # Sky 600
+                header_bg = "#0c4a6e"     # Sky 950
+                status_text = "✓ ALREADY INSIDE"
+                status_fg = "#38bdf8"     # Sky 400
+                badge_bg = "#0369a1"
+                message = f"First Check-in Today: {first_checkin[11:16] if len(first_checkin)>=16 else 'Today'}"
             elif status in ('denied', 'expired', 'frozen'):
                 bg_color = "#0b0f19"
                 card_border = "#ef4444"   # Red 500
@@ -109,18 +120,18 @@ def show_attendance_popup(popup_data):
                 status_fg = "#f87171"     # Red 400
                 badge_bg = "#7f1d1d"
                 message = f"Expired {expired_days} days ago" if expired_days else "Membership Expired"
-            else: # unknown / unmapped
+            else: # unmapped
                 bg_color = "#0b0f19"
                 card_border = "#f59e0b"   # Amber 500
                 header_bg = "#451a03"     # Amber 950
-                status_text = "⚠ UNMAPPED BIOMETRIC ID"
+                status_text = "⚠ MEMBER NOT MAPPED"
                 status_fg = "#fbbf24"     # Amber 400
                 badge_bg = "#78350f"
-                message = f"Biometric ID #{biometric_id} needs member mapping"
+                message = f"ESSL Device User ID #{biometric_id} needs CRM mapping"
 
             # Window Dimensions and Top-Right Positioning
             win_width = 390
-            win_height = 430
+            win_height = 440
             screen_w = root.winfo_screenwidth()
             
             x_pos = screen_w - win_width - 25
@@ -189,7 +200,6 @@ def show_attendance_popup(popup_data):
                 avatar_canvas.create_image(46, 46, image=photo_img)
                 avatar_canvas.image = photo_img
             else:
-                # Default Initials Avatar
                 clean_name = member_name.replace("Unmapped Biometric User #", "ID ")
                 parts = clean_name.split()
                 initials = (parts[0][0] + (parts[1][0] if len(parts) > 1 else '')).upper() if parts else "AZ"
@@ -220,14 +230,15 @@ def show_attendance_popup(popup_data):
             info_box = tk.Frame(main_frame, bg="#1e293b", bd=0)
             info_box.pack(fill=tk.X, padx=18, pady=10)
 
-            if status == 'granted':
+            if status in ('granted', 'already_inside'):
                 r1 = tk.Label(info_box, text=f"Plan: {plan_name}", font=("Segoe UI", 9, "bold"), fg="#e2e8f0", bg="#1e293b")
                 r1.pack(anchor="w", padx=14, pady=(8, 2))
                 
                 r2 = tk.Label(info_box, text=f"Days Remaining: {days_left} Days", font=("Segoe UI", 9, "bold"), fg="#34d399", bg="#1e293b")
                 r2.pack(anchor="w", padx=14, pady=2)
 
-                r3 = tk.Label(info_box, text=f"Today's Check-in: #{visit_count}", font=("Segoe UI", 9), fg="#94a3b8", bg="#1e293b")
+                r3_text = f"First Check-in: {first_checkin[11:16]}" if status == 'already_inside' and first_checkin else f"Today's Visit: #{visit_count}"
+                r3 = tk.Label(info_box, text=r3_text, font=("Segoe UI", 9), fg="#38bdf8" if status == 'already_inside' else "#94a3b8", bg="#1e293b")
                 r3.pack(anchor="w", padx=14, pady=(2, 8))
             elif status in ('denied', 'expired', 'frozen'):
                 r1 = tk.Label(info_box, text=f"Plan: {plan_name}", font=("Segoe UI", 9, "bold"), fg="#e2e8f0", bg="#1e293b")
@@ -236,19 +247,19 @@ def show_attendance_popup(popup_data):
                 r2 = tk.Label(info_box, text=message, font=("Segoe UI", 9, "bold"), fg="#f87171", bg="#1e293b")
                 r2.pack(anchor="w", padx=14, pady=(2, 8))
             else: # unmapped
-                r1 = tk.Label(info_box, text=f"Biometric Hardware ID: #{biometric_id}", font=("Segoe UI", 9, "bold"), fg="#e2e8f0", bg="#1e293b")
+                r1 = tk.Label(info_box, text=f"ESSL Hardware User ID: #{biometric_id}", font=("Segoe UI", 9, "bold"), fg="#e2e8f0", bg="#1e293b")
                 r1.pack(anchor="w", padx=14, pady=(8, 2))
                 
-                r2 = tk.Label(info_box, text="Biometric ID needs member mapping", font=("Segoe UI", 9), fg="#fbbf24", bg="#1e293b")
+                r2 = tk.Label(info_box, text="Biometric ID needs CRM member mapping", font=("Segoe UI", 9), fg="#fbbf24", bg="#1e293b")
                 r2.pack(anchor="w", padx=14, pady=(2, 8))
 
             # 6. Action Button Footer
-            if status == 'granted':
+            if status in ('granted', 'already_inside'):
                 msg_label = tk.Label(
                     main_frame, 
                     text=message, 
                     font=("Segoe UI", 10, "bold"), 
-                    fg="#34d399", 
+                    fg="#38bdf8" if status == 'already_inside' else "#34d399", 
                     bg=bg_color
                 )
                 msg_label.pack(pady=4)
@@ -275,26 +286,55 @@ def show_attendance_popup(popup_data):
                 )
                 btn.pack(pady=4)
             else: # unmapped
+                btn_box = tk.Frame(main_frame, bg=bg_color)
+                btn_box.pack(pady=4)
+
+                def trigger_automap():
+                    import webbrowser
+                    try:
+                        req = urllib.request.Request("http://localhost:5000/api/devices/auto-map-biometrics", method="POST")
+                        urllib.request.urlopen(req, timeout=3)
+                    except Exception:
+                        pass
+                    webbrowser.open("http://localhost:3000/dashboard/settings/member-migration")
+                    root.destroy()
+
                 def open_mapping():
                     import webbrowser
                     webbrowser.open("http://localhost:3000/dashboard/settings/member-migration")
                     root.destroy()
 
-                btn = tk.Button(
-                    main_frame, 
-                    text="⚡ MAP TO MEMBER", 
+                btn_auto = tk.Button(
+                    btn_box, 
+                    text="⚡ AUTO MAP", 
+                    font=("Segoe UI", 9, "bold"), 
+                    fg="#ffffff", 
+                    bg="#2563eb", 
+                    activebackground="#1d4ed8",
+                    activeforeground="#ffffff",
+                    bd=0, 
+                    padx=12, 
+                    pady=6, 
+                    cursor="hand2",
+                    command=trigger_automap
+                )
+                btn_auto.pack(side=tk.LEFT, padx=6)
+
+                btn_map = tk.Button(
+                    btn_box, 
+                    text="⚡ MAP MEMBER", 
                     font=("Segoe UI", 9, "bold"), 
                     fg="#0f172a", 
                     bg="#f59e0b", 
                     activebackground="#d97706",
                     activeforeground="#0f172a",
                     bd=0, 
-                    padx=16, 
+                    padx=12, 
                     pady=6, 
                     cursor="hand2",
                     command=open_mapping
                 )
-                btn.pack(pady=4)
+                btn_map.pack(side=tk.LEFT, padx=6)
 
             # Auto close after 7 seconds
             root.after(7000, lambda: root.destroy() if root.winfo_exists() else None)

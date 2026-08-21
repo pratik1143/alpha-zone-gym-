@@ -61,34 +61,25 @@ export const createCheckIn = async (req: Request, res: Response) => {
     });
     
     if (!member) {
-      const log = await db.addAttendance({
-        memberId: `unmapped_bio_${memberId}`,
-        memberName: `Unmapped Biometric User #${memberId}`,
-        checkIn: new Date().toISOString(),
-        checkOut: null,
-        method: method || 'biometric',
-        branch: branch || 'Mohali, Punjab',
-        status: 'unknown',
-        reason: `Biometric User ID #${memberId} is not mapped to a member profile yet`,
-        createdAt: new Date().toISOString()
-      });
-
+      // DO NOT write attendance log for unmapped users (Requirement 3 & 15)
       latestPunchEvent = {
-        id: log.id || 'punch_' + Date.now(),
+        id: 'punch_' + Date.now(),
         memberId: `unmapped_bio_${memberId}`,
         memberName: `Unmapped Biometric User #${memberId}`,
         memberCode: `ID #${memberId}`,
         status: 'unknown',
-        reason: `Biometric ID #${memberId} needs mapping`,
+        unmapped: true,
+        reason: `Biometric ID #${memberId} needs CRM mapping`,
         checkIn: new Date().toISOString(),
         createdAt: new Date().toISOString()
       };
 
       return res.status(200).json({
-        success: true,
-        log,
+        success: false,
+        unmapped: true,
+        biometricId: memberId,
         memberName: `Unmapped Biometric User #${memberId}`,
-        unmapped: true
+        message: 'Member not mapped'
       });
     }
 
@@ -100,6 +91,38 @@ export const createCheckIn = async (req: Request, res: Response) => {
     } else if (member.status === 'frozen') {
       status = 'denied';
       reason = 'Membership is frozen';
+    }
+
+    // Check Duplicate / Today Check-in for resolved member
+    const todayStr = new Date().toISOString().split('T')[0];
+    const logs = await db.getAttendance();
+    const existingLog = logs.find((a: any) => a.memberId === member.id && (a.status === 'granted' || a.status === 'already_inside') && a.checkIn && String(a.checkIn).startsWith(todayStr));
+
+    if (existingLog && status === 'granted') {
+      latestPunchEvent = {
+        id: 'punch_' + Date.now(),
+        memberId: member.id,
+        memberName: member.name,
+        memberCode: member.memberId || 'AZ-2026-0001',
+        avatarUrl: member.avatar || member.avatarUrl || '',
+        plan: member.plan || 'Monthly Standard',
+        trainer: member.trainer || 'No PT Assigned',
+        expiryDate: member.expiryDate || '',
+        status: 'already_inside',
+        alreadyInside: true,
+        reason: 'Already checked in today',
+        firstCheckInTime: existingLog.checkIn,
+        checkIn: new Date().toISOString(),
+        createdAt: new Date().toISOString()
+      };
+
+      return res.status(200).json({
+        success: true,
+        alreadyInside: true,
+        member,
+        firstCheckInTime: existingLog.checkIn,
+        currentPunchTime: new Date().toISOString()
+      });
     }
 
     const log = await db.addAttendance({

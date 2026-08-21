@@ -1059,21 +1059,27 @@ def run_membership_validation(user_id, device_id, device_name, branch, timestamp
         except Exception as f_err:
             logging.error(f"[Firestore Member Lookup Error]: {f_err}")
 
-    # 4. Determine Membership Status & Access
+    # 4. Determine Membership Status & Access (Canonical Member Flow)
     status = 'granted'
     reason = ''
     days_left = 30
     expired_days = 0
+    first_checkin_time = ''
+    current_punch_time = timestamp_iso
 
     if not member and api_result and not api_result.get('unmapped'):
         member_name = api_result.get('memberName', 'Gym Member')
         avatar_url = api_result.get('avatarUrl', '')
         plan_name = api_result.get('plan', 'Standard Membership')
         status = 'granted'
+        member_id_str = api_result.get('memberId', '')
+        member_code_str = api_result.get('memberCode', f"ID #{user_id_str}")
     elif member:
         member_name = member.get('name', 'Gym Member')
         avatar_url = member.get('avatarUrl', '') or member.get('avatar', '')
         plan_name = member.get('plan', 'Standard Membership')
+        member_id_str = member.get('id', '')
+        member_code_str = member.get('memberId', f"AZ-2026-{user_id_str}")
         
         exp_date_str = member.get('expiryDate', '')
         if exp_date_str:
@@ -1094,35 +1100,57 @@ def run_membership_validation(user_id, device_id, device_name, branch, timestamp
         elif member.get('status') == 'expired':
             status = 'expired'
             reason = 'Membership has expired'
+
+        # Check Duplicate / Today Checkin for resolved member
+        if status == 'granted' and db is not None:
+            try:
+                today_prefix = datetime.now().strftime("%Y-%m-%d")
+                att_query = db.collection('attendance').where('memberId', '==', member_id_str).limit(10).stream()
+                for a_snap in att_query:
+                    a_data = a_snap.to_dict()
+                    a_checkin = str(a_data.get('checkIn', ''))
+                    if a_checkin.startswith(today_prefix) and a_data.get('status') in ('granted', 'already_inside'):
+                        status = 'already_inside'
+                        first_checkin_time = a_checkin
+                        reason = 'Already checked in today'
+                        break
+            except Exception as att_err:
+                logging.warning(f"Error checking duplicate attendance for member {member_id_str}: {att_err}")
     else:
-        status = 'unknown'
+        # UNMAPPED MEMBER (Requirement 3 & 15)
+        status = 'unmapped'
         member_name = f"Unmapped Biometric User #{user_id_str}"
         plan_name = "Unmapped Biometric ID"
+        member_id_str = ""
+        member_code_str = f"ID #{user_id_str}"
 
-    # 5. Trigger Always-on-Top Desktop Overlay Popup
+    mapping_found = True if member or (api_result and not api_result.get('unmapped')) else False
+    attendance_written = True if (status in ('granted', 'already_inside', 'expired', 'frozen') and mapping_found) else False
+    gate_will_trigger = True if (status == 'granted' and mapping_found) else False
+
+    # 5. Trigger Always-on-Top Desktop Overlay Popup with Canonical Member Object
     if desktop_popup:
         try:
             desktop_popup.show_attendance_popup({
                 'status': status,
                 'memberName': member_name,
-                'memberId': member.get('id', '') if member else '',
-                'memberCode': member.get('memberId', f"ID #{user_id_str}") if member else f"ID #{user_id_str}",
+                'memberId': member_id_str,
+                'memberCode': member_code_str,
                 'plan': plan_name,
-                'daysRemaining': days_left if status == 'granted' else 0,
+                'daysRemaining': days_left if status in ('granted', 'already_inside') else 0,
                 'expiredDays': expired_days,
                 'visitCount': member.get('attendanceCount', 1) if member else 1,
-                'avatarUrl': avatar_url if 'avatar_url' in locals() else '',
+                'avatarUrl': avatar_url,
                 'deviceId': device_name,
                 'biometricId': user_id_str,
-                'timestamp': timestamp_iso
+                'timestamp': timestamp_iso,
+                'firstCheckInTime': first_checkin_time,
+                'currentPunchTime': current_punch_time
             })
         except Exception as pop_err:
             logging.error(f"[Popup Error]: {pop_err}")
 
     # 6. Print Terminal Output Stream Log & Dev Diagnostic Log (Requirement 14)
-    mapping_found = True if member or (api_result and not api_result.get('unmapped')) else False
-    gate_will_trigger = True if status == 'granted' else False
-
     print("\n[ESSL PUNCH]")
     print(f"device={device_name}")
     print(f"deviceUserId={user_id_str}")
@@ -1130,59 +1158,60 @@ def run_membership_validation(user_id, device_id, device_name, branch, timestamp
     print(f"enrollNumber={user_id_str}")
     print(f"name=\"{member_name}\"")
     print(f"mappingFound={'true' if mapping_found else 'false'}")
-    print(f"firebaseMemberId=\"{member.get('id', '') if member else ''}\"")
+    print(f"firebaseMemberId=\"{member_id_str}\"")
     print(f"membershipStatus=\"{status.upper()}\"")
-    print(f"attendanceWritten=true")
+    print(f"attendanceWritten={'true' if attendance_written else 'false'}")
     print(f"popupTriggered=true")
     print(f"gateTriggered={'true' if gate_will_trigger else 'false'}\n")
 
-    access_label = "ACCESS GRANTED 🟢" if status == 'granted' else ("ACCESS DENIED 🔴" if status in ('expired', 'frozen', 'denied') else "UNKNOWN MEMBER 🟡")
+    access_label = "ACCESS GRANTED 🟢" if status == 'granted' else ("ALREADY INSIDE 🔵" if status == 'already_inside' else ("ACCESS DENIED 🔴" if status in ('expired', 'frozen', 'denied') else "MEMBER NOT MAPPED 🟡"))
     print("="*52)
     print(f"[{time_str}] REAL PUNCH RECEIVED — {access_label}")
     print(f"Device ID    : {device_id} ({device_name})")
     print(f"Biometric ID : {user_id_str}")
     print(f"Member       : {member_name}")
-    print(f"Membership   : {plan_name} ({days_left} Days Remaining)" if status == 'granted' else f"Status       : {status.upper()} ({reason or 'Access Denied'})")
+    print(f"Membership   : {plan_name} ({days_left} Days Remaining)" if status in ('granted', 'already_inside') else f"Status       : {status.upper()} ({reason or 'Access Denied'})")
     print(f"Popup        : TRIGGERED (Always-On-Top Desktop Overlay)")
     print(f"Gate Relay   : {'OPENED (3.0s)' if gate_will_trigger else 'DISABLED'}")
     print("="*52 + "\n")
 
-    # 7. Save Attendance Log to Firestore or Offline Queue
-    att_doc_id = f"att_{device_id}_{user_id_str}_{int(time.time())}"
-    punch_record = {
-        'docId': att_doc_id,
-        'attendanceId': att_doc_id,
-        'fingerprint': fp,
-        'memberId': member.get('id', f"unmapped_bio_{user_id_str}") if member else f"unmapped_bio_{user_id_str}",
-        'biometricId': user_id_str,
-        'deviceUserId': user_id_str,
-        'memberName': member_name,
-        'memberCode': member.get('memberId', f"ID #{user_id_str}") if member else f"ID #{user_id_str}",
-        'avatarUrl': avatar_url if 'avatar_url' in locals() else '',
-        'deviceId': device_id,
-        'deviceName': device_name,
-        'branch': branch,
-        'timestamp': timestamp_iso,
-        'checkIn': timestamp_iso,
-        'status': status,
-        'reason': reason,
-        'method': 'biometric',
-        'membership': plan_name,
-        'createdAt': timestamp_iso
-    }
+    # 7. Save Attendance Log ONLY for resolved members (DO NOT save for unmapped users)
+    if mapping_found and attendance_written:
+        att_doc_id = f"att_{device_id}_{user_id_str}_{int(time.time())}"
+        punch_record = {
+            'docId': att_doc_id,
+            'attendanceId': att_doc_id,
+            'fingerprint': fp,
+            'memberId': member_id_str,
+            'biometricId': user_id_str,
+            'deviceUserId': user_id_str,
+            'memberName': member_name,
+            'memberCode': member_code_str,
+            'avatarUrl': avatar_url,
+            'deviceId': device_id,
+            'deviceName': device_name,
+            'branch': branch,
+            'timestamp': timestamp_iso,
+            'checkIn': timestamp_iso,
+            'status': status,
+            'reason': reason,
+            'method': 'biometric',
+            'membership': plan_name,
+            'createdAt': timestamp_iso
+        }
 
-    if db is not None:
-        try:
-            db.collection('attendance').document(att_doc_id).set(punch_record)
-            db.collection('attendance_logs').document(att_doc_id).set(punch_record)
-            flush_offline_queue()
-        except Exception as save_err:
-            logging.warning(f"Firebase write failed during punch. Queuing punch locally: {save_err}")
+        if db is not None:
+            try:
+                db.collection('attendance').document(att_doc_id).set(punch_record)
+                db.collection('attendance_logs').document(att_doc_id).set(punch_record)
+                flush_offline_queue()
+            except Exception as save_err:
+                logging.warning(f"Firebase write failed during punch. Queuing punch locally: {save_err}")
+                queue_offline_punch(punch_record)
+        else:
             queue_offline_punch(punch_record)
-    else:
-        queue_offline_punch(punch_record)
 
-    return (status == 'granted')
+    return gate_will_trigger
 
 def sync_device_data(conn, device_id, device_name, branch):
     """
