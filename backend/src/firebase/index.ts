@@ -1103,6 +1103,125 @@ export const db = {
     }
   },
 
+  updatePayment: async (paymentId: string, updates: any): Promise<any> => {
+    const firestore = getFirestoreDb();
+    const origAmt = Number(updates.originalAmount !== undefined ? updates.originalAmount : (updates.amount || 0));
+    const discAmt = Number(updates.discountAmount !== undefined ? updates.discountAmount : (updates.discount || 0));
+    const taxAmt = Number(updates.taxAmount !== undefined ? updates.taxAmount : (updates.tax || updates.gst || 0));
+    const othAmt = Number(updates.otherCharges || 0);
+
+    const calculatedNet = Math.max(0, origAmt - discAmt + taxAmt + othAmt);
+    const netPayable = Number(updates.netPayable !== undefined ? updates.netPayable : (calculatedNet > 0 ? calculatedNet : origAmt));
+    const amountPaid = Number(updates.amountPaid !== undefined ? updates.amountPaid : (updates.paid !== undefined ? updates.paid : netPayable));
+    const outstanding = Math.max(0, netPayable - amountPaid);
+    const status = updates.status || (outstanding <= 0 ? 'paid' : (amountPaid > 0 ? 'partial' : 'pending'));
+
+    const sanitizedUpdates: any = {
+      ...updates,
+      originalAmount: origAmt,
+      discountAmount: discAmt,
+      discount: discAmt,
+      taxAmount: taxAmt,
+      gst: taxAmt,
+      otherCharges: othAmt,
+      netPayable,
+      amount: netPayable,
+      amountPaid,
+      paid: amountPaid,
+      outstandingAmount: outstanding,
+      pendingAmount: outstanding,
+      status,
+      updatedAt: new Date().toISOString()
+    };
+
+    if (firestore) {
+      let docRef = firestore.collection('payments').doc(paymentId);
+      let docSnap = await docRef.get();
+      
+      if (!docSnap.exists) {
+        const qSnap = await firestore.collection('payments').where('invoiceNumber', '==', paymentId).limit(1).get();
+        if (!qSnap.empty) {
+          docRef = qSnap.docs[0].ref;
+          docSnap = qSnap.docs[0];
+        }
+      }
+
+      if (docSnap.exists) {
+        const prevData = docSnap.data() || {};
+        await docRef.update(sanitizedUpdates);
+        const updatedDoc = { id: docRef.id, ...prevData, ...sanitizedUpdates };
+
+        const memberId = sanitizedUpdates.memberId || prevData.memberId;
+        if (memberId) {
+          const memDocRef = firestore.collection('members').doc(memberId);
+          const memSnap = await memDocRef.get();
+          if (memSnap.exists) {
+            const memData = memSnap.data() || {};
+            const memberUpdates: any = {};
+            if (sanitizedUpdates.memberName) memberUpdates.name = sanitizedUpdates.memberName;
+            if (sanitizedUpdates.memberPhone) memberUpdates.phone = sanitizedUpdates.memberPhone;
+            if (sanitizedUpdates.plan) memberUpdates.plan = sanitizedUpdates.plan;
+            if (sanitizedUpdates.startDate) memberUpdates.startDate = sanitizedUpdates.startDate;
+            if (sanitizedUpdates.expiryDate) memberUpdates.expiryDate = sanitizedUpdates.expiryDate;
+            if (sanitizedUpdates.email !== undefined) memberUpdates.email = sanitizedUpdates.email;
+            if (sanitizedUpdates.gender !== undefined) memberUpdates.gender = sanitizedUpdates.gender;
+            if (sanitizedUpdates.trainer !== undefined) memberUpdates.trainer = sanitizedUpdates.trainer;
+            if (sanitizedUpdates.branch !== undefined) memberUpdates.branch = sanitizedUpdates.branch;
+            if (sanitizedUpdates.memberStatus !== undefined) memberUpdates.status = sanitizedUpdates.memberStatus;
+
+            if (Array.isArray(memData.billingHistory)) {
+              memberUpdates.billingHistory = memData.billingHistory.map((item: any) => {
+                if (item.id === paymentId || item.invoiceNumber === paymentId || item.invoice === paymentId || item.id === docRef.id) {
+                  return { ...item, ...sanitizedUpdates, id: docRef.id };
+                }
+                return item;
+              });
+            }
+
+            if (Object.keys(memberUpdates).length > 0) {
+              await memDocRef.update(memberUpdates);
+            }
+          }
+        }
+
+        // Record Audit Log
+        try {
+          await firestore.collection('audit_logs').add({
+            action: 'Billing Updated',
+            paymentId: docRef.id,
+            memberId: memberId || 'unknown',
+            memberName: sanitizedUpdates.memberName || prevData.memberName || 'Member',
+            invoiceNumber: sanitizedUpdates.invoiceNumber || prevData.invoiceNumber || 'INV',
+            changedBy: updates.changedBy || 'Gym Owner',
+            timestamp: new Date().toISOString(),
+            details: {
+              previousAmount: prevData.amount || prevData.netPayable,
+              newAmount: netPayable,
+              previousDiscount: prevData.discount || prevData.discountAmount,
+              newDiscount: discAmt,
+              previousStartDate: prevData.startDate,
+              newStartDate: sanitizedUpdates.startDate,
+              previousExpiryDate: prevData.expiryDate,
+              newExpiryDate: sanitizedUpdates.expiryDate
+            }
+          });
+        } catch (err: any) {
+          console.warn('[Audit Log] Failed to write audit log:', err.message);
+        }
+
+        return updatedDoc;
+      }
+    }
+
+    const idx = mockPayments.findIndex(p => p.id === paymentId || p.invoiceNumber === paymentId || p.invoice === paymentId);
+    if (idx !== -1) {
+      mockPayments[idx] = { ...mockPayments[idx], ...sanitizedUpdates };
+      saveMockDb();
+      return mockPayments[idx];
+    }
+    return { id: paymentId, ...sanitizedUpdates };
+  },
+
   cleanupDuplicateInvoices: async (): Promise<any> => {
     const firestore = getFirestoreDb();
     const cleanedReport: any[] = [];

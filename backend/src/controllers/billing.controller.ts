@@ -153,6 +153,17 @@ export const markPaymentPaid = async (req: Request, res: Response) => {
   }
 };
 
+export const updateInvoice = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const updates = req.body;
+    const updatedInvoice = await db.updatePayment(id, updates);
+    res.json({ success: true, message: 'Invoice updated successfully', invoice: updatedInvoice });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
 export const cleanupDuplicateInvoicesController = async (req: Request, res: Response) => {
   try {
     const report = await db.cleanupDuplicateInvoices();

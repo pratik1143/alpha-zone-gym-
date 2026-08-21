@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Receipt, CreditCard, AlertCircle, CheckCircle, Clock, Download, MessageSquare,
   RefreshCw, Plus, Eye, Printer, Mail, ArrowUpRight, Edit3, X, Calendar, Shield,
@@ -14,19 +15,61 @@ import { useGymStore } from '@/store';
 import toast from 'react-hot-toast';
 import RenewalWizardModal from '../../components/RenewalWizardModal';
 import OfficialInvoiceReceipt from '@/app/dashboard/components/OfficialInvoiceReceipt';
+import EditBillingModal from './EditBillingModal';
 
-export default function BillingTab({ member }: { member: any }) {
+export default function BillingTab({ member: initialMember }: { member: any }) {
   const { fetchMembers } = useGymStore();
+  const [member, setMember] = useState(initialMember);
   const [invoices, setInvoices] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [markingId, setMarkingId] = useState<string | null>(null);
-  const [activeDropdownIndex, setActiveDropdownIndex] = useState<number | null>(null);
+
+  // Floating portal dropdown state
+  const [openDropdown, setOpenDropdown] = useState<{ invoice: any; anchorRect: DOMRect } | null>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Modals state
   const [viewInvoice, setViewInvoice] = useState<any | null>(null);
-  const [editInvoice, setEditInvoice] = useState<any | null>(null);
+  const [selectedInvoiceForEdit, setSelectedInvoiceForEdit] = useState<any | null>(null);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [showNewBillModal, setShowNewBillModal] = useState(false);
+
+  useEffect(() => {
+    setMember(initialMember);
+  }, [initialMember]);
+
+  // Click outside and Escape key handler for portal dropdown
+  useEffect(() => {
+    if (!openDropdown) return;
+
+    const handleOutsideClick = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setOpenDropdown(null);
+      }
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setOpenDropdown(null);
+      }
+    };
+
+    const handleScrollOrResize = () => {
+      setOpenDropdown(null);
+    };
+
+    document.addEventListener('mousedown', handleOutsideClick);
+    document.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('resize', handleScrollOrResize);
+    window.addEventListener('scroll', handleScrollOrResize, true);
+
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick);
+      document.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('resize', handleScrollOrResize);
+      window.removeEventListener('scroll', handleScrollOrResize, true);
+    };
+  }, [openDropdown]);
 
   // Edit Bill Form State
   const [editForm, setEditForm] = useState({
@@ -445,72 +488,20 @@ export default function BillingTab({ member }: { member: any }) {
                           {/* ACTION Dropdown Button */}
                           <button
                             type="button"
-                            onClick={() => setActiveDropdownIndex(activeDropdownIndex === idx ? null : idx)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const rect = e.currentTarget.getBoundingClientRect();
+                              if (openDropdown?.invoice?.id === (inv.id || inv.invoiceNumber)) {
+                                setOpenDropdown(null);
+                              } else {
+                                setOpenDropdown({ invoice: inv, anchorRect: rect });
+                              }
+                            }}
                             className="px-3 py-1.5 bg-[#d32f2f] hover:bg-[#c62828] text-white font-black rounded-lg text-xs uppercase tracking-wider transition-all flex items-center gap-1 cursor-pointer border-none shadow-md active:scale-95"
                           >
                             <span>ACTION</span>
                             <ChevronDown size={14} />
                           </button>
-
-                          {/* Action Dropdown Menu (Positioned cleanly) */}
-                          {activeDropdownIndex === idx && (
-                            <div className="absolute right-0 bottom-full mb-1 bg-white border border-slate-300 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.25)] z-[300] w-48 py-2 text-left text-xs font-bold text-slate-800 animate-in fade-in">
-                              <button
-                                onClick={() => {
-                                  setShowUpgradeModal(true);
-                                  setActiveDropdownIndex(null);
-                                }}
-                                className="w-full px-4 py-2.5 hover:bg-slate-100 flex items-center gap-2 text-left border-none bg-transparent cursor-pointer"
-                              >
-                                <RefreshCw size={14} className="text-blue-600" />
-                                <span>Renew</span>
-                              </button>
-
-                              <button
-                                onClick={() => {
-                                  setShowUpgradeModal(true);
-                                  setActiveDropdownIndex(null);
-                                }}
-                                className="w-full px-4 py-2.5 hover:bg-slate-100 flex items-center gap-2 text-left border-none bg-transparent cursor-pointer"
-                              >
-                                <ArrowUpRight size={14} className="text-indigo-600" />
-                                <span>Upgrade</span>
-                              </button>
-
-                              <button
-                                onClick={() => {
-                                  setViewInvoice(inv);
-                                  setActiveDropdownIndex(null);
-                                }}
-                                className="w-full px-4 py-2.5 hover:bg-slate-100 flex items-center gap-2 text-left border-none bg-transparent cursor-pointer"
-                              >
-                                <Eye size={14} className="text-slate-600" />
-                                <span>View Receipt</span>
-                              </button>
-
-                              <button
-                                onClick={() => {
-                                  handlePrint(inv);
-                                  setActiveDropdownIndex(null);
-                                }}
-                                className="w-full px-4 py-2.5 hover:bg-slate-100 flex items-center gap-2 text-left border-none bg-transparent cursor-pointer"
-                              >
-                                <Printer size={14} className="text-slate-600" />
-                                <span>Print Bill</span>
-                              </button>
-
-                              <button
-                                onClick={() => {
-                                  handleWhatsApp(inv);
-                                  setActiveDropdownIndex(null);
-                                }}
-                                className="w-full px-4 py-2.5 hover:bg-slate-100 flex items-center gap-2 text-left border-none bg-transparent cursor-pointer text-emerald-700 font-extrabold"
-                              >
-                                <MessageSquare size={14} className="text-emerald-600" />
-                                <span>WhatsApp Bill</span>
-                              </button>
-                            </div>
-                          )}
                         </div>
                       </td>
                     </tr>
@@ -692,6 +683,122 @@ export default function BillingTab({ member }: { member: any }) {
           onClose={() => {
             setShowUpgradeModal(false);
             fetchMembers();
+          }}
+        />
+      )}
+
+      {/* ── 4. PORTAL FLOATING ACTION DROPDOWN (NEVER CLIPPED) ──────────────── */}
+      {openDropdown && typeof document !== 'undefined' && createPortal(
+        <div
+          ref={dropdownRef}
+          style={{
+            position: 'fixed',
+            left: Math.max(12, Math.min(window.innerWidth - 220, openDropdown.anchorRect.right - 200)),
+            top: window.innerHeight - openDropdown.anchorRect.bottom >= 260
+              ? openDropdown.anchorRect.bottom + 6
+              : Math.max(12, openDropdown.anchorRect.top - 260),
+            zIndex: 99999
+          }}
+          className="bg-white border border-slate-200 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.3)] w-52 py-2 text-left text-xs font-bold text-slate-800 animate-in fade-in select-none"
+        >
+          <button
+            type="button"
+            onClick={() => {
+              setViewInvoice(openDropdown.invoice);
+              setOpenDropdown(null);
+            }}
+            className="w-full px-4 py-2.5 hover:bg-slate-50 flex items-center gap-2.5 text-left border-none bg-transparent cursor-pointer text-slate-800 transition-colors"
+          >
+            <Eye size={15} className="text-blue-600" />
+            <span>View Bill</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setSelectedInvoiceForEdit(openDropdown.invoice);
+              setOpenDropdown(null);
+            }}
+            className="w-full px-4 py-2.5 hover:bg-indigo-50 hover:text-indigo-700 flex items-center gap-2.5 text-left border-none bg-transparent cursor-pointer text-slate-800 transition-colors font-extrabold"
+          >
+            <Edit3 size={15} className="text-indigo-600" />
+            <span>Edit Bill</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              handlePrint(openDropdown.invoice);
+              setOpenDropdown(null);
+            }}
+            className="w-full px-4 py-2.5 hover:bg-slate-50 flex items-center gap-2.5 text-left border-none bg-transparent cursor-pointer text-slate-800 transition-colors"
+          >
+            <Printer size={15} className="text-slate-600" />
+            <span>Print Bill</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              handleExportPDF();
+              setOpenDropdown(null);
+            }}
+            className="w-full px-4 py-2.5 hover:bg-slate-50 flex items-center gap-2.5 text-left border-none bg-transparent cursor-pointer text-slate-800 transition-colors"
+          >
+            <FileCode size={15} className="text-rose-600" />
+            <span>Download PDF</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              handleExportCSV();
+              setOpenDropdown(null);
+            }}
+            className="w-full px-4 py-2.5 hover:bg-slate-50 flex items-center gap-2.5 text-left border-none bg-transparent cursor-pointer text-slate-800 transition-colors"
+          >
+            <FileSpreadsheet size={15} className="text-emerald-600" />
+            <span>Download Excel</span>
+          </button>
+
+          <div className="border-t border-slate-100 my-1"></div>
+
+          <button
+            type="button"
+            onClick={() => {
+              handleWhatsApp(openDropdown.invoice);
+              setOpenDropdown(null);
+            }}
+            className="w-full px-4 py-2.5 hover:bg-emerald-50 flex items-center gap-2.5 text-left border-none bg-transparent cursor-pointer text-emerald-700 font-extrabold transition-colors"
+          >
+            <MessageSquare size={15} className="text-emerald-600" />
+            <span>WhatsApp Bill</span>
+          </button>
+        </div>,
+        document.body
+      )}
+
+      {/* ── 5. EDIT BILLING MODAL (FULL PRODUCTION FLOW) ────────────────────── */}
+      {selectedInvoiceForEdit && (
+        <EditBillingModal
+          isOpen={!!selectedInvoiceForEdit}
+          invoice={selectedInvoiceForEdit}
+          member={member}
+          onClose={() => setSelectedInvoiceForEdit(null)}
+          onSaved={(updatedInv, updatedMem, shouldGenerateReceipt) => {
+            setInvoices((prev: any[]) => prev.map(inv => {
+              const matches = (inv.id && inv.id === updatedInv.id) ||
+                (inv.invoiceNumber && inv.invoiceNumber === updatedInv.invoiceNumber) ||
+                (inv.invoice && inv.invoice === updatedInv.invoice);
+              return matches ? { ...inv, ...updatedInv } : inv;
+            }));
+            if (updatedMem) {
+              setMember((prev: any) => ({ ...prev, ...updatedMem }));
+            }
+            if (shouldGenerateReceipt) {
+              setViewInvoice(updatedInv);
+            }
+            fetchMembers(true);
           }}
         />
       )}
