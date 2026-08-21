@@ -23,6 +23,7 @@ import FollowUpWidget from "./components/FollowUpWidget";
 import MembershipWidget from "./components/MembershipWidget";
 import FinancialAnalytics from "./components/FinancialAnalytics";
 import AIInsights from "./components/AIInsights";
+import PresentMembersModal from "./components/PresentMembersModal";
 import { useFollowups } from "@/hooks/useFollowups";
 
 const fadeUp = (delay = 0) => ({
@@ -53,6 +54,7 @@ export default function OverviewCommandCenter() {
   const [showNewEnquiryModal, setShowNewEnquiryModal] = useState(false);
   const [showNewFollowupModal, setShowNewFollowupModal] = useState(false);
   const [showNewMemberModal, setShowNewMemberModal] = useState(false);
+  const [showPresentModal, setShowPresentModal] = useState(false);
 
   // New Enquiry Form State
   const [enqName, setEnqName] = useState('');
@@ -491,13 +493,14 @@ export default function OverviewCommandCenter() {
       >
         {[
           { title: "Today's Collection", value: `₹${todaysRealCollection.toLocaleString('en-IN')}`, icon: IndianRupee, color: "#a855f7" },
-          { title: "Present Today", value: todayCheckins, icon: UserCheck, color: "#14b8a6" },
+          { title: "Present Today", value: todayCheckins, icon: UserCheck, color: "#14b8a6", onClick: () => setShowPresentModal(true) },
           { title: "Active Members", value: activeMembersCount, icon: Activity, color: "#6366f1" },
           { title: "Today's Follow-ups", value: todaysCount, icon: PhoneCall, color: "#f97316" },
         ].map((kpi, i) => (
           <div
             key={i}
-            className="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.08)] flex items-center gap-3 hover:border-amber-400 transition-all"
+            onClick={kpi.onClick}
+            className={`bg-white rounded-2xl p-4 border border-slate-200/80 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.08)] flex items-center gap-3 hover:border-amber-400 transition-all ${kpi.onClick ? 'cursor-pointer hover:shadow-md hover:scale-[1.02]' : ''}`}
           >
             <div
               className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
@@ -506,7 +509,10 @@ export default function OverviewCommandCenter() {
               <kpi.icon size={18} />
             </div>
             <div>
-              <div className="text-[9.5px] font-bold text-slate-500 uppercase tracking-wider leading-none">{kpi.title}</div>
+              <div className="text-[9.5px] font-bold text-slate-500 uppercase tracking-wider leading-none flex items-center gap-1">
+                {kpi.title}
+                {kpi.onClick && <span className="text-[8px] text-teal-600 font-black">· Click for list →</span>}
+              </div>
               <div className="text-lg font-black text-slate-900 mt-1 leading-none">{kpi.value}</div>
             </div>
           </div>
@@ -620,6 +626,7 @@ export default function OverviewCommandCenter() {
               icon={Users}
               color="#4f46e5"
               lineAccentColor="#4338ca"
+              onClick={() => setShowPresentModal(true)}
             />
 
             {/* Row 4 */}
@@ -899,19 +906,33 @@ export default function OverviewCommandCenter() {
         )}
       </AnimatePresence>
 
+      {/* ── PRESENT MEMBERS ROSTER MODAL ── */}
+      <PresentMembersModal
+        isOpen={showPresentModal}
+        onClose={() => setShowPresentModal(false)}
+        attendanceLogs={attendance}
+        members={members}
+      />
+
     </div>
   );
 }
 
-function SummaryStatCard({ title, value, icon: Icon, color, lineAccentColor }: { title: string; value: string | number; icon: any; color: string; lineAccentColor: string }) {
+function SummaryStatCard({ title, value, icon: Icon, color, lineAccentColor, onClick }: { title: string; value: string | number; icon: any; color: string; lineAccentColor: string; onClick?: () => void }) {
   return (
-    <div className="bg-slate-50/90 hover:bg-white rounded-2xl p-4 border border-slate-200 shadow-sm relative overflow-hidden flex flex-col justify-between transition-all hover:shadow-md">
+    <div
+      onClick={onClick}
+      className={`bg-slate-50/90 hover:bg-white rounded-2xl p-4 border border-slate-200 shadow-sm relative overflow-hidden flex flex-col justify-between transition-all hover:shadow-md ${onClick ? 'cursor-pointer hover:border-indigo-400 hover:scale-[1.02]' : ''}`}
+    >
       <div className="flex items-center gap-3">
         <div className="w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 shadow-sm" style={{ backgroundColor: `${color}18`, color }}>
           <Icon size={20} />
         </div>
         <div>
-          <div className="text-xs font-bold text-slate-600">{title}</div>
+          <div className="text-xs font-bold text-slate-600 flex items-center gap-1">
+            {title}
+            {onClick && <span className="text-[8px] text-indigo-600 font-black">· Click for list →</span>}
+          </div>
           <div className="text-xl font-black text-slate-900 font-mono tracking-tight mt-0.5">{value}</div>
         </div>
       </div>
