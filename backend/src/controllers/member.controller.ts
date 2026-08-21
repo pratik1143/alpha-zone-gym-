@@ -202,11 +202,20 @@ export const updateMember = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     
-    // Fetch old member details to check previous state
+    // Fetch old member details using multi-field matching
     const members = await db.getMembers();
-    const oldMember = members.find(item => item.id === id);
+    const cleanId = String(id || '').trim().toLowerCase();
 
-    const updated = await db.updateMember(id, req.body);
+    const oldMember = members.find(item => {
+      const itemDocId = String(item.id || '').trim().toLowerCase();
+      const itemUid = String(item.uid || '').trim().toLowerCase();
+      const itemMemberId = String(item.memberId || '').trim().toLowerCase();
+      return itemDocId === cleanId || itemUid === cleanId || itemMemberId === cleanId || itemDocId.endsWith(cleanId) || itemUid.endsWith(cleanId) || cleanId.endsWith(itemDocId) || cleanId.endsWith(itemUid);
+    });
+
+    const targetId = oldMember ? oldMember.id : id;
+
+    const updated = await db.updateMember(targetId, req.body);
     if (!updated) {
       return res.status(404).json({ error: 'Member not found' });
     }

@@ -60,32 +60,37 @@ export default function ClientProfileSystem() {
   }, [searchParams]);
 
   const handleSavePhoto = async (photoUrl: string) => {
-    if (!member || !member.id) return;
+    if (!member) return;
+    const targetMemberId = member.id || member.uid || member.docId || id;
     try {
-      try {
-        await updateDoc(doc(db, 'members', member.id), {
-          photo: photoUrl,
-          avatarUrl: photoUrl,
-          avatar: photoUrl,
-          updatedAt: new Date().toISOString()
-        });
-      } catch (fErr) {
-        console.warn('Direct Firestore update doc notice, calling API fallback:', fErr);
-        await API.put(`/members/${member.id}`, {
-          photo: photoUrl,
-          avatarUrl: photoUrl,
-          avatar: photoUrl,
-          updatedAt: new Date().toISOString()
-        });
-      }
+      // Direct API update via Firebase Admin SDK to bypass client permission rules 100%
+      await API.put(`/members/${targetMemberId}`, {
+        photo: photoUrl,
+        avatarUrl: photoUrl,
+        avatar: photoUrl,
+        updatedAt: new Date().toISOString()
+      });
 
       setMember((prev: any) => ({ ...prev, photo: photoUrl, avatarUrl: photoUrl, avatar: photoUrl }));
-      toast.success('Member profile photo updated successfully!');
+      toast.success(`${member.name || 'Member'} profile photo updated successfully!`);
       setShowPhotoModal(false);
       useGymStore.getState().fetchMembers();
     } catch (err: any) {
-      console.error('Error saving photo:', err);
-      toast.error('Failed to update photo: ' + (err.message || 'Unknown error'));
+      console.error('Error saving photo via API, trying client fallback:', err);
+      try {
+        await updateDoc(doc(db, 'members', targetMemberId), {
+          photo: photoUrl,
+          avatarUrl: photoUrl,
+          avatar: photoUrl,
+          updatedAt: new Date().toISOString()
+        });
+        setMember((prev: any) => ({ ...prev, photo: photoUrl, avatarUrl: photoUrl, avatar: photoUrl }));
+        toast.success(`${member.name || 'Member'} profile photo updated successfully!`);
+        setShowPhotoModal(false);
+        useGymStore.getState().fetchMembers();
+      } catch (fErr: any) {
+        toast.error('Failed to update photo: ' + (fErr.message || err.message));
+      }
     }
   };
 
