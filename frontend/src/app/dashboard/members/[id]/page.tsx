@@ -54,11 +54,21 @@ export default function ClientProfileSystem() {
   const attendancePct  = member ? calculateRealAttendance(member.joinDate, member.attendanceCount || 0) : 0;
   const healthScore    = membershipEngine.calculateHealthScore(daysLeft, attendancePct);
 
-  // Payment totals from invoices
-  const totalInvoiced  = memberInvoices.reduce((s, inv) => s + (Number(inv.amount)||0) + (Number(inv.gst)||0), 0);
-  const totalPaid      = memberInvoices.reduce((s, inv) => s + (Number(inv.paid)||Number(inv.amount)||0), 0);
-  const outstanding    = paymentEngine.calculateOutstandingAmount(totalInvoiced, totalPaid);
-  const payStatus      = paymentEngine.calculatePaymentStatus(totalInvoiced, totalPaid);
+  // Payment totals from invoices (Single Source of Truth)
+  const isMemberPaid = member?.paymentStatus === 'paid' || (member?.totalPaid && member?.totalPaid >= member?.totalBilled);
+  const totalInvoiced = memberInvoices.reduce((s, inv) => s + (Number(inv.amount) || 0) + (Number(inv.gst) || 0), 0);
+  const totalPaid = isMemberPaid 
+    ? (totalInvoiced || Number(member?.totalPaid) || Number(member?.price) || Number(member?.amount) || 0)
+    : memberInvoices.reduce((s, inv) => {
+        if (inv.status === 'paid' || inv.paymentStatus === 'paid') {
+          return s + (Number(inv.amount) || 0) + (Number(inv.gst) || 0);
+        }
+        return s + (Number(inv.paid) || Number(inv.amount) || 0);
+      }, 0);
+
+  const rawOutstanding = isMemberPaid ? 0 : paymentEngine.calculateOutstandingAmount(totalInvoiced, totalPaid);
+  const outstanding = Math.max(0, rawOutstanding);
+  const payStatus = isMemberPaid ? 'PAID' : (outstanding <= 0 ? 'PAID' : paymentEngine.calculatePaymentStatus(totalInvoiced, totalPaid));
 
   // Activity Alerts — now driven by real engine data
   const rightPanelAlerts = [

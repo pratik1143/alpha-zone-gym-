@@ -321,12 +321,13 @@ export default function MembersTable({
                   </td>
                   <td className="px-4 py-4">
                     {(() => {
-                      const amountVal = Number(member.amount ?? member.currentAmount ?? member.paidAmount ?? 0);
+                      const amountVal = Number(member.amount ?? member.currentAmount ?? member.paidAmount ?? member.price ?? member.totalPaid ?? 0);
+                      const isPaid = member.paymentStatus === 'paid' || (member.totalPaid && member.totalBilled && member.totalPaid >= member.totalBilled);
                       const invoiceTotal = (Number(member.invoiceAmount) || 0) + (Number(member.invoiceGst) || 0);
-                      const paidTotal    = Number(member.paidAmount) || 0;
-                      const status       = invoiceTotal > 0
+                      const paidTotal    = isPaid ? (invoiceTotal || amountVal) : Number(member.paidAmount || member.totalPaid || 0);
+                      const status       = isPaid ? 'PAID' : (invoiceTotal > 0
                         ? paymentEngine.calculatePaymentStatus(invoiceTotal, paidTotal)
-                        : (member.paymentStatus === 'pending' ? 'PENDING' : 'PAID');
+                        : (member.paymentStatus === 'pending' ? 'PENDING' : 'PAID'));
                       const outstanding  = paymentEngine.calculateOutstandingAmount(invoiceTotal, paidTotal);
                       return status === 'PAID' ? (
                         <div className="flex flex-col items-start gap-1">
