@@ -9,10 +9,18 @@ from datetime import datetime, date, timedelta
 import threading
 import subprocess
 import platform
+from pathlib import Path
 from zk import ZK, const
 from zk.exception import ZKError
 import firebase_admin
 from firebase_admin import credentials, firestore
+
+# ── DYNAMIC BASE DIRECTORY RESOLUTION ──────────────────────────────
+BASE_DIR = Path(__file__).resolve().parent
+
+LOG_FILE = BASE_DIR / "alpha_zone_device_service.log"
+OFFLINE_QUEUE_FILE = BASE_DIR / "offline_punch_queue.json"
+CACHE_FILE = BASE_DIR / "device_cache.json"
 
 if sys.platform == 'win32':
     try:
@@ -26,26 +34,68 @@ except Exception as pe:
     logging.warning(f"Could not import desktop_popup: {pe}")
     desktop_popup = None
 
-# Configure Logging
+# Configure Logging using Portable File Path
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s [%(levelname)s] %(message)s',
     handlers=[
-        logging.FileHandler(r"C:\Users\defaultuser\Desktop\alpha gym zone\device-service\alpha_zone_device_service.log"),
+        logging.FileHandler(LOG_FILE, encoding='utf-8'),
         logging.StreamHandler(sys.stdout)
     ]
 )
 
-# Firebase Init
-SERVICE_ACCOUNT_PATH = r"C:\Users\defaultuser\Desktop\alpha gym zone\backend\serviceAccountKey.json"
-try:
-    cred = credentials.Certificate(SERVICE_ACCOUNT_PATH)
-    firebase_admin.initialize_app(cred)
-    db = firestore.client()
-    logging.info("Firebase Admin SDK initialized successfully in Python Device Service.")
-except Exception as e:
-    logging.error(f"Failed to initialize Firebase Admin: {e}")
-    db = None
+# Dynamic Service Account Key Discovery
+def resolve_service_account_path():
+    env_path = os.getenv("FIREBASE_CREDENTIALS_PATH")
+    if env_path and Path(env_path).exists():
+        return Path(env_path)
+    
+    candidates = [
+        BASE_DIR / "serviceAccountKey.json",
+        BASE_DIR.parent / "backend" / "serviceAccountKey.json",
+        BASE_DIR.parent / "serviceAccountKey.json",
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return None
+
+SERVICE_ACCOUNT_PATH = resolve_service_account_path()
+db = None
+
+if SERVICE_ACCOUNT_PATH:
+    try:
+        cred = credentials.Certificate(str(SERVICE_ACCOUNT_PATH))
+        firebase_admin.initialize_app(cred)
+        db = firestore.client()
+        logging.info(f"Firebase Admin SDK initialized successfully using certificate at: {SERVICE_ACCOUNT_PATH}")
+    except Exception as e:
+        logging.error(f"Failed to initialize Firebase Admin: {e}")
+        db = None
+else:
+    logging.warning("serviceAccountKey.json not found in candidate paths. Firebase features will operate in local offline queue mode.")
+
+def run_startup_self_diagnostics():
+    """Performs friendly startup checks for Python dependencies, directories, and configuration."""
+    logging.info("==================================================")
+    logging.info("    ALPHA ZONE GYM BIOMETRIC SERVICE STARTUP      ")
+    logging.info("==================================================")
+    logging.info(f"Base Directory: {BASE_DIR}")
+    
+    try:
+        from PIL import Image, ImageTk
+        logging.info("✓ Dependency Check: Pillow (PIL) is available.")
+    except Exception as e:
+        logging.warning(f"⚠ Dependency Check: Pillow (PIL) missing ({e}). Run: py -m pip install -r requirements.txt")
+
+    if SERVICE_ACCOUNT_PATH:
+        logging.info(f"✓ Firebase Certificate: Found at {SERVICE_ACCOUNT_PATH}")
+    else:
+        logging.warning("⚠ Firebase Certificate: serviceAccountKey.json not found. Operating in local queue mode.")
+
+    logging.info("==================================================")
+
+run_startup_self_diagnostics()
 
 # Active devices threads tracker
 active_threads = {}
@@ -55,8 +105,6 @@ biometric_lock = threading.Lock()
 # Cooldown tracker to prevent duplicate unlocks (UserID -> last_unlock_epoch)
 last_unlock_time = {}
 processed_fingerprints = set()
-
-OFFLINE_QUEUE_FILE = r"C:\Users\defaultuser\Desktop\alpha gym zone\device-service\offline_punch_queue.json"
 
 def check_internet_connection():
     """Checks real internet connectivity by attempting socket connection to DNS servers."""

@@ -5,17 +5,26 @@ from zk import ZK
 import firebase_admin
 from firebase_admin import credentials, firestore
 
-# Firebase Init
-SERVICE_ACCOUNT_PATH = r"C:\Users\defaultuser\Desktop\alpha gym zone\backend\serviceAccountKey.json"
-try:
-    cred = credentials.Certificate(SERVICE_ACCOUNT_PATH)
-    firebase_admin.initialize_app(cred)
-    db = firestore.client()
-    firebase_init_success = True
-except Exception as e:
-    print(f"Firebase Init Error: {e}")
-    firebase_init_success = False
-    sys.exit(1)
+from pathlib import Path
+
+BASE_DIR = Path(__file__).resolve().parent
+candidates = [
+    BASE_DIR / "serviceAccountKey.json",
+    BASE_DIR.parent / "backend" / "serviceAccountKey.json",
+    BASE_DIR.parent / "serviceAccountKey.json",
+]
+SERVICE_ACCOUNT_PATH = next((c for c in candidates if c.exists()), None)
+db = None
+firebase_init_success = False
+
+if SERVICE_ACCOUNT_PATH:
+    try:
+        cred = credentials.Certificate(str(SERVICE_ACCOUNT_PATH))
+        firebase_admin.initialize_app(cred)
+        db = firestore.client()
+        firebase_init_success = True
+    except Exception as e:
+        print(f"Firebase Init Error: {e}")
 
 DEVICE_IP = "192.168.18.11"
 DEVICE_PORT = 4370

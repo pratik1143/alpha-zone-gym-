@@ -10,26 +10,48 @@ from zk.exception import ZKError
 import firebase_admin
 from firebase_admin import credentials, firestore
 
+from pathlib import Path
+
+BASE_DIR = Path(__file__).resolve().parent
+LOG_DIR = BASE_DIR / "logs"
+LOG_DIR.mkdir(parents=True, exist_ok=True)
+LOG_FILE = LOG_DIR / "alpha_zone_device_tester.log"
+
 # Configure Logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s [%(levelname)s] %(message)s',
     handlers=[
-        logging.FileHandler(r"C:\Users\defaultuser\Desktop\alpha gym zone\device-service\alpha_zone_device_tester.log"),
+        logging.FileHandler(LOG_FILE, encoding='utf-8'),
         logging.StreamHandler(sys.stdout)
     ]
 )
 
-# Firebase Init
-SERVICE_ACCOUNT_PATH = r"C:\Users\defaultuser\Desktop\alpha gym zone\backend\serviceAccountKey.json"
-try:
-    cred = credentials.Certificate(SERVICE_ACCOUNT_PATH)
-    firebase_admin.initialize_app(cred)
-    db = firestore.client()
-    logging.info("[Tester Init] Firebase Admin SDK initialized successfully in Python Device Connectivity Tester.")
-except Exception as e:
-    logging.error(f"[Tester Init] Failed to initialize Firebase Admin: {e}")
-    sys.exit(1)
+# Firebase Certificate Resolution
+def resolve_service_account_path():
+    env_path = os.getenv("FIREBASE_CREDENTIALS_PATH")
+    if env_path and Path(env_path).exists():
+        return Path(env_path)
+    candidates = [
+        BASE_DIR / "serviceAccountKey.json",
+        BASE_DIR.parent / "backend" / "serviceAccountKey.json",
+        BASE_DIR.parent / "serviceAccountKey.json",
+    ]
+    for c in candidates:
+        if c.exists():
+            return c
+    return None
+
+SERVICE_ACCOUNT_PATH = resolve_service_account_path()
+db = None
+if SERVICE_ACCOUNT_PATH:
+    try:
+        cred = credentials.Certificate(str(SERVICE_ACCOUNT_PATH))
+        firebase_admin.initialize_app(cred)
+        db = firestore.client()
+        logging.info(f"[Tester Init] Firebase Admin SDK initialized using certificate: {SERVICE_ACCOUNT_PATH}")
+    except Exception as e:
+        logging.error(f"[Tester Init] Failed to initialize Firebase Admin: {e}")
 
 DEVICE_IP = "192.168.18.11"
 DEVICE_PORT = 4370

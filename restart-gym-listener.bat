@@ -1,6 +1,8 @@
 @echo off
 title ALPHA ZONE GYM - Restart Biometric Listener
 color 0E
+cd /d "%~dp0"
+
 echo Restarting Alpha Zone Biometric Listener...
 call "%~dp0stop-gym-listener.bat"
 timeout /t 2 >nul
