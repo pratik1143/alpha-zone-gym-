@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   X, User, Phone, Mail, Calendar, Heart, Shield, Smartphone, 
@@ -149,52 +149,51 @@ export default function AddMemberModal({ isOpen, onClose }: AddMemberModalProps)
       const memberPayload = {
         name: fullName,
         phone: mobile,
-        email: email || `${mobile}@alphagym.com`,
+        email: email,
+        photo: photoPreview || '',
         plan: planName,
-        trainer: trainer || 'No PT Assigned',
-        avatar: photoPreview || undefined,
-        status: 'active',
+        price: basePrice,
         joinDate: todayStr,
+        createdAt: new Date().toISOString(),
         expiryDate: expiryStr,
-        biometricId: biometricId,
-        deviceUserId: biometricId,
-        age: age ? Number(age) : undefined,
-        height: height || undefined,
-        weight: weight || undefined,
-        dob: dob || undefined,
-        maritalStatus: maritalStatus,
-        anniversaryDate: maritalStatus === 'married' ? anniversaryDate : undefined,
+        status: 'active',
+        paymentStatus: paidAmt >= finalBilled ? 'paid' : 'partial',
         totalBilled: finalBilled,
         totalPaid: paidAmt,
-        paymentStatus: paidAmt >= finalBilled ? 'paid' : 'partial'
+        biometricId: biometricId,
+        deviceUserId: biometricId,
+        trainer: trainer || 'Unassigned',
+        isRealTimeToday: true,
+        age, height, weight, dob, maritalStatus, anniversaryDate
       };
 
       const newMember: any = await addMember(memberPayload);
+      const createdId = newMember?.id || newMember?.memberId || `mem_${Date.now()}`;
 
-      // Create Payment / Invoice record for Today's Collection
-      const invoiceNo = 'INV-' + Math.floor(100000 + Math.random() * 900000);
+      const invNumber = `INV-${Math.floor(100000 + Math.random() * 900000)}`;
       const paymentPayload = {
-        invoice: invoiceNo,
-        memberId: newMember?.id || `m_${Date.now()}`,
+        memberId: createdId,
         memberName: fullName,
         memberPhone: mobile,
-        plan: planName,
         amount: finalBilled,
         paid: paidAmt,
+        discount: disc,
+        plan: planName,
         method: paymentMethod,
+        invoiceNumber: invNumber,
+        invoice: invNumber,
+        status: 'paid',
         date: todayStr,
-        status: paidAmt >= finalBilled ? 'paid' : 'partial',
         isRealTimeToday: true,
-        notes: paymentNotes
+        createdAt: new Date().toISOString()
       };
 
       try {
         await addPayment(paymentPayload);
       } catch (e) {
-        try {
-          await API.post('/billing', paymentPayload);
-        } catch (err) {}
+        console.warn("Local payment add notice:", e);
       }
+
       fetchPayments();
 
       setCreatedMember(newMember || memberPayload);
@@ -223,46 +222,46 @@ export default function AddMemberModal({ isOpen, onClose }: AddMemberModalProps)
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="absolute inset-0 bg-slate-950/60 backdrop-blur-md"
+          className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
           onClick={step === 5 ? onClose : undefined}
         />
 
-        {/* Modal Window */}
+        {/* Modal Window — Clean White Theme UI */}
         <motion.div
-          initial={{ opacity: 0, scale: 0.95, y: 20 }}
+          initial={{ opacity: 0, scale: 0.96, y: 15 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.95, y: 20 }}
+          exit={{ opacity: 0, scale: 0.96, y: 15 }}
           transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-          className="w-full max-w-[1050px] bg-slate-900 text-white rounded-[32px] shadow-2xl border border-white/10 relative overflow-hidden flex flex-col h-[90vh] z-10"
+          className="w-full max-w-[1050px] bg-white text-slate-900 rounded-[32px] shadow-2xl border border-slate-200 relative overflow-hidden flex flex-col h-[90vh] z-10"
         >
-          {/* Header */}
-          <div className="px-8 py-5 border-b border-white/10 bg-slate-900/80 backdrop-blur-md flex justify-between items-center shrink-0">
+          {/* Header Bar */}
+          <div className="px-8 py-5 bg-gradient-to-r from-[#0052FF] via-[#0b5cbe] to-[#0040D0] text-white flex justify-between items-center shrink-0">
             <div>
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-[#d4ff00]/15 border border-[#d4ff00]/30 flex items-center justify-center text-[#d4ff00]">
+                <div className="w-10 h-10 rounded-2xl bg-white/20 border border-white/30 flex items-center justify-center text-white shadow-inner">
                   <User size={20} />
                 </div>
                 <div>
-                  <h2 className="text-xl font-black tracking-wide text-white uppercase font-display">New Member Onboarding</h2>
-                  <p className="text-xs text-slate-400 font-medium">Multi-step Profile, Biometrics & Instant Invoice Generator</p>
+                  <h2 className="text-xl font-extrabold tracking-tight text-white">New Member Onboarding</h2>
+                  <p className="text-xs text-blue-100 font-medium">Multi-step Profile, Biometrics & Instant Invoice Generator</p>
                 </div>
               </div>
             </div>
 
             <button 
               onClick={onClose}
-              className="w-10 h-10 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-all flex items-center justify-center border-none cursor-pointer"
+              className="w-10 h-10 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-all flex items-center justify-center border-none cursor-pointer"
             >
               <X size={20} />
             </button>
           </div>
 
-          {/* Step Progress Bar */}
-          <div className="px-8 py-3 bg-slate-950/60 border-b border-white/5 shrink-0">
+          {/* Step Progress Bar Header */}
+          <div className="px-8 py-4 bg-slate-50 border-b border-slate-200 shrink-0">
             <div className="flex items-center justify-between relative max-w-3xl mx-auto">
-              <div className="absolute left-0 top-1/2 -translate-y-1/2 w-full h-1 bg-white/10 rounded-full z-0 overflow-hidden">
+              <div className="absolute left-0 top-1/2 -translate-y-1/2 w-full h-1 bg-slate-200 rounded-full z-0 overflow-hidden">
                 <motion.div 
-                  className="h-full bg-[#d4ff00]" 
+                  className="h-full bg-blue-600" 
                   initial={{ width: 0 }}
                   animate={{ width: `${((step - 1) / 4) * 100}%` }}
                   transition={{ duration: 0.4 }}
@@ -279,15 +278,15 @@ export default function AddMemberModal({ isOpen, onClose }: AddMemberModalProps)
                 const isDone = step > s.id;
                 const isCurrent = step === s.id;
                 return (
-                  <div key={s.id} className="relative z-10 flex flex-col items-center gap-1 bg-slate-950 px-3">
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center font-black text-xs transition-all ${
-                      isDone ? 'bg-emerald-500 text-black' :
-                      isCurrent ? 'bg-[#d4ff00] text-black shadow-[0_0_15px_rgba(212,255,0,0.5)] scale-110' :
-                      'bg-white/10 text-slate-500'
+                  <div key={s.id} className="relative z-10 flex flex-col items-center gap-1 bg-slate-50 px-3">
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center font-extrabold text-xs transition-all ${
+                      isDone ? 'bg-emerald-600 text-white shadow-sm' :
+                      isCurrent ? 'bg-blue-600 text-white shadow-md scale-110' :
+                      'bg-slate-200 text-slate-500'
                     }`}>
                       {isDone ? <CheckCircle2 size={16} /> : s.id}
                     </div>
-                    <span className={`text-[9px] font-black uppercase tracking-wider ${isCurrent ? 'text-[#d4ff00]' : 'text-slate-500'}`}>
+                    <span className={`text-[10px] font-extrabold uppercase tracking-wider ${isCurrent ? 'text-blue-700' : 'text-slate-400'}`}>
                       {s.label}
                     </span>
                   </div>
@@ -296,15 +295,15 @@ export default function AddMemberModal({ isOpen, onClose }: AddMemberModalProps)
             </div>
           </div>
 
-          {/* Step Body */}
-          <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
+          {/* Step Body Container */}
+          <div className="flex-1 overflow-y-auto p-8 custom-scrollbar bg-white">
 
             {/* STEP 1: Profile & Package */}
             {step === 1 && (
               <div className="max-w-3xl mx-auto space-y-6 animate-fade-in">
                 <div className="text-center mb-6">
-                  <h3 className="text-2xl font-black text-white uppercase font-display">Member Profile & Membership Package</h3>
-                  <p className="text-xs text-slate-400 mt-1">Enter essential contact information and select a workout plan</p>
+                  <h3 className="text-2xl font-black text-slate-900 tracking-tight">Member Profile & Membership Package</h3>
+                  <p className="text-xs text-slate-500 mt-1">Enter essential contact information and select a workout plan</p>
                 </div>
 
                 <div className="flex flex-col md:flex-row gap-8 items-start">
@@ -316,44 +315,44 @@ export default function AddMemberModal({ isOpen, onClose }: AddMemberModalProps)
                     />
                   </div>
 
-                  <div className="w-full md:w-2/3 space-y-4">
+                  <div className="w-full md:2/3 space-y-4">
                     <div>
-                      <label className="block text-[10px] font-black uppercase text-slate-400 mb-1.5">Full Name *</label>
+                      <label className="block text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1.5">Full Name *</label>
                       <input 
                         type="text" 
                         value={fullName} 
                         onChange={(e) => setFullName(e.target.value)}
                         placeholder="e.g. Rahul Sharma"
-                        className="w-full h-12 bg-slate-800/80 border border-white/10 rounded-xl px-4 text-sm font-bold text-white focus:outline-none focus:border-[#d4ff00]"
+                        className="w-full h-12 bg-slate-50 border border-slate-300 rounded-xl px-4 text-sm font-bold text-slate-900 focus:outline-none focus:border-blue-600 focus:bg-white transition-all"
                       />
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-[10px] font-black uppercase text-slate-400 mb-1.5">Mobile Number *</label>
+                        <label className="block text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1.5">Mobile Number *</label>
                         <input 
                           type="tel" 
                           value={mobile} 
                           onChange={(e) => setMobile(e.target.value)}
                           placeholder="+91 9876543210"
-                          className="w-full h-12 bg-slate-800/80 border border-white/10 rounded-xl px-4 text-sm font-bold text-white focus:outline-none focus:border-[#d4ff00]"
+                          className="w-full h-12 bg-slate-50 border border-slate-300 rounded-xl px-4 text-sm font-bold text-slate-900 focus:outline-none focus:border-blue-600 focus:bg-white transition-all"
                         />
                       </div>
                       <div>
-                        <label className="block text-[10px] font-black uppercase text-slate-400 mb-1.5">Email Address</label>
+                        <label className="block text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1.5">Email Address</label>
                         <input 
                           type="email" 
                           value={email} 
                           onChange={(e) => setEmail(e.target.value)}
                           placeholder="rahul@example.com"
-                          className="w-full h-12 bg-slate-800/80 border border-white/10 rounded-xl px-4 text-sm font-bold text-white focus:outline-none focus:border-[#d4ff00]"
+                          className="w-full h-12 bg-slate-50 border border-slate-300 rounded-xl px-4 text-sm font-bold text-slate-900 focus:outline-none focus:border-blue-600 focus:bg-white transition-all"
                         />
                       </div>
                     </div>
 
                     {/* Package Selector */}
                     <div>
-                      <label className="block text-[10px] font-black uppercase text-slate-400 mb-1.5">Select Membership Package *</label>
+                      <label className="block text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1.5">Select Membership Package *</label>
                       <div className="grid grid-cols-2 gap-3">
                         {activePlans.map((p: any) => {
                           const isSelected = selectedPlan?.name === p.name || selectedPlan?.id === p.id;
@@ -361,17 +360,17 @@ export default function AddMemberModal({ isOpen, onClose }: AddMemberModalProps)
                             <div 
                               key={p.id || p.name}
                               onClick={() => setSelectedPlan(p)}
-                              className={`p-3.5 rounded-2xl border-2 cursor-pointer transition-all ${
+                              className={`p-4 rounded-2xl border-2 cursor-pointer transition-all ${
                                 isSelected 
-                                  ? 'bg-[#d4ff00]/10 border-[#d4ff00] text-white shadow-lg' 
-                                  : 'bg-slate-800/50 border-white/5 hover:border-white/20 text-slate-300'
+                                  ? 'bg-blue-50/80 border-blue-600 text-blue-900 shadow-sm' 
+                                  : 'bg-white border-slate-200 hover:border-slate-300 text-slate-700 hover:bg-slate-50'
                               }`}
                             >
                               <div className="flex justify-between items-start">
                                 <span className="text-xs font-black uppercase">{p.name}</span>
-                                <span className="text-xs font-mono font-black text-[#d4ff00]">₹{p.price}</span>
+                                <span className="text-xs font-mono font-black text-blue-700">₹{p.price}</span>
                               </div>
-                              <div className="text-[10px] text-slate-400 mt-1 font-semibold">{p.duration || '30 Days'} Validity</div>
+                              <div className="text-[10px] text-slate-500 mt-1 font-bold">{p.duration || '30 Days'} Validity</div>
                             </div>
                           );
                         })}
@@ -380,11 +379,11 @@ export default function AddMemberModal({ isOpen, onClose }: AddMemberModalProps)
 
                     {/* Trainer Selector */}
                     <div>
-                      <label className="block text-[10px] font-black uppercase text-slate-400 mb-1.5">Personal Trainer (Optional)</label>
+                      <label className="block text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1.5">Personal Trainer (Optional)</label>
                       <select 
                         value={trainer} 
                         onChange={(e) => setTrainer(e.target.value)}
-                        className="w-full h-12 bg-slate-800/80 border border-white/10 rounded-xl px-4 text-sm font-bold text-white focus:outline-none focus:border-[#d4ff00]"
+                        className="w-full h-12 bg-slate-50 border border-slate-300 rounded-xl px-4 text-sm font-bold text-slate-900 focus:outline-none focus:border-blue-600 focus:bg-white transition-all cursor-pointer"
                       >
                         <option value="">No PT Assigned</option>
                         <option value="Karan Verma">Karan Verma (Master Coach)</option>
@@ -401,65 +400,65 @@ export default function AddMemberModal({ isOpen, onClose }: AddMemberModalProps)
             {step === 2 && (
               <div className="max-w-2xl mx-auto space-y-6 animate-fade-in">
                 <div className="text-center mb-6">
-                  <span className="px-3 py-1 bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[10px] font-black uppercase tracking-widest rounded-full inline-block mb-2">
+                  <span className="px-3 py-1 bg-amber-50 border border-amber-200 text-amber-700 text-[10px] font-extrabold uppercase tracking-widest rounded-full inline-block mb-2">
                     Skippable Step
                   </span>
-                  <h3 className="text-2xl font-black text-white uppercase font-display">Personal & Physical Health Details</h3>
-                  <p className="text-xs text-slate-400 mt-1">Fill physical metrics for workout & diet customization, or skip to biometrics</p>
+                  <h3 className="text-2xl font-black text-slate-900 tracking-tight">Personal & Physical Health Details</h3>
+                  <p className="text-xs text-slate-500 mt-1">Fill physical metrics for workout & diet customization, or skip to biometrics</p>
                 </div>
 
-                <div className="bg-slate-800/50 p-6 rounded-3xl border border-white/10 space-y-5">
+                <div className="bg-slate-50 p-6 rounded-3xl border border-slate-200 space-y-5">
                   <div className="grid grid-cols-3 gap-4">
                     <div>
-                      <label className="block text-[10px] font-black uppercase text-slate-400 mb-1.5">Age (Years)</label>
+                      <label className="block text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1.5">Age (Years)</label>
                       <input 
                         type="number" 
                         value={age} 
                         onChange={(e) => setAge(e.target.value)}
                         placeholder="e.g. 25"
-                        className="w-full h-12 bg-slate-900 border border-white/10 rounded-xl px-4 text-sm font-bold text-white focus:outline-none focus:border-[#d4ff00]"
+                        className="w-full h-12 bg-white border border-slate-300 rounded-xl px-4 text-sm font-bold text-slate-900 focus:outline-none focus:border-blue-600"
                       />
                     </div>
                     <div>
-                      <label className="block text-[10px] font-black uppercase text-slate-400 mb-1.5">Height (cm)</label>
+                      <label className="block text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1.5">Height (cm)</label>
                       <input 
                         type="text" 
                         value={height} 
                         onChange={(e) => setHeight(e.target.value)}
                         placeholder="e.g. 175 cm"
-                        className="w-full h-12 bg-slate-900 border border-white/10 rounded-xl px-4 text-sm font-bold text-white focus:outline-none focus:border-[#d4ff00]"
+                        className="w-full h-12 bg-white border border-slate-300 rounded-xl px-4 text-sm font-bold text-slate-900 focus:outline-none focus:border-blue-600"
                       />
                     </div>
                     <div>
-                      <label className="block text-[10px] font-black uppercase text-slate-400 mb-1.5">Weight (kg)</label>
+                      <label className="block text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1.5">Weight (kg)</label>
                       <input 
                         type="text" 
                         value={weight} 
                         onChange={(e) => setWeight(e.target.value)}
                         placeholder="e.g. 70 kg"
-                        className="w-full h-12 bg-slate-900 border border-white/10 rounded-xl px-4 text-sm font-bold text-white focus:outline-none focus:border-[#d4ff00]"
+                        className="w-full h-12 bg-white border border-slate-300 rounded-xl px-4 text-sm font-bold text-slate-900 focus:outline-none focus:border-blue-600"
                       />
                     </div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-[10px] font-black uppercase text-slate-400 mb-1.5">Date of Birth (DOB)</label>
+                      <label className="block text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1.5">Date of Birth (DOB)</label>
                       <input 
                         type="date" 
                         value={dob} 
                         onChange={(e) => setDob(e.target.value)}
-                        className="w-full h-12 bg-slate-900 border border-white/10 rounded-xl px-4 text-sm font-bold text-white focus:outline-none focus:border-[#d4ff00]"
+                        className="w-full h-12 bg-white border border-slate-300 rounded-xl px-4 text-sm font-bold text-slate-900 focus:outline-none focus:border-blue-600 cursor-pointer"
                       />
                     </div>
                     <div>
-                      <label className="block text-[10px] font-black uppercase text-slate-400 mb-1.5">Marital Status</label>
+                      <label className="block text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1.5">Marital Status</label>
                       <div className="grid grid-cols-2 gap-2">
                         <button
                           type="button"
                           onClick={() => setMaritalStatus('single')}
-                          className={`h-12 rounded-xl text-xs font-bold uppercase transition-all border-none cursor-pointer ${
-                            maritalStatus === 'single' ? 'bg-[#d4ff00] text-black font-black' : 'bg-slate-900 text-slate-400 hover:text-white'
+                          className={`h-12 rounded-xl text-xs font-extrabold uppercase transition-all border-none cursor-pointer ${
+                            maritalStatus === 'single' ? 'bg-blue-600 text-white shadow-sm' : 'bg-white border border-slate-300 text-slate-600 hover:bg-slate-100'
                           }`}
                         >
                           Single
@@ -467,8 +466,8 @@ export default function AddMemberModal({ isOpen, onClose }: AddMemberModalProps)
                         <button
                           type="button"
                           onClick={() => setMaritalStatus('married')}
-                          className={`h-12 rounded-xl text-xs font-bold uppercase transition-all border-none cursor-pointer ${
-                            maritalStatus === 'married' ? 'bg-[#d4ff00] text-black font-black' : 'bg-slate-900 text-slate-400 hover:text-white'
+                          className={`h-12 rounded-xl text-xs font-extrabold uppercase transition-all border-none cursor-pointer ${
+                            maritalStatus === 'married' ? 'bg-blue-600 text-white shadow-sm' : 'bg-white border border-slate-300 text-slate-600 hover:bg-slate-100'
                           }`}
                         >
                           Married
@@ -479,12 +478,12 @@ export default function AddMemberModal({ isOpen, onClose }: AddMemberModalProps)
 
                   {maritalStatus === 'married' && (
                     <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
-                      <label className="block text-[10px] font-black uppercase text-[#d4ff00] mb-1.5">Anniversary Date 💍</label>
+                      <label className="block text-[10px] font-black uppercase tracking-wider text-blue-600 mb-1.5">Anniversary Date 💍</label>
                       <input 
                         type="date" 
                         value={anniversaryDate} 
                         onChange={(e) => setAnniversaryDate(e.target.value)}
-                        className="w-full h-12 bg-slate-900 border border-[#d4ff00]/40 rounded-xl px-4 text-sm font-bold text-white focus:outline-none focus:border-[#d4ff00]"
+                        className="w-full h-12 bg-white border border-blue-300 rounded-xl px-4 text-sm font-bold text-slate-900 focus:outline-none focus:border-blue-600 cursor-pointer"
                       />
                     </motion.div>
                   )}
@@ -496,22 +495,22 @@ export default function AddMemberModal({ isOpen, onClose }: AddMemberModalProps)
             {step === 3 && (
               <div className="max-w-xl mx-auto space-y-6 text-center animate-fade-in">
                 <div>
-                  <h3 className="text-2xl font-black text-white uppercase font-display">ESSL Biometric Hardware Registration</h3>
-                  <p className="text-xs text-slate-400 mt-1">Assign Biometric ID & Trigger machine fingerprint enrollment</p>
+                  <h3 className="text-2xl font-black text-slate-900 tracking-tight">ESSL Biometric Hardware Registration</h3>
+                  <p className="text-xs text-slate-500 mt-1">Assign Biometric ID & Trigger machine fingerprint enrollment</p>
                 </div>
 
-                <div className="bg-slate-800/50 p-8 rounded-3xl border border-white/10 space-y-6">
+                <div className="bg-slate-50 p-8 rounded-3xl border border-slate-200 space-y-6">
                   <div className="flex items-center justify-center gap-4">
-                    <div className="w-16 h-16 rounded-full bg-[#d4ff00]/20 border border-[#d4ff00]/40 flex items-center justify-center text-[#d4ff00]">
-                      <Fingerprint size={32} className={enrollStatus === 'enrolling' ? 'animate-pulse' : ''} />
+                    <div className="w-16 h-16 rounded-full bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-600">
+                      <Fingerprint size={36} className={enrollStatus === 'enrolling' ? 'animate-pulse text-blue-600' : ''} />
                     </div>
                     <div className="text-left">
-                      <label className="block text-[10px] font-black uppercase text-slate-400">Assigned Biometric ID</label>
+                      <label className="block text-[10px] font-black uppercase tracking-wider text-slate-500">Assigned Biometric ID</label>
                       <input 
                         type="text" 
                         value={biometricId} 
                         onChange={(e) => setBiometricId(e.target.value)}
-                        className="h-10 w-32 bg-slate-900 border border-[#d4ff00]/40 rounded-xl px-3 font-mono font-black text-lg text-[#d4ff00] focus:outline-none"
+                        className="h-10 w-32 bg-white border border-blue-500 rounded-xl px-3 font-mono font-black text-lg text-blue-700 focus:outline-none shadow-sm"
                       />
                     </div>
                   </div>
@@ -520,7 +519,7 @@ export default function AddMemberModal({ isOpen, onClose }: AddMemberModalProps)
                     <button
                       type="button"
                       onClick={handleStartBiometricEnrollment}
-                      className="w-full py-4 rounded-2xl bg-[#d4ff00] text-black font-black uppercase text-sm shadow-lg hover:bg-[#c4ef00] transition-all border-none cursor-pointer flex items-center justify-center gap-2"
+                      className="w-full py-4 rounded-2xl bg-blue-600 text-white font-extrabold uppercase text-sm shadow-md hover:bg-blue-700 transition-all border-none cursor-pointer flex items-center justify-center gap-2"
                     >
                       <Fingerprint size={18} />
                       <span>Start Machine Fingerprint Registration</span>
@@ -528,8 +527,8 @@ export default function AddMemberModal({ isOpen, onClose }: AddMemberModalProps)
                   )}
 
                   {enrollStatus === 'enrolling' && (
-                    <div className="space-y-4 p-5 bg-slate-900 rounded-2xl border border-white/10 text-center">
-                      <div className="text-xs font-bold text-[#d4ff00] animate-pulse leading-relaxed">
+                    <div className="space-y-4 p-5 bg-white rounded-2xl border border-slate-200 text-center shadow-sm">
+                      <div className="text-xs font-extrabold text-blue-600 animate-pulse leading-relaxed">
                         {enrollMsg}
                       </div>
                       
@@ -538,7 +537,7 @@ export default function AddMemberModal({ isOpen, onClose }: AddMemberModalProps)
                           <div 
                             key={s} 
                             className={`w-10 h-10 rounded-2xl flex items-center justify-center font-black text-xs ${
-                              enrollScanStep >= s ? 'bg-[#d4ff00] text-black shadow-lg scale-105' : 'bg-slate-800 text-slate-500'
+                              enrollScanStep >= s ? 'bg-blue-600 text-white shadow-md scale-105' : 'bg-slate-100 text-slate-400'
                             }`}
                           >
                             Scan {s}
@@ -554,7 +553,7 @@ export default function AddMemberModal({ isOpen, onClose }: AddMemberModalProps)
                             setEnrollScanStep(3);
                             toast.success(`Fingerprint registered & assigned to ID #${biometricId}!`);
                           }}
-                          className="w-full py-3.5 rounded-xl bg-emerald-500 text-black font-black uppercase text-xs hover:bg-emerald-400 transition-all border-none cursor-pointer flex items-center justify-center gap-2 shadow-lg"
+                          className="w-full py-3.5 rounded-xl bg-emerald-600 text-white font-extrabold uppercase text-xs hover:bg-emerald-700 transition-all border-none cursor-pointer flex items-center justify-center gap-2 shadow-md"
                         >
                           <CheckCircle2 size={16} />
                           <span>Confirm Scans Completed on Machine</span>
@@ -564,7 +563,7 @@ export default function AddMemberModal({ isOpen, onClose }: AddMemberModalProps)
                   )}
 
                   {enrollStatus === 'success' && (
-                    <div className="p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-2xl text-emerald-400 text-xs font-black flex items-center justify-center gap-2">
+                    <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl text-emerald-700 text-xs font-black flex items-center justify-center gap-2">
                       <CheckCircle2 size={18} />
                       <span>Fingerprint Enrolled & Linked to ID #{biometricId}!</span>
                     </div>
@@ -577,53 +576,53 @@ export default function AddMemberModal({ isOpen, onClose }: AddMemberModalProps)
             {step === 4 && (
               <div className="max-w-2xl mx-auto space-y-6 animate-fade-in">
                 <div className="text-center mb-6">
-                  <h3 className="text-2xl font-black text-white uppercase font-display">Payment & Billing Summary</h3>
-                  <p className="text-xs text-slate-400 mt-1">Select payment method & enter collected amount for Today's Collection ledger</p>
+                  <h3 className="text-2xl font-black text-slate-900 tracking-tight">Payment & Billing Summary</h3>
+                  <p className="text-xs text-slate-500 mt-1">Select payment method & enter collected amount for Today's Collection ledger</p>
                 </div>
 
-                <div className="bg-slate-800/50 p-6 rounded-3xl border border-white/10 space-y-6">
-                  <div className="grid grid-cols-2 gap-4 bg-slate-900 p-4 rounded-2xl border border-white/5">
+                <div className="bg-slate-50 p-6 rounded-3xl border border-slate-200 space-y-6">
+                  <div className="grid grid-cols-2 gap-4 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
                     <div>
-                      <span className="text-[10px] font-black uppercase text-slate-500 block">Package Billed</span>
-                      <span className="text-sm font-black text-white">{selectedPlan?.name || 'Monthly Standard'}</span>
+                      <span className="text-[10px] font-black uppercase text-slate-400 block">Package Billed</span>
+                      <span className="text-sm font-extrabold text-slate-900">{selectedPlan?.name || 'Monthly Standard'}</span>
                     </div>
                     <div className="text-right">
-                      <span className="text-[10px] font-black uppercase text-slate-500 block">Plan Amount</span>
-                      <span className="text-base font-black font-mono text-[#d4ff00]">₹{selectedPlan?.price || 2500}</span>
+                      <span className="text-[10px] font-black uppercase text-slate-400 block">Plan Amount</span>
+                      <span className="text-base font-black font-mono text-blue-700">₹{selectedPlan?.price || 2500}</span>
                     </div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-[10px] font-black uppercase text-slate-400 mb-1.5">Discount Amount (₹)</label>
+                      <label className="block text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1.5">Discount Amount (₹)</label>
                       <input 
                         type="number" 
                         value={discount} 
                         onChange={(e) => setDiscount(e.target.value)}
                         placeholder="0"
-                        className="w-full h-12 bg-slate-900 border border-white/10 rounded-xl px-4 text-sm font-bold text-white focus:outline-none focus:border-[#d4ff00]"
+                        className="w-full h-12 bg-white border border-slate-300 rounded-xl px-4 text-sm font-bold text-slate-900 focus:outline-none focus:border-blue-600"
                       />
                     </div>
                     <div>
-                      <label className="block text-[10px] font-black uppercase text-slate-400 mb-1.5">Amount Collected Now (₹) *</label>
+                      <label className="block text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1.5">Amount Collected Now (₹) *</label>
                       <input 
                         type="number" 
                         value={amountPaid} 
                         onChange={(e) => setAmountPaid(e.target.value)}
-                        className="w-full h-12 bg-slate-900 border border-[#d4ff00]/40 rounded-xl px-4 text-sm font-mono font-black text-[#d4ff00] focus:outline-none"
+                        className="w-full h-12 bg-white border border-blue-500 rounded-xl px-4 text-sm font-mono font-black text-blue-700 focus:outline-none shadow-sm"
                       />
                     </div>
                   </div>
 
                   {/* Payment Method Selector */}
                   <div>
-                    <label className="block text-[10px] font-black uppercase text-slate-400 mb-2">Payment Method *</label>
+                    <label className="block text-[10px] font-black uppercase tracking-wider text-slate-500 mb-2">Payment Method *</label>
                     <div className="grid grid-cols-4 gap-3">
                       {[
-                        { key: 'UPI', label: 'UPI / QR', icon: Smartphone, color: 'border-purple-500 bg-purple-500/10 text-purple-400' },
-                        { key: 'Cash', label: 'Cash', icon: Banknote, color: 'border-emerald-500 bg-emerald-500/10 text-emerald-400' },
-                        { key: 'Card', label: 'Card', icon: CreditCard, color: 'border-blue-500 bg-blue-500/10 text-blue-400' },
-                        { key: 'NetBanking', label: 'Net Bank', icon: Wallet, color: 'border-amber-500 bg-amber-500/10 text-amber-400' },
+                        { key: 'UPI', label: 'UPI / QR', icon: Smartphone, color: 'border-purple-600 bg-purple-50 text-purple-700 font-extrabold shadow-sm' },
+                        { key: 'Cash', label: 'Cash', icon: Banknote, color: 'border-emerald-600 bg-emerald-50 text-emerald-700 font-extrabold shadow-sm' },
+                        { key: 'Card', label: 'Card', icon: CreditCard, color: 'border-blue-600 bg-blue-50 text-blue-700 font-extrabold shadow-sm' },
+                        { key: 'NetBanking', label: 'Net Bank', icon: Wallet, color: 'border-amber-600 bg-amber-50 text-amber-700 font-extrabold shadow-sm' },
                       ].map((m) => {
                         const isSelected = paymentMethod === m.key;
                         return (
@@ -631,14 +630,14 @@ export default function AddMemberModal({ isOpen, onClose }: AddMemberModalProps)
                             key={m.key}
                             type="button"
                             onClick={() => setPaymentMethod(m.key as any)}
-                            className={`p-3 rounded-2xl border-2 flex flex-col items-center gap-1.5 transition-all border-none cursor-pointer ${
+                            className={`p-3.5 rounded-2xl border-2 flex flex-col items-center gap-1.5 transition-all border-none cursor-pointer ${
                               isSelected 
-                                ? `${m.color} font-black shadow-lg scale-105` 
-                                : 'bg-slate-900 border-white/5 text-slate-400 hover:text-white'
+                                ? `${m.color}` 
+                                : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-100'
                             }`}
                           >
                             <m.icon size={20} />
-                            <span className="text-xs uppercase font-bold">{m.label}</span>
+                            <span className="text-xs uppercase font-extrabold">{m.label}</span>
                           </button>
                         );
                       })}
@@ -652,23 +651,23 @@ export default function AddMemberModal({ isOpen, onClose }: AddMemberModalProps)
             {step === 5 && (
               <div className="max-w-2xl mx-auto space-y-6 animate-fade-in">
                 <div className="text-center mb-4">
-                  <span className="px-3 py-1 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-black uppercase tracking-widest rounded-full inline-block mb-2">
+                  <span className="px-3.5 py-1 bg-emerald-50 border border-emerald-200 text-emerald-700 text-[10px] font-extrabold uppercase tracking-widest rounded-full inline-block mb-2">
                     Registration Completed! 🎉
                   </span>
-                  <h3 className="text-2xl font-black text-white uppercase font-display">Official Receipt & Member Invoice</h3>
-                  <p className="text-xs text-slate-400 mt-1">Invoice registered in Today's Collection. Print or download PDF below.</p>
+                  <h3 className="text-2xl font-black text-slate-900 tracking-tight">Official Receipt & Member Invoice</h3>
+                  <p className="text-xs text-slate-500 mt-1">Invoice registered in Today's Collection. Print or download PDF below.</p>
                 </div>
 
                 {/* Printable Invoice Card */}
-                <div id="printable-invoice" className="bg-white text-slate-900 p-8 rounded-3xl shadow-2xl border border-slate-200 space-y-6">
+                <div id="printable-invoice" className="bg-white text-slate-900 p-8 rounded-3xl shadow-xl border border-slate-200 space-y-6">
                   {/* Header */}
                   <div className="flex justify-between items-start border-b border-slate-200 pb-4">
                     <div>
                       <img src="/gymlogo.png" alt="Alpha Zone" className="h-10 w-auto object-contain mb-1" />
-                      <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Main Branch · Mohali, Punjab</div>
+                      <div className="text-[10px] font-extrabold text-slate-500 uppercase tracking-widest">Main Branch · Mohali, Punjab</div>
                     </div>
                     <div className="text-right">
-                      <div className="text-lg font-black text-slate-900 font-mono">{createdInvoice?.invoice || 'INV-849201'}</div>
+                      <div className="text-lg font-black text-blue-700 font-mono">{createdInvoice?.invoice || 'INV-849201'}</div>
                       <div className="text-[10px] font-bold text-slate-400 uppercase">Date: {createdInvoice?.date || new Date().toLocaleDateString()}</div>
                     </div>
                   </div>
@@ -682,7 +681,7 @@ export default function AddMemberModal({ isOpen, onClose }: AddMemberModalProps)
                     </div>
                     <div className="text-right">
                       <span className="text-[9px] font-black uppercase text-slate-400 block">Biometric ID</span>
-                      <span className="font-mono font-black text-slate-900 text-sm">#{createdMember?.biometricId || biometricId}</span>
+                      <span className="font-mono font-black text-blue-700 text-sm">#{createdMember?.biometricId || biometricId}</span>
                     </div>
                   </div>
 
@@ -706,7 +705,7 @@ export default function AddMemberModal({ isOpen, onClose }: AddMemberModalProps)
                   </table>
 
                   {/* Summary Total */}
-                  <div className="flex justify-between items-center bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                  <div className="flex justify-between items-center bg-slate-50 p-4 rounded-2xl border border-slate-200">
                     <div>
                       <span className="text-[9px] font-black uppercase text-slate-400 block">Payment Method</span>
                       <span className="font-black text-slate-900 uppercase text-xs">{createdInvoice?.method || paymentMethod}</span>
@@ -723,7 +722,7 @@ export default function AddMemberModal({ isOpen, onClose }: AddMemberModalProps)
                   <button
                     type="button"
                     onClick={handlePrintReceipt}
-                    className="flex-1 py-3.5 rounded-2xl bg-white text-slate-900 font-black uppercase text-xs hover:bg-slate-100 transition-all border-none cursor-pointer flex items-center justify-center gap-2 shadow-lg"
+                    className="flex-1 py-3.5 rounded-2xl bg-slate-100 text-slate-900 font-extrabold uppercase text-xs hover:bg-slate-200 transition-all border-none cursor-pointer flex items-center justify-center gap-2 shadow-sm"
                   >
                     <Printer size={16} />
                     <span>Print Official Receipt</span>
@@ -731,7 +730,7 @@ export default function AddMemberModal({ isOpen, onClose }: AddMemberModalProps)
                   <button
                     type="button"
                     onClick={handlePrintReceipt}
-                    className="flex-1 py-3.5 rounded-2xl bg-[#d4ff00] text-black font-black uppercase text-xs hover:bg-[#c4ef00] transition-all border-none cursor-pointer flex items-center justify-center gap-2 shadow-lg"
+                    className="flex-1 py-3.5 rounded-2xl bg-blue-600 text-white font-extrabold uppercase text-xs hover:bg-blue-700 transition-all border-none cursor-pointer flex items-center justify-center gap-2 shadow-md"
                   >
                     <Download size={16} />
                     <span>Download Invoice PDF</span>
@@ -743,11 +742,11 @@ export default function AddMemberModal({ isOpen, onClose }: AddMemberModalProps)
           </div>
 
           {/* Footer Bar Navigation */}
-          <div className="px-8 py-4 bg-slate-950 border-t border-white/10 flex items-center justify-between shrink-0">
+          <div className="px-8 py-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between shrink-0">
             {step < 5 ? (
               <button 
                 onClick={step > 1 ? () => setStep(step - 1) : onClose} 
-                className="px-5 py-3 rounded-xl font-bold text-xs text-slate-400 hover:text-white transition-colors cursor-pointer border-none bg-transparent flex items-center gap-2"
+                className="px-5 py-3 rounded-xl font-bold text-xs text-slate-600 hover:text-slate-900 transition-colors cursor-pointer border-none bg-transparent flex items-center gap-2"
               >
                 {step > 1 && <ArrowLeft size={14} />}
                 {step > 1 ? 'Previous Step' : 'Cancel'}
@@ -762,7 +761,7 @@ export default function AddMemberModal({ isOpen, onClose }: AddMemberModalProps)
                 <button
                   type="button"
                   onClick={() => setStep(step + 1)}
-                  className="px-6 py-3 rounded-xl font-bold text-xs text-slate-400 bg-white/5 hover:bg-white/10 transition-all border-none cursor-pointer"
+                  className="px-6 py-3 rounded-xl font-bold text-xs text-slate-600 bg-slate-200 hover:bg-slate-300 transition-all border-none cursor-pointer"
                 >
                   Skip Step
                 </button>
@@ -778,7 +777,7 @@ export default function AddMemberModal({ isOpen, onClose }: AddMemberModalProps)
                     }
                     setStep(step + 1);
                   }}
-                  className="px-8 py-3 rounded-xl bg-[#d4ff00] text-black font-black text-xs uppercase hover:bg-[#c4ef00] transition-all flex items-center gap-2 border-none cursor-pointer shadow-lg"
+                  className="px-8 py-3 rounded-xl bg-blue-600 text-white font-extrabold text-xs uppercase hover:bg-blue-700 transition-all flex items-center gap-2 border-none cursor-pointer shadow-md"
                 >
                   <span>Next Step</span>
                   <ArrowRight size={14} />
@@ -790,7 +789,7 @@ export default function AddMemberModal({ isOpen, onClose }: AddMemberModalProps)
                   type="button"
                   onClick={handleFinalSubmit}
                   disabled={isSubmitting}
-                  className="px-10 py-3.5 rounded-xl bg-[#d4ff00] text-black font-black text-xs uppercase hover:bg-[#c4ef00] transition-all flex items-center gap-2 border-none cursor-pointer shadow-lg disabled:opacity-50"
+                  className="px-10 py-3.5 rounded-xl bg-blue-600 text-white font-extrabold text-xs uppercase hover:bg-blue-700 transition-all flex items-center gap-2 border-none cursor-pointer shadow-md disabled:opacity-50"
                 >
                   <span>{isSubmitting ? 'Processing...' : 'Complete & Generate Bill'}</span>
                   <CheckCircle2 size={16} />
@@ -801,7 +800,7 @@ export default function AddMemberModal({ isOpen, onClose }: AddMemberModalProps)
                 <button
                   type="button"
                   onClick={onClose}
-                  className="px-10 py-3.5 rounded-xl bg-[#d4ff00] text-black font-black text-xs uppercase hover:bg-[#c4ef00] transition-all flex items-center gap-2 border-none cursor-pointer shadow-lg"
+                  className="px-10 py-3.5 rounded-xl bg-blue-600 text-white font-extrabold text-xs uppercase hover:bg-blue-700 transition-all flex items-center gap-2 border-none cursor-pointer shadow-md"
                 >
                   <span>Finish & Return to Dashboard</span>
                   <CheckCircle2 size={16} />

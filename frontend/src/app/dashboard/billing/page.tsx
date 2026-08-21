@@ -84,25 +84,20 @@ export default function BillingPage() {
       fallbacks.forEach(item => combinedMap.set(item.invoice || item.id, item));
       data.forEach(item => combinedMap.set(item.invoice || item.id, item));
 
-      const todayYMD = new Date().toISOString().split('T')[0];
-      const todayLocal = new Date().toLocaleDateString('en-CA');
-
       const merged = Array.from(combinedMap.values()).sort((a: any, b: any) => {
-        const aDate = String(a.date || a.createdAt || '').split('T')[0];
-        const bDate = String(b.date || b.createdAt || '').split('T')[0];
+        const aInv = String(a.invoice || a.invoiceNumber || '');
+        const bInv = String(b.invoice || b.invoiceNumber || '');
 
-        const aIsToday = a.isRealTimeToday === true || aDate === todayYMD || aDate === todayLocal || aDate === todayStr;
-        const bIsToday = b.isRealTimeToday === true || bDate === todayYMD || bDate === todayLocal || bDate === todayStr;
+        const aIsLegacy = a.isLegacyImport === true || aInv.startsWith('LEG-') || String(a.notes || '').includes('Legacy Import');
+        const bIsLegacy = b.isLegacyImport === true || bInv.startsWith('LEG-') || String(b.notes || '').includes('Legacy Import');
 
-        if (aIsToday && !bIsToday) return -1;
-        if (!aIsToday && bIsToday) return 1;
+        // Real user transactions ALWAYS take top priority over legacy migration imports
+        if (!aIsLegacy && bIsLegacy) return -1;
+        if (aIsLegacy && !bIsLegacy) return 1;
 
-        // Cap future legacy dates to today for recency sorting
-        const validADate = aDate > todayYMD ? todayYMD : aDate;
-        const validBDate = bDate > todayYMD ? todayYMD : bDate;
-
-        const timeA = new Date(a.createdAt || validADate || 0).getTime();
-        const timeB = new Date(b.createdAt || validBDate || 0).getTime();
+        // Within real transactions or legacy transactions, sort by timestamp / date descending
+        const timeA = new Date(a.createdAt || a.date || 0).getTime();
+        const timeB = new Date(b.createdAt || b.date || 0).getTime();
         return timeB - timeA;
       });
 
