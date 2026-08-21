@@ -46,7 +46,7 @@ export const membershipEngine = {
     return Math.min(100, score);
   },
 
-  calculatePlanExpiryDate: (planName: string, startDateVal?: any, plansList: any[] = []): string => {
+  calculatePlanExpiryDate: (planOrObject: any, startDateVal?: any, plansList: any[] = []): string => {
     let validStart: Date;
     if (!startDateVal) {
       validStart = new Date();
@@ -61,14 +61,50 @@ export const membershipEngine = {
     }
     if (isNaN(validStart.getTime())) validStart = new Date();
     
-    let durationDays = 30;
+    let planName = typeof planOrObject === 'string' ? planOrObject : (planOrObject?.name || planOrObject?.plan || '');
+    let durationDays: number | null = null;
+
+    // Stage 1: Check direct plan object properties
+    if (typeof planOrObject === 'object' && planOrObject !== null) {
+      if (typeof planOrObject.durationDays === 'number' && planOrObject.durationDays > 0) {
+        durationDays = planOrObject.durationDays;
+      } else if (planOrObject.duration) {
+        const dMatch = String(planOrObject.duration).match(/(\d+)\s*(?:day|days|d)\b/i);
+        if (dMatch) durationDays = parseInt(dMatch[1], 10);
+      }
+    }
+
     const p = String(planName || '').trim().toLowerCase();
 
-    if (plansList && plansList.length > 0) {
+    // Stage 2: Direct string regex parsing (e.g. "10 days", "2 months", "1 year", "quarterly", "semi", "annual")
+    if (durationDays === null && p) {
+      const dayMatch = p.match(/(\d+)\s*(?:day|days|d)\b/i);
+      const monthMatch = p.match(/(\d+)\s*(?:month|months|m)\b/i);
+      const yearMatch = p.match(/(\d+)\s*(?:year|years|y)\b/i);
+
+      if (dayMatch) {
+        durationDays = parseInt(dayMatch[1], 10);
+      } else if (monthMatch) {
+        durationDays = parseInt(monthMatch[1], 10) * 30;
+      } else if (yearMatch) {
+        durationDays = parseInt(yearMatch[1], 10) * 365;
+      } else if (p.includes('quarterly')) {
+        durationDays = 90;
+      } else if (p.includes('semi') || p.includes('half year')) {
+        durationDays = 180;
+      } else if (p.includes('annual') || p.includes('yearly')) {
+        durationDays = 365;
+      } else if (p.includes('lifetime')) {
+        durationDays = 3650;
+      }
+    }
+
+    // Stage 3: Exact lookup in plansList if provided
+    if (durationDays === null && plansList && plansList.length > 0) {
       const matched = plansList.find((item: any) => {
         const name = String(item.name || '').trim().toLowerCase();
         const id = String(item.id || '').trim().toLowerCase();
-        return name === p || id === p || (name && p.includes(name)) || (name && name.includes(p));
+        return name === p || id === p;
       });
       if (matched) {
         if (typeof matched.durationDays === 'number' && matched.durationDays > 0) {
@@ -80,26 +116,9 @@ export const membershipEngine = {
       }
     }
 
-    if (durationDays === 30 && p) {
-      const dayMatch = p.match(/(\d+)\s*(?:day|days|d)\b/i);
-      const monthMatch = p.match(/(\d+)\s*(?:month|months|m)\b/i);
-      const yearMatch = p.match(/(\d+)\s*(?:year|years|y)\b/i);
-
-      if (dayMatch) {
-        durationDays = parseInt(dayMatch[1], 10) || 30;
-      } else if (monthMatch) {
-        durationDays = (parseInt(monthMatch[1], 10) || 1) * 30;
-      } else if (yearMatch) {
-        durationDays = (parseInt(yearMatch[1], 10) || 1) * 365;
-      } else if (p.includes('quarterly')) {
-        durationDays = 90;
-      } else if (p.includes('semi') || p.includes('half year')) {
-        durationDays = 180;
-      } else if (p.includes('annual') || p.includes('yearly')) {
-        durationDays = 365;
-      } else if (p.includes('lifetime')) {
-        durationDays = 3650;
-      }
+    // Fallback if unresolved
+    if (durationDays === null || isNaN(durationDays) || durationDays <= 0) {
+      durationDays = 30;
     }
 
     const expiryDate = new Date(validStart.getTime() + durationDays * 24 * 60 * 60 * 1000);
