@@ -992,18 +992,70 @@ def run_membership_validation(user_id, device_id, device_name, branch, timestamp
     except Exception as err:
         logging.warning(f"[API Checkin Notice]: {err}")
 
-    # 3. Lookup member in Firestore / local roster
+    # 3. Lookup member in Firestore / local roster with multi-type matching
     member = None
     if db is not None:
         try:
             members_ref = db.collection('members')
-            for field in ['biometricId', 'deviceUserId', 'uid', 'memberId', 'phone']:
-                query = members_ref.where(field, '==', user_id_str).limit(1).stream()
-                for doc_snap in query:
+            
+            # Check string and int exact queries first
+            queries = [
+                members_ref.where('biometricId', '==', user_id_str).limit(1).stream(),
+                members_ref.where('deviceUserId', '==', user_id_str).limit(1).stream(),
+                members_ref.where('memberId', '==', user_id_str).limit(1).stream(),
+            ]
+            
+            try:
+                num_id = int(user_id_str)
+                queries.extend([
+                    members_ref.where('biometricId', '==', num_id).limit(1).stream(),
+                    members_ref.where('deviceUserId', '==', num_id).limit(1).stream(),
+                ])
+            except ValueError:
+                pass
+
+            for q in queries:
+                for doc_snap in q:
                     member = { 'id': doc_snap.id, **doc_snap.to_dict() }
                     break
                 if member:
                     break
+
+            # Comprehensive fallback scan across all members if exact index queries didn't hit
+            if not member:
+                all_members = [ { 'id': d.id, **d.to_dict() } for d in members_ref.stream() ]
+                m_str_clean = user_id_str.lower().strip()
+                for m in all_members:
+                    bio_id = str(m.get('biometricId', '')).lower().strip()
+                    dev_id = str(m.get('deviceUserId', '')).lower().strip()
+                    c_id = str(m.get('clientId', '')).lower().strip()
+                    cust_id = str(m.get('customId', '')).lower().strip()
+                    mem_id = str(m.get('memberId', '')).lower().strip()
+                    m_id = str(m.get('id', '')).lower().strip()
+                    phone = str(m.get('phone', '')).lower().strip()
+
+                    if bio_id and (bio_id == m_str_clean or bio_id.lstrip('0') == m_str_clean.lstrip('0')):
+                        member = m
+                        break
+                    if dev_id and (dev_id == m_str_clean or dev_id.lstrip('0') == m_str_clean.lstrip('0')):
+                        member = m
+                        break
+                    if c_id and (c_id == m_str_clean or c_id.lstrip('0') == m_str_clean.lstrip('0')):
+                        member = m
+                        break
+                    if cust_id and (cust_id == m_str_clean or cust_id.lstrip('0') == m_str_clean.lstrip('0')):
+                        member = m
+                        break
+                    if mem_id and (mem_id == m_str_clean or mem_id.endswith(f"-{m_str_clean}") or mem_id.endswith(m_str_clean)):
+                        member = m
+                        break
+                    if m_id and m_id == m_str_clean:
+                        member = m
+                        break
+                    if phone and (phone == m_str_clean or phone.endswith(m_str_clean)):
+                        member = m
+                        break
+
         except Exception as f_err:
             logging.error(f"[Firestore Member Lookup Error]: {f_err}")
 
