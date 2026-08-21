@@ -22,6 +22,7 @@ const PLANS = [
   { id: '3m', name: '3 Months Pro', price: 6500, duration: 3, desc: 'Quarterly membership saver' },
   { id: '6m', name: '6 Months Elite', price: 11500, duration: 6, desc: 'Semi-annual transformation pack' },
   { id: '12m', name: '12 Months VIP', price: 18000, duration: 12, desc: 'Annual ultimate access' },
+  { id: '10d', name: '10 Days Pass', price: 1000, duration: 0.33, desc: '10 Days short trial pass' },
   { id: 'pt', name: 'Personal Training (PT)', price: 8000, duration: 1, desc: '1-on-1 personal trainer sessions' },
   { id: 'premium', name: 'Premium Platinum', price: 25000, duration: 12, desc: 'All-inclusive premium annual access' },
   { id: 'custom', name: 'Custom Custom Plan', price: 0, duration: 1, desc: 'Enter custom pricing and duration' },
