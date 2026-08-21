@@ -178,7 +178,11 @@ export default function RenewalWizardModal({ isOpen, member, onClose }: RenewalW
   };
 
   const newExpiryString = calculateNewExpiry();
+  const renewalStart = getRenewalStartDate();
+  const todayStr = new Date().toISOString().split('T')[0];
+  const calculatedDuration = membershipEngine.calculateDurationDays(newExpiryString, renewalStart);
   const calculatedDaysLeft = membershipEngine.calculateDaysLeft(newExpiryString);
+  const daysUntilStart = membershipEngine.calculateDaysUntilStart(renewalStart);
 
   const handleNextStep = () => {
     setStep(prev => prev + 1);
@@ -192,10 +196,9 @@ export default function RenewalWizardModal({ isOpen, member, onClose }: RenewalW
     setIsCompleting(true);
     try {
       const generatedInvoiceNum = 'INV-' + Math.floor(100000 + Math.random() * 900000);
-      const todayStr = new Date().toISOString().split('T')[0];
-      const renewalStart = getRenewalStartDate();
       const planName = selectedPlanId === 'custom' ? `Custom (${customDuration}m)` : currentPlan.name;
-      const daysLeftCount = membershipEngine.calculateDaysLeft(newExpiryString);
+      const daysLeftCount = renewalStart > todayStr ? calculatedDuration : membershipEngine.calculateDaysLeft(newExpiryString);
+      const computedMemberStatus = renewalStart > todayStr ? 'upcoming' : 'active';
 
       const invoiceData = {
         memberId: member.id,
@@ -236,7 +239,7 @@ export default function RenewalWizardModal({ isOpen, member, onClose }: RenewalW
 
       // Keep current active status if current membership is active until renewalStart
       const activeExpiry = renewalStart > todayStr ? (member.expiryDate || newExpiryString) : newExpiryString;
-      const computedMemberStatus = membershipEngine.calculateMembershipStatus(activeExpiry, member.startDate || member.joinDate || todayStr);
+      const finalStatus = renewalStart > todayStr ? 'upcoming' : membershipEngine.calculateMembershipStatus(activeExpiry, member.startDate || member.joinDate || todayStr);
 
       await updateMember(member.id, {
         plan: planName,
@@ -246,7 +249,7 @@ export default function RenewalWizardModal({ isOpen, member, onClose }: RenewalW
         totalPaid: (Number(member.totalPaid) || 0) + totalAmount,
         expiryDate: newExpiryString,
         daysLeft: daysLeftCount,
-        status: computedMemberStatus,
+        status: finalStatus,
         paymentStatus: 'paid',
         membershipHistory: updatedHistory
       });

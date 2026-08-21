@@ -16,6 +16,26 @@ export const membershipEngine = {
     return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
   },
 
+  calculateDurationDays: (expiryDate: string | null | undefined, startDate?: string | null | undefined): number => {
+    if (!expiryDate || expiryDate === 'N/A' || expiryDate === '—') return 30;
+    const expiry = new Date(expiryDate);
+    if (isNaN(expiry.getTime())) return 30;
+
+    let start: Date;
+    if (startDate && startDate !== 'N/A' && startDate !== '—') {
+      start = new Date(startDate);
+      if (isNaN(start.getTime())) start = new Date();
+    } else {
+      start = new Date();
+    }
+
+    const eDay = new Date(expiry.getFullYear(), expiry.getMonth(), expiry.getDate());
+    const sDay = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+    const diffTime = eDay.getTime() - sDay.getTime();
+    
+    return Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
+  },
+
   calculateDaysUntilStart: (startDate: string | null | undefined): number => {
     if (!startDate || startDate === 'N/A' || startDate === '—') return 0;
     const start = new Date(startDate);

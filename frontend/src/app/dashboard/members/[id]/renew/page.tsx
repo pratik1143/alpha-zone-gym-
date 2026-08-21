@@ -169,7 +169,12 @@ export default function RenewMembershipPage() {
   };
 
   const newExpiryString = calculateNewExpiry();
+  const effectiveStartDate = getEffectiveStartDate();
+  const todayStr = new Date().toISOString().split('T')[0];
+
+  const calculatedDuration = membershipEngine.calculateDurationDays(newExpiryString, effectiveStartDate);
   const calculatedDaysLeft = membershipEngine.calculateDaysLeft(newExpiryString);
+  const daysUntilStart = membershipEngine.calculateDaysUntilStart(effectiveStartDate);
 
   const handleFinishRenewal = async () => {
     setIsCompleting(true);
@@ -177,8 +182,9 @@ export default function RenewMembershipPage() {
       const generatedInvoiceNum = 'INV-' + Math.floor(100000 + Math.random() * 900000);
       const todayStr = new Date().toISOString().split('T')[0];
       const planName = selectedPlanId === 'custom' ? `Custom (${customDuration}m)` : currentPlan.name;
-      const daysLeftCount = membershipEngine.calculateDaysLeft(newExpiryString);
       const startDateVal = getEffectiveStartDate();
+      const daysLeftCount = startDateVal > todayStr ? calculatedDuration : membershipEngine.calculateDaysLeft(newExpiryString);
+      const computedMemberStatus = startDateVal > todayStr ? 'upcoming' : 'active';
 
       const invoiceData = {
         memberId: member.id,
@@ -224,7 +230,7 @@ export default function RenewMembershipPage() {
         totalPaid: totalAmount,
         expiryDate: newExpiryString,
         daysLeft: daysLeftCount,
-        status: 'active',
+        status: computedMemberStatus,
         paymentStatus: 'paid',
         trainer: assignedTrainer || member.trainer || '',
         membershipHistory: updatedHistory,
@@ -604,13 +610,19 @@ export default function RenewMembershipPage() {
                 <div className="space-y-1">
                   <div className="text-[10px] text-slate-400 font-bold uppercase">Calculated New Expiry Date</div>
                   <div className="text-2xl font-black text-white font-mono">{newExpiryString}</div>
-                  <div className="text-xs font-bold text-emerald-400">({calculatedDaysLeft} Days Remaining)</div>
+                  <div className="text-xs font-bold text-emerald-400">
+                    ({calculatedDuration} Days Duration{effectiveStartDate > todayStr ? ` • Starts in ${daysUntilStart} Days` : ''})
+                  </div>
                 </div>
 
                 <div className="pt-3 border-t border-slate-800 space-y-2 text-xs">
                   <div className="flex justify-between text-slate-300">
                     <span>Member:</span>
                     <span className="font-bold text-white">{member?.name}</span>
+                  </div>
+                  <div className="flex justify-between text-slate-300">
+                    <span>Start Date:</span>
+                    <span className="font-bold text-indigo-300 font-mono">{effectiveStartDate}</span>
                   </div>
                   <div className="flex justify-between text-slate-300">
                     <span>Selected Plan:</span>
