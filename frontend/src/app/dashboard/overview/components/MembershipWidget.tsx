@@ -4,10 +4,14 @@ import React, { useState } from "react";
 import { useGymStore } from "@/store";
 import { motion, AnimatePresence } from "framer-motion";
 import { CreditCard, Calendar, User, ChevronRight } from "lucide-react";
+import { useRouter } from "next/navigation";
+import RenewalWizardModal from "../../members/components/RenewalWizardModal";
 
 export default function MembershipWidget() {
+  const router = useRouter();
   const { members } = useGymStore();
   const [activeTab, setActiveTab] = useState<"Today" | "Tomorrow" | "3Days" | "7Days">("Today");
+  const [selectedMemberForRenew, setSelectedMemberForRenew] = useState<any>(null);
 
   const now = new Date();
   now.setHours(0,0,0,0);
@@ -47,7 +51,7 @@ export default function MembershipWidget() {
   };
 
   return (
-    <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 mt-6 relative overflow-hidden">
+    <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 mt-6 relative overflow-hidden text-left">
       {/* Decorative blurred blob */}
       <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-50 rounded-full blur-3xl opacity-50 -z-10 pointer-events-none" />
 
@@ -65,7 +69,7 @@ export default function MembershipWidget() {
           <button
             key={tab}
             onClick={() => setActiveTab(tab as any)}
-            className={`px-4 py-1.5 rounded-full text-xs font-bold transition-colors ${
+            className={`px-4 py-1.5 rounded-full text-xs font-bold transition-colors cursor-pointer ${
               activeTab === tab 
                 ? "bg-slate-900 text-white shadow-md" 
                 : "bg-slate-100 text-slate-500 hover:bg-slate-200"
@@ -94,7 +98,8 @@ export default function MembershipWidget() {
                   animate={{ opacity: 1, scale: 1, x: 0 }}
                   exit={{ opacity: 0, scale: 0.8, x: -50 }}
                   transition={{ type: "spring", bounce: 0.3, duration: 0.6, delay: idx * 0.05 }}
-                  className={`snap-center shrink-0 w-72 h-44 rounded-2xl bg-gradient-to-br ${getGradient(idx)} p-5 text-white shadow-lg relative overflow-hidden group flex flex-col justify-between`}
+                  onClick={() => router.push(`/dashboard/members/${encodeURIComponent(item.id || item.docId || '')}/renew`)}
+                  className={`snap-center shrink-0 w-72 h-44 rounded-2xl bg-gradient-to-br ${getGradient(idx)} p-5 text-white shadow-lg relative overflow-hidden group flex flex-col justify-between cursor-pointer hover:shadow-xl transition-all`}
                 >
                   {/* Glass reflection */}
                   <div className="absolute inset-0 bg-gradient-to-tr from-white/0 via-white/10 to-white/0 opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none transform -translate-x-full group-hover:translate-x-full" style={{ transition: 'all 1.5s ease' }} />
@@ -103,8 +108,8 @@ export default function MembershipWidget() {
                   <div className="flex justify-between items-start z-10">
                     <div className="flex items-center gap-3">
                       <img 
-                        src={`https://api.dicebear.com/7.x/adventurer/svg?seed=${item.name?.replace(/ /g,'') || item.id}`}
-                        className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-sm border border-white/30 shadow-sm"
+                        src={item.photo || item.avatarUrl || item.avatar || `https://api.dicebear.com/7.x/adventurer/svg?seed=${item.name?.replace(/ /g,'') || item.id}`}
+                        className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-sm border border-white/30 shadow-sm object-cover"
                       />
                       <div>
                         <h4 className="font-black text-sm drop-shadow-sm">{item.name || 'Member'}</h4>
@@ -124,12 +129,19 @@ export default function MembershipWidget() {
                   <div className="flex justify-between items-end z-10">
                     <div>
                       <p className="text-[9px] font-black uppercase tracking-widest text-white/70 mb-0.5">Expires</p>
-                      <p className="font-bold text-xs flex items-center gap-1">
+                      <p className="font-bold text-xs flex items-center gap-1 font-mono">
                         <Calendar size={12} />
                         {item.expiryDate ? new Date(item.expiryDate).toLocaleDateString('en-GB') : 'Unknown'}
                       </p>
                     </div>
-                    <button className="bg-white/20 hover:bg-white/30 backdrop-blur-md border border-white/30 px-3 py-1.5 rounded-xl text-xs font-bold transition-colors flex items-center gap-1">
+                    <button 
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        router.push(`/dashboard/members/${encodeURIComponent(item.id || item.docId || '')}/renew`);
+                      }}
+                      className="bg-white/20 hover:bg-white/40 backdrop-blur-md border border-white/40 px-3.5 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-1 cursor-pointer shadow-sm active:scale-95"
+                    >
                       Renew <ChevronRight size={12} />
                     </button>
                   </div>
@@ -148,6 +160,15 @@ export default function MembershipWidget() {
           )}
         </AnimatePresence>
       </div>
+
+      {/* ── RENEWAL WIZARD MODAL ── */}
+      {selectedMemberForRenew && (
+        <RenewalWizardModal
+          isOpen={!!selectedMemberForRenew}
+          member={selectedMemberForRenew}
+          onClose={() => setSelectedMemberForRenew(null)}
+        />
+      )}
     </div>
   );
 }

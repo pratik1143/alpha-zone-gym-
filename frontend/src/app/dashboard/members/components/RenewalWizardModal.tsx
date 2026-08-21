@@ -9,6 +9,8 @@ import { membershipEngine } from '@/lib/engines/membershipEngine';
 import API from '@/services/api';
 import toast from 'react-hot-toast';
 
+import OfficialInvoiceReceipt from '../../components/OfficialInvoiceReceipt';
+
 interface RenewalWizardProps {
   isOpen: boolean;
   member: any;
@@ -242,15 +244,15 @@ export default function RenewalWizardModal({ isOpen, member, onClose }: RenewalW
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[200] flex items-center justify-center p-3 md:p-6 overflow-y-auto bg-slate-950/85 backdrop-blur-xl">
       {/* Backdrop */}
-      <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md" onClick={completeDone ? undefined : onClose} />
+      <div className="absolute inset-0" onClick={completeDone ? undefined : onClose} />
 
-      {/* Glassmorphic Wizard Card */}
+      {/* Glassmorphic Workspace Card */}
       <motion.div 
-        initial={{ scale: 0.95, y: 15, opacity: 0 }}
+        initial={{ scale: 0.96, y: 15, opacity: 0 }}
         animate={{ scale: 1, y: 0, opacity: 1 }}
-        className="relative w-full max-w-lg bg-white/80 backdrop-blur-3xl border border-white/80 rounded-[32px] shadow-[0_30px_70px_rgba(0,0,0,0.15)] z-10 overflow-hidden text-slate-800 p-6 min-h-[500px] flex flex-col justify-between"
+        className="relative w-full max-w-3xl bg-white border border-slate-200 rounded-[32px] shadow-2xl z-10 overflow-hidden text-slate-800 p-6 md:p-8 max-h-[92vh] flex flex-col justify-between overflow-y-auto text-left"
       >
         {/* Step Indicator Header */}
         {!completeDone && (
@@ -486,89 +488,31 @@ export default function RenewalWizardModal({ isOpen, member, onClose }: RenewalW
                 key="step4"
                 initial={{ scale: 0.95, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
-                className="text-center space-y-6 py-6 relative"
+                className="space-y-6 py-2 relative text-center"
               >
-                {/* Confetti element */}
                 <Confetti />
 
-                {/* Apple Wallet Style Invoice Success Card */}
-                <div className="w-64 h-36 bg-gradient-to-br from-slate-900 to-slate-950 border border-slate-800 rounded-2xl shadow-xl mx-auto flex flex-col justify-between p-4 text-left relative overflow-hidden">
-                  <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-500/10 rounded-full blur-2xl" />
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <div className="text-[8px] font-black text-indigo-400 uppercase tracking-widest">Alpha Zone Gym VIP</div>
-                      <div className="text-xs font-black text-white mt-1">{member.name}</div>
-                    </div>
-                    <div className="w-7 h-7 rounded-lg bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400">
-                      <Receipt size={14} />
-                    </div>
-                  </div>
-
-                  <div className="flex justify-between items-end border-t border-slate-800/80 pt-3">
-                    <div>
-                      <div className="text-[7px] text-slate-500 font-bold uppercase">Valid Until</div>
-                      <div className="text-[10px] font-bold text-white font-mono">{new Date(newExpiryString).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-[7px] text-slate-500 font-bold uppercase">Membership Paid</div>
-                      <div className="text-[11px] font-black text-indigo-400">{formatCurrency(totalAmount)}</div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <h3 className="text-lg font-black text-slate-900 flex items-center justify-center gap-1.5">
-                    <span className="w-6 h-6 rounded-full bg-emerald-500 text-white text-xs flex items-center justify-center">✓</span>
-                    Membership Renewed!
+                <div className="space-y-1">
+                  <h3 className="text-xl font-black text-slate-900 flex items-center justify-center gap-2">
+                    <span className="w-7 h-7 rounded-full bg-emerald-500 text-white text-xs flex items-center justify-center shadow-md">✓</span>
+                    Membership Renewed Successfully!
                   </h3>
-                  <p className="text-xs text-slate-500 max-w-xs mx-auto">Database updated, invoice generated, and notifications dispatched.</p>
+                  <p className="text-xs text-slate-500">Database updated, new expiry calculated & Official Tax Invoice generated.</p>
                 </div>
 
-                {/* Simulated Notification feed */}
-                <div className="max-w-xs mx-auto space-y-2 bg-slate-50 border border-slate-100 p-3 rounded-2xl text-left">
-                  <div className="flex items-center justify-between text-[8px] text-slate-400 font-bold uppercase tracking-wider mb-1.5 pb-1 border-b border-slate-200">
-                    <span>Notification dispatch feed</span>
-                    <span className="animate-pulse text-indigo-500">Live</span>
-                  </div>
-                  
-                  {/* Email */}
-                  <div className="flex items-center justify-between text-[10px]">
-                    <div className="flex items-center gap-1.5 font-semibold text-slate-700">
-                      <Mail size={12} className="text-blue-500" />
-                      <span>Email Invoice Receipt</span>
-                    </div>
-                    <span className={`font-bold uppercase text-[8px] px-1.5 py-0.5 rounded ${
-                      notifications.email === 'sent' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-400 animate-pulse'
-                    }`}>
-                      {notifications.email === 'sent' ? 'Sent ✓' : 'Dispatching...'}
-                    </span>
-                  </div>
-
-                  {/* WhatsApp */}
-                  <div className="flex items-center justify-between text-[10px]">
-                    <div className="flex items-center gap-1.5 font-semibold text-slate-700">
-                      <MessageSquare size={12} className="text-emerald-500" />
-                      <span>WhatsApp Notice</span>
-                    </div>
-                    <span className={`font-bold uppercase text-[8px] px-1.5 py-0.5 rounded ${
-                      notifications.whatsapp === 'sent' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-400 animate-pulse'
-                    }`}>
-                      {notifications.whatsapp === 'sent' ? 'Sent ✓' : 'Dispatching...'}
-                    </span>
-                  </div>
-
-                  {/* Push */}
-                  <div className="flex items-center justify-between text-[10px]">
-                    <div className="flex items-center gap-1.5 font-semibold text-slate-700">
-                      <Bell size={12} className="text-amber-500" />
-                      <span>App Push Alert</span>
-                    </div>
-                    <span className={`font-bold uppercase text-[8px] px-1.5 py-0.5 rounded ${
-                      notifications.push === 'sent' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-400 animate-pulse'
-                    }`}>
-                      {notifications.push === 'sent' ? 'Sent ✓' : 'Dispatching...'}
-                    </span>
-                  </div>
+                <div className="bg-slate-50 p-4 rounded-3xl border border-slate-200 shadow-inner max-w-2xl mx-auto overflow-hidden text-left">
+                  <OfficialInvoiceReceipt
+                    invoice={generatedInvoiceData || {
+                      amount: totalAmount,
+                      paid: totalAmount,
+                      discount: totalDiscount,
+                      plan: selectedPlanId === 'custom' ? `Custom (${customDuration}m)` : currentPlan.name,
+                      expiryDate: newExpiryString,
+                      startDate: member.expiryDate && member.expiryDate > new Date().toISOString().split('T')[0] ? member.expiryDate : new Date().toISOString().split('T')[0]
+                    }}
+                    member={member}
+                    onPrint={() => window.print()}
+                  />
                 </div>
               </motion.div>
             )}

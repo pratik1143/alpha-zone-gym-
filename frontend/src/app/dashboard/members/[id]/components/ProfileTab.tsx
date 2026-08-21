@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { Camera, Edit2, MapPin, Phone, Mail, Droplet, Activity, User, Briefcase, HeartPulse, CreditCard, Calendar, Clock, Star, Dumbbell, Shield, BadgeCheck, CheckCircle2, AlertCircle, Snowflake, Repeat } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useRouter } from 'next/navigation';
 import { cleanPlanName, parsePlanSegments } from '@/lib/utils';
 import { db } from '@/lib/firebase';
 import { doc, updateDoc, addDoc, collection } from 'firebase/firestore';
@@ -12,6 +13,7 @@ import toast from 'react-hot-toast';
 import RenewalWizardModal from '../../components/RenewalWizardModal';
 
 export default function ProfileTab({ member }: { member: any }) {
+  const router = useRouter();
   const { fetchMembers } = useGymStore();
   const plans = useGymStore(s => s.plans);
 
@@ -305,7 +307,7 @@ export default function ProfileTab({ member }: { member: any }) {
 
             <div className="flex gap-3">
               <button 
-                onClick={() => setShowRenewModal(true)}
+                onClick={() => router.push(`/dashboard/members/${encodeURIComponent(member.id)}/renew`)}
                 className="flex-1 py-3 bg-white text-slate-900 rounded-xl text-xs font-black transition-all hover:bg-slate-100 flex items-center justify-center gap-2 border-none cursor-pointer shadow-md active:scale-95"
               >
                 <CreditCard size={14} className="text-blue-600" /> Renew Plan
@@ -547,137 +549,7 @@ export default function ProfileTab({ member }: { member: any }) {
       </AnimatePresence>
 
       {/* ── RENEW MEMBERSHIP MODAL ── */}
-      <AnimatePresence>
-        {showRenewModal && (
-          <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 15 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 15 }}
-              className="bg-white rounded-3xl shadow-2xl border border-slate-200 p-6 max-w-md w-full relative space-y-4 text-slate-900 z-10"
-            >
-              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                <div className="flex items-center gap-2">
-                  <CreditCard size={20} className="text-blue-600" />
-                  <h3 className="font-extrabold text-slate-900 text-lg">Renew Membership Plan</h3>
-                </div>
-                <button
-                  onClick={() => setShowRenewModal(false)}
-                  className="text-slate-400 hover:text-slate-700 bg-transparent border-none cursor-pointer p-1"
-                >
-                  ✕
-                </button>
-              </div>
 
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-[10px] font-black uppercase text-slate-500 mb-1.5">Select Plan / Package</label>
-                  <select
-                    value={renewPlan}
-                    onChange={(e) => {
-                      const sel = e.target.value;
-                      setRenewPlan(sel);
-                      const foundP = plans.find((p: any) => p.name === sel || p.id === sel);
-                      if (foundP && foundP.price) setRenewPrice(foundP.price);
-                    }}
-                    className="w-full h-11 bg-slate-50 border border-slate-300 rounded-xl px-3 font-bold text-slate-900 text-sm focus:outline-none focus:border-blue-500 cursor-pointer"
-                  >
-                    {plans && plans.length > 0 ? (
-                      plans.map((p: any) => (
-                        <option key={p.id || p.name} value={p.name}>
-                          {p.name} — ₹{(p.price || 0).toLocaleString('en-IN')}
-                        </option>
-                      ))
-                    ) : (
-                      <>
-                        <option value="1 Month">1 Month — ₹1,000</option>
-                        <option value="3 Months">3 Months — ₹2,500</option>
-                        <option value="6 Months">6 Months — ₹4,500</option>
-                        <option value="1 Year">1 Year — ₹8,000</option>
-                        <option value="10 Days">10 Days — ₹800</option>
-                      </>
-                    )}
-                  </select>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-[10px] font-black uppercase text-slate-500 mb-1.5">Collected Amount (₹)</label>
-                    <input
-                      type="number"
-                      value={renewPrice}
-                      onChange={(e) => setRenewPrice(Number(e.target.value))}
-                      className="w-full h-11 bg-slate-50 border border-slate-300 rounded-xl px-3 font-mono font-black text-slate-900 text-sm focus:outline-none focus:border-blue-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-black uppercase text-slate-500 mb-1.5">Payment Method</label>
-                    <select
-                      value={renewPaymentMethod}
-                      onChange={(e) => setRenewPaymentMethod(e.target.value)}
-                      className="w-full h-11 bg-slate-50 border border-slate-300 rounded-xl px-3 font-bold text-slate-900 text-sm focus:outline-none focus:border-blue-500 cursor-pointer"
-                    >
-                      <option value="UPI">UPI / QR</option>
-                      <option value="Cash">Cash</option>
-                      <option value="Card">Credit / Debit Card</option>
-                      <option value="NetBanking">NetBanking</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-[10px] font-black uppercase text-slate-500 mb-1.5">Renewal Start Date</label>
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setRenewStartDateOption('extend')}
-                      className={`p-2.5 rounded-xl border text-xs font-bold transition-all text-left cursor-pointer ${
-                        renewStartDateOption === 'extend'
-                          ? 'bg-blue-50 border-blue-500 text-blue-700'
-                          : 'bg-slate-50 border-slate-200 text-slate-600'
-                      }`}
-                    >
-                      <div>📅 Extend from Expiry</div>
-                      <div className="text-[9px] text-slate-400 font-normal mt-0.5">{member.expiryDate || 'Current Expiry'}</div>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setRenewStartDateOption('today')}
-                      className={`p-2.5 rounded-xl border text-xs font-bold transition-all text-left cursor-pointer ${
-                        renewStartDateOption === 'today'
-                          ? 'bg-blue-50 border-blue-500 text-blue-700'
-                          : 'bg-slate-50 border-slate-200 text-slate-600'
-                      }`}
-                    >
-                      <div>⚡ Start Today</div>
-                      <div className="text-[9px] text-slate-400 font-normal mt-0.5">{new Date().toISOString().split('T')[0]}</div>
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowRenewModal(false)}
-                  className="flex-1 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs border-none cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={handleRenewSubmit}
-                  disabled={savingRenew}
-                  className="flex-1 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black text-xs border-none cursor-pointer shadow-md disabled:opacity-50"
-                >
-                  {savingRenew ? 'Processing...' : 'Confirm Renewal'}
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
 
       {/* ── FREEZE MEMBERSHIP MODAL ── */}
       <AnimatePresence>

@@ -7,7 +7,7 @@ import {
   Clock, DollarSign, MessageSquare, Phone, Mail, Printer, Download,
   Trash2, Snowflake, Repeat, Sparkles, AlertCircle, Bell, ChevronRight, Camera, User
 } from 'lucide-react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { db } from '@/lib/firebase';
 import { doc, onSnapshot, collection, query, where, updateDoc } from 'firebase/firestore';
 import toast from 'react-hot-toast';
@@ -42,6 +42,7 @@ const TABS = [
 export default function ClientProfileSystem() {
   const router = useRouter();
   const params = useParams();
+  const searchParams = useSearchParams();
   const rawId = params?.id as string;
   const id = rawId ? decodeURIComponent(rawId) : '';
 
@@ -51,6 +52,12 @@ export default function ClientProfileSystem() {
   const [memberInvoices, setMemberInvoices] = useState<any[]>([]);
   const [showPhotoModal, setShowPhotoModal] = useState(false);
   const [showRenewalModal, setShowRenewalModal] = useState(false);
+
+  useEffect(() => {
+    if (searchParams && searchParams.get('renew') === 'true') {
+      setShowRenewalModal(true);
+    }
+  }, [searchParams]);
 
   const handleSavePhoto = async (photoUrl: string) => {
     if (!member || !member.id) return;
@@ -321,7 +328,7 @@ export default function ClientProfileSystem() {
               ⚡ Auto-Sync Expiry
             </button>
             <button 
-              onClick={() => setShowRenewalModal(true)}
+              onClick={() => router.push(`/dashboard/members/${encodeURIComponent(id)}/renew`)}
               className="w-full py-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-xl text-xs font-black transition-all flex justify-center items-center gap-2 cursor-pointer shadow-sm active:scale-95"
             >
               <DollarSign size={14} /> Renew Membership
