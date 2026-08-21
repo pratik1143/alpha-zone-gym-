@@ -148,17 +148,16 @@ export default function RenewalWizardModal({ isOpen, member, onClose }: RenewalW
   const gstAmount = Number(gst);
   const totalAmount = Math.max(0, Number(planPrice) + Number(admissionFee) + Number(outstanding) - totalDiscount + gstAmount);
 
-  // Calculate Expiry Date
   const calculateNewExpiry = () => {
-    const curExpiry = new Date(member.expiryDate);
-    const today = new Date();
-    // If membership is expired or expires today, start from today. Else start from old expiry.
-    const start = curExpiry.getTime() > today.getTime() ? curExpiry : today;
-    const newExpiry = new Date(start.getTime() + planDuration * 30 * 24 * 60 * 60 * 1000);
-    return newExpiry.toISOString().split('T')[0];
+    const curExpiry = member?.expiryDate;
+    const today = new Date().toISOString().split('T')[0];
+    const startBase = (curExpiry && curExpiry > today) ? curExpiry : today;
+    const planName = selectedPlanId === 'custom' ? `${customDuration} Months` : currentPlan.name;
+    return membershipEngine.calculatePlanExpiryDate(planName, startBase, plans);
   };
 
   const newExpiryString = calculateNewExpiry();
+  const calculatedDaysLeft = membershipEngine.calculateDaysLeft(newExpiryString);
 
   const handleNextStep = () => {
     setStep(prev => prev + 1);
@@ -168,55 +167,76 @@ export default function RenewalWizardModal({ isOpen, member, onClose }: RenewalW
     setStep(prev => prev - 1);
   };
 
+  const [generatedInvoiceData, setGeneratedInvoiceData] = useState<any>(null);
+
   const handleFinish = async () => {
     setIsCompleting(true);
     try {
-      const generatedInvoiceNum = 'INV-' + Math.floor(10000 + Math.random() * 90000);
-      
-      // 1. Save payment invoice to Firestore via API
-      await addPayment({
+      const generatedInvoiceNum = 'INV-' + Math.floor(100000 + Math.random() * 900000);
+      const todayStr = new Date().toISOString().split('T')[0];
+      const planName = selectedPlanId === 'custom' ? `Custom (${customDuration}m)` : currentPlan.name;
+      const daysLeftCount = membershipEngine.calculateDaysLeft(newExpiryString);
+
+      const invoiceData = {
         memberId: member.id,
+        memberName: member.name,
+        memberPhone: member.phone || '',
         amount: totalAmount,
-        plan: selectedPlanId === 'custom' ? `Custom (${customDuration}m)` : currentPlan.name,
+        paid: totalAmount,
+        plan: planName,
         method: method,
-        newExpiryDate: newExpiryString,
+        discount: totalDiscount,
+        status: 'paid',
+        invoice: generatedInvoiceNum,
+        invoiceNumber: generatedInvoiceNum,
+        date: todayStr,
+        startDate: member.expiryDate && member.expiryDate > todayStr ? member.expiryDate : todayStr,
+        expiryDate: newExpiryString,
+        createdAt: new Date().toISOString()
+      };
+
+      await addPayment(invoiceData);
+      setGeneratedInvoiceData(invoiceData);
+
+      const newHistoryItem = {
+        packageName: planName,
+        startDate: member.expiryDate && member.expiryDate > todayStr ? member.expiryDate : todayStr,
+        expiryDate: newExpiryString,
+        amount: totalAmount,
+        invoiceNumber: generatedInvoiceNum,
+        renewedAt: new Date().toISOString()
+      };
+
+      const existingHistory = Array.isArray(member.membershipHistory) ? member.membershipHistory : [];
+      const updatedHistory = [newHistoryItem, ...existingHistory];
+
+      await updateMember(member.id, {
+        plan: planName,
+        price: planPrice,
+        amount: totalAmount,
+        totalBilled: totalAmount,
+        totalPaid: totalAmount,
+        expiryDate: newExpiryString,
+        daysLeft: daysLeftCount,
+        status: 'active',
+        paymentStatus: 'paid',
+        membershipHistory: updatedHistory
       });
 
-      // 2. Update member details
-      await updateMember(member.id, {
-        plan: selectedPlanId === 'custom' ? `Custom (${customDuration}m)` : currentPlan.name,
-        trainer: assignedTrainer,
-        outstandingBalance: 0, // Reset balance since it was paid in renewal
-        status: 'active',
-        expiryDate: newExpiryString,
-        timeline: [
-          ...(member.timeline || []),
-          { 
-            type: 'Renewed', 
-            date: new Date().toISOString().split('T')[0], 
-            details: `Renewed membership: ${selectedPlanId === 'custom' ? 'Custom' : currentPlan.name} for ${planDuration} Months` 
-          }
-        ]
-      });
+      member.plan = planName;
+      member.expiryDate = newExpiryString;
+      member.daysLeft = daysLeftCount;
+      member.status = 'active';
 
       setCompleteDone(true);
       fetchMembers();
+      toast.success(`🎉 Membership Renewed! New expiry: ${newExpiryString} (${daysLeftCount} Days Left)`);
 
-      // Trigger simulated notification delivery delays
-      setTimeout(() => {
-        setNotifications(n => ({ ...n, email: 'sent' }));
-      }, 700);
-
-      setTimeout(() => {
-        setNotifications(n => ({ ...n, whatsapp: 'sent' }));
-      }, 1400);
-
-      setTimeout(() => {
-        setNotifications(n => ({ ...n, push: 'sent' }));
-      }, 2100);
-
-    } catch (err) {
-      toast.error('Failed to complete membership renewal');
+      setTimeout(() => setNotifications(n => ({ ...n, email: 'sent' })), 600);
+      setTimeout(() => setNotifications(n => ({ ...n, whatsapp: 'sent' })), 1200);
+      setTimeout(() => setNotifications(n => ({ ...n, push: 'sent' })), 1800);
+    } catch (err: any) {
+      toast.error('Failed to complete membership renewal: ' + err.message);
     } finally {
       setIsCompleting(false);
     }

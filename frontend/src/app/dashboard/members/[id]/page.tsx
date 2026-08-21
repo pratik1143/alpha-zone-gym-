@@ -18,6 +18,7 @@ import API from '@/services/api';
 import { useGymStore } from '@/store';
 import MemberAvatar from '../../components/MemberAvatar';
 import SmartPhotoCapture from '../../components/SmartPhotoCapture';
+import RenewalWizardModal from '../components/RenewalWizardModal';
 
 // Tabs
 import ProfileTab from './components/ProfileTab';
@@ -49,6 +50,7 @@ export default function ClientProfileSystem() {
   const [loading, setLoading] = useState(true);
   const [memberInvoices, setMemberInvoices] = useState<any[]>([]);
   const [showPhotoModal, setShowPhotoModal] = useState(false);
+  const [showRenewalModal, setShowRenewalModal] = useState(false);
 
   const handleSavePhoto = async (photoUrl: string) => {
     if (!member || !member.id) return;
@@ -318,7 +320,10 @@ export default function ClientProfileSystem() {
             >
               ⚡ Auto-Sync Expiry
             </button>
-            <button className="w-full py-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-xl text-xs font-black transition-all flex justify-center items-center gap-2 cursor-pointer">
+            <button 
+              onClick={() => setShowRenewalModal(true)}
+              className="w-full py-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-xl text-xs font-black transition-all flex justify-center items-center gap-2 cursor-pointer shadow-sm active:scale-95"
+            >
               <DollarSign size={14} /> Renew Membership
             </button>
             <div className="grid grid-cols-2 gap-2">
@@ -428,6 +433,13 @@ export default function ClientProfileSystem() {
           </div>
         )}
       </AnimatePresence>
+
+      {/* ── RENEWAL WIZARD MODAL ── */}
+      <RenewalWizardModal
+        isOpen={showRenewalModal}
+        member={member}
+        onClose={() => setShowRenewalModal(false)}
+      />
     </div>
   );
 }

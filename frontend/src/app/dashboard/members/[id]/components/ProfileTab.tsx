@@ -9,6 +9,7 @@ import { doc, updateDoc, addDoc, collection } from 'firebase/firestore';
 import { useGymStore } from '@/store';
 import { membershipEngine } from '@/lib/engines/membershipEngine';
 import toast from 'react-hot-toast';
+import RenewalWizardModal from '../../components/RenewalWizardModal';
 
 export default function ProfileTab({ member }: { member: any }) {
   const { fetchMembers } = useGymStore();
@@ -770,6 +771,13 @@ export default function ProfileTab({ member }: { member: any }) {
           </div>
         )}
       </AnimatePresence>
+
+      {/* ── RENEWAL WIZARD MODAL ── */}
+      <RenewalWizardModal
+        isOpen={showRenewModal}
+        member={member}
+        onClose={() => setShowRenewModal(false)}
+      />
     </div>
   );
 }
