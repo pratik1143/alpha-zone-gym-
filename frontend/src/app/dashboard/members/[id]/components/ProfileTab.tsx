@@ -5,15 +5,32 @@ import { Camera, Edit2, MapPin, Phone, Mail, Droplet, Activity, User, Briefcase,
 import { motion, AnimatePresence } from 'framer-motion';
 import { cleanPlanName, parsePlanSegments } from '@/lib/utils';
 import { db } from '@/lib/firebase';
-import { doc, updateDoc } from 'firebase/firestore';
+import { doc, updateDoc, addDoc, collection } from 'firebase/firestore';
 import { useGymStore } from '@/store';
+import { membershipEngine } from '@/lib/engines/membershipEngine';
 import toast from 'react-hot-toast';
 
 export default function ProfileTab({ member }: { member: any }) {
   const { fetchMembers } = useGymStore();
+  const plans = useGymStore(s => s.plans);
+
   const [showEditExpiryModal, setShowEditExpiryModal] = useState(false);
   const [customExpiryDate, setCustomExpiryDate] = useState(member.expiryDate || new Date().toISOString().split('T')[0]);
   const [savingExpiry, setSavingExpiry] = useState(false);
+
+  // Renew Modal States
+  const [showRenewModal, setShowRenewModal] = useState(false);
+  const [renewPlan, setRenewPlan] = useState(member.plan || '1 Month');
+  const [renewPrice, setRenewPrice] = useState<number>(member.price || member.amount || 1000);
+  const [renewPaymentMethod, setRenewPaymentMethod] = useState('UPI');
+  const [renewStartDateOption, setRenewStartDateOption] = useState<'extend' | 'today'>('extend');
+  const [savingRenew, setSavingRenew] = useState(false);
+
+  // Freeze Modal States
+  const [showFreezeModal, setShowFreezeModal] = useState(false);
+  const [freezeDays, setFreezeDays] = useState(7);
+  const [freezeReason, setFreezeReason] = useState('Travel / Vacation');
+  const [savingFreeze, setSavingFreeze] = useState(false);
 
   const handleUpdateExpiry = async (targetDateStr: string) => {
     setSavingExpiry(true);
@@ -46,6 +63,149 @@ export default function ProfileTab({ member }: { member: any }) {
       toast.error('Failed to update expiry date: ' + err.message);
     } finally {
       setSavingExpiry(false);
+    }
+  };
+
+  const handleRenewSubmit = async () => {
+    if (!member || !member.id) return;
+    setSavingRenew(true);
+    try {
+      const todayStr = new Date().toISOString().split('T')[0];
+      
+      let baseStartDate = todayStr;
+      if (renewStartDateOption === 'extend' && member.expiryDate && member.expiryDate > todayStr) {
+        baseStartDate = member.expiryDate;
+      }
+
+      const newExpiry = membershipEngine.calculatePlanExpiryDate(renewPlan, baseStartDate, plans);
+      const daysLeftCount = membershipEngine.calculateDaysLeft(newExpiry);
+
+      const invoiceId = 'INV-' + Math.floor(100000 + Math.random() * 900000);
+      const newPayment = {
+        memberId: member.id,
+        memberName: member.name,
+        amount: Number(renewPrice) || 0,
+        paid: Number(renewPrice) || 0,
+        plan: renewPlan,
+        method: renewPaymentMethod,
+        status: 'paid',
+        invoice: invoiceId,
+        date: todayStr,
+        createdAt: new Date().toISOString()
+      };
+
+      await addDoc(collection(db, 'payments'), newPayment);
+
+      const newHistoryItem = {
+        packageName: renewPlan,
+        startDate: baseStartDate,
+        expiryDate: newExpiry,
+        amount: Number(renewPrice) || 0,
+        invoiceNumber: invoiceId,
+        renewedAt: new Date().toISOString()
+      };
+
+      const existingHistory = Array.isArray(member.membershipHistory) ? member.membershipHistory : [];
+      const updatedHistory = [newHistoryItem, ...existingHistory];
+
+      await updateDoc(doc(db, 'members', member.id), {
+        plan: renewPlan,
+        price: Number(renewPrice) || member.price || 1000,
+        amount: Number(renewPrice) || member.amount || 1000,
+        totalBilled: Number(renewPrice) || member.totalBilled || 1000,
+        totalPaid: Number(renewPrice) || member.totalPaid || 1000,
+        expiryDate: newExpiry,
+        daysLeft: daysLeftCount,
+        status: 'active',
+        paymentStatus: 'paid',
+        membershipHistory: updatedHistory,
+        updatedAt: new Date().toISOString()
+      });
+
+      member.plan = renewPlan;
+      member.expiryDate = newExpiry;
+      member.daysLeft = daysLeftCount;
+      member.status = 'active';
+      member.membershipHistory = updatedHistory;
+
+      toast.success(`🎉 Membership renewed for ${renewPlan}! New expiry: ${newExpiry}`);
+      setShowRenewModal(false);
+      fetchMembers();
+    } catch (err: any) {
+      toast.error('Failed to renew membership: ' + err.message);
+    } finally {
+      setSavingRenew(false);
+    }
+  };
+
+  const handleFreezeSubmit = async () => {
+    if (!member || !member.id) return;
+    setSavingFreeze(true);
+    try {
+      const todayStr = new Date().toISOString().split('T')[0];
+      const isCurrentlyFrozen = member.status === 'frozen';
+
+      if (isCurrentlyFrozen) {
+        const freezeStart = member.frozenStartDate || todayStr;
+        const startD = new Date(freezeStart);
+        const nowD = new Date();
+        const frozenDurationDays = Math.max(1, Math.ceil((nowD.getTime() - startD.getTime()) / (1000 * 60 * 60 * 24)));
+
+        const oldExpiry = new Date(member.expiryDate || todayStr);
+        const newExpiryDate = new Date(oldExpiry.getTime() + frozenDurationDays * 24 * 60 * 60 * 1000);
+        const newExpiryStr = newExpiryDate.toISOString().split('T')[0];
+        const newDaysLeft = membershipEngine.calculateDaysLeft(newExpiryStr);
+
+        await updateDoc(doc(db, 'members', member.id), {
+          status: 'active',
+          expiryDate: newExpiryStr,
+          daysLeft: newDaysLeft,
+          frozenStartDate: null,
+          unfrozenAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        });
+
+        member.status = 'active';
+        member.expiryDate = newExpiryStr;
+        member.daysLeft = newDaysLeft;
+
+        toast.success(`⚡ Membership Unfrozen! Expiry extended by ${frozenDurationDays} days to ${newExpiryStr}`);
+      } else {
+        const daysToFreeze = Number(freezeDays) || 7;
+        const currentExpiry = new Date(member.expiryDate || todayStr);
+        const newExpiryDate = new Date(currentExpiry.getTime() + daysToFreeze * 24 * 60 * 60 * 1000);
+        const newExpiryStr = newExpiryDate.toISOString().split('T')[0];
+
+        const freezeItem = {
+          frozenAt: todayStr,
+          days: daysToFreeze,
+          reason: freezeReason,
+          newExpiryDate: newExpiryStr
+        };
+
+        const existingFreezeHistory = Array.isArray(member.freezeHistory) ? member.freezeHistory : [];
+
+        await updateDoc(doc(db, 'members', member.id), {
+          status: 'frozen',
+          frozenStartDate: todayStr,
+          freezeReason: freezeReason,
+          expiryDate: newExpiryStr,
+          freezeHistory: [freezeItem, ...existingFreezeHistory],
+          updatedAt: new Date().toISOString()
+        });
+
+        member.status = 'frozen';
+        member.expiryDate = newExpiryStr;
+
+        toast.success(`❄️ Membership Frozen for ${daysToFreeze} days (until new expiry ${newExpiryStr})`);
+      }
+
+      setShowFreezeModal(false);
+      fetchMembers();
+    } catch (err: any) {
+      toast.error('Failed to freeze/unfreeze membership: ' + err.message);
+    } finally {
+      setSavingFreeze(false);
     }
   };
 
@@ -143,11 +303,21 @@ export default function ProfileTab({ member }: { member: any }) {
             })()}
 
             <div className="flex gap-3">
-              <button className="flex-1 py-3 bg-white text-slate-900 rounded-xl text-xs font-black transition-all hover:bg-slate-100 flex items-center justify-center gap-2">
-                <CreditCard size={14} /> Renew Plan
+              <button 
+                onClick={() => setShowRenewModal(true)}
+                className="flex-1 py-3 bg-white text-slate-900 rounded-xl text-xs font-black transition-all hover:bg-slate-100 flex items-center justify-center gap-2 border-none cursor-pointer shadow-md active:scale-95"
+              >
+                <CreditCard size={14} className="text-blue-600" /> Renew Plan
               </button>
-              <button className="flex-1 py-3 bg-white/10 border border-white/20 text-white rounded-xl text-xs font-black transition-all hover:bg-white/20 flex items-center justify-center gap-2">
-                <Snowflake size={14} /> Freeze
+              <button 
+                onClick={() => member.status === 'frozen' ? handleFreezeSubmit() : setShowFreezeModal(true)}
+                className={`flex-1 py-3 border rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95 ${
+                  member.status === 'frozen'
+                    ? 'bg-amber-500 text-slate-900 border-amber-400 hover:bg-amber-400'
+                    : 'bg-white/10 border-white/20 text-white hover:bg-white/20'
+                }`}
+              >
+                <Snowflake size={14} /> {member.status === 'frozen' ? '⚡ Unfreeze' : 'Freeze'}
               </button>
             </div>
           </div>
@@ -368,6 +538,232 @@ export default function ProfileTab({ member }: { member: any }) {
                   className="flex-1 py-3 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-xs border-none cursor-pointer shadow-md disabled:opacity-50"
                 >
                   {savingExpiry ? 'Saving...' : 'Save Expiry Date'}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ── RENEW MEMBERSHIP MODAL ── */}
+      <AnimatePresence>
+        {showRenewModal && (
+          <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 15 }}
+              className="bg-white rounded-3xl shadow-2xl border border-slate-200 p-6 max-w-md w-full relative space-y-4 text-slate-900 z-10"
+            >
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div className="flex items-center gap-2">
+                  <CreditCard size={20} className="text-blue-600" />
+                  <h3 className="font-extrabold text-slate-900 text-lg">Renew Membership Plan</h3>
+                </div>
+                <button
+                  onClick={() => setShowRenewModal(false)}
+                  className="text-slate-400 hover:text-slate-700 bg-transparent border-none cursor-pointer p-1"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-[10px] font-black uppercase text-slate-500 mb-1.5">Select Plan / Package</label>
+                  <select
+                    value={renewPlan}
+                    onChange={(e) => {
+                      const sel = e.target.value;
+                      setRenewPlan(sel);
+                      const foundP = plans.find((p: any) => p.name === sel || p.id === sel);
+                      if (foundP && foundP.price) setRenewPrice(foundP.price);
+                    }}
+                    className="w-full h-11 bg-slate-50 border border-slate-300 rounded-xl px-3 font-bold text-slate-900 text-sm focus:outline-none focus:border-blue-500 cursor-pointer"
+                  >
+                    {plans && plans.length > 0 ? (
+                      plans.map((p: any) => (
+                        <option key={p.id || p.name} value={p.name}>
+                          {p.name} — ₹{(p.price || 0).toLocaleString('en-IN')}
+                        </option>
+                      ))
+                    ) : (
+                      <>
+                        <option value="1 Month">1 Month — ₹1,000</option>
+                        <option value="3 Months">3 Months — ₹2,500</option>
+                        <option value="6 Months">6 Months — ₹4,500</option>
+                        <option value="1 Year">1 Year — ₹8,000</option>
+                        <option value="10 Days">10 Days — ₹800</option>
+                      </>
+                    )}
+                  </select>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-black uppercase text-slate-500 mb-1.5">Collected Amount (₹)</label>
+                    <input
+                      type="number"
+                      value={renewPrice}
+                      onChange={(e) => setRenewPrice(Number(e.target.value))}
+                      className="w-full h-11 bg-slate-50 border border-slate-300 rounded-xl px-3 font-mono font-black text-slate-900 text-sm focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-black uppercase text-slate-500 mb-1.5">Payment Method</label>
+                    <select
+                      value={renewPaymentMethod}
+                      onChange={(e) => setRenewPaymentMethod(e.target.value)}
+                      className="w-full h-11 bg-slate-50 border border-slate-300 rounded-xl px-3 font-bold text-slate-900 text-sm focus:outline-none focus:border-blue-500 cursor-pointer"
+                    >
+                      <option value="UPI">UPI / QR</option>
+                      <option value="Cash">Cash</option>
+                      <option value="Card">Credit / Debit Card</option>
+                      <option value="NetBanking">NetBanking</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-black uppercase text-slate-500 mb-1.5">Renewal Start Date</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setRenewStartDateOption('extend')}
+                      className={`p-2.5 rounded-xl border text-xs font-bold transition-all text-left cursor-pointer ${
+                        renewStartDateOption === 'extend'
+                          ? 'bg-blue-50 border-blue-500 text-blue-700'
+                          : 'bg-slate-50 border-slate-200 text-slate-600'
+                      }`}
+                    >
+                      <div>📅 Extend from Expiry</div>
+                      <div className="text-[9px] text-slate-400 font-normal mt-0.5">{member.expiryDate || 'Current Expiry'}</div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setRenewStartDateOption('today')}
+                      className={`p-2.5 rounded-xl border text-xs font-bold transition-all text-left cursor-pointer ${
+                        renewStartDateOption === 'today'
+                          ? 'bg-blue-50 border-blue-500 text-blue-700'
+                          : 'bg-slate-50 border-slate-200 text-slate-600'
+                      }`}
+                    >
+                      <div>⚡ Start Today</div>
+                      <div className="text-[9px] text-slate-400 font-normal mt-0.5">{new Date().toISOString().split('T')[0]}</div>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowRenewModal(false)}
+                  className="flex-1 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs border-none cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleRenewSubmit}
+                  disabled={savingRenew}
+                  className="flex-1 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black text-xs border-none cursor-pointer shadow-md disabled:opacity-50"
+                >
+                  {savingRenew ? 'Processing...' : 'Confirm Renewal'}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ── FREEZE MEMBERSHIP MODAL ── */}
+      <AnimatePresence>
+        {showFreezeModal && (
+          <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 15 }}
+              className="bg-white rounded-3xl shadow-2xl border border-slate-200 p-6 max-w-md w-full relative space-y-4 text-slate-900 z-10"
+            >
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div className="flex items-center gap-2">
+                  <Snowflake size={20} className="text-cyan-500" />
+                  <h3 className="font-extrabold text-slate-900 text-lg">Freeze Membership</h3>
+                </div>
+                <button
+                  onClick={() => setShowFreezeModal(false)}
+                  className="text-slate-400 hover:text-slate-700 bg-transparent border-none cursor-pointer p-1"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-[10px] font-black uppercase text-slate-500 mb-1.5">Freeze Duration</label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[7, 14, 30].map((days) => (
+                      <button
+                        key={days}
+                        type="button"
+                        onClick={() => setFreezeDays(days)}
+                        className={`py-2.5 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
+                          freezeDays === days
+                            ? 'bg-cyan-50 border-cyan-500 text-cyan-700'
+                            : 'bg-slate-50 border-slate-200 text-slate-600'
+                        }`}
+                      >
+                        {days} Days
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-black uppercase text-slate-500 mb-1.5">Reason for Freeze</label>
+                  <select
+                    value={freezeReason}
+                    onChange={(e) => setFreezeReason(e.target.value)}
+                    className="w-full h-11 bg-slate-50 border border-slate-300 rounded-xl px-3 font-bold text-slate-900 text-sm focus:outline-none focus:border-cyan-500 cursor-pointer"
+                  >
+                    <option value="Travel / Vacation">✈️ Travel / Vacation</option>
+                    <option value="Medical / Health Issue">🏥 Medical / Health Issue</option>
+                    <option value="Exams / Work Emergency">📚 Exams / Work Emergency</option>
+                    <option value="Personal Reason">👤 Personal Reason</option>
+                  </select>
+                </div>
+
+                <div className="p-3 bg-cyan-50 border border-cyan-100 rounded-2xl text-xs text-cyan-800 space-y-1">
+                  <div className="font-bold flex items-center gap-1">
+                    <Clock size={14} /> Automatic Expiry Extension
+                  </div>
+                  <p className="text-[11px] leading-relaxed opacity-90">
+                    Freezing membership for {freezeDays} days will shift current expiry from <strong className="font-mono">{member.expiryDate || 'N/A'}</strong> to{' '}
+                    <strong className="font-mono text-cyan-900">
+                      {new Date(new Date(member.expiryDate || new Date()).getTime() + freezeDays * 86400000).toISOString().split('T')[0]}
+                    </strong>.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowFreezeModal(false)}
+                  className="flex-1 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs border-none cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleFreezeSubmit}
+                  disabled={savingFreeze}
+                  className="flex-1 py-3 rounded-xl bg-cyan-600 hover:bg-cyan-700 text-white font-black text-xs border-none cursor-pointer shadow-md disabled:opacity-50"
+                >
+                  {savingFreeze ? 'Freezing...' : `Freeze for ${freezeDays} Days`}
                 </button>
               </div>
             </motion.div>
