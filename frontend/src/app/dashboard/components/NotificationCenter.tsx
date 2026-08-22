@@ -314,7 +314,7 @@ export default function NotificationCenter({ hideIcon = false }: { hideIcon?: bo
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 10, scale: 0.95 }}
             transition={{ duration: 0.15 }}
-            className="absolute top-full -right-24 md:-right-28 mt-3 w-80 max-w-[calc(100vw-32px)] bg-white rounded-3xl shadow-[0_20px_60px_rgba(0,0,0,0.18)] border border-slate-200/80 overflow-hidden z-[9999] flex flex-col"
+            className="absolute top-full left-1/2 -translate-x-1/2 md:translate-x-0 md:left-auto md:right-0 mt-3 w-80 max-w-[calc(100vw-32px)] bg-white rounded-3xl shadow-[0_20px_60px_rgba(0,0,0,0.18)] border border-slate-200/80 overflow-hidden z-[9999] flex flex-col"
           >
             <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
               <h3 className="text-sm font-black text-slate-800">Notifications</h3>

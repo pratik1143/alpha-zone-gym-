@@ -333,15 +333,15 @@ export default function DashboardPage() {
   }).length;
 
   return (
-    <div className="flex flex-col gap-6 w-full text-slate-800 text-left">
+    <div className="flex flex-col gap-3.5 w-full text-slate-800 text-left">
       
       {/* Header Title Area & Switcher */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-2.5">
         <div>
-          <h2 className="font-rowdies text-3xl md:text-4xl font-bold text-slate-900 uppercase tracking-tight leading-none">
+          <h2 className="font-rowdies text-2xl font-bold text-slate-900 uppercase tracking-tight leading-none">
             {viewMode === 'owner' ? 'Owner Dashboard' : 'Receptionist Console'}
           </h2>
-          <p className="text-slate-500 text-xs mt-1.5 font-medium">
+          <p className="text-slate-500 text-[11px] mt-1 font-medium">
             {viewMode === 'owner' 
               ? 'Manage gym operations, expected revenue loss, and member retention rates.' 
               : 'Track daily member follow-ups, at-risk members, and turnstile check-ins.'}
@@ -349,12 +349,12 @@ export default function DashboardPage() {
         </div>
 
         {/* Device Status & View mode toggle pill */}
-        <div className="flex flex-col md:flex-row items-end md:items-center gap-3">
-          <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-100 border border-slate-200 rounded-xl shadow-sm text-[10px] font-black uppercase tracking-wider text-slate-600">
-            <span className={`w-2 h-2 rounded-full ${deviceStatus === 'connected' ? 'bg-green-500' : deviceStatus === 'syncing' ? 'bg-yellow-500 animate-pulse' : 'bg-red-500'}`} />
+        <div className="flex flex-col md:flex-row items-end md:items-center gap-2">
+          <div className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-100 border border-slate-200 rounded-lg shadow-sm text-[9.5px] font-black uppercase tracking-wider text-slate-600">
+            <span className={`w-1.5 h-1.5 rounded-full ${deviceStatus === 'connected' ? 'bg-green-500' : deviceStatus === 'syncing' ? 'bg-yellow-500 animate-pulse' : 'bg-red-500'}`} />
             {deviceStatus === 'connected' ? 'Device Online' : deviceStatus === 'syncing' ? 'Syncing...' : 'Device Offline'}
           </div>
-          <div className="px-3 py-1 bg-slate-900 text-[#d4ff00] text-[10px] font-black uppercase tracking-widest rounded-full shadow-sm">
+          <div className="px-2.5 py-1 bg-slate-900 text-[#d4ff00] text-[9.5px] font-black uppercase tracking-widest rounded-full shadow-sm">
             Owner Command Center
           </div>
         </div>
@@ -363,18 +363,18 @@ export default function DashboardPage() {
       {viewMode === 'owner' ? (
         <>
           {/* Owner Analytics Metrics Row - 4 Clickable Action Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 animate-fade-in">
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 animate-fade-in">
             {/* Card 1: Today's Followups */}
             <div 
               onClick={() => router.push('/dashboard/follow-up')}
-              className="bg-white border border-slate-100 p-5 rounded-[26px] shadow-sm flex items-center gap-4 hover:border-amber-400 hover:shadow-md transition-all cursor-pointer group"
+              className="bg-white border border-slate-100 p-3.5 rounded-2xl shadow-sm flex items-center gap-3 hover:border-amber-400 hover:shadow-md transition-all cursor-pointer group"
             >
-              <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
-                <AlertTriangle size={24} />
+              <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                <AlertTriangle size={18} />
               </div>
               <div>
-                <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">Today's Followups</span>
-                <h3 className="text-xl font-black text-slate-900 mt-0.5">{todaysCount} Follow-ups</h3>
+                <span className="text-[9px] font-black uppercase tracking-wider text-slate-400 block">Today's Followups</span>
+                <h3 className="text-base font-black text-slate-900 mt-0.5">{todaysCount} Follow-ups</h3>
                 <p className="text-[8px] text-amber-600 font-semibold mt-0.5">Click to view follow-up list →</p>
               </div>
             </div>
@@ -382,14 +382,14 @@ export default function DashboardPage() {
             {/* Card 2: Total Enquiry */}
             <div 
               onClick={() => router.push('/dashboard/enquiries')}
-              className="bg-white border border-slate-100 p-5 rounded-[26px] shadow-sm flex items-center gap-4 hover:border-blue-400 hover:shadow-md transition-all cursor-pointer group"
+              className="bg-white border border-slate-100 p-3.5 rounded-2xl shadow-sm flex items-center gap-3 hover:border-blue-400 hover:shadow-md transition-all cursor-pointer group"
             >
-              <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
-                <ClipboardList size={24} />
+              <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                <ClipboardList size={18} />
               </div>
               <div>
-                <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">Total Enquiry</span>
-                <h3 className="text-xl font-black text-slate-900 mt-0.5">{enquiriesCount} Enquiries</h3>
+                <span className="text-[9px] font-black uppercase tracking-wider text-slate-400 block">Total Enquiry</span>
+                <h3 className="text-base font-black text-slate-900 mt-0.5">{enquiriesCount} Enquiries</h3>
                 <p className="text-[8px] text-blue-600 font-semibold mt-0.5">Click to view enquiry leads →</p>
               </div>
             </div>
@@ -397,14 +397,14 @@ export default function DashboardPage() {
             {/* Card 3: Expiring Soon Clients */}
             <div 
               onClick={() => router.push('/dashboard/expired')}
-              className="bg-white border border-slate-100 p-5 rounded-[26px] shadow-sm flex items-center gap-4 hover:border-orange-400 hover:shadow-md transition-all cursor-pointer group"
+              className="bg-white border border-slate-100 p-3.5 rounded-2xl shadow-sm flex items-center gap-3 hover:border-orange-400 hover:shadow-md transition-all cursor-pointer group"
             >
-              <div className="w-12 h-12 rounded-2xl bg-orange-50 text-orange-600 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
-                <Clock size={24} />
+              <div className="w-9 h-9 rounded-xl bg-orange-50 text-orange-600 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                <Clock size={18} />
               </div>
               <div>
-                <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">Expiring Soon Clients</span>
-                <h3 className="text-xl font-black text-slate-900 mt-0.5">{expiringSoonCount} Clients</h3>
+                <span className="text-[9px] font-black uppercase tracking-wider text-slate-400 block">Expiring Soon Clients</span>
+                <h3 className="text-base font-black text-slate-900 mt-0.5">{expiringSoonCount} Clients</h3>
                 <p className="text-[8px] text-orange-600 font-semibold mt-0.5">Click to view expiring list →</p>
               </div>
             </div>
@@ -412,14 +412,14 @@ export default function DashboardPage() {
             {/* Card 4: Today's Collection */}
             <div 
               onClick={() => router.push('/dashboard/billing')}
-              className="bg-white border border-slate-100 p-5 rounded-[26px] shadow-sm flex items-center gap-4 hover:border-emerald-400 hover:shadow-md transition-all cursor-pointer group"
+              className="bg-white border border-slate-100 p-3.5 rounded-2xl shadow-sm flex items-center gap-3 hover:border-emerald-400 hover:shadow-md transition-all cursor-pointer group"
             >
-              <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
-                <DollarSign size={24} />
+              <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                <DollarSign size={18} />
               </div>
               <div>
-                <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">Today's Collection</span>
-                <h3 className="text-xl font-black text-emerald-600 mt-0.5">
+                <span className="text-[9px] font-black uppercase tracking-wider text-slate-400 block">Today's Collection</span>
+                <h3 className="text-base font-black text-emerald-600 mt-0.5">
                   ₹{todaysCollection.toLocaleString('en-IN')}
                 </h3>
                 <p className="text-[8px] text-emerald-600 font-semibold mt-0.5">Click to view billing ledger →</p>
@@ -428,24 +428,24 @@ export default function DashboardPage() {
           </div>
 
           {/* Top Row Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
             
             {/* Card 1: Today Inside (Tasks Card) */}
-            <div className="bg-white border border-slate-100 p-5 rounded-[26px] shadow-sm flex flex-col justify-between min-h-[140px] relative overflow-hidden group hover:border-black/10 transition-colors">
+            <div className="bg-white border border-slate-100 p-3.5 rounded-2xl shadow-sm flex flex-col justify-between min-h-[110px] relative overflow-hidden group hover:border-black/10 transition-colors">
               <div className="flex justify-between items-center text-slate-400">
-                <span className="text-[10px] font-black uppercase tracking-wider">Members Inside</span>
-                <div className="w-6 h-6 rounded-full bg-slate-50 border border-slate-100 flex items-center justify-center text-black">
-                  <ArrowUpRight size={12} />
+                <span className="text-[9px] font-black uppercase tracking-wider">Members Inside</span>
+                <div className="w-5 h-5 rounded-full bg-slate-50 border border-slate-100 flex items-center justify-center text-black">
+                  <ArrowUpRight size={10} />
                 </div>
               </div>
-              <div className="mt-3">
-                <h3 className="text-3xl font-black text-slate-900 leading-none">
+              <div className="mt-2">
+                <h3 className="text-2xl font-black text-slate-900 leading-none">
                   {liveCount}
                 </h3>
-                <div className="h-1.5 bg-slate-100 rounded-full mt-3 overflow-hidden flex">
+                <div className="h-1.5 bg-slate-100 rounded-full mt-2 overflow-hidden flex">
                   <div className="h-full bg-black" style={{ width: `${Math.min(100, (liveCount / 50) * 100)}%` }} />
                 </div>
-                <div className="flex justify-between text-[8px] text-slate-400 font-bold mt-1.5">
+                <div className="flex justify-between text-[8px] text-slate-400 font-bold mt-1">
                   <span>Inside Now</span>
                   <span>Cap 50</span>
                 </div>
@@ -453,24 +453,24 @@ export default function DashboardPage() {
             </div>
 
             {/* Card 2: Core Team / Active Members Card */}
-            <div className="bg-[#d4ff00] border border-black/5 p-5 rounded-[26px] shadow-sm flex flex-col justify-between min-h-[140px] relative overflow-hidden">
+            <div className="bg-[#d4ff00] border border-black/5 p-3.5 rounded-2xl shadow-sm flex flex-col justify-between min-h-[110px] relative overflow-hidden">
               <div className="flex justify-between items-center text-black">
-                <span className="text-[10px] font-black uppercase tracking-wider">Active Pass</span>
-                <span className="text-[8.5px] bg-black text-white px-2 py-0.5 rounded-full font-bold uppercase">Gold</span>
+                <span className="text-[9px] font-black uppercase tracking-wider">Active Pass</span>
+                <span className="text-[8px] bg-black text-white px-2 py-0.5 rounded-full font-bold uppercase">Gold</span>
               </div>
               <div className="mt-2 text-left">
-                <h3 className="text-xl font-black text-black leading-none">
+                <h3 className="text-base font-black text-black leading-none">
                   {realtimeMembers ? realtimeMembers.filter(m => m.status === 'active').length : 0} Members
                 </h3>
                 
-                <div className="flex items-center gap-1.5 mt-3">
-                  <div className="flex -space-x-2.5 overflow-hidden">
+                <div className="flex items-center gap-1.5 mt-2">
+                  <div className="flex -space-x-2 overflow-hidden">
                     {realtimeMembers ? realtimeMembers.slice(0, 3).map((m, idx) => {
                        const colors = ['bg-amber-400', 'bg-violet-400', 'bg-rose-400'];
                        return (
                          <div 
                            key={idx} 
-                           className={`w-6 h-6 rounded-full border-2 border-[#d4ff00] ${colors[idx % 3]} text-black text-[8px] font-black flex items-center justify-center`}
+                           className={`w-5 h-5 rounded-full border border-[#d4ff00] ${colors[idx % 3]} text-black text-[7.5px] font-black flex items-center justify-center`}
                          >
                            {getInitials(m.name)}
                          </div>
@@ -478,7 +478,7 @@ export default function DashboardPage() {
                     }) : null}
                   </div>
                   {realtimeMembers && realtimeMembers.length > 3 && (
-                    <span className="text-[9px] bg-black text-white px-2 py-0.5 rounded-full font-black">
+                    <span className="text-[8px] bg-black text-white px-1.5 py-0.5 rounded-full font-black">
                       +{realtimeMembers.length - 3}
                     </span>
                   )}
@@ -487,17 +487,17 @@ export default function DashboardPage() {
             </div>
 
             {/* Card 3: Staff Live Widget */}
-            <div className="bg-white border border-slate-100 p-4 rounded-[26px] shadow-sm flex flex-col justify-between min-h-[140px] text-xs font-semibold">
+            <div className="bg-white border border-slate-100 p-3 rounded-2xl shadow-sm flex flex-col justify-between min-h-[110px] text-xs font-semibold">
               <div className="flex justify-between items-center text-slate-400">
-                <span className="text-[10px] font-black uppercase tracking-wider flex items-center gap-1">
+                <span className="text-[9px] font-black uppercase tracking-wider flex items-center gap-1">
                   👨‍💼 Staff Live
                 </span>
-                <span className="text-[8px] bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded-full font-black uppercase tracking-widest border border-emerald-100 animate-pulse">
+                <span className="text-[7.5px] bg-emerald-50 text-emerald-600 px-1.5 py-0.5 rounded-full font-black uppercase tracking-widest border border-emerald-100 animate-pulse">
                   Live
                 </span>
               </div>
               
-              <div className="mt-2 space-y-1 text-[9.5px]">
+              <div className="mt-1 space-y-0.5 text-[9px]">
                 {[
                   { label: 'Trainers', inside: employees.filter(e => e.role === 'Trainer' && e.currentStatus === 'Inside').length, total: employees.filter(e => e.role === 'Trainer').length, iconColor: 'bg-emerald-500' },
                   { label: 'Reception', inside: employees.filter(e => e.role === 'Reception' && e.currentStatus === 'Inside').length, total: employees.filter(e => e.role === 'Reception').length, iconColor: 'bg-blue-500' },
@@ -519,7 +519,7 @@ export default function DashboardPage() {
                 })}
               </div>
 
-              <div className="mt-2 pt-2 border-t border-slate-100 flex justify-between items-center text-[9px]">
+              <div className="mt-1 pt-1 border-t border-slate-100 flex justify-between items-center text-[8.5px]">
                 <span className="text-slate-400 font-bold">Total Staff Inside</span>
                 <span className="font-black text-slate-900 font-mono">
                   {employees.filter(e => e.currentStatus === 'Inside').length}
@@ -531,97 +531,97 @@ export default function DashboardPage() {
             <button 
               onClick={handleManualUnlock}
               disabled={gateUnlocked}
-              className="bg-transparent border-2 border-dashed border-black/15 hover:border-black/35 rounded-[26px] p-5 flex flex-col items-center justify-center min-h-[140px] transition-all cursor-pointer group text-center"
+              className="bg-transparent border-2 border-dashed border-black/15 hover:border-black/35 rounded-2xl p-3.5 flex flex-col items-center justify-center min-h-[110px] transition-all cursor-pointer group text-center"
             >
-              <div className={`w-10 h-10 rounded-full border-2 border-dashed ${gateUnlocked ? 'bg-black border-black text-[#d4ff00]' : 'border-black/25 text-black group-hover:bg-black group-hover:text-white'} flex items-center justify-center transition-all`}>
-                {gateUnlocked ? <Unlock size={16} /> : <Plus size={16} />}
+              <div className={`w-8 h-8 rounded-full border-2 border-dashed ${gateUnlocked ? 'bg-black border-black text-[#d4ff00]' : 'border-black/25 text-black group-hover:bg-black group-hover:text-white'} flex items-center justify-center transition-all`}>
+                {gateUnlocked ? <Unlock size={14} /> : <Plus size={14} />}
               </div>
-              <span className="text-xs font-black uppercase tracking-wider text-black mt-3 block">
+              <span className="text-[11px] font-black uppercase tracking-wider text-black mt-2 block">
                 {gateUnlocked ? 'Gate Unlocked' : 'Unlock Turnstile'}
               </span>
-              <span className="text-[8px] text-slate-500 font-bold mt-1">ESSL Gate Trigger Bridge</span>
+              <span className="text-[7.5px] text-slate-500 font-bold mt-0.5">ESSL Gate Trigger Bridge</span>
             </button>
 
           </div>
 
           {/* Inconsistency Alerts Row Widget */}
-          <div className="bg-white border border-slate-100 rounded-[28px] p-5 shadow-sm space-y-3.5 text-left">
+          <div className="bg-white border border-slate-100 rounded-2xl p-3.5 shadow-sm space-y-2.5 text-left">
             <div className="flex justify-between items-center">
-              <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 flex items-center gap-1.5 font-display">
+              <span className="text-[9px] font-black uppercase tracking-wider text-slate-400 flex items-center gap-1.5 font-display">
                 ⚠️ Attendance Inconsistency Alerts
               </span>
-              <span className="text-[8px] bg-rose-50 text-rose-600 px-2 py-0.5 rounded-full font-black uppercase tracking-widest border border-rose-100 animate-pulse">
+              <span className="text-[7.5px] bg-rose-50 text-rose-600 px-2 py-0.5 rounded-full font-black uppercase tracking-widest border border-rose-100 animate-pulse">
                 Action Required
               </span>
             </div>
             
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {[
                 { label: 'Members Missing Today', value: membersMissing, sub: 'Needs punch today', color: 'bg-slate-50 text-slate-750 border-slate-100' },
                 { label: 'Employees Missing Today', value: employeesMissing, sub: 'Staff attendance status', color: 'bg-slate-50 text-slate-750 border-slate-100' },
                 { label: 'Needs Follow-up', value: needsFollowUp, sub: '2-3 Days Absent', color: 'bg-amber-50 text-amber-750 border-amber-100' },
                 { label: 'Critical (10+ Days)', value: critical, sub: 'Inconsistent attendance', color: 'bg-rose-50 text-rose-755 border-rose-100' }
               ].map((item, idx) => (
-                <div key={idx} className={`p-4 rounded-2xl border flex flex-col justify-between min-h-[90px] ${item.color}`}>
-                  <span className="text-[8.5px] font-black uppercase tracking-wider opacity-60 leading-none">{item.label}</span>
-                  <div className="text-xl font-black mt-1.5 leading-none font-mono">{item.value}</div>
-                  <span className="text-[8.5px] font-bold mt-1 opacity-70 leading-none">{item.sub}</span>
+                <div key={idx} className={`p-2.5 rounded-xl border flex flex-col justify-between min-h-[72px] ${item.color}`}>
+                  <span className="text-[8px] font-black uppercase tracking-wider opacity-60 leading-none">{item.label}</span>
+                  <div className="text-lg font-black mt-1 leading-none font-mono">{item.value}</div>
+                  <span className="text-[8px] font-bold mt-0.5 opacity-70 leading-none">{item.sub}</span>
                 </div>
               ))}
             </div>
           </div>
 
           {/* Middle Row: Composed Chart & Live Activity Hub */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
             
             {/* Chart Card */}
-            <div className="lg:col-span-2 bg-black text-white p-5 rounded-[28px] shadow-lg flex flex-col md:flex-row gap-6 justify-between min-h-[260px] relative overflow-hidden">
+            <div className="lg:col-span-2 bg-black text-white p-3.5 rounded-2xl shadow-lg flex flex-col md:flex-row gap-4 justify-between min-h-[200px] relative overflow-hidden">
               <div className="absolute right-0 top-0 w-24 h-24 rounded-full bg-white/5 blur-xl pointer-events-none" />
 
               <div className="flex-1 flex flex-col justify-between">
                 <div>
-                  <span className="text-[9px] font-black uppercase tracking-wider text-slate-400">Attendance Intensity</span>
-                  <h4 className="text-sm font-extrabold text-white mt-1 leading-none">Weekly Check-in Distribution</h4>
+                  <span className="text-[8.5px] font-black uppercase tracking-wider text-slate-400">Attendance Intensity</span>
+                  <h4 className="text-xs font-extrabold text-white mt-0.5 leading-none">Weekly Check-in Distribution</h4>
                 </div>
 
-                <div className="h-[140px] w-full mt-4">
+                <div className="h-[110px] w-full mt-2">
                   {isMounted && hasChartData ? (
                     <ResponsiveContainer width="100%" height="100%">
-                      <ComposedChart data={chartData} margin={{ top: 10, right: 0, bottom: 0, left: -40 }}>
-                        <XAxis dataKey="name" stroke="transparent" tick={{ fill: '#64748B', fontSize: 9, fontWeight: 700 }} axisLine={false} tickLine={false} />
-                        <Bar dataKey="checkins" fill="#FFFFFF" radius={[4, 4, 0, 0]} barSize={16} />
+                      <ComposedChart data={chartData} margin={{ top: 5, right: 0, bottom: 0, left: -40 }}>
+                        <XAxis dataKey="name" stroke="transparent" tick={{ fill: '#64748B', fontSize: 8, fontWeight: 700 }} axisLine={false} tickLine={false} />
+                        <Bar dataKey="checkins" fill="#FFFFFF" radius={[3, 3, 0, 0]} barSize={12} />
                         <Line type="monotone" dataKey="intensity" stroke="#d4ff00" strokeWidth={2} dot={false} />
                       </ComposedChart>
                     </ResponsiveContainer>
                   ) : (
-                    <div className="h-full w-full flex flex-col items-center justify-center text-center gap-2">
-                      <Activity size={18} className="text-slate-700" />
-                      <span className="text-[10px] text-slate-500 font-bold">No biometric data recorded this year</span>
+                    <div className="h-full w-full flex flex-col items-center justify-center text-center gap-1.5">
+                      <Activity size={16} className="text-slate-700" />
+                      <span className="text-[9.5px] text-slate-500 font-bold">No biometric data recorded this year</span>
                     </div>
                   )}
                 </div>
               </div>
 
-              <div className="w-full md:w-[170px] border-t md:border-t-0 md:border-l border-white/10 pt-4 md:pt-0 md:pl-5 flex flex-col justify-between text-left">
+              <div className="w-full md:w-[150px] border-t md:border-t-0 md:border-l border-white/10 pt-3 md:pt-0 md:pl-4 flex flex-col justify-between text-left shrink-0">
                 <div>
-                  <span className="text-[8.5px] font-black uppercase tracking-wider text-slate-400 block">Weekly Syncs</span>
-                  <div className="flex items-center gap-2 mt-2">
-                    <div className="text-2xl font-black text-white">{totalCheckinsThisWeek}</div>
-                    <span className="text-[9px] bg-red-900/50 text-red-400 px-1.5 py-0.5 rounded font-black">-7%</span>
+                  <span className="text-[8px] font-black uppercase tracking-wider text-slate-400 block">Weekly Syncs</span>
+                  <div className="flex items-center gap-1.5 mt-1">
+                    <div className="text-lg font-black text-white">{totalCheckinsThisWeek}</div>
+                    <span className="text-[8px] bg-red-900/50 text-red-400 px-1 py-0.5 rounded font-black">-7%</span>
                   </div>
-                  <p className="text-[7.5px] text-slate-500 font-bold mt-1">Checkins since last week</p>
+                  <p className="text-[7px] text-slate-500 font-bold mt-0.5">Checkins since last week</p>
                 </div>
 
-                <div className="mt-4 border-t border-white/5 pt-3">
-                  <span className="text-[8.5px] font-black uppercase tracking-wider text-slate-400 block">Monthly Syncs</span>
-                  <div className="flex items-center gap-2 mt-2">
-                    <div className="text-2xl font-black text-white">{attendance ? attendance.length : 0}</div>
-                    <span className="text-[9px] bg-emerald-950 text-[#d4ff00] px-1.5 py-0.5 rounded font-black">+13%</span>
+                <div className="mt-2 border-t border-white/5 pt-2">
+                  <span className="text-[8px] font-black uppercase tracking-wider text-slate-400 block">Monthly Syncs</span>
+                  <div className="flex items-center gap-1.5 mt-1">
+                    <div className="text-lg font-black text-white">{attendance ? attendance.length : 0}</div>
+                    <span className="text-[8px] bg-emerald-950 text-[#d4ff00] px-1 py-0.5 rounded font-black">+13%</span>
                   </div>
-                  <p className="text-[7.5px] text-slate-500 font-bold mt-1">Checkins this month</p>
+                  <p className="text-[7px] text-slate-500 font-bold mt-0.5">Checkins this month</p>
                 </div>
 
-                <div className="mt-4 flex items-center gap-3 text-[7.5px] text-slate-500 font-black uppercase">
+                <div className="mt-2 flex items-center gap-2 text-[7px] text-slate-500 font-black uppercase">
                   <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-[#d4ff00]" /> This Year</span>
                   <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-slate-500" /> Last Year</span>
                 </div>
@@ -629,8 +629,8 @@ export default function DashboardPage() {
             </div>
 
             {/* Live Activity Hub Column */}
-            <div className="bg-white border border-slate-100 p-5 rounded-[28px] shadow-sm flex flex-col justify-between min-h-[260px] text-left">
-              <div className="flex justify-between items-center border-b border-slate-50 pb-3">
+            <div className="bg-white border border-slate-100 p-3.5 rounded-2xl shadow-sm flex flex-col justify-between min-h-[200px] text-left">
+              <div className="flex justify-between items-center border-b border-slate-50 pb-2">
                 <div>
                   <h3 className="font-extrabold text-slate-800 text-sm flex items-center gap-1.5">
                     Live Activity Hub

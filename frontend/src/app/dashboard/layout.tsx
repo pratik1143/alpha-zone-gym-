@@ -254,7 +254,7 @@ export default function DashboardLayout({
 
   return (
     <div 
-      className="min-h-screen h-screen w-full relative flex p-5 font-poppins text-slate-800 overflow-hidden"
+      className="min-h-screen h-screen w-full relative flex p-2.5 sm:p-3.5 font-poppins text-slate-800 overflow-hidden"
       style={{
         backgroundImage: "linear-gradient(to bottom right, rgba(20, 20, 25, 0.4), rgba(10, 10, 12, 0.55)), url('/custom_gym_bg.png')",
         backgroundSize: 'cover',
@@ -267,20 +267,20 @@ export default function DashboardLayout({
       <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] rounded-full bg-orange-200/20 blur-[120px] pointer-events-none z-0" />
 
       {/* Back to Site pinterest-style circle button */}
-      <div className="absolute top-8 left-8 z-30">
+      <div className="absolute top-5 left-5 z-30">
         <Link 
           href="/" 
-          className="w-12 h-12 bg-white/90 rounded-full flex items-center justify-center shadow-md hover:scale-105 transition-transform text-black border border-[#EBE3D5] backdrop-blur-sm"
+          className="w-10 h-10 bg-white/90 rounded-full flex items-center justify-center shadow-md hover:scale-105 transition-transform text-black border border-[#EBE3D5] backdrop-blur-sm"
         >
-          <ArrowLeftIcon size={20} />
+          <ArrowLeftIcon size={18} />
         </Link>
       </div>
 
       {/* ─── Main Floating Glass Dashboard Panel ─── */}
-      <div className="w-full h-full rounded-[30px] bg-white/60 backdrop-blur-xl border border-white/80 shadow-2xl p-5 flex flex-col lg:flex-row gap-5 relative z-10 overflow-hidden">
+      <div className="w-full h-full rounded-[24px] bg-white/60 backdrop-blur-xl border border-white/80 shadow-2xl p-3 sm:p-4 flex flex-col lg:flex-row gap-3.5 relative z-10 overflow-hidden">
         
         {/* ─── Column 1: Left Floating Sidebar Panel ─── */}
-        <aside className="w-full lg:w-[240px] flex-shrink-0 bg-white/95 rounded-[22px] shadow-sm border border-[#EBE3D5] p-4 flex flex-col justify-between h-full overflow-y-auto">
+        <aside className="w-full lg:w-[220px] flex-shrink-0 bg-white/95 rounded-[18px] shadow-sm border border-[#EBE3D5] p-3 flex flex-col justify-between h-full overflow-y-auto">
           
           <div className="space-y-6">
             {/* Branding Logo - Large & Visible */}
@@ -381,13 +381,12 @@ export default function DashboardLayout({
           </div>
           {children}
         </main>
-
         {/* ─── Column 3: Right Content Panel ─── */}
         {pathname === '/dashboard' && (
-          <aside className="w-full lg:w-[330px] flex-shrink-0 flex flex-col gap-6 text-left overflow-y-auto h-full pt-4 pb-4 pr-2">
+          <aside className="w-full lg:w-[300px] flex-shrink-0 flex flex-col gap-3 text-left h-full py-1 pr-1 relative z-30 overflow-visible">
           
           {/* Top header row: Profile card, toggles */}
-          <div className="flex justify-between items-center bg-white/60 p-2.5 rounded-2xl border border-white/45 shadow-sm gap-2 relative z-50">
+          <div className="flex justify-between items-center bg-white/60 p-2.5 rounded-2xl border border-white/45 shadow-sm gap-2 relative z-50 shrink-0">
             <div className="flex gap-2">
               <button className="w-10 h-10 rounded-xl bg-black text-[#d4ff00] flex items-center justify-center shadow-sm cursor-pointer border-none">
                 <Sun size={15} />
@@ -431,8 +430,10 @@ export default function DashboardLayout({
             </div>
           </div>
 
-          {/* Widget 1: Live Attendance Feed */}
-          <div className="bg-white border border-slate-100 p-5 rounded-[28px] shadow-sm flex flex-col justify-between min-h-[260px] relative overflow-hidden">
+          {/* Scrollable Aside Widgets Area */}
+          <div className="flex-1 overflow-y-auto flex flex-col gap-4 pr-1">
+            {/* Widget 1: Live Attendance Feed */}
+            <div className="bg-white border border-slate-100 p-5 rounded-[28px] shadow-sm flex flex-col justify-between min-h-[260px] relative overflow-hidden">
             <div>
               <span className="text-[9px] font-black uppercase tracking-wider text-slate-400">Live Activity Feed</span>
               <h3 className="text-xs font-black text-slate-800 uppercase mt-0.5 font-display flex items-center gap-1.5">
@@ -574,8 +575,8 @@ export default function DashboardLayout({
               </div>
             </div>
           </div>
-
-        </aside>
+        </div>
+      </aside>
         )}
 
       {/* AI Gym Copilot Helper */}

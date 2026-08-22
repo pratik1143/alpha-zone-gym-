@@ -183,7 +183,7 @@ export default function UniversalSearchBar() {
           onFocus={() => setIsFocused(true)}
           onKeyDown={handleKeyDown}
           placeholder="Search by Name, ID, Address, Age, Phone..."
-          className="w-full py-3 pl-3 pr-24 bg-transparent text-sm font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none"
+          className="w-full py-2 pl-2.5 pr-20 bg-transparent text-xs font-semibold text-slate-800 placeholder:text-slate-400 focus:outline-none"
         />
 
         <div className="absolute right-3 flex items-center gap-2">
