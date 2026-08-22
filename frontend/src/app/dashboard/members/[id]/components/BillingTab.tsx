@@ -242,24 +242,33 @@ export default function BillingTab({ member: initialMember }: { member: any }) {
     }
   };
 
-  // Derived Totals based on active filter (ALL, MEMBERSHIP, PT)
-  const totalBilled = filteredInvoices.reduce((s: number, inv: any) => {
-    const origAmt = Number(inv.originalAmount !== undefined ? inv.originalAmount : (inv.price || inv.amount || 0));
-    const discAmt = Number(inv.discountAmount !== undefined ? inv.discountAmount : (inv.discount || 0));
-    const taxAmt = Number(inv.taxAmount !== undefined ? inv.taxAmount : (inv.tax || inv.gst || 0));
-    const othAmt = Number(inv.otherCharges || 0);
+  // Separate Membership vs PT Invoices
+  const membershipInvoices = useMemo(() => invoices.filter((inv: any) => inv.billingType !== 'pt' && inv.billingType !== 'PT'), [invoices]);
+  const ptInvoices = useMemo(() => invoices.filter((inv: any) => inv.billingType === 'pt' || inv.billingType === 'PT'), [invoices]);
 
-    const calculatedNet = Math.max(0, origAmt - discAmt + taxAmt + othAmt);
-    const net = Number(inv.netPayable !== undefined ? inv.netPayable : (calculatedNet > 0 ? calculatedNet : Number(inv.amount || 0)));
-    return s + (isNaN(net) ? 0 : net);
-  }, 0);
+  const calcStats = (invList: any[]) => {
+    const billed = invList.reduce((s: number, inv: any) => {
+      const origAmt = Number(inv.originalAmount !== undefined ? inv.originalAmount : (inv.price || inv.amount || 0));
+      const discAmt = Number(inv.discountAmount !== undefined ? inv.discountAmount : (inv.discount || 0));
+      const taxAmt = Number(inv.taxAmount !== undefined ? inv.taxAmount : (inv.tax || inv.gst || 0));
+      const othAmt = Number(inv.otherCharges || 0);
 
-  const totalPaid = filteredInvoices.reduce((s: number, inv: any) => {
-    const paid = Number(inv.amountPaid !== undefined ? inv.amountPaid : (inv.paid !== undefined ? inv.paid : Number(inv.amount || 0)));
-    return s + (isNaN(paid) ? 0 : paid);
-  }, 0);
+      const calculatedNet = Math.max(0, origAmt - discAmt + taxAmt + othAmt);
+      const net = Number(inv.netPayable !== undefined ? inv.netPayable : (calculatedNet > 0 ? calculatedNet : Number(inv.amount || 0)));
+      return s + (isNaN(net) ? 0 : net);
+    }, 0);
 
-  const totalOutstanding = Math.max(0, totalBilled - totalPaid);
+    const paid = invList.reduce((s: number, inv: any) => {
+      const p = Number(inv.amountPaid !== undefined ? inv.amountPaid : (inv.paid !== undefined ? inv.paid : Number(inv.amount || 0)));
+      return s + (isNaN(p) ? 0 : p);
+    }, 0);
+
+    const outstanding = Math.max(0, billed - paid);
+    return { billed, paid, outstanding };
+  };
+
+  const memStats = useMemo(() => calcStats(membershipInvoices), [membershipInvoices]);
+  const ptStats = useMemo(() => calcStats(ptInvoices), [ptInvoices]);
 
   const fmt = (n: number) => `₹${Math.round(n).toLocaleString('en-IN')}`;
 
@@ -333,45 +342,63 @@ export default function BillingTab({ member: initialMember }: { member: any }) {
     window.print();
   };
 
-
-
   return (
     <div className="space-y-6">
-      {/* ── KPI Cards Header ─────────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-white rounded-2xl p-4 border border-[#d9e7f7] shadow-xs">
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">TOTAL BILLED</p>
-          <p className="text-2xl font-black text-[#10233f]">{fmt(totalBilled)}</p>
-          <p className="text-[10px] text-slate-400 mt-0.5">{invoices.length} billing entry</p>
-        </div>
-        <div className="bg-white rounded-2xl p-4 border border-[#b9d6f5] shadow-xs">
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">TOTAL COLLECTED</p>
-          <p className="text-2xl font-black text-[#0b5cbe]">{fmt(totalPaid)}</p>
-          <p className="text-[10px] text-[#0b5cbe] font-bold mt-0.5">Amount Paid</p>
-        </div>
-        <div className={`rounded-2xl p-4 border shadow-xs ${totalOutstanding > 0 ? 'border-red-200 bg-red-50/50' : 'border-[#d9e7f7] bg-white'}`}>
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">OUTSTANDING</p>
-          <p className={`text-2xl font-black ${totalOutstanding > 0 ? 'text-red-600' : 'text-[#0b5cbe]'}`}>
-            {fmt(totalOutstanding)}
-          </p>
-          <p className={`text-[10px] mt-0.5 font-bold ${totalOutstanding > 0 ? 'text-red-500' : 'text-[#0b5cbe]'}`}>
-            {totalOutstanding > 0 ? 'Pending Balance' : 'Fully Paid ✅'}
-          </p>
+      {/* ── KPI Cards Header (Separate Membership & PT Totals) ───────────────────────── */}
+      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-7 gap-3">
+        
+        {/* MEMBERSHIP STATS GROUP (3 Cards) */}
+        <div className="lg:col-span-3 bg-blue-50/50 p-3.5 rounded-3xl border border-blue-200/80 space-y-2">
+          <span className="text-[10px] font-black uppercase tracking-widest text-[#0b5cbe] block">MEMBERSHIP FINANCIALS</span>
+          <div className="grid grid-cols-3 gap-2">
+            <div className="bg-white rounded-2xl p-3 border border-[#d9e7f7]">
+              <p className="text-[9px] font-bold text-slate-500 uppercase">Billed</p>
+              <p className="text-base font-black text-[#10233f] font-mono">{fmt(memStats.billed)}</p>
+            </div>
+            <div className="bg-white rounded-2xl p-3 border border-[#b9d6f5]">
+              <p className="text-[9px] font-bold text-[#0b5cbe] uppercase">Collected</p>
+              <p className="text-base font-black text-[#0b5cbe] font-mono">{fmt(memStats.paid)}</p>
+            </div>
+            <div className="bg-white rounded-2xl p-3 border border-slate-200">
+              <p className="text-[9px] font-bold text-slate-500 uppercase">Pending</p>
+              <p className={`text-base font-black font-mono ${memStats.outstanding > 0 ? 'text-red-600' : 'text-[#0b5cbe]'}`}>{fmt(memStats.outstanding)}</p>
+            </div>
+          </div>
         </div>
 
-        {/* Create New Bill Button Card */}
-        <div className="bg-gradient-to-br from-[#0b5cbe] to-[#2876d0] rounded-2xl p-4 text-white shadow-md flex flex-col justify-between">
+        {/* PT STATS GROUP (3 Cards) */}
+        <div className="lg:col-span-3 bg-amber-50/50 p-3.5 rounded-3xl border border-amber-200/80 space-y-2">
+          <span className="text-[10px] font-black uppercase tracking-widest text-amber-800 block">PERSONAL TRAINING (PT) FINANCIALS</span>
+          <div className="grid grid-cols-3 gap-2">
+            <div className="bg-white rounded-2xl p-3 border border-amber-200">
+              <p className="text-[9px] font-bold text-slate-500 uppercase">PT Billed</p>
+              <p className="text-base font-black text-[#10233f] font-mono">{fmt(ptStats.billed)}</p>
+            </div>
+            <div className="bg-white rounded-2xl p-3 border border-amber-300">
+              <p className="text-[9px] font-bold text-amber-800 uppercase">PT Collected</p>
+              <p className="text-base font-black text-amber-700 font-mono">{fmt(ptStats.paid)}</p>
+            </div>
+            <div className="bg-white rounded-2xl p-3 border border-slate-200">
+              <p className="text-[9px] font-bold text-slate-500 uppercase">PT Pending</p>
+              <p className={`text-base font-black font-mono ${ptStats.outstanding > 0 ? 'text-red-600' : 'text-amber-800'}`}>{fmt(ptStats.outstanding)}</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Create New Bill Action Card (1 Card) */}
+        <div className="lg:col-span-1 bg-gradient-to-br from-[#0b5cbe] to-[#2876d0] rounded-3xl p-3.5 text-white shadow-md flex flex-col justify-between">
           <div>
-            <span className="text-[10px] font-black uppercase tracking-widest text-blue-100 block">BILLING ACTIONS</span>
-            <p className="text-sm font-black mt-1">Generate / Renew Bill</p>
+            <span className="text-[9px] font-black uppercase tracking-widest text-blue-100 block">ACTIONS</span>
+            <p className="text-xs font-black mt-0.5">New Invoice</p>
           </div>
           <button
             onClick={() => setShowNewBillModal(true)}
-            className="mt-3 py-2.5 px-4 bg-white text-[#0b5cbe] hover:bg-[#eaf3ff] rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-xs border-none cursor-pointer"
+            className="mt-2 py-2 px-3 bg-white text-[#0b5cbe] hover:bg-[#eaf3ff] rounded-xl text-[11px] font-black transition-all flex items-center justify-center gap-1 shadow-xs border-none cursor-pointer"
           >
-            <Plus size={15} /> Create New Bill
+            <Plus size={14} /> + New Bill
           </button>
         </div>
+
       </div>
 
       {/* ── Official Billing History Table Module (Spacious & Clean Layout) ── */}

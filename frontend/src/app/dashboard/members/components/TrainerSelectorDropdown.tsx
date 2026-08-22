@@ -9,16 +9,12 @@ import toast from 'react-hot-toast';
 import API from '@/services/api';
 import PtBillingModal from './PtBillingModal';
 
-const DEFAULT_TRAINERS = [
-  { id: 'emp_502', name: 'Karan Verma', employeeId: 'EMP-502', role: 'Trainer', specialization: 'Personal Trainer & Strength', avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150' },
-  { id: 'emp_503', name: 'Sneha Kapoor', employeeId: 'EMP-503', role: 'Trainer', specialization: 'Fitness & Cardio Specialist', avatarUrl: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150' },
-];
-
+// Deduplicate real trainers from employees collection (NO FAKE DATA)
 function deduplicateTrainers(rawList: any[]) {
   const map = new Map<string, any>();
   rawList.forEach((t) => {
     const r = String(t.role || t.type || '').toLowerCase();
-    if (!r.includes('trainer') && !r.includes('coach')) return;
+    if (!r.includes('trainer') && !r.includes('coach') && !t.isTrainer) return;
 
     const key = (t.phone && String(t.phone).trim().length >= 8)
       ? String(t.phone).trim()
@@ -69,7 +65,7 @@ export default function TrainerSelectorDropdown({
     setIsMounted(true);
   }, []);
 
-  // Fetch & deduplicate trainers
+  // Fetch & deduplicate real trainers only
   useEffect(() => {
     setLoading(true);
     const q = query(collection(db, 'employees'));
@@ -83,18 +79,18 @@ export default function TrainerSelectorDropdown({
       } else {
         API.get('/employees').then(res => {
           const apiDeduped = deduplicateTrainers(res.data || []);
-          setTrainers(apiDeduped.length > 0 ? apiDeduped : DEFAULT_TRAINERS);
+          setTrainers(apiDeduped);
         }).catch(() => {
-          setTrainers(DEFAULT_TRAINERS);
+          setTrainers([]);
         }).finally(() => setLoading(false));
       }
     }, (err) => {
       console.warn("Trainers listener warning:", err);
       API.get('/employees').then(res => {
         const apiDeduped = deduplicateTrainers(res.data || []);
-        setTrainers(apiDeduped.length > 0 ? apiDeduped : DEFAULT_TRAINERS);
+        setTrainers(apiDeduped);
       }).catch(() => {
-        setTrainers(DEFAULT_TRAINERS);
+        setTrainers([]);
       }).finally(() => setLoading(false));
     });
 
