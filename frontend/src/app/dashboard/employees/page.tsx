@@ -185,7 +185,7 @@ export default function EmployeesPage() {
         
         <button 
           onClick={() => setShowAddWizard(true)}
-          className="px-6 py-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-2xl text-xs font-black uppercase tracking-wider border-none cursor-pointer flex items-center justify-center gap-2 shadow-[0_10px_25px_rgba(37,99,235,0.25)] transition-all hover:scale-[1.02] active:scale-95 shrink-0"
+          className="px-6 py-3.5 bg-gradient-to-r from-[#0b5cbe] to-[#2876d0] hover:from-[#084a99] hover:to-[#0b5cbe] text-white rounded-2xl text-xs font-black uppercase tracking-wider border-none cursor-pointer flex items-center justify-center gap-2 shadow-[0_10px_25px_rgba(11,92,190,0.25)] transition-all hover:scale-[1.02] active:scale-95 shrink-0"
         >
           <Plus size={16} /> Register New Employee
         </button>
@@ -194,20 +194,20 @@ export default function EmployeesPage() {
       {/* Summary Stats Grid */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: 'Total Employees', value: totalEmployees, sub: 'Registered Staff', icon: Users, gradient: 'from-blue-500/10 via-blue-500/5 to-transparent', border: 'border-blue-200/60', text: 'text-blue-600' },
-          { label: 'Present Today', value: presentToday, sub: 'Checked In Today', icon: UserCheck, gradient: 'from-emerald-500/10 via-emerald-500/5 to-transparent', border: 'border-emerald-200/60', text: 'text-emerald-600' },
-          { label: 'Absent Today', value: absentToday, sub: 'Not Punched Yet', icon: AlertCircle, gradient: 'from-rose-500/10 via-rose-500/5 to-transparent', border: 'border-rose-200/60', text: 'text-rose-600' },
-          { label: 'Currently Inside', value: currentlyInside, sub: 'Active inside Gym', icon: Shield, gradient: 'from-purple-500/10 via-purple-500/5 to-transparent', border: 'border-purple-200/60', text: 'text-purple-600' }
+          { label: 'Total Employees', value: totalEmployees, sub: 'Registered Staff', icon: Users },
+          { label: 'Present Today', value: presentToday, sub: 'Checked In Today', icon: UserCheck },
+          { label: 'Absent Today', value: absentToday, sub: 'Not Punched Yet', icon: AlertCircle },
+          { label: 'Currently Inside', value: currentlyInside, sub: 'Active inside Gym', icon: Shield }
         ].map((stat, i) => (
-          <div key={i} className={`bg-gradient-to-br ${stat.gradient} bg-white border ${stat.border} rounded-3xl p-5 flex flex-col justify-between shadow-[0_4px_20px_rgba(0,0,0,0.02)] relative overflow-hidden group transition-all hover:shadow-md`}>
+          <div key={i} className="bg-white border border-[#d9e7f7] rounded-3xl p-5 flex flex-col justify-between shadow-[0_4px_20px_rgba(11,92,190,0.03)] relative overflow-hidden group transition-all hover:border-[#0b5cbe] hover:shadow-md">
             <div className="flex justify-between items-start">
               <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">{stat.label}</span>
-              <div className={`p-2.5 rounded-2xl bg-white shadow-sm border ${stat.border} ${stat.text}`}>
+              <div className="p-2.5 rounded-2xl bg-[#eaf3ff] border border-[#b9d6f5] text-[#0b5cbe]">
                 <stat.icon size={16} />
               </div>
             </div>
             <div className="mt-4">
-              <div className="text-3xl font-black text-slate-900 leading-none font-mono tracking-tight">{stat.value}</div>
+              <div className="text-3xl font-black text-[#10233f] leading-none font-mono tracking-tight">{stat.value}</div>
               <span className="text-[10px] font-bold text-slate-400 mt-1 block">{stat.sub}</span>
             </div>
           </div>
@@ -215,7 +215,7 @@ export default function EmployeesPage() {
       </div>
 
       {/* Filter and Search Bar */}
-      <div className="bg-white border border-slate-100 rounded-3xl p-4 flex flex-wrap gap-4 items-center shadow-[0_4px_20px_rgba(0,0,0,0.02)]">
+      <div className="bg-white border border-[#d9e7f7] rounded-3xl p-4 flex flex-wrap gap-4 items-center shadow-[0_4px_20px_rgba(11,92,190,0.02)]">
         <div className="relative flex-1 min-w-[240px]">
           <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
           <input 
@@ -223,7 +223,7 @@ export default function EmployeesPage() {
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder="Search staff by name, phone, email or biometric ID..."
-            className="w-full text-xs bg-slate-50/80 border border-slate-200/80 rounded-2xl pl-11 pr-4 py-3 focus:outline-none focus:border-blue-500 focus:bg-white transition-all text-slate-800 font-semibold placeholder:text-slate-400"
+            className="w-full text-xs bg-[#fdfdfd] border border-[#d9e7f7] rounded-2xl pl-11 pr-4 py-3 focus:outline-none focus:border-[#0b5cbe] focus:bg-white transition-all text-[#10233f] font-semibold placeholder:text-slate-400"
           />
         </div>
 
@@ -231,7 +231,7 @@ export default function EmployeesPage() {
           <select 
             value={roleFilter}
             onChange={e => setRoleFilter(e.target.value)}
-            className="text-xs bg-slate-50/80 border border-slate-200/80 rounded-2xl px-4 py-3 text-slate-700 focus:outline-none font-bold cursor-pointer hover:bg-white transition-all"
+            className="text-xs bg-[#fdfdfd] border border-[#d9e7f7] rounded-2xl px-4 py-3 text-[#10233f] focus:outline-none font-bold cursor-pointer hover:bg-white transition-all"
           >
             <option value="all">All Roles</option>
             {['Trainer', 'Reception', 'Manager', 'Owner', 'Cleaner', 'Security', 'Nutritionist', 'Sales', 'Custom'].map(r => (
@@ -242,7 +242,7 @@ export default function EmployeesPage() {
           <select 
             value={branchFilter}
             onChange={e => setBranchFilter(e.target.value)}
-            className="text-xs bg-slate-50/80 border border-slate-200/80 rounded-2xl px-4 py-3 text-slate-700 focus:outline-none font-bold cursor-pointer hover:bg-white transition-all"
+            className="text-xs bg-[#fdfdfd] border border-[#d9e7f7] rounded-2xl px-4 py-3 text-[#10233f] focus:outline-none font-bold cursor-pointer hover:bg-white transition-all"
           >
             <option value="all">All Branches</option>
             <option value="Mohali, Punjab">Mohali, Punjab</option>
@@ -253,7 +253,7 @@ export default function EmployeesPage() {
           <select 
             value={statusFilter}
             onChange={e => setStatusFilter(e.target.value)}
-            className="text-xs bg-slate-50/80 border border-slate-200/80 rounded-2xl px-4 py-3 text-slate-700 focus:outline-none font-bold cursor-pointer hover:bg-white transition-all"
+            className="text-xs bg-[#fdfdfd] border border-[#d9e7f7] rounded-2xl px-4 py-3 text-[#10233f] focus:outline-none font-bold cursor-pointer hover:bg-white transition-all"
           >
             <option value="all">All Statuses</option>
             <option value="Inside">Inside Gym</option>
@@ -263,21 +263,21 @@ export default function EmployeesPage() {
       </div>
 
       {/* Custom Table Grid */}
-      <div className="bg-white border border-slate-100 rounded-3xl overflow-hidden shadow-[0_4px_25px_rgba(0,0,0,0.03)]">
+      <div className="bg-white border border-[#d9e7f7] rounded-3xl overflow-hidden shadow-[0_4px_25px_rgba(11,92,190,0.03)]">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs whitespace-nowrap">
-            <thead className="bg-slate-50/70 text-slate-400 font-extrabold uppercase tracking-wider text-[9px] border-b border-slate-100">
+            <thead className="bg-[#0b5cbe] text-[#fdfdfd] font-extrabold uppercase tracking-wider text-[9px] border-b border-[#084a99]">
               <tr>
-                <th className="px-5 py-4 w-12 text-center">Photo</th>
-                <th className="px-5 py-4">Employee</th>
-                <th className="px-5 py-4">Contact</th>
-                <th className="px-5 py-4">Role</th>
-                <th className="px-5 py-4">Branch</th>
-                <th className="px-5 py-4 text-center">Biometric ID</th>
-                <th className="px-5 py-4 text-center">Today's Status</th>
-                <th className="px-5 py-4">Last Punch</th>
-                <th className="px-5 py-4">Current Status</th>
-                <th className="px-5 py-4 text-right">Actions</th>
+                <th className="px-5 py-4 w-12 text-center text-[#fdfdfd]">Photo</th>
+                <th className="px-5 py-4 text-[#fdfdfd]">Employee</th>
+                <th className="px-5 py-4 text-[#fdfdfd]">Contact</th>
+                <th className="px-5 py-4 text-[#fdfdfd]">Role</th>
+                <th className="px-5 py-4 text-[#fdfdfd]">Branch</th>
+                <th className="px-5 py-4 text-center text-[#fdfdfd]">Biometric ID</th>
+                <th className="px-5 py-4 text-center text-[#fdfdfd]">Today's Status</th>
+                <th className="px-5 py-4 text-[#fdfdfd]">Last Punch</th>
+                <th className="px-5 py-4 text-[#fdfdfd]">Current Status</th>
+                <th className="px-5 py-4 text-right text-[#fdfdfd]">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 font-medium">

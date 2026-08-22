@@ -366,10 +366,10 @@ export default function ClientProfileSystem() {
           <div className="flex items-center gap-2 self-start flex-wrap">
             <button
               onClick={() => setShowPtModal(true)}
-              className="py-2.5 px-4 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 rounded-xl flex justify-center items-center gap-1.5 text-xs font-black transition-all cursor-pointer shadow-sm active:scale-95"
+              className="py-2.5 px-4 bg-[#eaf3ff] hover:bg-blue-100 text-[#0b5cbe] border border-[#b9d6f5] rounded-xl flex justify-center items-center gap-1.5 text-xs font-black transition-all cursor-pointer shadow-xs active:scale-95"
               title="Add Personal Training Bill"
             >
-              <Dumbbell size={16} className="text-amber-600" /> + Add PT Bill
+              <Dumbbell size={16} className="text-[#0b5cbe]" /> + Add PT Bill
             </button>
 
             <button

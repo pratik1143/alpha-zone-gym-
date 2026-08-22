@@ -339,35 +339,35 @@ export default function BillingTab({ member: initialMember }: { member: any }) {
     <div className="space-y-6">
       {/* ── KPI Cards Header ─────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm">
+        <div className="bg-white rounded-2xl p-4 border border-[#d9e7f7] shadow-xs">
           <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">TOTAL BILLED</p>
-          <p className="text-2xl font-black text-slate-900">{fmt(totalBilled)}</p>
+          <p className="text-2xl font-black text-[#10233f]">{fmt(totalBilled)}</p>
           <p className="text-[10px] text-slate-400 mt-0.5">{invoices.length} billing entry</p>
         </div>
-        <div className="bg-white rounded-2xl p-4 border border-emerald-200 shadow-sm">
+        <div className="bg-white rounded-2xl p-4 border border-[#b9d6f5] shadow-xs">
           <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">TOTAL COLLECTED</p>
-          <p className="text-2xl font-black text-emerald-600">{fmt(totalPaid)}</p>
-          <p className="text-[10px] text-emerald-600 font-bold mt-0.5">Amount Paid</p>
+          <p className="text-2xl font-black text-[#0b5cbe]">{fmt(totalPaid)}</p>
+          <p className="text-[10px] text-[#0b5cbe] font-bold mt-0.5">Amount Paid</p>
         </div>
-        <div className={`rounded-2xl p-4 border shadow-sm ${totalOutstanding > 0 ? 'border-red-200 bg-red-50/50' : 'border-slate-200 bg-white'}`}>
+        <div className={`rounded-2xl p-4 border shadow-xs ${totalOutstanding > 0 ? 'border-red-200 bg-red-50/50' : 'border-[#d9e7f7] bg-white'}`}>
           <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">OUTSTANDING</p>
-          <p className={`text-2xl font-black ${totalOutstanding > 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+          <p className={`text-2xl font-black ${totalOutstanding > 0 ? 'text-red-600' : 'text-[#0b5cbe]'}`}>
             {fmt(totalOutstanding)}
           </p>
-          <p className={`text-[10px] mt-0.5 font-bold ${totalOutstanding > 0 ? 'text-red-500' : 'text-emerald-600'}`}>
+          <p className={`text-[10px] mt-0.5 font-bold ${totalOutstanding > 0 ? 'text-red-500' : 'text-[#0b5cbe]'}`}>
             {totalOutstanding > 0 ? 'Pending Balance' : 'Fully Paid ✅'}
           </p>
         </div>
 
         {/* Create New Bill Button Card */}
-        <div className="bg-gradient-to-br from-blue-600 to-indigo-700 rounded-2xl p-4 text-white shadow-md flex flex-col justify-between">
+        <div className="bg-gradient-to-br from-[#0b5cbe] to-[#2876d0] rounded-2xl p-4 text-white shadow-md flex flex-col justify-between">
           <div>
-            <span className="text-[10px] font-black uppercase tracking-widest text-blue-200 block">BILLING ACTIONS</span>
+            <span className="text-[10px] font-black uppercase tracking-widest text-blue-100 block">BILLING ACTIONS</span>
             <p className="text-sm font-black mt-1">Generate / Renew Bill</p>
           </div>
           <button
             onClick={() => setShowNewBillModal(true)}
-            className="mt-3 py-2.5 px-4 bg-white text-blue-700 hover:bg-blue-50 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-sm border-none cursor-pointer"
+            className="mt-3 py-2.5 px-4 bg-white text-[#0b5cbe] hover:bg-[#eaf3ff] rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-xs border-none cursor-pointer"
           >
             <Plus size={15} /> Create New Bill
           </button>

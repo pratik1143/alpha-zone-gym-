@@ -345,14 +345,14 @@ export default function ProfileTab({ member }: { member: any }) {
 
         {/* Assigned Trainer Card (ONLY RENDERED IF TRAINER IS ASSIGNED) */}
         {hasTrainer && (
-          <div className="bg-white rounded-[32px] shadow-[0_2px_20px_rgba(0,0,0,0.02)] border border-slate-100 p-8 flex flex-col items-center text-center justify-between">
+          <div className="bg-white rounded-[32px] shadow-[0_2px_20px_rgba(0,0,0,0.02)] border border-[#d9e7f7] p-8 flex flex-col items-center text-center justify-between">
             <div className="flex flex-col items-center w-full">
-              <div className="w-12 h-12 bg-amber-50 rounded-2xl flex items-center justify-center text-amber-600 mb-3 border border-amber-200">
+              <div className="w-12 h-12 bg-[#eaf3ff] rounded-2xl flex items-center justify-center text-[#0b5cbe] mb-3 border border-[#b9d6f5]">
                 <Dumbbell size={22} />
               </div>
               <div className="flex items-center gap-2 mb-3">
                 <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest">PERSONAL TRAINER</h3>
-                <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[9px] font-black uppercase border border-emerald-200">
+                <span className="px-2 py-0.5 rounded-full bg-[#eaf3ff] text-[#0b5cbe] text-[9px] font-black uppercase border border-[#b9d6f5]">
                   {member?.pt?.status || 'ACTIVE'}
                 </span>
               </div>
@@ -363,18 +363,18 @@ export default function ProfileTab({ member }: { member: any }) {
                   alt="trainer"
                   className="w-full h-full object-cover"
                 />
-                <div className="absolute bottom-0 right-0 bg-emerald-500 p-1 rounded-full border-2 border-white text-white">
+                <div className="absolute bottom-0 right-0 bg-[#0b5cbe] p-1 rounded-full border-2 border-white text-white">
                   <BadgeCheck size={10} />
                 </div>
               </div>
 
               <h4 className="text-lg font-black text-slate-900 leading-tight">{member.trainerName || member.trainer}</h4>
-              <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2.5 py-0.5 rounded-full mt-1">
+              <span className="text-[10px] font-bold text-slate-500 bg-[#f4f8fd] px-2.5 py-0.5 rounded-full mt-1 border border-[#d9e7f7]">
                 {member.trainerRole || member.pt?.trainerRole || 'Personal Trainer & Strength'}
               </span>
 
               {/* PT Package & Validity Breakdown */}
-              <div className="w-full mt-4 p-3.5 bg-slate-50 border border-slate-200 rounded-2xl space-y-2 text-xs text-left">
+              <div className="w-full mt-4 p-3.5 bg-[#fdfdfd] border border-[#d9e7f7] rounded-2xl space-y-2 text-xs text-left">
                 <div className="flex justify-between items-center">
                   <span className="text-[10px] font-black text-slate-400 uppercase">PT Package</span>
                   <span className="font-black text-slate-900">{member?.pt?.packageName || member?.pt?.duration || '3 Months'}</span>
@@ -387,12 +387,12 @@ export default function ProfileTab({ member }: { member: any }) {
                 </div>
                 <div className="flex justify-between items-center pt-1 border-t border-slate-200">
                   <span className="text-[10px] font-black text-slate-400 uppercase">PT Amount</span>
-                  <span className="font-black font-mono text-amber-700">₹{(member?.pt?.amount || 6000).toLocaleString('en-IN')}</span>
+                  <span className="font-black font-mono text-[#0b5cbe]">₹{(member?.pt?.amount || 6000).toLocaleString('en-IN')}</span>
                 </div>
                 {member?.pt?.invoiceNo && (
                   <div className="flex justify-between items-center">
                     <span className="text-[10px] font-black text-slate-400 uppercase">Invoice No</span>
-                    <span className="font-mono text-[10px] font-bold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded">
+                    <span className="font-mono text-[10px] font-bold text-[#0b5cbe] bg-[#eaf3ff] px-1.5 py-0.5 rounded border border-[#b9d6f5]">
                       {member?.pt?.invoiceNo}
                     </span>
                   </div>

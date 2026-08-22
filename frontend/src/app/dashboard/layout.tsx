@@ -263,24 +263,24 @@ export default function DashboardLayout({
       }}
     >
       {/* Background glow effects */}
-      <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] rounded-full bg-[#d4ff00]/5 blur-[120px] pointer-events-none z-0" />
-      <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] rounded-full bg-orange-200/20 blur-[120px] pointer-events-none z-0" />
+      <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] rounded-full bg-[#0b5cbe]/10 blur-[120px] pointer-events-none z-0" />
+      <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] rounded-full bg-[#0b5cbe]/5 blur-[120px] pointer-events-none z-0" />
 
       {/* Back to Site pinterest-style circle button */}
       <div className="absolute top-5 left-5 z-30">
         <Link 
           href="/" 
-          className="w-10 h-10 bg-white/90 rounded-full flex items-center justify-center shadow-md hover:scale-105 transition-transform text-black border border-[#EBE3D5] backdrop-blur-sm"
+          className="w-10 h-10 bg-white/90 rounded-full flex items-center justify-center shadow-md hover:scale-105 transition-transform text-[#0b5cbe] border border-[#d9e7f7] backdrop-blur-sm"
         >
           <ArrowLeftIcon size={18} />
         </Link>
       </div>
 
       {/* ─── Main Floating Glass Dashboard Panel ─── */}
-      <div className="w-full h-full rounded-[24px] bg-white/60 backdrop-blur-xl border border-white/80 shadow-2xl p-3 sm:p-4 flex flex-col lg:flex-row gap-3.5 relative z-10 overflow-hidden">
+      <div className="w-full h-full rounded-[24px] bg-white/70 backdrop-blur-xl border border-white/80 shadow-2xl p-3 sm:p-4 flex flex-col lg:flex-row gap-3.5 relative z-10 overflow-hidden">
         
         {/* ─── Column 1: Left Floating Sidebar Panel ─── */}
-        <aside className="w-full lg:w-[220px] flex-shrink-0 bg-white/95 rounded-[18px] shadow-sm border border-[#EBE3D5] p-3 flex flex-col justify-between h-full overflow-y-auto">
+        <aside className="w-full lg:w-[220px] flex-shrink-0 bg-white/95 rounded-[18px] shadow-sm border border-[#d9e7f7] p-3 flex flex-col justify-between h-full overflow-y-auto">
           
           <div className="space-y-6">
             {/* Branding Logo - Large & Visible */}
@@ -320,16 +320,16 @@ export default function DashboardLayout({
                     href={item.to}
                     className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl text-[10px] font-extrabold uppercase tracking-wider transition-all ${
                       isActive 
-                        ? 'bg-[#d4ff00]/15 text-[#4a5f00] border border-[#d4ff00]/30 shadow-sm' 
-                        : 'text-slate-500 hover:text-black hover:bg-slate-50'
+                        ? 'bg-[#eaf3ff] text-[#0b5cbe] border border-[#b9d6f5] shadow-xs' 
+                        : 'text-slate-600 hover:text-[#0b5cbe] hover:bg-[#f4f8fd]'
                     }`}
                   >
                     <div className="flex items-center gap-3">
-                      <item.icon size={14} className={isActive ? 'text-[#4a5f00]' : 'text-slate-400'} />
+                      <item.icon size={14} className={isActive ? 'text-[#0b5cbe]' : 'text-slate-400'} />
                       <span>{item.label}</span>
                     </div>
                     {item.badge && (
-                      <span className="bg-[#d4ff00]/80 text-[#303a00] text-[8px] font-black px-1.5 py-0.5 rounded-full scale-90 border border-[#d4ff00]/20 animate-pulse">
+                      <span className="bg-[#0b5cbe] text-white text-[8px] font-black px-1.5 py-0.5 rounded-full scale-90 border border-blue-400 animate-pulse">
                         {item.badge}
                       </span>
                     )}
@@ -343,7 +343,7 @@ export default function DashboardLayout({
           <div className="mt-4 border-t border-slate-100 pt-4 space-y-2">
             {/* User Info */}
             <div className="flex items-center gap-3 px-2 py-2 rounded-xl bg-slate-50 border border-slate-100">
-              <div className="w-8 h-8 rounded-full bg-[#d4ff00] text-black font-black text-xs flex items-center justify-center shrink-0">
+              <div className="w-8 h-8 rounded-full bg-[#0b5cbe] text-white font-black text-xs flex items-center justify-center shrink-0">
                 {getInitials(user?.name || 'A')}
               </div>
               <div className="flex-1 min-w-0">

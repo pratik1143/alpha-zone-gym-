@@ -461,10 +461,10 @@ export default function OverviewCommandCenter() {
             </motion.div>
 
             <motion.h1 {...fadeUp(0.05)} className="text-3xl md:text-4xl font-black text-white tracking-tight leading-tight">
-              {getGreeting()}, <span className="text-amber-400 font-extrabold">Mr. Veer Chand</span> 👋
+              {getGreeting()}, <span className="text-blue-300 font-extrabold">Mr. Veer Chand</span> 👋
             </motion.h1>
 
-            <motion.p {...fadeUp(0.1)} className="text-slate-400 text-xs md:text-sm mt-1.5 font-semibold">
+            <motion.p {...fadeUp(0.1)} className="text-slate-300 text-xs md:text-sm mt-1.5 font-semibold">
               {dateStr}
             </motion.p>
 
@@ -472,21 +472,21 @@ export default function OverviewCommandCenter() {
             <motion.div {...fadeUp(0.15)} className="flex flex-wrap gap-2.5 mt-5">
               <button
                 onClick={() => router.push('/dashboard/members?action=add')}
-                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 border border-indigo-400/30 transition-all cursor-pointer shadow-md shadow-indigo-600/30 active:scale-95"
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-white bg-[#0b5cbe] hover:bg-[#084a99] border border-blue-400/30 transition-all cursor-pointer shadow-md active:scale-95"
               >
                 <UserPlus size={14} /> + New Member
               </button>
 
               <button
                 onClick={() => setShowNewEnquiryModal(true)}
-                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-white bg-pink-600 hover:bg-pink-500 border border-pink-400/30 transition-all cursor-pointer shadow-md shadow-pink-600/30 active:scale-95"
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-white bg-[#0b5cbe]/90 hover:bg-[#084a99] border border-blue-400/30 transition-all cursor-pointer shadow-md active:scale-95"
               >
                 <MessageSquare size={14} /> + New Enquiry
               </button>
 
               <button
                 onClick={() => setShowNewFollowupModal(true)}
-                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-white bg-amber-500 hover:bg-amber-400 border border-amber-400/30 transition-all cursor-pointer shadow-md shadow-amber-500/30 active:scale-95"
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-white bg-[#0b5cbe]/80 hover:bg-[#084a99] border border-blue-400/30 transition-all cursor-pointer shadow-md active:scale-95"
               >
                 <PhoneCall size={14} /> + Follow Up
               </button>
@@ -495,21 +495,21 @@ export default function OverviewCommandCenter() {
                 onClick={() => router.push('/dashboard/attendance')}
                 className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-slate-200 bg-white/10 hover:bg-white/20 border border-white/10 transition-all cursor-pointer"
               >
-                <Fingerprint size={14} className="text-teal-400" /> Attendance
+                <Fingerprint size={14} className="text-blue-300" /> Attendance
               </button>
 
               <button
                 onClick={() => router.push('/dashboard/billing')}
                 className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-slate-200 bg-white/10 hover:bg-white/20 border border-white/10 transition-all cursor-pointer"
               >
-                <IndianRupee size={14} className="text-purple-400" /> Billing
+                <IndianRupee size={14} className="text-blue-300" /> Billing
               </button>
 
               <button
                 onClick={() => router.push('/dashboard/analytics')}
                 className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-slate-200 bg-white/10 hover:bg-white/20 border border-white/10 transition-all cursor-pointer"
               >
-                <BarChart3 size={14} className="text-sky-400" /> Analytics
+                <BarChart3 size={14} className="text-blue-300" /> Analytics
               </button>
             </motion.div>
           </div>
@@ -518,7 +518,7 @@ export default function OverviewCommandCenter() {
           <motion.div {...fadeUp(0.1)} className="flex flex-col items-end gap-4 shrink-0">
             <div className="text-right">
               <div className="text-3xl font-black text-white font-mono tracking-tight">{timeStr}</div>
-              <div className="text-[10px] text-amber-400 font-bold uppercase tracking-widest mt-0.5">ALPHA ZONE GYM</div>
+              <div className="text-[10px] text-blue-300 font-bold uppercase tracking-widest mt-0.5">ALPHA ZONE GYM</div>
             </div>
 
             {/* Date range picker */}
@@ -527,18 +527,18 @@ export default function OverviewCommandCenter() {
                 type="date"
                 value={fromDate}
                 onChange={e => setFromDate(e.target.value)}
-                className="bg-white/10 border border-white/10 text-white text-[11px] font-bold rounded-xl px-3 py-1.5 outline-none focus:border-amber-400 transition-all w-36 cursor-pointer"
+                className="bg-white/10 border border-white/10 text-white text-[11px] font-bold rounded-xl px-3 py-1.5 outline-none focus:border-blue-400 transition-all w-36 cursor-pointer"
               />
               <span className="text-slate-400 text-xs font-black">→</span>
               <input
                 type="date"
                 value={toDate}
                 onChange={e => setToDate(e.target.value)}
-                className="bg-white/10 border border-white/10 text-white text-[11px] font-bold rounded-xl px-3 py-1.5 outline-none focus:border-amber-400 transition-all w-36 cursor-pointer"
+                className="bg-white/10 border border-white/10 text-white text-[11px] font-bold rounded-xl px-3 py-1.5 outline-none focus:border-blue-400 transition-all w-36 cursor-pointer"
               />
               <button
                 onClick={() => setDateRange("Custom")}
-                className="px-4 py-1.5 bg-amber-500 hover:bg-amber-400 text-white text-[11px] font-black rounded-xl transition-all tracking-wider uppercase cursor-pointer border-none"
+                className="px-4 py-1.5 bg-[#0b5cbe] hover:bg-[#084a99] text-white text-[11px] font-black rounded-xl transition-all tracking-wider uppercase cursor-pointer border-none"
               >
                 Filter
               </button>
@@ -552,8 +552,8 @@ export default function OverviewCommandCenter() {
                   onClick={() => setDateRange(r)}
                   className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer border ${
                     dateRange === r
-                      ? "bg-amber-500 text-white border-amber-500"
-                      : "bg-white/10 text-slate-200 border-white/10 hover:border-amber-400/50 hover:text-white"
+                      ? "bg-[#0b5cbe] text-white border-[#0b5cbe]"
+                      : "bg-white/10 text-slate-200 border-white/10 hover:border-blue-400/50 hover:text-white"
                   }`}
                 >
                   {r}
@@ -570,26 +570,25 @@ export default function OverviewCommandCenter() {
         className="grid grid-cols-2 sm:grid-cols-4 gap-3 -mt-10 relative z-10"
       >
         {[
-          { title: "Today's Collection", value: `₹${todaysRealCollection.toLocaleString('en-IN')}`, icon: IndianRupee, color: "#a855f7" },
-          { title: "Present Today", value: todayCheckins, icon: UserCheck, color: "#14b8a6", onClick: () => setShowPresentModal(true) },
-          { title: "Active Members", value: activeMembersCount, icon: Activity, color: "#6366f1" },
-          { title: "Today's Follow-ups", value: todaysCount, icon: PhoneCall, color: "#f97316" },
+          { title: "Today's Collection", value: `₹${todaysRealCollection.toLocaleString('en-IN')}`, icon: IndianRupee, color: "#0b5cbe" },
+          { title: "Present Today", value: todayCheckins, icon: UserCheck, color: "#0b5cbe", onClick: () => setShowPresentModal(true) },
+          { title: "Active Members", value: activeMembersCount, icon: Activity, color: "#0b5cbe" },
+          { title: "Today's Follow-ups", value: todaysCount, icon: PhoneCall, color: "#0b5cbe" },
         ].map((kpi, i) => (
           <div
             key={i}
             onClick={kpi.onClick}
-            className={`bg-white rounded-2xl p-4 border border-slate-200/80 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.08)] flex items-center gap-3 hover:border-amber-400 transition-all ${kpi.onClick ? 'cursor-pointer hover:shadow-md hover:scale-[1.02]' : ''}`}
+            className={`bg-white rounded-2xl p-4 border border-blue-100 shadow-[0_4px_20px_-4px_rgba(11,92,190,0.08)] flex items-center gap-3 hover:border-[#0b5cbe] transition-all ${kpi.onClick ? 'cursor-pointer hover:shadow-md hover:scale-[1.02]' : ''}`}
           >
             <div
-              className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
-              style={{ backgroundColor: `${kpi.color}18`, color: kpi.color }}
+              className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-[#eaf3ff] text-[#0b5cbe]"
             >
               <kpi.icon size={18} />
             </div>
             <div>
               <div className="text-[9.5px] font-bold text-slate-500 uppercase tracking-wider leading-none flex items-center gap-1">
                 {kpi.title}
-                {kpi.onClick && <span className="text-[8px] text-teal-600 font-black">· Click for list →</span>}
+                {kpi.onClick && <span className="text-[8px] text-[#0b5cbe] font-black">· Click for list →</span>}
               </div>
               <div className="text-lg font-black text-slate-900 mt-1 leading-none">{kpi.value}</div>
             </div>
@@ -604,13 +603,13 @@ export default function OverviewCommandCenter() {
         <motion.div {...fadeUp(0.25)}>
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-xl bg-slate-900 text-amber-400 flex items-center justify-center font-black">
+              <div className="w-8 h-8 rounded-xl bg-[#0b5cbe] text-white flex items-center justify-center font-black">
                 <BarChart3 size={18} />
               </div>
               <h2 className="text-lg font-black text-slate-900 font-display">Summary Statistics</h2>
             </div>
             <div className="h-px flex-1 mx-4 bg-slate-200" />
-            <span className="text-[10px] font-black text-amber-700 bg-amber-50 px-3 py-1 rounded-full border border-amber-200 uppercase tracking-wider">
+            <span className="text-[10px] font-black text-[#0b5cbe] bg-[#eaf3ff] px-3 py-1 rounded-full border border-[#b9d6f5] uppercase tracking-wider">
               {dateRange} Real Time
             </span>
           </div>
@@ -621,29 +620,29 @@ export default function OverviewCommandCenter() {
               title="New clients"
               value={newClientsCount}
               icon={Dumbbell}
-              color="#22c55e"
-              lineAccentColor="#22c55e"
+              color="#0b5cbe"
+              lineAccentColor="#0b5cbe"
             />
             <SummaryStatCard
               title="Total collection"
               value={`₹${filteredRangeCollection.toLocaleString('en-IN')}`}
               icon={Coins}
-              color="#a855f7"
-              lineAccentColor="#7c3aed"
+              color="#0b5cbe"
+              lineAccentColor="#084a99"
             />
             <SummaryStatCard
               title="Total Expenses"
               value="₹0"
               icon={Wallet}
-              color="#ef4444"
-              lineAccentColor="#ef4444"
+              color="#0b5cbe"
+              lineAccentColor="#2876d0"
             />
             <SummaryStatCard
               title="Total PT Collection"
               value="₹0"
               icon={Sparkles}
-              color="#f59e0b"
-              lineAccentColor="#f59e0b"
+              color="#0b5cbe"
+              lineAccentColor="#0040d0"
             />
 
             {/* Row 2 */}
@@ -651,29 +650,29 @@ export default function OverviewCommandCenter() {
               title="Profit/Loss"
               value={`₹${filteredRangeCollection.toLocaleString('en-IN')}`}
               icon={IndianRupee}
-              color="#f97316"
-              lineAccentColor="#ef4444"
+              color="#0b5cbe"
+              lineAccentColor="#0b5cbe"
             />
             <SummaryStatCard
               title="Pending Inquiry(s)"
               value={pendingEnquiriesCount}
               icon={MessageSquare}
-              color="#84cc16"
-              lineAccentColor="#22c55e"
+              color="#0b5cbe"
+              lineAccentColor="#2876d0"
             />
             <SummaryStatCard
               title="Active clients"
               value={activeMembersCount}
               icon={Activity}
-              color="#14b8a6"
-              lineAccentColor="#0d9488"
+              color="#0b5cbe"
+              lineAccentColor="#084a99"
             />
             <SummaryStatCard
               title="Expired clients"
               value={expiredMembersCount}
               icon={UserMinus}
-              color="#475569"
-              lineAccentColor="#1e293b"
+              color="#5f7593"
+              lineAccentColor="#8aa0ba"
             />
 
             {/* Row 3 */}
@@ -681,29 +680,29 @@ export default function OverviewCommandCenter() {
               title="Profile Created clients"
               value={newClientsCount}
               icon={UserCheck}
-              color="#334155"
-              lineAccentColor="#0f172a"
+              color="#0b5cbe"
+              lineAccentColor="#084a99"
             />
             <SummaryStatCard
               title="Booked PT Sessions"
               value="0"
               icon={CalendarCheck}
-              color="#06b6d4"
-              lineAccentColor="#0891b2"
+              color="#0b5cbe"
+              lineAccentColor="#2876d0"
             />
             <SummaryStatCard
               title="Follow-ups"
               value={todaysCount}
               icon={PhoneCall}
-              color="#f97316"
-              lineAccentColor="#f97316"
+              color="#0b5cbe"
+              lineAccentColor="#0b5cbe"
             />
             <SummaryStatCard
               title="Today Present Client"
               value={todayCheckins}
               icon={Users}
-              color="#4f46e5"
-              lineAccentColor="#4338ca"
+              color="#0b5cbe"
+              lineAccentColor="#084a99"
               onClick={() => setShowPresentModal(true)}
             />
 
@@ -712,8 +711,8 @@ export default function OverviewCommandCenter() {
               title="Booked Group Class"
               value="0"
               icon={Users}
-              color="#6366f1"
-              lineAccentColor="#4f46e5"
+              color="#0b5cbe"
+              lineAccentColor="#2876d0"
             />
           </div>
         </motion.div>
@@ -1000,21 +999,21 @@ function SummaryStatCard({ title, value, icon: Icon, color, lineAccentColor, onC
   return (
     <div
       onClick={onClick}
-      className={`bg-slate-50/90 hover:bg-white rounded-2xl p-4 border border-slate-200 shadow-sm relative overflow-hidden flex flex-col justify-between transition-all hover:shadow-md ${onClick ? 'cursor-pointer hover:border-indigo-400 hover:scale-[1.02]' : ''}`}
+      className={`bg-[#fdfdfd] hover:bg-white rounded-2xl p-4 border border-[#d9e7f7] shadow-xs relative overflow-hidden flex flex-col justify-between transition-all hover:border-[#0b5cbe] hover:shadow-md ${onClick ? 'cursor-pointer hover:scale-[1.02]' : ''}`}
     >
       <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 shadow-sm" style={{ backgroundColor: `${color}18`, color }}>
+        <div className="w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 shadow-xs bg-[#eaf3ff] text-[#0b5cbe]">
           <Icon size={20} />
         </div>
         <div>
-          <div className="text-xs font-bold text-slate-600 flex items-center gap-1">
+          <div className="text-xs font-bold text-[#5f7593] flex items-center gap-1">
             {title}
-            {onClick && <span className="text-[8px] text-indigo-600 font-black">· Click for list →</span>}
+            {onClick && <span className="text-[8px] text-[#0b5cbe] font-black">· Click for list →</span>}
           </div>
-          <div className="text-xl font-black text-slate-900 font-mono tracking-tight mt-0.5">{value}</div>
+          <div className="text-xl font-black text-[#10233f] font-mono tracking-tight mt-0.5">{value}</div>
         </div>
       </div>
-      <div className="h-1.5 w-16 rounded-full mt-3" style={{ backgroundColor: lineAccentColor }} />
+      <div className="h-1.5 w-16 rounded-full mt-3 bg-[#0b5cbe]" />
     </div>
   );
 }

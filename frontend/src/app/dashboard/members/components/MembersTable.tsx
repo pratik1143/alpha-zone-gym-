@@ -927,7 +927,7 @@ export default function MembersTable({
               onClick={() => setStatusFilter(tab.id)}
               className={`px-4 py-3 text-sm font-black whitespace-nowrap border-b-2 transition-colors cursor-pointer ${
                 statusFilter === tab.id 
-                  ? 'border-indigo-600 text-indigo-600' 
+                  ? 'border-[#0b5cbe] text-[#0b5cbe]' 
                   : 'border-transparent text-slate-500 hover:text-slate-800 hover:border-slate-300'
               }`}
             >
@@ -936,25 +936,25 @@ export default function MembersTable({
           ))}
         </div>
         <div className="text-xs font-bold text-slate-500">
-          Showing <b className="text-slate-900 font-mono">{filtered.length}</b> members
+          Showing <b className="text-[#10233f] font-mono">{filtered.length}</b> members
         </div>
       </div>
 
       {/* Table */}
       <div className="overflow-x-auto">
         <table className="w-full text-left text-sm whitespace-nowrap">
-          <thead className="bg-slate-50/50 text-slate-500 font-semibold border-b border-slate-100">
+          <thead className="bg-[#0b5cbe] text-[#fdfdfd] font-bold border-b border-[#084a99]">
             <tr>
-              <th className="px-4 py-4 w-12"><input type="checkbox" className="rounded border-slate-300" /></th>
-              <th className="px-4 py-4">Member</th>
-              <th className="px-4 py-4">Membership</th>
-              <th className="px-4 py-4">Trainer</th>
-              <th className="px-4 py-4 text-center">Attendance</th>
-              <th className="px-4 py-4 text-center">Days Left</th>
-              <th className="px-4 py-4 text-center">Renewal Risk</th>
-              <th className="px-4 py-4">Status</th>
-              <th className="px-4 py-4">Payment</th>
-              <th className="px-4 py-4 text-right">Actions</th>
+              <th className="px-4 py-4 w-12 text-[#fdfdfd]"><input type="checkbox" className="rounded border-slate-300" /></th>
+              <th className="px-4 py-4 text-[#fdfdfd]">Member</th>
+              <th className="px-4 py-4 text-[#fdfdfd]">Membership</th>
+              <th className="px-4 py-4 text-[#fdfdfd]">Trainer</th>
+              <th className="px-4 py-4 text-center text-[#fdfdfd]">Attendance</th>
+              <th className="px-4 py-4 text-center text-[#fdfdfd]">Days Left</th>
+              <th className="px-4 py-4 text-center text-[#fdfdfd]">Renewal Risk</th>
+              <th className="px-4 py-4 text-[#fdfdfd]">Status</th>
+              <th className="px-4 py-4 text-[#fdfdfd]">Payment</th>
+              <th className="px-4 py-4 text-right text-[#fdfdfd]">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
