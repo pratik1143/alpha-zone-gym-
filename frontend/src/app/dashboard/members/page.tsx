@@ -64,7 +64,6 @@ import MembersKPI from "./components/MembersKPI";
 import MembersTable from "./components/MembersTable";
 import MemberDrawer from "./components/MemberDrawer";
 import AddMemberModal from "./components/AddMemberModal";
-import BiometricMappingModal from "./components/BiometricMappingModal";
 import RenewalCenterModal from "./components/RenewalCenterModal";
 import RenewalWizardModal from "./components/RenewalWizardModal";
 import SmartPhotoCapture from "../components/SmartPhotoCapture";
@@ -188,8 +187,6 @@ export default function MembersPage() {
   const [newCreatedMember, setNewCreatedMember] = useState<any | null>(null);
   const [showRenewalCenter, setShowRenewalCenter] = useState(false);
   const [renewWizardMember, setRenewWizardMember] = useState<any | null>(null);
-  const [showBiometricMappingModal, setShowBiometricMappingModal] = useState(false);
-  const [mappingTargetMember, setMappingTargetMember] = useState<any | null>(null);
 
   // Form states for new member
   const [newName, setNewName] = useState("");
@@ -919,10 +916,6 @@ export default function MembersPage() {
         onSelectMember={setActiveProfile}
         onEdit={(m) => setEditingMember(m)}
         onRenew={(m) => setRenewWizardMember(m)}
-        onMapBiometric={(m) => {
-          setMappingTargetMember(m);
-          setShowBiometricMappingModal(true);
-        }}
         onFreeze={async (m) => {
           try {
             await toggleFreeze(m.id);
@@ -1618,12 +1611,6 @@ export default function MembersPage() {
           </div>
         )}
       </AnimatePresence>
-      {/* Biometric ID Hardware Mapping Modal */}
-      <BiometricMappingModal 
-        isOpen={showBiometricMappingModal} 
-        onClose={() => setShowBiometricMappingModal(false)} 
-        targetMember={mappingTargetMember} 
-      />
     </div>
   );
 }
