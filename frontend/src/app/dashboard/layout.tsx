@@ -388,7 +388,7 @@ export default function DashboardLayout({
           {/* Top header row: Profile card, toggles */}
           <div className="flex justify-between items-center bg-white/60 p-2.5 rounded-2xl border border-white/45 shadow-sm gap-2 relative z-50 shrink-0">
             <div className="flex gap-2">
-              <button className="w-10 h-10 rounded-xl bg-black text-[#d4ff00] flex items-center justify-center shadow-sm cursor-pointer border-none">
+              <button className="w-10 h-10 rounded-xl bg-[#0b5cbe] text-white flex items-center justify-center shadow-sm cursor-pointer border-none">
                 <Sun size={15} />
               </button>
 
@@ -424,7 +424,7 @@ export default function DashboardLayout({
                 <div className="text-[10px] font-black text-slate-800 leading-none">{user?.name}</div>
                 <div className="text-[8px] text-slate-400 font-bold mt-1">Operator Shift</div>
               </div>
-              <div className="w-8 h-8 rounded-full bg-black text-[#d4ff00] font-rowdies text-xs flex items-center justify-center">
+              <div className="w-8 h-8 rounded-full bg-[#0b5cbe] text-white font-black text-xs flex items-center justify-center">
                 {getInitials(user?.name || 'Admin')}
               </div>
             </div>
@@ -491,19 +491,19 @@ export default function DashboardLayout({
             </div>
           </div>
 
-          {/* Widget 2: Attendance Heatmap */}
-          <div className="bg-[#d4ff00] text-black border border-black/5 p-5 rounded-[28px] shadow-sm flex flex-col justify-between min-h-[300px]">
+          {/* Widget 2: Attendance Heatmap (Brand Blue Palette) */}
+          <div className="bg-[#fdfdfd] text-[#0b1f3a] border border-[#dcebfa] p-5 rounded-[28px] shadow-[0_4px_20px_rgba(11,92,190,0.04)] flex flex-col justify-between min-h-[300px]">
             <div>
-              <span className="text-[9px] font-black uppercase tracking-wider text-black/60">Attendance Logs</span>
-              <h3 className="text-xs font-black text-black uppercase mt-0.5 font-display">Activity Heatmap</h3>
+              <span className="text-[9px] font-black uppercase tracking-wider text-[#5f7692]">Attendance Logs</span>
+              <h3 className="text-xs font-black text-[#0b1f3a] uppercase mt-0.5 font-display">Activity Heatmap</h3>
               
               <div className="flex gap-1.5 mt-3">
                 {['Yours', 'Mohali'].map((f) => (
                   <button
                     key={f}
                     onClick={() => setActiveHeatmapFilter(f)}
-                    className={`px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-wider transition-all border-none ${
-                      activeHeatmapFilter === f ? 'bg-black text-white' : 'bg-white/45 text-black hover:bg-white/80'
+                    className={`px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-wider transition-all border-none cursor-pointer ${
+                      activeHeatmapFilter === f ? 'bg-[#0b5cbe] text-white shadow-xs' : 'bg-[#f5f9fe] text-[#5f7692] hover:bg-[#eaf3ff] hover:text-[#0b5cbe]'
                     }`}
                   >
                     {f}
@@ -512,7 +512,7 @@ export default function DashboardLayout({
               </div>
             </div>
  
-            <div className="grid grid-cols-7 gap-2.5 my-4 justify-items-center border-t border-black/10 pt-4 text-[9px] font-black text-black/50">
+            <div className="grid grid-cols-7 gap-2.5 my-4 justify-items-center border-t border-[#dcebfa] pt-4 text-[9px] font-black text-[#8fa3b8]">
               {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map(d => (
                 <div key={d} className="w-5 text-center">{d}</div>
               ))}
@@ -527,8 +527,8 @@ export default function DashboardLayout({
                     key={idx}
                     className={`w-5 h-5 rounded-full border transition-all text-[8px] font-bold flex items-center justify-center ${
                       hasCheckin 
-                        ? 'bg-black border-black text-[#d4ff00] font-black shadow-md shadow-black/15' 
-                        : 'border-black/10 bg-transparent text-black/40 hover:border-black/35 hover:text-black cursor-pointer'
+                        ? 'bg-[#0b5cbe] border-[#0b5cbe] text-white font-black shadow-sm' 
+                        : 'border-[#dcebfa] bg-[#f5f9fe] text-[#5f7692] hover:border-[#b9d7f7] hover:bg-[#eaf3ff] hover:text-[#0b5cbe] cursor-pointer'
                     }`}
                   >
                     {dateNum}
@@ -537,27 +537,27 @@ export default function DashboardLayout({
               })}
             </div>
  
-            <div className="flex justify-between items-center text-[9px] font-black uppercase tracking-wider text-black border-t border-black/10 pt-3">
+            <div className="flex justify-between items-center text-[9px] font-black uppercase tracking-wider text-[#0b1f3a] border-t border-[#dcebfa] pt-3">
               <span>June 2026</span>
               <div className="flex gap-1.5">
-                <button className="w-5 h-5 rounded-full bg-black/5 hover:bg-black/10 text-black flex items-center justify-center border-none cursor-pointer">
+                <button className="w-5 h-5 rounded-full bg-[#f5f9fe] hover:bg-[#eaf3ff] text-[#0b5cbe] flex items-center justify-center border border-[#dcebfa] cursor-pointer">
                   <ChevronLeft size={10} />
                 </button>
-                <button className="w-5 h-5 rounded-full bg-black/5 hover:bg-black/10 text-black flex items-center justify-center border-none cursor-pointer">
+                <button className="w-5 h-5 rounded-full bg-[#f5f9fe] hover:bg-[#eaf3ff] text-[#0b5cbe] flex items-center justify-center border border-[#dcebfa] cursor-pointer">
                   <ChevronRight size={10} />
                 </button>
               </div>
             </div>
           </div>
 
-          {/* Widget 3: Shift Time Tracker */}
-          <div className="bg-black text-white p-5 rounded-[28px] shadow-lg flex flex-col justify-between min-h-[140px] relative overflow-hidden">
-            <div className="absolute right-0 bottom-0 w-28 h-28 bg-[#d4ff00]/5 rounded-full blur-xl pointer-events-none" />
+          {/* Widget 3: Shift Time Tracker / Live Clock (Deep Blue Brand Gradient) */}
+          <div className="bg-gradient-to-br from-[#083f82] to-[#0b5cbe] text-white p-5 rounded-[28px] shadow-lg flex flex-col justify-between min-h-[140px] relative overflow-hidden border border-blue-400/20">
+            <div className="absolute right-0 bottom-0 w-28 h-28 bg-white/5 rounded-full blur-xl pointer-events-none" />
 
             <div className="flex justify-between items-center">
-              <span className="text-[9px] font-black uppercase tracking-wider text-slate-400">Live Clock</span>
-              <div className="flex items-center gap-1 text-[8px] text-[#d4ff00] font-black uppercase">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#d4ff00] animate-ping" />
+              <span className="text-[9px] font-black uppercase tracking-wider text-blue-200">Live Clock</span>
+              <div className="flex items-center gap-1 text-[8px] text-blue-200 font-black uppercase">
+                <span className="w-1.5 h-1.5 rounded-full bg-blue-300 animate-ping" />
                 <span>Live Sync</span>
               </div>
             </div>
@@ -568,9 +568,9 @@ export default function DashboardLayout({
               </h3>
             </div>
 
-            <div className="flex items-center justify-between mt-5 border-t border-white/5 pt-3">
-              <span className="text-[8px] text-slate-500 font-bold uppercase tracking-wider">Mohali, Punjab (IST)</span>
-              <div className="text-[8px] text-[#d4ff00] font-black uppercase tracking-wider bg-[#d4ff00]/10 px-2.5 py-1 rounded-full border border-[#d4ff00]/25">
+            <div className="flex items-center justify-between mt-5 border-t border-white/10 pt-3">
+              <span className="text-[8px] text-blue-200/80 font-bold uppercase tracking-wider">Mohali, Punjab (IST)</span>
+              <div className="text-[8px] text-white font-black uppercase tracking-wider bg-white/20 px-2.5 py-1 rounded-full border border-white/20 backdrop-blur-xs">
                 UTC +5:30
               </div>
             </div>

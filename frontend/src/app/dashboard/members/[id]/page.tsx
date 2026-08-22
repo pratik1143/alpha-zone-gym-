@@ -341,7 +341,7 @@ export default function ClientProfileSystem() {
               </div>
               <div>
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Days Left</span>
-                <div className={`flex items-center gap-1.5 text-lg font-black ${daysLeft <= 0 ? 'text-red-500' : daysLeft <= 7 ? 'text-orange-500' : 'text-amber-500'}`}>
+                <div className={`flex items-center gap-1.5 text-lg font-black ${daysLeft <= 0 ? 'text-red-500' : 'text-[#0b5cbe]'}`}>
                   <Clock size={18} /> {daysLeft > 0 ? `${daysLeft} Days` : 'Expired'}
                 </div>
               </div>

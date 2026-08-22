@@ -182,42 +182,42 @@ export default function ProfileTab({ member }: { member: any }) {
       {/* TOP ROW: Membership Card & Personal Info */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         
-        {/* Active Membership Card */}
-        <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-indigo-950 rounded-[32px] p-8 text-white shadow-2xl relative overflow-hidden flex flex-col justify-between border border-slate-700/50">
-          <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
+        {/* Active Membership Card (Brand Deep Blue Gradient) */}
+        <div className="bg-gradient-to-br from-[#083f82] via-[#0b5cbe] to-[#064a9b] rounded-[32px] p-8 text-white shadow-2xl relative overflow-hidden flex flex-col justify-between border border-blue-400/30">
+          <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full blur-3xl pointer-events-none" />
           
           <div>
             <div className="flex justify-between items-start mb-6">
               <div>
-                <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest block mb-1">Active Membership</span>
+                <span className="text-[10px] font-black text-blue-200 uppercase tracking-widest block mb-1">Active Membership</span>
                 <h2 className="text-2xl font-black tracking-tight">{cleanPlanName(member.plan || 'Standard Membership')}</h2>
               </div>
               <span className={`px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider ${
-                member.status === 'active' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' :
-                member.status === 'frozen' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' :
-                'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                member.status === 'active' ? 'bg-white/20 text-white border border-white/30 backdrop-blur-xs' :
+                member.status === 'frozen' ? 'bg-blue-300/20 text-blue-100 border border-blue-300/30 backdrop-blur-xs' :
+                'bg-rose-500/20 text-rose-200 border border-rose-500/30'
               }`}>
                 {member.status || 'Active'}
               </span>
             </div>
 
-            <div className="grid grid-cols-2 gap-4 mb-6 bg-white/5 backdrop-blur-md rounded-2xl p-4 border border-white/10">
+            <div className="grid grid-cols-2 gap-4 mb-6 bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/15">
               <div>
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Start Date</span>
+                <span className="text-[10px] font-bold text-blue-200/80 uppercase tracking-wider block mb-1">Start Date</span>
                 <span className="text-sm font-black text-white">{member.startDate || 'N/A'}</span>
               </div>
               <div>
                 <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Expiry Date</span>
+                  <span className="text-[10px] font-bold text-blue-200/80 uppercase tracking-wider block mb-1">Expiry Date</span>
                   <button
                     onClick={() => setShowEditExpiryModal(true)}
-                    className="p-1 hover:bg-white/10 rounded-lg text-amber-400 hover:text-amber-300 transition-all border-none bg-transparent cursor-pointer"
+                    className="p-1 hover:bg-white/10 rounded-lg text-blue-200 hover:text-white transition-all border-none bg-transparent cursor-pointer"
                     title="Edit Expiry Date"
                   >
                     <Edit2 size={12} />
                   </button>
                 </div>
-                <span className="text-sm font-black text-amber-400">{member.expiryDate || 'N/A'}</span>
+                <span className="text-sm font-black text-blue-100">{member.expiryDate || 'N/A'}</span>
               </div>
             </div>
 

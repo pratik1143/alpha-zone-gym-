@@ -134,7 +134,7 @@ export default function BiometricMappingModal({ isOpen, onClose, targetMember }:
           {/* Header */}
           <div className="px-8 py-5 border-b border-white/10 bg-slate-900/80 backdrop-blur-md flex justify-between items-center shrink-0">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-[#d4ff00]/15 border border-[#d4ff00]/30 flex items-center justify-center text-[#d4ff00]">
+              <div className="w-10 h-10 rounded-2xl bg-[#0b5cbe]/20 border border-[#0b5cbe]/40 flex items-center justify-center text-[#0b5cbe]">
                 <Fingerprint size={22} />
               </div>
               <div>
@@ -155,15 +155,15 @@ export default function BiometricMappingModal({ isOpen, onClose, targetMember }:
           <div className="p-8 space-y-6 overflow-y-auto custom-scrollbar">
 
             {/* ⚡ 1-Click Auto Batch Mapping Hero Banner */}
-            <div className="bg-gradient-to-br from-indigo-900/60 to-purple-900/60 border border-indigo-500/30 p-5 rounded-3xl space-y-3">
+            <div className="bg-gradient-to-br from-blue-900/60 to-indigo-900/60 border border-blue-500/30 p-5 rounded-3xl space-y-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2.5">
-                  <div className="w-9 h-9 rounded-xl bg-[#d4ff00] text-black flex items-center justify-center font-black">
+                  <div className="w-9 h-9 rounded-xl bg-[#0b5cbe] text-white flex items-center justify-center font-black">
                     <Zap size={20} />
                   </div>
                   <div>
                     <h3 className="text-sm font-black uppercase text-white tracking-wide">1-Click Auto Map All Members</h3>
-                    <p className="text-[10px] text-slate-300 font-medium">Scans 236 ESSL machine users and matches names/IDs automatically</p>
+                    <p className="text-[10px] text-slate-300 font-medium">Scans ESSL machine users and matches names/IDs automatically</p>
                   </div>
                 </div>
 
@@ -171,7 +171,7 @@ export default function BiometricMappingModal({ isOpen, onClose, targetMember }:
                   type="button"
                   onClick={handleAutoMapAll}
                   disabled={isAutoMapping}
-                  className="px-6 py-3 rounded-2xl bg-[#d4ff00] text-black font-black uppercase text-xs hover:bg-[#c4ef00] transition-all border-none cursor-pointer shadow-lg disabled:opacity-50 flex items-center gap-2"
+                  className="px-6 py-3 rounded-2xl bg-[#0b5cbe] text-white font-black uppercase text-xs hover:bg-[#064a9b] transition-all border-none cursor-pointer shadow-lg disabled:opacity-50 flex items-center gap-2"
                 >
                   <Cpu size={16} className={isAutoMapping ? 'animate-spin' : ''} />
                   <span>{isAutoMapping ? 'Scanning ESSL...' : 'Auto-Map All Members'}</span>
@@ -188,7 +188,7 @@ export default function BiometricMappingModal({ isOpen, onClose, targetMember }:
                     </div>
                     <div className="bg-slate-900/80 p-3 rounded-xl border border-white/10 text-center">
                       <span className="text-[9px] font-black uppercase text-slate-400 block">Newly Mapped</span>
-                      <span className="text-lg font-black text-[#d4ff00] font-mono">+{autoMapResult.newlyMapped}</span>
+                      <span className="text-lg font-black text-blue-300 font-mono">+{autoMapResult.newlyMapped}</span>
                     </div>
                     <div className="bg-slate-900/80 p-3 rounded-xl border border-white/10 text-center">
                       <span className="text-[9px] font-black uppercase text-slate-400 block">Missing on Machine</span>
@@ -210,7 +210,7 @@ export default function BiometricMappingModal({ isOpen, onClose, targetMember }:
                               <span className="font-bold text-white">{m.name}</span>
                               <span className="text-[10px] text-slate-400 block">{m.phone || m.memberId}</span>
                             </div>
-                            <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded bg-amber-500/20 text-amber-300">
+                            <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded bg-blue-500/20 text-blue-200">
                               Missing Scanner FP
                             </span>
                           </div>
@@ -224,8 +224,8 @@ export default function BiometricMappingModal({ isOpen, onClose, targetMember }:
 
             {/* Unmapped Recent Punch Suggestions */}
             {unmappedPunches.length > 0 && (
-              <div className="bg-amber-500/10 border border-amber-500/20 p-4 rounded-2xl space-y-2">
-                <div className="text-[10px] font-black uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
+              <div className="bg-blue-500/10 border border-blue-500/20 p-4 rounded-2xl space-y-2">
+                <div className="text-[10px] font-black uppercase tracking-wider text-blue-300 flex items-center gap-1.5">
                   <Zap size={13} />
                   Recent Unmapped Machine Swipes (Click to Auto-Fill)
                 </div>
@@ -237,7 +237,7 @@ export default function BiometricMappingModal({ isOpen, onClose, targetMember }:
                         key={idx}
                         type="button"
                         onClick={() => setBiometricIdInput(bioId)}
-                        className="px-3 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 text-xs font-mono font-bold transition-all border border-amber-500/30 cursor-pointer flex items-center gap-1.5"
+                        className="px-3 py-1.5 rounded-xl bg-blue-500/20 hover:bg-blue-500/30 text-blue-200 text-xs font-mono font-bold transition-all border border-blue-500/30 cursor-pointer flex items-center gap-1.5"
                       >
                         <Fingerprint size={12} />
                         <span>Machine ID #{bioId}</span>
@@ -265,14 +265,14 @@ export default function BiometricMappingModal({ isOpen, onClose, targetMember }:
                     value={searchMember}
                     onChange={(e) => setSearchMember(e.target.value)}
                     placeholder="Search member name, phone or ID..."
-                    className="w-full h-10 bg-slate-800/80 border border-white/10 rounded-xl pl-10 pr-4 text-xs font-medium text-white focus:outline-none focus:border-[#d4ff00]"
+                    className="w-full h-10 bg-slate-800/80 border border-white/10 rounded-xl pl-10 pr-4 text-xs font-medium text-white focus:outline-none focus:border-[#0b5cbe]"
                   />
                 </div>
 
                 <select 
                   value={selectedMemberId}
                   onChange={(e) => setSelectedMemberId(e.target.value)}
-                  className="w-full h-12 bg-slate-800 border border-white/10 rounded-xl px-4 text-sm font-bold text-white focus:outline-none focus:border-[#d4ff00]"
+                  className="w-full h-12 bg-slate-800 border border-white/10 rounded-xl px-4 text-sm font-bold text-white focus:outline-none focus:border-[#0b5cbe]"
                 >
                   {filteredMembers.map((m: any) => (
                     <option key={m.id} value={m.id}>
@@ -284,7 +284,7 @@ export default function BiometricMappingModal({ isOpen, onClose, targetMember }:
 
               {/* Biometric Machine ID Input */}
               <div className="space-y-2">
-                <label className="block text-[10px] font-black uppercase text-[#d4ff00] tracking-wider">
+                <label className="block text-[10px] font-black uppercase text-blue-300 tracking-wider">
                   2. Enter Machine Biometric User ID (Finger / Card ID)
                 </label>
                 <div className="relative">
@@ -293,7 +293,7 @@ export default function BiometricMappingModal({ isOpen, onClose, targetMember }:
                     value={biometricIdInput}
                     onChange={(e) => setBiometricIdInput(e.target.value)}
                     placeholder="e.g. 1, 2, 5, 250"
-                    className="w-full h-14 bg-slate-800 border-2 border-[#d4ff00]/40 rounded-2xl px-4 font-mono font-black text-xl text-[#d4ff00] focus:outline-none focus:border-[#d4ff00]"
+                    className="w-full h-14 bg-slate-800 border-2 border-blue-500/40 rounded-2xl px-4 font-mono font-black text-xl text-blue-300 focus:outline-none focus:border-[#0b5cbe]"
                   />
                 </div>
               </div>
@@ -315,7 +315,7 @@ export default function BiometricMappingModal({ isOpen, onClose, targetMember }:
               type="button"
               onClick={handleSaveMapping}
               disabled={isSubmitting}
-              className="px-8 py-3.5 rounded-xl bg-[#d4ff00] text-black font-black text-xs uppercase hover:bg-[#c4ef00] transition-all flex items-center gap-2 border-none cursor-pointer shadow-lg disabled:opacity-50"
+              className="px-8 py-3.5 rounded-xl bg-[#0b5cbe] text-white font-black text-xs uppercase hover:bg-[#064a9b] transition-all flex items-center gap-2 border-none cursor-pointer shadow-lg disabled:opacity-50"
             >
               <CheckCircle2 size={16} />
               <span>{isSubmitting ? 'Linking...' : 'Save Single Mapping'}</span>

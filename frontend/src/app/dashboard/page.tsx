@@ -456,25 +456,25 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            {/* Card 2: Core Team / Active Members Card */}
-            <div className="bg-[#d4ff00] border border-black/5 p-3.5 rounded-2xl shadow-sm flex flex-col justify-between min-h-[110px] relative overflow-hidden">
-              <div className="flex justify-between items-center text-black">
-                <span className="text-[9px] font-black uppercase tracking-wider">Active Pass</span>
-                <span className="text-[8px] bg-black text-white px-2 py-0.5 rounded-full font-bold uppercase">Gold</span>
+            {/* Card 2: Core Team / Active            {/* Card 2: Core Team / Active Members Card */}
+            <div className="bg-gradient-to-br from-[#0b5cbe] to-[#064a9b] border border-[#b9d7f7]/30 p-3.5 rounded-2xl shadow-sm flex flex-col justify-between min-h-[110px] relative overflow-hidden text-white">
+              <div className="flex justify-between items-center text-white">
+                <span className="text-[9px] font-black uppercase tracking-wider text-blue-100">Active Pass</span>
+                <span className="text-[8px] bg-white/20 text-white px-2 py-0.5 rounded-full font-bold uppercase backdrop-blur-sm border border-white/20">Gold</span>
               </div>
               <div className="mt-2 text-left">
-                <h3 className="text-base font-black text-black leading-none">
+                <h3 className="text-base font-black text-white leading-none">
                   {realtimeMembers ? realtimeMembers.filter(m => m.status === 'active').length : 0} Members
                 </h3>
                 
                 <div className="flex items-center gap-1.5 mt-2">
                   <div className="flex -space-x-2 overflow-hidden">
                     {realtimeMembers ? realtimeMembers.slice(0, 3).map((m, idx) => {
-                       const colors = ['bg-amber-400', 'bg-violet-400', 'bg-rose-400'];
+                       const colors = ['bg-blue-300', 'bg-blue-400', 'bg-blue-200'];
                        return (
                          <div 
                            key={idx} 
-                           className={`w-5 h-5 rounded-full border border-[#d4ff00] ${colors[idx % 3]} text-black text-[7.5px] font-black flex items-center justify-center`}
+                           className={`w-5 h-5 rounded-full border border-[#0b5cbe] ${colors[idx % 3]} text-blue-950 text-[7.5px] font-black flex items-center justify-center`}
                          >
                            {getInitials(m.name)}
                          </div>
@@ -482,7 +482,7 @@ export default function DashboardPage() {
                     }) : null}
                   </div>
                   {realtimeMembers && realtimeMembers.length > 3 && (
-                    <span className="text-[8px] bg-black text-white px-1.5 py-0.5 rounded-full font-black">
+                    <span className="text-[8px] bg-white/20 text-white px-1.5 py-0.5 rounded-full font-black backdrop-blur-sm border border-white/20">
                       +{realtimeMembers.length - 3}
                     </span>
                   )}
@@ -535,15 +535,15 @@ export default function DashboardPage() {
             <button 
               onClick={handleManualUnlock}
               disabled={gateUnlocked}
-              className="bg-transparent border-2 border-dashed border-black/15 hover:border-black/35 rounded-2xl p-3.5 flex flex-col items-center justify-center min-h-[110px] transition-all cursor-pointer group text-center"
+              className="bg-white border-2 border-dashed border-[#b9d7f7] hover:border-[#0b5cbe] hover:bg-[#eaf3ff] rounded-2xl p-3.5 flex flex-col items-center justify-center min-h-[110px] transition-all cursor-pointer group text-center"
             >
-              <div className={`w-8 h-8 rounded-full border-2 border-dashed ${gateUnlocked ? 'bg-black border-black text-[#d4ff00]' : 'border-black/25 text-black group-hover:bg-black group-hover:text-white'} flex items-center justify-center transition-all`}>
+              <div className={`w-8 h-8 rounded-full border-2 border-dashed ${gateUnlocked ? 'bg-[#0b5cbe] border-[#0b5cbe] text-white' : 'border-[#0b5cbe]/30 text-[#0b5cbe] group-hover:bg-[#0b5cbe] group-hover:text-white'} flex items-center justify-center transition-all`}>
                 {gateUnlocked ? <Unlock size={14} /> : <Plus size={14} />}
               </div>
-              <span className="text-[11px] font-black uppercase tracking-wider text-black mt-2 block">
+              <span className="text-[11px] font-black uppercase tracking-wider text-[#0b1f3a] mt-2 block">
                 {gateUnlocked ? 'Gate Unlocked' : 'Unlock Turnstile'}
               </span>
-              <span className="text-[7.5px] text-slate-500 font-bold mt-0.5">ESSL Gate Trigger Bridge</span>
+              <span className="text-[7.5px] text-[#5f7692] font-bold mt-0.5">ESSL Gate Trigger Bridge</span>
             </button>
 
           </div>
@@ -579,12 +579,12 @@ export default function DashboardPage() {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
             
             {/* Chart Card */}
-            <div className="lg:col-span-2 bg-black text-white p-3.5 rounded-2xl shadow-lg flex flex-col md:flex-row gap-4 justify-between min-h-[200px] relative overflow-hidden">
+            <div className="lg:col-span-2 bg-gradient-to-br from-[#083f82] to-[#0b5cbe] text-white p-3.5 rounded-2xl shadow-lg flex flex-col md:flex-row gap-4 justify-between min-h-[200px] relative overflow-hidden border border-blue-400/20">
               <div className="absolute right-0 top-0 w-24 h-24 rounded-full bg-white/5 blur-xl pointer-events-none" />
 
               <div className="flex-1 flex flex-col justify-between">
                 <div>
-                  <span className="text-[8.5px] font-black uppercase tracking-wider text-slate-400">Attendance Intensity</span>
+                  <span className="text-[8.5px] font-black uppercase tracking-wider text-blue-200">Attendance Intensity</span>
                   <h4 className="text-xs font-extrabold text-white mt-0.5 leading-none">Weekly Check-in Distribution</h4>
                 </div>
 
@@ -592,15 +592,15 @@ export default function DashboardPage() {
                   {isMounted && hasChartData ? (
                     <ResponsiveContainer width="100%" height="100%">
                       <ComposedChart data={chartData} margin={{ top: 5, right: 0, bottom: 0, left: -40 }}>
-                        <XAxis dataKey="name" stroke="transparent" tick={{ fill: '#64748B', fontSize: 8, fontWeight: 700 }} axisLine={false} tickLine={false} />
+                        <XAxis dataKey="name" stroke="transparent" tick={{ fill: '#b9d7f7', fontSize: 8, fontWeight: 700 }} axisLine={false} tickLine={false} />
                         <Bar dataKey="checkins" fill="#FFFFFF" radius={[3, 3, 0, 0]} barSize={12} />
-                        <Line type="monotone" dataKey="intensity" stroke="#d4ff00" strokeWidth={2} dot={false} />
+                        <Line type="monotone" dataKey="intensity" stroke="#b9d7f7" strokeWidth={2} dot={false} />
                       </ComposedChart>
                     </ResponsiveContainer>
                   ) : (
                     <div className="h-full w-full flex flex-col items-center justify-center text-center gap-1.5">
-                      <Activity size={16} className="text-slate-700" />
-                      <span className="text-[9.5px] text-slate-500 font-bold">No biometric data recorded this year</span>
+                      <Activity size={16} className="text-blue-200/50" />
+                      <span className="text-[9.5px] text-blue-200 font-bold">No biometric data recorded this year</span>
                     </div>
                   )}
                 </div>
@@ -608,26 +608,26 @@ export default function DashboardPage() {
 
               <div className="w-full md:w-[150px] border-t md:border-t-0 md:border-l border-white/10 pt-3 md:pt-0 md:pl-4 flex flex-col justify-between text-left shrink-0">
                 <div>
-                  <span className="text-[8px] font-black uppercase tracking-wider text-slate-400 block">Weekly Syncs</span>
+                  <span className="text-[8px] font-black uppercase tracking-wider text-blue-200 block">Weekly Syncs</span>
                   <div className="flex items-center gap-1.5 mt-1">
                     <div className="text-lg font-black text-white">{totalCheckinsThisWeek}</div>
-                    <span className="text-[8px] bg-red-900/50 text-red-400 px-1 py-0.5 rounded font-black">-7%</span>
+                    <span className="text-[8px] bg-red-900/50 text-red-300 px-1 py-0.5 rounded font-black">-7%</span>
                   </div>
-                  <p className="text-[7px] text-slate-500 font-bold mt-0.5">Checkins since last week</p>
+                  <p className="text-[7px] text-blue-200/70 font-bold mt-0.5">Checkins since last week</p>
                 </div>
 
                 <div className="mt-2 border-t border-white/5 pt-2">
-                  <span className="text-[8px] font-black uppercase tracking-wider text-slate-400 block">Monthly Syncs</span>
+                  <span className="text-[8px] font-black uppercase tracking-wider text-blue-200 block">Monthly Syncs</span>
                   <div className="flex items-center gap-1.5 mt-1">
                     <div className="text-lg font-black text-white">{attendance ? attendance.length : 0}</div>
-                    <span className="text-[8px] bg-emerald-950 text-[#d4ff00] px-1 py-0.5 rounded font-black">+13%</span>
+                    <span className="text-[8px] bg-white/20 text-white px-1 py-0.5 rounded font-black">+13%</span>
                   </div>
-                  <p className="text-[7px] text-slate-500 font-bold mt-0.5">Checkins this month</p>
+                  <p className="text-[7px] text-blue-200/70 font-bold mt-0.5">Checkins this month</p>
                 </div>
 
-                <div className="mt-2 flex items-center gap-2 text-[7px] text-slate-500 font-black uppercase">
-                  <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-[#d4ff00]" /> This Year</span>
-                  <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-slate-500" /> Last Year</span>
+                <div className="mt-2 flex items-center gap-2 text-[7px] text-blue-200/80 font-black uppercase">
+                  <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-white" /> This Year</span>
+                  <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-blue-300" /> Last Year</span>
                 </div>
               </div>
             </div>
@@ -868,7 +868,7 @@ export default function DashboardPage() {
                   </div>
                   <button 
                     onClick={() => handleReceptionAction(m, 'Offer Discount')}
-                    className="px-3 py-1.5 rounded-xl bg-[#d4ff00] text-black hover:bg-[#c2eb00] transition-all text-[8.5px] font-black uppercase tracking-wider flex items-center gap-1 cursor-pointer border-none shrink-0"
+                    className="px-3 py-1.5 rounded-xl bg-[#0b5cbe] text-white hover:bg-[#064a9b] transition-all text-[8.5px] font-black uppercase tracking-wider flex items-center gap-1 cursor-pointer border-none shrink-0"
                   >
                     <Plus size={10} /> Offer 20%
                   </button>
@@ -889,7 +889,7 @@ export default function DashboardPage() {
             <h3 className="font-extrabold text-slate-800 text-sm">Today&apos;s Biometric Session Flow</h3>
             <p className="text-[9px] text-slate-400 font-bold mt-0.5">Live workout duration tracks from ESSL gate logs</p>
           </div>
-          <span className="text-[8.5px] bg-[#d4ff00] text-black px-2 py-1 rounded font-black uppercase tracking-wider">
+          <span className="text-[8.5px] bg-[#eaf3ff] text-[#0b5cbe] border border-[#b9d7f7] px-2 py-1 rounded font-black uppercase tracking-wider">
             June 2026
           </span>
         </div>
@@ -919,7 +919,7 @@ export default function DashboardPage() {
 
                   <div className="col-span-9 relative h-6 bg-slate-50 border border-slate-100 rounded-xl overflow-hidden flex items-center">
                     <div 
-                      className="absolute h-4 bg-[#d4ff00] border border-black/5 rounded-full flex items-center px-2 text-[8px] font-black text-black shadow-sm"
+                      className="absolute h-4 bg-gradient-to-r from-[#0b5cbe] to-[#2876d0] text-white border border-blue-400/30 rounded-full flex items-center px-2 text-[8px] font-black shadow-sm"
                       style={{ left: `${(startOffset / 14) * 100}%`, width: '25%' }}
                     >
                       Workout Session

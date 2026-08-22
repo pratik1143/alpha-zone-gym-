@@ -153,11 +153,11 @@ export default function CommunicationTab({ member }: { member: any }) {
             <button
               key={f}
               onClick={() => setFilter(f)}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-xs font-bold transition-all ${filter === f ? 'bg-slate-900 text-white shadow-md' : 'bg-white border border-slate-100 text-slate-600 hover:bg-slate-50'}`}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-xs font-bold transition-all ${filter === f ? 'bg-[#0b5cbe] text-white shadow-md border border-[#0b5cbe]' : 'bg-white border border-slate-100 text-slate-600 hover:bg-slate-50'}`}
             >
               {f === 'All' ? <Filter size={14} /> : getIcon(f)}
               {f}
-              <span className={`ml-auto text-[10px] px-2 py-0.5 rounded-full ${filter === f ? 'bg-white/20' : 'bg-slate-100'}`}>
+              <span className={`ml-auto text-[10px] px-2 py-0.5 rounded-full ${filter === f ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'}`}>
                 {f === 'All' ? communications.length : communications.filter(c => c.type === f || c.method === f).length}
               </span>
             </button>

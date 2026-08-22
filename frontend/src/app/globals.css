@@ -1,6 +1,26 @@
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Outfit:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&family=Poppins:wght@300;400;500;600;700&family=Rowdies:wght@300;400;700&display=swap');
 @import "tailwindcss";
 
+:root {
+  --primary: #0B5CBE;
+  --primary-dark: #064A9B;
+  --primary-deep: #083F82;
+
+  --background: #FDFDFD;
+  --surface: #FFFFFF;
+  --surface-soft: #F5F9FE;
+  --surface-blue: #EAF3FF;
+
+  --border: #DCEBFA;
+  --border-strong: #B9D7F7;
+
+  --text-primary: #0B1F3A;
+  --text-secondary: #5F7692;
+  --text-muted: #8FA3B8;
+
+  --danger: #DC2626;
+}
+
 @theme {
   --font-sans: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif;
   --font-display: 'Outfit', 'Plus Jakarta Sans', sans-serif;
@@ -9,27 +29,27 @@
   --font-poppins: 'Poppins', 'Plus Jakarta Sans', sans-serif;
 
   --color-brand-primary: #0b5cbe;
-  --color-brand-primary-hover: #084a99;
-  --color-brand-primary-active: #0040d0;
+  --color-brand-primary-hover: #064a9b;
+  --color-brand-primary-active: #083f82;
   --color-brand-primary-light: #eaf3ff;
-  --color-brand-primary-soft: #f4f8fd;
+  --color-brand-primary-soft: #f5f9fe;
 
   --color-brand-bg: #fdfdfd;
   --color-brand-bg-card: #ffffff;
-  --color-brand-border: #d9e7f7;
+  --color-brand-border: #dcebfa;
 
   --color-brand-cyan: #0b5cbe;
   --color-brand-purple: #eaf3ff;
   --color-brand-success: #0b5cbe;
   --color-brand-warning: #0b5cbe;
-  --color-brand-danger: #dc3545;
+  --color-brand-danger: #dc2626;
 
-  --color-brand-text-primary: #10233f;
-  --color-brand-text-secondary: #5f7593;
-  --color-brand-text-muted: #8aa0ba;
+  --color-brand-text-primary: #0b1f3a;
+  --color-brand-text-secondary: #5f7692;
+  --color-brand-text-muted: #8fa3b8;
   
   --color-background: #fdfdfd;
-  --color-foreground: #10233f;
+  --color-foreground: #0b1f3a;
 }
 
 /* Base Styles */
