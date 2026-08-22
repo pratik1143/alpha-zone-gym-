@@ -130,83 +130,96 @@ export const membershipEngine = {
     return Math.min(100, score);
   },
 
-  calculatePlanExpiryDate: (planOrObject: any, startDateVal?: any, plansList: any[] = []): string => {
-    let validStart: Date;
-    if (!startDateVal) {
-      validStart = new Date();
-    } else if (typeof startDateVal === 'string') {
-      validStart = new Date(startDateVal);
-    } else if (typeof startDateVal === 'object' && typeof startDateVal.seconds === 'number') {
-      validStart = new Date(startDateVal.seconds * 1000);
-    } else if (startDateVal instanceof Date) {
-      validStart = startDateVal;
+  calculateMembershipExpiry: (startDateInput: string | Date | null | undefined, packageDuration: string | number): string => {
+    if (!startDateInput) return new Date().toISOString().split('T')[0];
+    let start: Date;
+    if (typeof startDateInput === 'string') {
+      start = new Date(startDateInput);
+    } else if (startDateInput instanceof Date) {
+      start = startDateInput;
     } else {
-      validStart = new Date(startDateVal);
+      start = new Date(startDateInput);
     }
-    if (isNaN(validStart.getTime())) validStart = new Date();
-    
-    let planName = typeof planOrObject === 'string' ? planOrObject : (planOrObject?.name || planOrObject?.plan || '');
-    let durationDays: number | null = null;
+    if (isNaN(start.getTime())) return new Date().toISOString().split('T')[0];
 
-    // Stage 1: Check direct plan object properties
-    if (typeof planOrObject === 'object' && planOrObject !== null) {
-      if (typeof planOrObject.durationDays === 'number' && planOrObject.durationDays > 0) {
-        durationDays = planOrObject.durationDays;
-      } else if (planOrObject.duration) {
-        const dMatch = String(planOrObject.duration).match(/(\d+)\s*(?:day|days|d)\b/i);
-        if (dMatch) durationDays = parseInt(dMatch[1], 10);
-      }
-    }
+    let months = 0;
+    let days = 0;
 
-    const p = String(planName || '').trim().toLowerCase();
-
-    // Stage 2: Direct string regex parsing (e.g. "10 days", "2 months", "1 year", "quarterly", "semi", "annual")
-    if (durationDays === null && p) {
-      const dayMatch = p.match(/(\d+)\s*(?:day|days|d)\b/i);
+    if (typeof packageDuration === 'number') {
+      months = packageDuration;
+    } else {
+      const p = String(packageDuration || '').trim().toLowerCase();
       const monthMatch = p.match(/(\d+)\s*(?:month|months|m)\b/i);
       const yearMatch = p.match(/(\d+)\s*(?:year|years|y)\b/i);
+      const dayMatch = p.match(/(\d+)\s*(?:day|days|d)\b/i);
 
-      if (dayMatch) {
-        durationDays = parseInt(dayMatch[1], 10);
-      } else if (monthMatch) {
-        durationDays = parseInt(monthMatch[1], 10) * 30;
+      if (monthMatch) {
+        months = parseInt(monthMatch[1], 10);
       } else if (yearMatch) {
-        durationDays = parseInt(yearMatch[1], 10) * 365;
-      } else if (p.includes('quarterly')) {
-        durationDays = 90;
-      } else if (p.includes('semi') || p.includes('half year')) {
-        durationDays = 180;
-      } else if (p.includes('annual') || p.includes('yearly')) {
-        durationDays = 365;
-      } else if (p.includes('lifetime')) {
-        durationDays = 3650;
+        months = parseInt(yearMatch[1], 10) * 12;
+      } else if (dayMatch) {
+        days = parseInt(dayMatch[1], 10);
+      } else if (p.includes('quarterly') || p.includes('3 month')) {
+        months = 3;
+      } else if (p.includes('semi') || p.includes('6 month') || p.includes('half year')) {
+        months = 6;
+      } else if (p.includes('annual') || p.includes('12 month') || p.includes('1 year') || p.includes('yearly')) {
+        months = 12;
+      } else if (p.includes('1 month') || p.includes('monthly') || p.includes('standard')) {
+        months = 1;
+      } else {
+        months = 1;
       }
     }
 
-    // Stage 3: Exact lookup in plansList if provided
-    if (durationDays === null && plansList && plansList.length > 0) {
-      const matched = plansList.find((item: any) => {
-        const name = String(item.name || '').trim().toLowerCase();
-        const id = String(item.id || '').trim().toLowerCase();
-        return name === p || id === p;
-      });
-      if (matched) {
-        if (typeof matched.durationDays === 'number' && matched.durationDays > 0) {
-          durationDays = matched.durationDays;
-        } else if (matched.duration) {
-          const dMatch = String(matched.duration).match(/(\d+)\s*(?:day|days|d)\b/i);
-          if (dMatch) durationDays = parseInt(dMatch[1], 10);
-        }
+    const result = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+    if (months > 0) {
+      const targetMonth = result.getMonth() + months;
+      result.setMonth(targetMonth);
+      
+      // Handle month end overflow e.g. Jan 31 -> Feb 28
+      if (result.getDate() !== start.getDate()) {
+        result.setDate(0);
       }
+      // Subtract 1 day for inclusive subscription period (e.g. 21-11 to 20-05)
+      result.setDate(result.getDate() - 1);
+    } else if (days > 0) {
+      result.setDate(result.getDate() + days - 1);
     }
 
-    // Fallback if unresolved
-    if (durationDays === null || isNaN(durationDays) || durationDays <= 0) {
-      durationDays = 30;
+    const year = result.getFullYear();
+    const month = String(result.getMonth() + 1).padStart(2, '0');
+    const day = String(result.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  },
+
+  calculateAutoStartDate: (member: any): string => {
+    const todayStr = new Date().toISOString().split('T')[0];
+    if (!member || !member.expiryDate) return todayStr;
+
+    const expiry = new Date(member.expiryDate);
+    if (isNaN(expiry.getTime())) return todayStr;
+
+    const today = new Date();
+    const eDay = new Date(expiry.getFullYear(), expiry.getMonth(), expiry.getDate());
+    const tDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+
+    // If active member (expiry >= today), next membership start date is existing expiryDate + 1 day
+    if (eDay.getTime() >= tDay.getTime()) {
+      const nextStart = new Date(eDay);
+      nextStart.setDate(nextStart.getDate() + 1);
+      const year = nextStart.getFullYear();
+      const month = String(nextStart.getMonth() + 1).padStart(2, '0');
+      const day = String(nextStart.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
     }
 
-    const expiryDate = new Date(validStart.getTime() + durationDays * 24 * 60 * 60 * 1000);
-    return expiryDate.toISOString().split('T')[0];
+    return todayStr;
+  },
+
+  calculatePlanExpiryDate: (planOrObject: any, startDateVal?: any, plansList: any[] = []): string => {
+    const planName = typeof planOrObject === 'string' ? planOrObject : (planOrObject?.name || planOrObject?.plan || '');
+    return membershipEngine.calculateMembershipExpiry(startDateVal, planName);
   },
 
   selfHealMemberData: async (member: any) => {

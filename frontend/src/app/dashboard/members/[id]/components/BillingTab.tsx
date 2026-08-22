@@ -16,6 +16,7 @@ import toast from 'react-hot-toast';
 import RenewalWizardModal from '../../components/RenewalWizardModal';
 import OfficialInvoiceReceipt from '@/app/dashboard/components/OfficialInvoiceReceipt';
 import EditBillingModal from './EditBillingModal';
+import CreateNewBillModal from '../../components/CreateNewBillModal';
 
 export default function BillingTab({ member: initialMember }: { member: any }) {
   const { fetchMembers } = useGymStore();
@@ -84,16 +85,7 @@ export default function BillingTab({ member: initialMember }: { member: any }) {
     expiryDate: '',
   });
 
-  // New Bill Form State
-  const [newBillForm, setNewBillForm] = useState({
-    plan: '3 Months (Quarterly)',
-    amount: 6500,
-    method: 'UPI',
-    status: 'paid',
-    date: new Date().toISOString().split('T')[0],
-    startDate: new Date().toISOString().split('T')[0],
-    expiryDate: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-  });
+
 
   // Real-time listener for member invoices
   useEffect(() => {
@@ -248,58 +240,7 @@ export default function BillingTab({ member: initialMember }: { member: any }) {
     window.print();
   };
 
-  // Handle Save New Bill
-  const handleSaveNewBill = async () => {
-    try {
-      const invNum = `INV-${Math.floor(10000 + Math.random() * 90000)}`;
-      const origAmt = Number(newBillForm.amount);
-      const discAmt = 0;
-      const netPayable = origAmt - discAmt;
-      const paidAmt = newBillForm.status === 'paid' ? netPayable : 0;
-      const pendingAmt = Math.max(0, netPayable - paidAmt);
 
-      const newBill = {
-        memberId: member.id,
-        memberName: member.name,
-        memberPhone: member.phone,
-        invoiceNumber: invNum,
-        invoice: invNum,
-        plan: newBillForm.plan,
-        originalAmount: origAmt,
-        discountAmount: discAmt,
-        discount: discAmt,
-        taxAmount: 0,
-        otherCharges: 0,
-        netPayable: netPayable,
-        amount: netPayable,
-        amountPaid: paidAmt,
-        paid: paidAmt,
-        outstandingAmount: pendingAmt,
-        pendingAmount: pendingAmt,
-        method: newBillForm.method,
-        status: pendingAmt <= 0 ? 'paid' : (paidAmt > 0 ? 'partial' : 'pending'),
-        date: newBillForm.date,
-        startDate: newBillForm.startDate,
-        expiryDate: newBillForm.expiryDate,
-        createdAt: new Date().toISOString(),
-      };
-
-      await setDoc(doc(db, 'payments', `inv_${Date.now()}`), newBill);
-
-      await updateDoc(doc(db, 'members', member.id), {
-        plan: newBillForm.plan,
-        expiryDate: newBillForm.expiryDate,
-        status: 'active',
-        paymentStatus: newBill.status,
-      });
-
-      toast.success(`Bill ${invNum} generated successfully!`);
-      setShowNewBillModal(false);
-      fetchMembers();
-    } catch (err: any) {
-      toast.error('Failed to generate bill: ' + err.message);
-    }
-  };
 
   return (
     <div className="space-y-6">
@@ -576,104 +517,12 @@ export default function BillingTab({ member: initialMember }: { member: any }) {
       )}
 
       {/* ── 2. CREATE NEW BILL MODAL ─────────────────────────────────────────── */}
-      {showNewBillModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-          <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full p-6 space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
-                <Plus size={18} className="text-blue-600" /> Create New Bill for {member.name}
-              </h3>
-              <button onClick={() => setShowNewBillModal(false)} className="p-1 text-slate-400 hover:bg-slate-100 rounded-full border-none bg-transparent cursor-pointer">
-                <X size={16} />
-              </button>
-            </div>
-
-            <div className="space-y-3 text-xs">
-              <div>
-                <label className="font-bold text-slate-600 block mb-1">Select Package</label>
-                <select
-                  value={newBillForm.plan}
-                  onChange={(e) => {
-                    const selected = e.target.value;
-                    let amt = 2500;
-                    if (selected.includes('3 Month')) amt = 6500;
-                    if (selected.includes('6 Month')) amt = 11500;
-                    if (selected.includes('12 Month')) amt = 18000;
-                    setNewBillForm({ ...newBillForm, plan: selected, amount: amt });
-                  }}
-                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold"
-                >
-                  <option value="1 Month Standard">1 Month Standard (₹2,500)</option>
-                  <option value="3 Months (Quarterly)">3 Months (Quarterly) (₹6,500)</option>
-                  <option value="6 Months (Semi-Annual)">6 Months (Semi-Annual) (₹11,500)</option>
-                  <option value="12 Months (Annual)">12 Months (Annual) (₹18,000)</option>
-                </select>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="font-bold text-slate-600 block mb-1">Amount (₹)</label>
-                  <input
-                    type="number"
-                    value={newBillForm.amount}
-                    onChange={(e) => setNewBillForm({ ...newBillForm, amount: Number(e.target.value) })}
-                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold"
-                  />
-                </div>
-                <div>
-                  <label className="font-bold text-slate-600 block mb-1">Payment Mode</label>
-                  <select
-                    value={newBillForm.method}
-                    onChange={(e) => setNewBillForm({ ...newBillForm, method: e.target.value })}
-                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold"
-                  >
-                    <option value="UPI">UPI</option>
-                    <option value="Cash">Cash</option>
-                    <option value="Card">Card</option>
-                    <option value="Bank">Bank Transfer</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="font-bold text-slate-600 block mb-1">Start Date</label>
-                  <input
-                    type="date"
-                    value={newBillForm.startDate}
-                    onChange={(e) => setNewBillForm({ ...newBillForm, startDate: e.target.value })}
-                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold"
-                  />
-                </div>
-                <div>
-                  <label className="font-bold text-slate-600 block mb-1">Expiry Date</label>
-                  <input
-                    type="date"
-                    value={newBillForm.expiryDate}
-                    onChange={(e) => setNewBillForm({ ...newBillForm, expiryDate: e.target.value })}
-                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="flex gap-2 pt-2">
-              <button
-                onClick={handleSaveNewBill}
-                className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black transition-all border-none cursor-pointer"
-              >
-                Generate Bill & Activate
-              </button>
-              <button
-                onClick={() => setShowNewBillModal(false)}
-                className="py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all border-none cursor-pointer"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <CreateNewBillModal
+        isOpen={showNewBillModal}
+        member={member}
+        onClose={() => setShowNewBillModal(false)}
+        onSaved={() => fetchMembers()}
+      />
 
       {/* ── 3. RENEWAL / UPGRADE WIZARD MODAL ─────────────────────────────────── */}
       {showUpgradeModal && (
