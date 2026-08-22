@@ -15,6 +15,7 @@ import toast from 'react-hot-toast';
 import SmartPhotoCapture from '../components/SmartPhotoCapture';
 import SendWhatsAppModal from '../components/SendWhatsAppModal';
 import { MessageSquare } from 'lucide-react';
+import { z } from 'zod';
 
 export default function EmployeesPage() {
   const [employees, setEmployees] = useState<any[]>([]);
@@ -399,9 +400,21 @@ export default function EmployeesPage() {
 }
 
 // ─── ADD EMPLOYEE WIZARD COMPONENT ───
+const employeeValidationSchema = z.object({
+  name: z.string().trim().min(2, 'Full name must be at least 2 characters'),
+  phone: z.string().trim().regex(/^[0-9+\s-]{10,15}$/, 'Enter valid phone number (at least 10 digits)'),
+  email: z.string().trim().email('Enter valid email address'),
+  role: z.string().min(1, 'Role is required'),
+  branch: z.string().min(1, 'Branch location is required'),
+  emergencyContact: z.string().trim().optional().refine(val => !val || /^[0-9+\s-]{10,15}$/.test(val), {
+    message: 'Emergency contact must be valid phone number'
+  }),
+});
+
 function AddEmployeeWizard({ onClose, onSuccess }: { onClose: () => void; onSuccess?: () => void }) {
   const [step, setStep] = useState(1);
   const [submitting, setSubmitting] = useState(false);
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
   // Form Fields
   const [name, setName] = useState('');
@@ -425,12 +438,34 @@ function AddEmployeeWizard({ onClose, onSuccess }: { onClose: () => void; onSucc
   const [manualBiometricId, setManualBiometricId] = useState('');
   const [enrollStatus, setEnrollStatus] = useState<'idle' | 'scanning' | 'success'>('idle');
 
-  const handleNext = () => {
-    if (!name || !phone || !email) {
-      toast.error('Please fill in all required fields marked with *');
-      return;
+  const validateForm = () => {
+    const res = employeeValidationSchema.safeParse({
+      name,
+      phone,
+      email,
+      role,
+      branch,
+      emergencyContact,
+    });
+
+    if (!res.success) {
+      const fieldErrors: Record<string, string> = {};
+      res.error.issues.forEach((err: z.ZodIssue) => {
+        if (err.path[0]) fieldErrors[err.path[0] as string] = err.message;
+      });
+      setErrors(fieldErrors);
+      return false;
     }
-    setStep(2);
+    setErrors({});
+    return true;
+  };
+
+  const handleNext = () => {
+    if (validateForm()) {
+      setStep(2);
+    } else {
+      toast.error('Please fix errors highlighted in red');
+    }
   };
 
   const handleEnrollFingerprint = () => {
@@ -442,6 +477,7 @@ function AddEmployeeWizard({ onClose, onSuccess }: { onClose: () => void; onSucc
   };
 
   const handleSubmit = async () => {
+    if (step === 1 && !validateForm()) return;
     setSubmitting(true);
     try {
       const payload = {
@@ -492,36 +528,39 @@ function AddEmployeeWizard({ onClose, onSuccess }: { onClose: () => void; onSucc
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4">
       <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm animate-fade-in" onClick={onClose} />
       
-      <div className="relative w-full max-w-lg bg-white rounded-3xl z-10 shadow-[0_30px_70px_rgba(0,0,0,0.12)] overflow-hidden border border-slate-100 flex flex-col justify-between text-slate-800 text-left font-display">
+      <div className="relative w-full max-w-lg bg-white rounded-3xl z-10 shadow-[0_30px_70px_rgba(0,0,0,0.12)] overflow-hidden border border-slate-100 flex flex-col max-h-[85vh] text-slate-800 text-left font-display">
         {/* Top Accent bar */}
-        <div className="h-1.5 w-full bg-gradient-to-r from-blue-600 to-[#d4ff00]" />
+        <div className="h-1.5 w-full bg-gradient-to-r from-blue-600 to-[#d4ff00] shrink-0" />
 
         {/* Close button */}
-        <button onClick={onClose} className="absolute top-4 right-4 w-7 h-7 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 border border-slate-250 flex items-center justify-center cursor-pointer">
+        <button onClick={onClose} className="absolute top-4 right-4 w-7 h-7 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 border border-slate-250 flex items-center justify-center cursor-pointer z-20">
           <X size={12} />
         </button>
 
-        {/* Wizard content */}
-        <div className="p-6 space-y-6">
-          <div className="flex justify-between items-center">
+        {/* Wizard Header */}
+        <div className="p-5 sm:p-6 pb-3 border-b border-slate-100 shrink-0">
+          <div className="flex justify-between items-center pr-6">
             <div>
-              <h3 className="font-black text-sm text-slate-900 leading-none">Register Gym Employee</h3>
-              <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider mt-1">Step {step} of 2: {step === 1 ? 'Personal Profile' : 'Biometric Link'}</p>
+              <h3 className="font-black text-base text-slate-900 leading-none">Register Gym Employee</h3>
+              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-1">Step {step} of 2: {step === 1 ? 'Personal Profile' : 'Biometric Link'}</p>
             </div>
             {/* Progress indicators */}
             <div className="flex gap-1.5">
-              <span className={`w-3.5 h-1.5 rounded-full ${step >= 1 ? 'bg-blue-600' : 'bg-slate-200'}`} />
-              <span className={`w-3.5 h-1.5 rounded-full ${step >= 2 ? 'bg-blue-600' : 'bg-slate-200'}`} />
+              <span className={`w-4 h-1.5 rounded-full ${step >= 1 ? 'bg-blue-600' : 'bg-slate-200'}`} />
+              <span className={`w-4 h-1.5 rounded-full ${step >= 2 ? 'bg-blue-600' : 'bg-slate-200'}`} />
             </div>
           </div>
+        </div>
 
+        {/* Scrollable Wizard content */}
+        <div className="p-5 sm:p-6 space-y-4 overflow-y-auto flex-1 custom-scrollbar">
           {step === 1 ? (
             <div className="space-y-4 text-xs font-semibold">
               <div className="w-full">
-                <label className="block text-[8px] font-black uppercase tracking-wider text-slate-400 mb-2">Employee Photo</label>
+                <label className="block text-[9px] font-black uppercase tracking-wider text-slate-400 mb-1.5">Employee Photo</label>
                 <SmartPhotoCapture 
                   value={avatarUrl || undefined}
                   onCaptureComplete={(urls) => {
@@ -531,51 +570,80 @@ function AddEmployeeWizard({ onClose, onSuccess }: { onClose: () => void; onSucc
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-[8px] font-black uppercase tracking-wider text-slate-400 mb-1">Full Name *</label>
+                  <label className="block text-[9px] font-black uppercase tracking-wider text-slate-500 mb-1">Full Name *</label>
                   <input 
                     type="text" 
-                    required 
                     placeholder="e.g. Ramesh Kumar" 
                     value={name}
-                    onChange={e => setName(e.target.value)}
-                    className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 focus:outline-none focus:border-indigo-500 focus:bg-white transition-all text-slate-700 font-medium"
+                    onChange={e => {
+                      setName(e.target.value);
+                      if (errors.name) setErrors(prev => ({ ...prev, name: '' }));
+                    }}
+                    className={`w-full text-xs bg-slate-50 border rounded-xl px-3 py-2.5 focus:outline-none transition-all text-slate-800 font-medium ${
+                      errors.name ? 'border-red-500 bg-red-50/20' : 'border-slate-200 focus:border-indigo-500 focus:bg-white'
+                    }`}
                   />
+                  {errors.name && (
+                    <p className="text-[10px] font-bold text-red-500 mt-1 flex items-center gap-1">
+                      <AlertCircle size={11} /> {errors.name}
+                    </p>
+                  )}
                 </div>
+
                 <div>
-                  <label className="block text-[8px] font-black uppercase tracking-wider text-slate-400 mb-1">Phone Number *</label>
+                  <label className="block text-[9px] font-black uppercase tracking-wider text-slate-500 mb-1">Phone Number *</label>
                   <input 
                     type="tel" 
-                    required 
                     placeholder="e.g. 9876543210" 
                     value={phone}
-                    onChange={e => setPhone(e.target.value)}
-                    className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 focus:outline-none focus:border-indigo-500 focus:bg-white transition-all text-slate-700 font-medium"
+                    onChange={e => {
+                      setPhone(e.target.value);
+                      if (errors.phone) setErrors(prev => ({ ...prev, phone: '' }));
+                    }}
+                    className={`w-full text-xs bg-slate-50 border rounded-xl px-3 py-2.5 focus:outline-none transition-all text-slate-800 font-medium ${
+                      errors.phone ? 'border-red-500 bg-red-50/20' : 'border-slate-200 focus:border-indigo-500 focus:bg-white'
+                    }`}
                   />
+                  {errors.phone && (
+                    <p className="text-[10px] font-bold text-red-500 mt-1 flex items-center gap-1">
+                      <AlertCircle size={11} /> {errors.phone}
+                    </p>
+                  )}
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-[8px] font-black uppercase tracking-wider text-slate-400 mb-1">Email ID *</label>
+                  <label className="block text-[9px] font-black uppercase tracking-wider text-slate-500 mb-1">Email ID *</label>
                   <input 
                     type="email" 
-                    required 
                     placeholder="e.g. ramesh@alphazonegym.com" 
                     value={email}
-                    onChange={e => setEmail(e.target.value)}
-                    className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 focus:outline-none focus:border-indigo-500 focus:bg-white transition-all text-slate-700 font-medium"
+                    onChange={e => {
+                      setEmail(e.target.value);
+                      if (errors.email) setErrors(prev => ({ ...prev, email: '' }));
+                    }}
+                    className={`w-full text-xs bg-slate-50 border rounded-xl px-3 py-2.5 focus:outline-none transition-all text-slate-800 font-medium ${
+                      errors.email ? 'border-red-500 bg-red-50/20' : 'border-slate-200 focus:border-indigo-500 focus:bg-white'
+                    }`}
                   />
+                  {errors.email && (
+                    <p className="text-[10px] font-bold text-red-500 mt-1 flex items-center gap-1">
+                      <AlertCircle size={11} /> {errors.email}
+                    </p>
+                  )}
                 </div>
+
                 <div>
-                  <label className="block text-[8px] font-black uppercase tracking-wider text-slate-400 mb-1">Role *</label>
+                  <label className="block text-[9px] font-black uppercase tracking-wider text-slate-500 mb-1">Role *</label>
                   <select 
                     value={role} 
                     onChange={e => setRole(e.target.value)}
-                    className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:border-indigo-500 focus:bg-white text-slate-700 font-semibold cursor-pointer"
+                    className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:border-indigo-500 focus:bg-white text-slate-800 font-semibold cursor-pointer"
                   >
-                    {['Manager', 'Reception', 'Trainer', 'Accountant', 'Staff', 'Other'].map(r => (
+                    {['Trainer', 'Manager', 'Reception', 'Accountant', 'Staff', 'Other'].map(r => (
                       <option key={r} value={r}>{r}</option>
                     ))}
                   </select>
@@ -584,27 +652,27 @@ function AddEmployeeWizard({ onClose, onSuccess }: { onClose: () => void; onSucc
 
               {/* TRAINER SPECIFIC DETAILS SECTION */}
               {role === 'Trainer' && (
-                <div className="bg-amber-50/70 border border-amber-200/80 rounded-2xl p-3.5 space-y-3">
+                <div className="bg-amber-50/70 border border-amber-200/80 rounded-2xl p-4 space-y-3">
                   <h4 className="text-[10px] font-black text-amber-900 uppercase tracking-wider flex items-center gap-1.5">
-                    <Sparkles size={12} className="text-amber-600" /> Trainer Professional Details
+                    <Sparkles size={13} className="text-amber-600" /> Trainer Professional Details
                   </h4>
 
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-[8px] font-black uppercase tracking-wider text-slate-500 mb-1">Specialization</label>
+                      <label className="block text-[9px] font-black uppercase tracking-wider text-slate-500 mb-1">Specialization</label>
                       <input 
                         type="text" 
-                        placeholder="e.g. Weight Loss, Strength & Conditioning" 
+                        placeholder="e.g. Personal Trainer & Strength" 
                         value={specialization}
                         onChange={e => setSpecialization(e.target.value)}
                         className="w-full text-xs bg-white border border-amber-200 rounded-xl px-3 py-2 focus:outline-none text-slate-800 font-bold"
                       />
                     </div>
                     <div>
-                      <label className="block text-[8px] font-black uppercase tracking-wider text-slate-500 mb-1">Experience</label>
+                      <label className="block text-[9px] font-black uppercase tracking-wider text-slate-500 mb-1">Experience</label>
                       <input 
                         type="text" 
-                        placeholder="e.g. 5 Years" 
+                        placeholder="e.g. 3 Years" 
                         value={experience}
                         onChange={e => setExperience(e.target.value)}
                         className="w-full text-xs bg-white border border-amber-200 rounded-xl px-3 py-2 focus:outline-none text-slate-800 font-bold"
@@ -612,9 +680,9 @@ function AddEmployeeWizard({ onClose, onSuccess }: { onClose: () => void; onSucc
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-[8px] font-black uppercase tracking-wider text-slate-500 mb-1">Certifications</label>
+                      <label className="block text-[9px] font-black uppercase tracking-wider text-slate-500 mb-1">Certifications</label>
                       <input 
                         type="text" 
                         placeholder="e.g. ACE Certified, CPR First Aid" 
@@ -624,7 +692,7 @@ function AddEmployeeWizard({ onClose, onSuccess }: { onClose: () => void; onSucc
                       />
                     </div>
                     <div>
-                      <label className="block text-[8px] font-black uppercase tracking-wider text-slate-500 mb-1">Bio / About</label>
+                      <label className="block text-[9px] font-black uppercase tracking-wider text-slate-500 mb-1">Bio / About</label>
                       <input 
                         type="text" 
                         placeholder="Short trainer bio" 
@@ -637,39 +705,50 @@ function AddEmployeeWizard({ onClose, onSuccess }: { onClose: () => void; onSucc
                 </div>
               )}
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-[8px] font-black uppercase tracking-wider text-slate-400 mb-1">Branch Location *</label>
+                  <label className="block text-[9px] font-black uppercase tracking-wider text-slate-500 mb-1">Branch Location *</label>
                   <select 
                     value={branch} 
                     onChange={e => setBranch(e.target.value)}
-                    className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:border-indigo-500 focus:bg-white text-slate-700 font-semibold cursor-pointer"
+                    className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:border-indigo-500 focus:bg-white text-slate-800 font-semibold cursor-pointer"
                   >
                     <option value="Mohali, Punjab">Mohali, Punjab</option>
                     <option value="Chandigarh">Chandigarh</option>
                     <option value="Panchkula">Panchkula</option>
                   </select>
                 </div>
+
                 <div>
-                  <label className="block text-[8px] font-black uppercase tracking-wider text-slate-400 mb-1">Emergency Contact (Optional)</label>
+                  <label className="block text-[9px] font-black uppercase tracking-wider text-slate-500 mb-1">Emergency Contact (Optional)</label>
                   <input 
                     type="tel" 
                     placeholder="e.g. +91 99999 88888" 
                     value={emergencyContact}
-                    onChange={e => setEmergencyContact(e.target.value)}
-                    className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 focus:outline-none focus:border-indigo-500 focus:bg-white transition-all text-slate-700 font-medium"
+                    onChange={e => {
+                      setEmergencyContact(e.target.value);
+                      if (errors.emergencyContact) setErrors(prev => ({ ...prev, emergencyContact: '' }));
+                    }}
+                    className={`w-full text-xs bg-slate-50 border rounded-xl px-3 py-2.5 focus:outline-none transition-all text-slate-800 font-medium ${
+                      errors.emergencyContact ? 'border-red-500 bg-red-50/20' : 'border-slate-200 focus:border-indigo-500 focus:bg-white'
+                    }`}
                   />
+                  {errors.emergencyContact && (
+                    <p className="text-[10px] font-bold text-red-500 mt-1 flex items-center gap-1">
+                      <AlertCircle size={11} /> {errors.emergencyContact}
+                    </p>
+                  )}
                 </div>
               </div>
 
               <div>
-                <label className="block text-[8px] font-black uppercase tracking-wider text-slate-400 mb-1">Residential Address (Optional)</label>
+                <label className="block text-[9px] font-black uppercase tracking-wider text-slate-500 mb-1">Residential Address (Optional)</label>
                 <input 
                   type="text" 
                   placeholder="e.g. H.No 1234, Phase 3B2, Mohali" 
                   value={address}
                   onChange={e => setAddress(e.target.value)}
-                  className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 focus:outline-none focus:border-indigo-500 focus:bg-white transition-all text-slate-700 font-medium"
+                  className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:border-indigo-500 focus:bg-white transition-all text-slate-800 font-medium"
                 />
               </div>
             </div>
@@ -684,31 +763,32 @@ function AddEmployeeWizard({ onClose, onSuccess }: { onClose: () => void; onSucc
                 </p>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-[8px] font-black uppercase tracking-wider text-slate-400 mb-1">Assign Device</label>
+                  <label className="block text-[9px] font-black uppercase tracking-wider text-slate-500 mb-1">Assign Device</label>
                   <select 
                     value={device} 
                     onChange={e => setDevice(e.target.value)}
-                    className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:border-indigo-500 focus:bg-white text-slate-700 font-semibold cursor-pointer"
+                    className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:border-indigo-500 focus:bg-white text-slate-800 font-semibold cursor-pointer"
                   >
                     <option value="ESSL K90 Pro">ESSL K90 Pro (Mohali Front Gate)</option>
                   </select>
                 </div>
+
                 <div>
-                  <label className="block text-[8px] font-black uppercase tracking-wider text-slate-400 mb-1">Biometric ID Assignment</label>
+                  <label className="block text-[9px] font-black uppercase tracking-wider text-slate-500 mb-1">Biometric ID Assignment</label>
                   <div className="flex gap-2">
                     <button 
                       type="button" 
                       onClick={() => setBiometricIdType('auto')}
-                      className={`flex-1 py-2 text-center rounded-xl border text-[10px] font-bold ${biometricIdType === 'auto' ? 'bg-blue-600 text-white border-blue-600' : 'bg-slate-50 border-slate-200 text-slate-650 hover:bg-slate-100'}`}
+                      className={`flex-1 py-2 text-center rounded-xl border text-[10px] font-extrabold cursor-pointer transition-all ${biometricIdType === 'auto' ? 'bg-blue-600 text-white border-blue-600 shadow-xs' : 'bg-slate-50 border-slate-200 text-slate-650 hover:bg-slate-100'}`}
                     >
                       Auto Generate
                     </button>
                     <button 
                       type="button" 
                       onClick={() => setBiometricIdType('manual')}
-                      className={`flex-1 py-2 text-center rounded-xl border text-[10px] font-bold ${biometricIdType === 'manual' ? 'bg-blue-600 text-white border-blue-600' : 'bg-slate-50 border-slate-200 text-slate-650 hover:bg-slate-100'}`}
+                      className={`flex-1 py-2 text-center rounded-xl border text-[10px] font-extrabold cursor-pointer transition-all ${biometricIdType === 'manual' ? 'bg-blue-600 text-white border-blue-600 shadow-xs' : 'bg-slate-50 border-slate-200 text-slate-650 hover:bg-slate-100'}`}
                     >
                       Manual ID
                     </button>
@@ -718,13 +798,13 @@ function AddEmployeeWizard({ onClose, onSuccess }: { onClose: () => void; onSucc
 
               {biometricIdType === 'manual' && (
                 <div>
-                  <label className="block text-[8px] font-black uppercase tracking-wider text-slate-400 mb-1">Biometric ID Number</label>
+                  <label className="block text-[9px] font-black uppercase tracking-wider text-slate-500 mb-1">Biometric ID Number</label>
                   <input 
                     type="number" 
                     placeholder="Enter device user slot (e.g. 501)" 
                     value={manualBiometricId}
                     onChange={e => setManualBiometricId(e.target.value)}
-                    className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 focus:outline-none focus:border-indigo-500 focus:bg-white transition-all text-slate-700 font-medium"
+                    className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:border-indigo-500 focus:bg-white transition-all text-slate-800 font-medium"
                   />
                 </div>
               )}
@@ -760,14 +840,14 @@ function AddEmployeeWizard({ onClose, onSuccess }: { onClose: () => void; onSucc
           )}
         </div>
 
-        {/* Wizard Footer */}
-        <div className="p-6 bg-slate-50 border-t border-slate-150 flex justify-between items-center">
+        {/* Fixed Wizard Footer */}
+        <div className="p-4 sm:p-5 bg-slate-50 border-t border-slate-200 flex justify-between items-center shrink-0">
           {step === 1 ? (
             <>
               <button onClick={onClose} className="px-4 py-2 text-slate-500 hover:text-slate-700 text-xs font-black uppercase tracking-wider bg-transparent border-none cursor-pointer">Cancel</button>
               <button 
                 onClick={handleNext}
-                className="px-4 py-2 bg-slate-900 hover:bg-black text-white rounded-xl text-xs font-black uppercase tracking-wider border-none cursor-pointer flex items-center gap-1.5"
+                className="px-5 py-2.5 bg-slate-900 hover:bg-black text-white rounded-xl text-xs font-black uppercase tracking-wider border-none cursor-pointer flex items-center gap-1.5 shadow-md active:scale-95 transition-all"
               >
                 Next Step <ArrowRight size={13} />
               </button>
@@ -778,14 +858,14 @@ function AddEmployeeWizard({ onClose, onSuccess }: { onClose: () => void; onSucc
               <div className="flex gap-2">
                 <button 
                   onClick={handleSubmit}
-                  className="px-4 py-2 bg-slate-200 hover:bg-slate-350 text-slate-600 rounded-xl text-xs font-black uppercase tracking-wider border border-slate-300 cursor-pointer"
+                  className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl text-xs font-black uppercase tracking-wider border border-slate-300 cursor-pointer"
                 >
                   Skip Biometric
                 </button>
                 <button 
                   onClick={handleSubmit}
                   disabled={submitting}
-                  className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black uppercase tracking-wider border-none cursor-pointer flex items-center gap-1 shadow-md shadow-blue-600/10"
+                  className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black uppercase tracking-wider border-none cursor-pointer flex items-center gap-1 shadow-md shadow-blue-600/10 active:scale-95 transition-all disabled:opacity-50"
                 >
                   {submitting ? 'Registering...' : 'Finish Registration'}
                 </button>

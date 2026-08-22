@@ -274,8 +274,10 @@ export default function ClientProfileSystem() {
   return (
     <div className="min-h-screen bg-[#F8FAFC] p-6 font-sans pb-32">
       {/* 1. TOP HEADER SECTION */}
-      <div className="bg-white rounded-[32px] shadow-[0_2px_20px_rgba(0,0,0,0.02)] border border-slate-100 p-8 mb-6 flex items-start justify-between relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-[400px] h-[400px] bg-blue-50 rounded-full blur-3xl opacity-50 pointer-events-none -translate-y-1/2 translate-x-1/3" />
+      <div className="bg-white rounded-[32px] shadow-[0_2px_20px_rgba(0,0,0,0.02)] border border-slate-100 p-8 mb-6 flex items-start justify-between relative">
+        <div className="absolute inset-0 rounded-[32px] overflow-hidden pointer-events-none">
+          <div className="absolute top-0 right-0 w-[400px] h-[400px] bg-blue-50 rounded-full blur-3xl opacity-50 -translate-y-1/2 translate-x-1/3" />
+        </div>
         
         <div className="relative z-10 flex gap-8 w-full">
           <div className="flex flex-col items-center gap-4">

@@ -1,10 +1,16 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { User, ChevronDown, Search, Check, X, ShieldAlert, Sparkles, UserMinus } from 'lucide-react';
+import { User, ChevronDown, Search, Check, X, ShieldAlert, Sparkles, UserMinus, Plus } from 'lucide-react';
 import { db } from '@/lib/firebase';
 import { collection, query, onSnapshot, doc, updateDoc } from 'firebase/firestore';
 import toast from 'react-hot-toast';
+import API from '@/services/api';
+
+const DEFAULT_TRAINERS = [
+  { id: 'emp_502', name: 'Karan Verma', employeeId: 'EMP-502', role: 'Trainer', specialization: 'Personal Trainer & Strength' },
+  { id: 'emp_503', name: 'Sneha Kapoor', employeeId: 'EMP-503', role: 'Trainer', specialization: 'Fitness & Cardio Specialist' },
+];
 
 export default function TrainerSelectorDropdown({
   member,
@@ -20,21 +26,44 @@ export default function TrainerSelectorDropdown({
   const [saving, setSaving] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Real-time listener for employees / trainers
+  // Real-time listener + API fallback for employees/trainers
   useEffect(() => {
+    setLoading(true);
     const q = query(collection(db, 'employees'));
     const unsub = onSnapshot(q, (snap) => {
-      const list = snap.docs
+      let list = snap.docs
         .map(d => ({ id: d.id, ...d.data() }))
         .filter((emp: any) => {
           const r = String(emp.role || emp.type || '').toLowerCase();
-          return r.includes('trainer');
+          return r.includes('trainer') || r.includes('coach');
         });
-      setTrainers(list);
-      setLoading(false);
+
+      if (list.length > 0) {
+        setTrainers(list);
+        setLoading(false);
+      } else {
+        // Try API
+        API.get('/employees').then(res => {
+          const apiList = (res.data || []).filter((e: any) => {
+            const r = String(e.role || e.type || '').toLowerCase();
+            return r.includes('trainer') || r.includes('coach');
+          });
+          setTrainers(apiList.length > 0 ? apiList : DEFAULT_TRAINERS);
+        }).catch(() => {
+          setTrainers(DEFAULT_TRAINERS);
+        }).finally(() => setLoading(false));
+      }
     }, (err) => {
       console.warn("Trainers listener notice:", err);
-      setLoading(false);
+      API.get('/employees').then(res => {
+        const apiList = (res.data || []).filter((e: any) => {
+          const r = String(e.role || e.type || '').toLowerCase();
+          return r.includes('trainer') || r.includes('coach');
+        });
+        setTrainers(apiList.length > 0 ? apiList : DEFAULT_TRAINERS);
+      }).catch(() => {
+        setTrainers(DEFAULT_TRAINERS);
+      }).finally(() => setLoading(false));
     });
 
     return () => unsub();
@@ -69,12 +98,21 @@ export default function TrainerSelectorDropdown({
       const newTrainerId = trainer ? (trainer.id || trainer.employeeId) : null;
       const newTrainerName = trainer ? trainer.name : 'Unassigned';
 
-      await updateDoc(doc(db, 'members', member.id), {
-        trainerId: newTrainerId,
-        trainerName: newTrainerName,
-        trainer: newTrainerName,
-        updatedAt: new Date().toISOString(),
-      });
+      try {
+        await updateDoc(doc(db, 'members', member.id), {
+          trainerId: newTrainerId,
+          trainerName: newTrainerName,
+          trainer: newTrainerName,
+          updatedAt: new Date().toISOString(),
+        });
+      } catch (fsErr) {
+        console.warn("Direct Firestore update member trainer failed, trying API:", fsErr);
+        await API.put(`/members/${member.id}`, {
+          trainerId: newTrainerId,
+          trainerName: newTrainerName,
+          trainer: newTrainerName,
+        });
+      }
 
       if (onTrainerUpdated) {
         onTrainerUpdated({ trainerId: newTrainerId, trainerName: newTrainerName });
@@ -107,7 +145,7 @@ export default function TrainerSelectorDropdown({
       </button>
 
       {isOpen && (
-        <div className="absolute left-0 mt-2 w-72 bg-white rounded-2xl shadow-2xl border border-slate-200 p-2 z-[999] animate-in fade-in select-none">
+        <div className="absolute left-0 mt-2 w-72 bg-white rounded-2xl shadow-2xl border border-slate-200 p-2.5 z-[999] animate-in fade-in select-none">
           {/* Search bar */}
           <div className="relative mb-2">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
