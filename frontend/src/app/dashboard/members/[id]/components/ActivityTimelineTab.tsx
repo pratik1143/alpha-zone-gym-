@@ -12,18 +12,17 @@ import { formatDate, formatTime, cleanPlanName } from '@/lib/utils';
 
 export default function ActivityTimelineTab({ member }: { member: any }) {
   const [paymentsList, setPaymentsList] = useState<any[]>([]);
-  const [attendanceList, setAttendanceList] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<'all' | 'memberships' | 'payments' | 'attendance'>('all');
+  const [filter, setFilter] = useState<'all' | 'memberships' | 'payments'>('all');
   const [displayCount, setDisplayCount] = useState(50);
 
   const docId = member?.id || member?.uid || member?.memberId;
   const memberCode = member?.memberId || '';
-  const bioId = member?.biometricId || member?.deviceUserId || '';
 
-  // 1. Real-time Firestore Listener for member Payments
+  // 1. Real-time Firestore Listener for member Payments & PT Purchases
   useEffect(() => {
     if (!docId && !memberCode) return;
+    setLoading(true);
 
     const qPayments = query(collection(db, 'payments'), where('memberId', '==', docId));
 
@@ -38,51 +37,16 @@ export default function ActivityTimelineTab({ member }: { member: any }) {
       });
 
       setPaymentsList(Array.from(payMap.values()));
+      setLoading(false);
     }, (err) => {
       console.warn("Timeline payments listener notice:", err);
+      setLoading(false);
     });
 
     return () => unsubPayments();
   }, [docId, memberCode]);
 
-  // 2. Real-time Firestore Listener for member Attendance Logs
-  useEffect(() => {
-    if (!docId && !memberCode && !bioId) return;
-
-    const qAttendance = collection(db, 'attendance_logs');
-
-    const unsubAttendance = onSnapshot(qAttendance, (snap) => {
-      const rawLogs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-
-      const matchedLogs = rawLogs.filter((log: any) => {
-        if (!log) return false;
-        const lMemberId = String(log.memberId || log.memberCode || log.uid || '').trim();
-        const lBioId = String(log.biometricId || log.deviceUserId || log.bioId || '').trim();
-        const lPhone = log.phone ? String(log.phone).replace(/\D/g, '') : '';
-        const mPhone = member?.phone ? String(member.phone).replace(/\D/g, '') : '';
-        const lName = String(log.memberName || '').trim().toLowerCase();
-        const mName = String(member?.name || '').trim().toLowerCase();
-
-        if (docId && lMemberId === String(docId).trim()) return true;
-        if (memberCode && lMemberId === String(memberCode).trim()) return true;
-        if (bioId && lBioId === String(bioId).trim()) return true;
-        if (mPhone && lPhone && mPhone === lPhone) return true;
-        if (mName && lName && mName === lName) return true;
-
-        return false;
-      });
-
-      setAttendanceList(matchedLogs);
-      setLoading(false);
-    }, (err) => {
-      console.warn("Timeline attendance listener notice:", err);
-      setLoading(false);
-    });
-
-    return () => unsubAttendance();
-  }, [docId, memberCode, bioId, member?.phone, member?.name]);
-
-  // 3. Build Combined Real Timeline Events
+  // 2. Build Combined Real Timeline Events (Financial, PT, Membership, Account)
   const timelineEvents = useMemo(() => {
     if (!member) return [];
 
@@ -200,48 +164,7 @@ export default function ActivityTimelineTab({ member }: { member: any }) {
       });
     });
 
-    // C. REAL ATTENDANCE EVENTS (from attendance_logs collection)
-    attendanceList.forEach((log: any, idx: number) => {
-      const rawIn = log.checkIn || log.timestamp || log.date;
-      if (!rawIn) return;
-
-      const rawOut = log.checkOut || log.outTime;
-      const isDuplicate = log.status === 'duplicate' || log.isDuplicate;
-      const dt = new Date(rawIn);
-      const isLate = dt.getHours() > 9 || (dt.getHours() === 9 && dt.getMinutes() > 30);
-
-      let durationText = 'N/A';
-      if (rawIn && rawOut) {
-        const diffMs = new Date(rawOut).getTime() - dt.getTime();
-        if (diffMs > 0) {
-          const mins = Math.round(diffMs / (1000 * 60));
-          const h = Math.floor(mins / 60);
-          const m = mins % 60;
-          durationText = h > 0 ? `${h}h ${m}m` : `${m} mins`;
-        }
-      } else if (idx === 0) {
-        const ageHours = (Date.now() - dt.getTime()) / (1000 * 3600);
-        if (ageHours <= 4) durationText = 'Currently Inside ⚡';
-      }
-
-      events.push({
-        id: `att_${log.id || idx}`,
-        category: 'attendance',
-        type: 'BIOMETRIC GATE PUNCH',
-        title: `Gate Access: ${log.doorName || log.deviceName || log.gate || 'Main Gate'}`,
-        date: rawIn,
-        time: formatTime(rawIn),
-        gate: log.doorName || log.deviceName || log.gate || 'Main Gate',
-        duration: durationText,
-        status: isDuplicate ? 'DUPLICATE PUNCH' : (isLate ? 'LATE' : 'PRESENT'),
-        icon: Zap,
-        color: 'bg-blue-600 text-white',
-        badgeBg: isDuplicate ? 'bg-slate-100 text-slate-700 border-slate-300' : (isLate ? 'bg-amber-100 text-amber-800 border-amber-300' : 'bg-blue-100 text-blue-800 border-blue-300'),
-        rawTimestamp: dt.getTime(),
-      });
-    });
-
-    // D. ACCOUNT CREATION EVENT
+    // C. ACCOUNT CREATION EVENT
     if (member?.joinDate || member?.createdAt) {
       const joinDateStr = member.joinDate || member.createdAt;
       events.push({
@@ -266,7 +189,7 @@ export default function ActivityTimelineTab({ member }: { member: any }) {
 
     // Sort chronologically descending (newest first)
     return Array.from(eventMap.values()).sort((a, b) => b.rawTimestamp - a.rawTimestamp);
-  }, [member, paymentsList, attendanceList]);
+  }, [member, paymentsList]);
 
   // Filter events by selected category
   const filteredEvents = useMemo(() => {
@@ -288,13 +211,13 @@ export default function ActivityTimelineTab({ member }: { member: any }) {
             <h2 className="text-xl font-black text-slate-900 tracking-tight">Activity Timeline &amp; Audit Logs</h2>
           </div>
           <p className="text-xs text-slate-500 font-medium mt-1">
-            Deduplicated real-time audit log of payments, PT purchases, membership renewals, and gate access.
+            Deduplicated real-time audit log of payments, PT purchases, membership renewals, and account events.
           </p>
         </div>
 
-        {/* Category Filters */}
+        {/* Category Filters (Memberships & Payments) */}
         <div className="flex items-center gap-1.5 bg-slate-100 p-1.5 rounded-2xl shrink-0">
-          {(['all', 'memberships', 'payments', 'attendance'] as const).map((cat) => (
+          {(['all', 'memberships', 'payments'] as const).map((cat) => (
             <button
               key={cat}
               type="button"
@@ -318,191 +241,90 @@ export default function ActivityTimelineTab({ member }: { member: any }) {
       {visibleEvents.length > 0 ? (
         <div className="relative pl-6 sm:pl-10 space-y-6 before:absolute before:left-3 sm:before:left-5 before:top-4 before:bottom-4 before:w-0.5 before:bg-slate-200">
           {visibleEvents.map((evt, idx) => {
-            const Icon = evt.icon;
-
+            const Icon = evt.icon || Activity;
             return (
               <motion.div
-                key={evt.id}
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.2, delay: Math.min(idx * 0.02, 0.3) }}
+                key={evt.id || idx}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.2, delay: idx * 0.02 }}
                 className="relative group"
               >
-                {/* Node Icon */}
-                <div className={`absolute -left-6 sm:-left-10 top-1 w-6 h-6 sm:w-10 sm:h-10 rounded-2xl ${evt.color} flex items-center justify-center shadow-lg ring-4 ring-white`}>
-                  <Icon size={16} />
+                {/* Timeline Node Icon Circle */}
+                <div className={`absolute -left-6 sm:-left-10 top-1 w-6 h-6 sm:w-8 sm:h-8 rounded-full ${evt.color} flex items-center justify-center shadow-md ring-4 ring-white z-10`}>
+                  <Icon size={14} className="sm:w-4 sm:h-4" />
                 </div>
 
-                {/* Timeline Card */}
-                <div className="bg-slate-50/70 hover:bg-slate-50 border border-slate-200/80 hover:border-slate-300 rounded-3xl p-5 transition-all space-y-3">
-                  {/* Card Header Row */}
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-xs font-black text-slate-900 uppercase tracking-wider">{evt.type}</span>
-                      <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-full border uppercase tracking-wider ${evt.badgeBg}`}>
-                        {evt.status}
+                {/* Event Card */}
+                <div className="bg-slate-50 hover:bg-slate-100/80 transition-all rounded-2xl border border-slate-200/80 p-5 space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border ${evt.badgeBg}`}>
+                        {evt.type}
                       </span>
+                      {evt.status && (
+                        <span className="px-2 py-0.5 bg-slate-200/60 text-slate-700 text-[10px] font-black uppercase rounded-full">
+                          {evt.status}
+                        </span>
+                      )}
                       {evt.invoice && (
-                        <span className="text-[10px] font-mono font-black bg-white text-blue-700 px-2 py-0.5 rounded-lg border border-blue-200">
+                        <span className="font-mono text-[10px] font-bold text-indigo-600 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-md">
                           {evt.invoice}
                         </span>
                       )}
                     </div>
 
-                    <div className="flex items-center gap-2 text-xs font-bold text-slate-500 font-mono">
-                      <Calendar size={13} className="text-slate-400" />
-                      <span>{formatDate(evt.date)}</span>
+                    <div className="text-[11px] font-bold text-slate-400 flex items-center gap-2">
+                      <span className="flex items-center gap-1">
+                        <Calendar size={12} /> {formatDate(evt.date)}
+                      </span>
                       <span>•</span>
-                      <Clock size={13} className="text-slate-400" />
-                      <span>{evt.time}</span>
+                      <span className="flex items-center gap-1">
+                        <Clock size={12} /> {evt.time}
+                      </span>
                     </div>
                   </div>
 
-                  {/* ── TYPE SPECIFIC DETAILED CONTENT ── */}
+                  {/* Event Title */}
+                  <h3 className="text-base font-black text-slate-900 tracking-tight">{evt.title}</h3>
 
-                  {/* 1. PT PURCHASE CARD DETAILS */}
-                  {evt.type === 'PERSONAL TRAINING PURCHASE' && (
-                    <div className="space-y-3 pt-1">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <h4 className="text-sm font-black text-slate-900 tracking-tight">{evt.title}</h4>
-                          <p className="text-xs text-slate-600 font-medium mt-0.5">
-                            Assigned Trainer: <strong className="text-amber-800 font-extrabold">{evt.trainerName}</strong>
-                          </p>
-                          <p className="text-xs text-slate-500 font-medium mt-0.5">
-                            Validity Period: <strong className="font-mono text-slate-700">{evt.startDate} → {evt.expiryDate}</strong>
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          <span className="text-lg font-black text-amber-600 font-mono">₹{evt.amountPaid.toLocaleString('en-IN')}</span>
-                          <span className="text-[10px] font-bold text-slate-400 block uppercase">Paid ({evt.paymentMethod})</span>
-                        </div>
-                      </div>
-
-                      {/* Sessions Breakdown */}
-                      <div className="bg-amber-50/80 border border-amber-200/80 rounded-2xl p-3 flex items-center justify-between text-xs font-bold">
-                        <span className="text-amber-900">Total Sessions: <b className="font-mono text-amber-950">{evt.sessionCount}</b></span>
-                        <span className="text-emerald-700">Used Sessions: <b className="font-mono">{evt.usedSessions}</b></span>
-                        <span className="text-indigo-700">Remaining Sessions: <b className="font-mono">{evt.remainingSessions}</b></span>
-                      </div>
-
-                      {/* Financial Breakdown Table */}
-                      <div className="bg-white rounded-2xl p-3 border border-slate-200/80 grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2 text-xs font-mono">
-                        <div>
-                          <span className="text-[10px] font-bold text-slate-400 uppercase block">Original</span>
-                          <span className="font-bold text-slate-800">₹{evt.originalAmount.toLocaleString('en-IN')}</span>
-                        </div>
-                        <div>
-                          <span className="text-[10px] font-bold text-slate-400 uppercase block">Discount</span>
-                          <span className="font-bold text-emerald-600">₹{evt.discountAmount.toLocaleString('en-IN')}</span>
-                        </div>
-                        <div>
-                          <span className="text-[10px] font-bold text-slate-400 uppercase block">Tax</span>
-                          <span className="font-bold text-slate-600">₹{evt.taxAmount.toLocaleString('en-IN')}</span>
-                        </div>
-                        <div>
-                          <span className="text-[10px] font-bold text-slate-400 uppercase block">Net Payable</span>
-                          <span className="font-black text-slate-900">₹{evt.netPayable.toLocaleString('en-IN')}</span>
-                        </div>
-                        <div>
-                          <span className="text-[10px] font-bold text-slate-400 uppercase block">Amount Paid</span>
-                          <span className="font-black text-amber-600">₹{evt.amountPaid.toLocaleString('en-IN')}</span>
-                        </div>
-                        <div>
-                          <span className="text-[10px] font-bold text-slate-400 uppercase block">Pending</span>
-                          <span className={`font-bold ${evt.pendingAmount > 0 ? 'text-red-500' : 'text-slate-400'}`}>
-                            ₹{evt.pendingAmount.toLocaleString('en-IN')}
-                          </span>
-                        </div>
-                        <div>
-                          <span className="text-[10px] font-bold text-slate-400 uppercase block">Method</span>
-                          <span className="font-bold text-slate-800">{evt.paymentMethod}</span>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* 2. STANDARD PAYMENT CARD DETAILS */}
-                  {evt.type === 'PAYMENT RECEIVED' && (
-                    <div className="space-y-3 pt-1">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <h4 className="text-sm font-black text-slate-900 tracking-tight">{evt.title}</h4>
-                          <p className="text-xs text-slate-500 font-medium mt-0.5">
-                            Membership Validity: <strong className="font-mono text-slate-700">{evt.startDate} → {evt.expiryDate}</strong>
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          <span className="text-lg font-black text-emerald-600 font-mono">₹{evt.amountPaid.toLocaleString('en-IN')}</span>
-                          <span className="text-[10px] font-bold text-slate-400 block uppercase">Paid ({evt.paymentMethod})</span>
-                        </div>
-                      </div>
-
-                      {/* Detailed Financial Breakdown Table */}
-                      <div className="bg-white rounded-2xl p-3 border border-slate-200/80 grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2 text-xs font-mono">
-                        <div>
-                          <span className="text-[10px] font-bold text-slate-400 uppercase block">Original</span>
-                          <span className="font-bold text-slate-800">₹{evt.originalAmount.toLocaleString('en-IN')}</span>
-                        </div>
-                        <div>
-                          <span className="text-[10px] font-bold text-slate-400 uppercase block">Discount</span>
-                          <span className="font-bold text-emerald-600">₹{evt.discountAmount.toLocaleString('en-IN')}</span>
-                        </div>
-                        <div>
-                          <span className="text-[10px] font-bold text-slate-400 uppercase block">Tax</span>
-                          <span className="font-bold text-slate-600">₹{evt.taxAmount.toLocaleString('en-IN')}</span>
-                        </div>
-                        <div>
-                          <span className="text-[10px] font-bold text-slate-400 uppercase block">Net Payable</span>
-                          <span className="font-black text-slate-900">₹{evt.netPayable.toLocaleString('en-IN')}</span>
-                        </div>
-                        <div>
-                          <span className="text-[10px] font-bold text-slate-400 uppercase block">Amount Paid</span>
-                          <span className="font-black text-emerald-600">₹{evt.amountPaid.toLocaleString('en-IN')}</span>
-                        </div>
-                        <div>
-                          <span className="text-[10px] font-bold text-slate-400 uppercase block">Pending</span>
-                          <span className={`font-bold ${evt.pendingAmount > 0 ? 'text-red-500' : 'text-slate-400'}`}>
-                            ₹{evt.pendingAmount.toLocaleString('en-IN')}
-                          </span>
-                        </div>
-                        <div>
-                          <span className="text-[10px] font-bold text-slate-400 uppercase block">Method</span>
-                          <span className="font-bold text-slate-800">{evt.paymentMethod}</span>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* 3. ATTENDANCE CARD DETAILS */}
-                  {evt.category === 'attendance' && (
-                    <div className="flex items-center justify-between pt-1">
+                  {/* Financial & Detailed Transaction Breakdown Card */}
+                  {evt.category === 'payments' && (
+                    <div className="bg-white rounded-xl border border-slate-200 p-4 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
                       <div>
-                        <h4 className="text-sm font-black text-slate-900 tracking-tight">{evt.title}</h4>
-                        <p className="text-xs text-slate-500 font-medium mt-0.5 flex items-center gap-1">
-                          <MapPin size={12} className="text-slate-400" /> Gate: <strong className="text-slate-800">{evt.gate}</strong>
-                        </p>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase block">Validity Period</span>
+                        <span className="font-bold text-slate-800 text-[11px]">
+                          {evt.startDate !== 'N/A' ? formatDate(evt.startDate) : 'N/A'} → {evt.expiryDate !== 'N/A' ? formatDate(evt.expiryDate) : 'N/A'}
+                        </span>
                       </div>
-                      <div className="text-right">
-                        <span className="text-xs font-black text-indigo-700 font-mono block">{evt.duration}</span>
-                        <span className="text-[10px] font-bold text-slate-400 uppercase">Stay Duration</span>
+                      <div>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase block">Net Payable</span>
+                        <span className="font-black text-slate-900 font-mono">₹{(evt.netPayable || 0).toLocaleString('en-IN')}</span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase block">Amount Paid</span>
+                        <span className="font-black text-emerald-600 font-mono">₹{(evt.amountPaid || 0).toLocaleString('en-IN')}</span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase block">Payment Method</span>
+                        <span className="font-black text-slate-800 uppercase">{evt.paymentMethod}</span>
                       </div>
                     </div>
                   )}
 
-                  {/* 4. NON-PAYMENT MEMBERSHIP CARD DETAILS */}
-                  {evt.category === 'memberships' && evt.type !== 'PAYMENT RECEIVED' && evt.type !== 'PERSONAL TRAINING PURCHASE' && (
-                    <div className="flex items-center justify-between pt-1">
+                  {/* Account / Membership Details */}
+                  {evt.category === 'memberships' && (
+                    <div className="bg-white rounded-xl border border-slate-200 p-3 text-xs flex justify-between items-center">
                       <div>
-                        <h4 className="text-sm font-black text-slate-900 tracking-tight">{evt.title}</h4>
-                        <p className="text-xs text-slate-500 font-medium mt-0.5">
-                          {evt.description || `Validity Period: ${evt.startDate} → ${evt.expiryDate}`}
-                        </p>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase block">Validity Range</span>
+                        <span className="font-bold text-slate-800">
+                          {evt.startDate !== 'N/A' ? formatDate(evt.startDate) : 'N/A'} → {evt.expiryDate !== 'N/A' ? formatDate(evt.expiryDate) : 'N/A'}
+                        </span>
                       </div>
                       {evt.amountPaid > 0 && (
                         <div className="text-right">
-                          <span className="text-sm font-black text-purple-700 font-mono">₹{evt.amountPaid.toLocaleString('en-IN')}</span>
-                          <span className="text-[10px] font-bold text-slate-400 uppercase block">Billed</span>
+                          <span className="text-[10px] font-bold text-slate-400 uppercase block">Amount Billed</span>
+                          <span className="font-black text-slate-900 font-mono">₹{evt.amountPaid.toLocaleString('en-IN')}</span>
                         </div>
                       )}
                     </div>
@@ -511,28 +333,25 @@ export default function ActivityTimelineTab({ member }: { member: any }) {
               </motion.div>
             );
           })}
-
-          {/* Load More Button */}
-          {filteredEvents.length > displayCount && (
-            <div className="pt-4 text-center">
-              <button
-                type="button"
-                onClick={() => setDisplayCount(prev => prev + 50)}
-                className="px-6 py-3 bg-slate-100 hover:bg-slate-200 text-slate-800 font-black rounded-xl text-xs uppercase tracking-wider transition-all flex items-center gap-2 mx-auto border-none cursor-pointer shadow-sm active:scale-95"
-              >
-                <span>Load More Activity</span>
-                <ChevronDown size={14} />
-              </button>
-            </div>
-          )}
         </div>
       ) : (
-        <div className="py-16 text-center bg-slate-50 rounded-3xl border border-slate-200/80">
-          <AlertCircle size={32} className="text-slate-300 mx-auto mb-2" />
-          <h4 className="text-sm font-black text-slate-800">No activity recorded yet.</h4>
-          <p className="text-xs text-slate-500 font-medium mt-1">
-            No real timeline entries matching filter "{filter}".
-          </p>
+        <div className="py-16 text-center text-slate-400 space-y-2">
+          <Activity size={32} className="mx-auto text-slate-300" />
+          <p className="text-sm font-bold text-slate-500">No timeline audit events found for this filter</p>
+        </div>
+      )}
+
+      {/* Show More Pagination */}
+      {filteredEvents.length > displayCount && (
+        <div className="pt-4 text-center">
+          <button
+            type="button"
+            onClick={() => setDisplayCount(prev => prev + 50)}
+            className="px-6 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-black transition-all border-none cursor-pointer inline-flex items-center gap-1.5"
+          >
+            <span>Load More Timeline Events ({filteredEvents.length - displayCount} remaining)</span>
+            <ChevronDown size={14} />
+          </button>
         </div>
       )}
     </div>
