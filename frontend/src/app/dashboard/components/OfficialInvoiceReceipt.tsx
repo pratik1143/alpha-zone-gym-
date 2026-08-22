@@ -24,11 +24,24 @@ export default function OfficialInvoiceReceipt({ invoice, member, onPrint, onWha
   const endDate = invoice?.expiryDate ? formatDate(invoice.expiryDate) : formatDate(member?.expiryDate || new Date(Date.now() + 90*24*60*60*1000).toISOString());
   const billedBy = invoice?.billedBy || 'Veer Chand (manager)';
 
-  const packageFees = Number(invoice?.amount || member?.totalBilled || 7000);
-  const discount = Number(invoice?.discount || 0);
-  const paidAmount = Number(invoice?.paid || member?.totalPaid || (packageFees - discount));
-  const pendingAmount = Math.max(0, (packageFees - discount) - paidAmount);
-  const paymentMethod = invoice?.method || member?.paymentMethod || 'Online Payment';
+  const discount = Number(invoice?.discountAmount !== undefined ? invoice.discountAmount : (invoice?.discount || 0));
+  const tax = Number(invoice?.taxAmount !== undefined ? invoice.taxAmount : (invoice?.tax || invoice?.gst || 0));
+
+  // Package Fees is canonical original price (e.g. Rs. 3,000)
+  const packageFees = Number(
+    invoice?.originalAmount !== undefined ? invoice.originalAmount :
+    invoice?.packagePrice !== undefined ? invoice.packagePrice :
+    (invoice?.amount !== undefined ? Number(invoice.amount) + discount - tax : member?.totalBilled || 3000)
+  );
+
+  const calculatedNet = Math.max(0, packageFees - discount + tax);
+  const netPayable = Number(invoice?.netPayable !== undefined ? invoice.netPayable : calculatedNet);
+  const paidAmount = Number(
+    invoice?.amountPaid !== undefined ? invoice.amountPaid :
+    invoice?.paid !== undefined ? invoice.paid : netPayable
+  );
+  const pendingAmount = Math.max(0, netPayable - paidAmount);
+  const paymentMethod = invoice?.paymentMethod || invoice?.method || member?.paymentMethod || 'UPI';
 
   return (
     <div id="printable-official-invoice" className="bg-white text-black p-8 rounded-xl max-w-[800px] w-full mx-auto font-sans shadow-lg border border-slate-200 official-invoice-print-area">

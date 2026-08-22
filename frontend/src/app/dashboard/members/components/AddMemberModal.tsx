@@ -78,6 +78,16 @@ const step2Schema = z.object({
       if (!val) return true;
       return /^[0-9+\s-]{10,15}$/.test(val);
     }, { message: 'Enter a valid 10-15 digit phone number' }),
+  maritalStatus: z.string().optional(),
+  anniversaryDate: z.string().optional(),
+}).refine((data) => {
+  if (data.maritalStatus === 'married') {
+    return !!data.anniversaryDate && data.anniversaryDate.trim().length > 0;
+  }
+  return true;
+}, {
+  message: 'Anniversary Date is required when Married',
+  path: ['anniversaryDate'],
 });
 
 const ptStepSchema = z.object({
@@ -99,7 +109,9 @@ const MAX_PHOTO_SIZE_BYTES = 300 * 1024; // 300 KB
 function deduplicatePackages(rawPlans: any[]) {
   const map = new Map<string, any>();
   rawPlans.forEach((p) => {
-    const key = String(p.id || p.name || '').trim().toLowerCase();
+    const name = String(p.name || '').trim().toLowerCase();
+    const duration = String(p.duration || '').trim().toLowerCase();
+    const key = `${name}_${duration}`;
     if (key && !map.has(key)) {
       map.set(key, p);
     }
@@ -133,10 +145,10 @@ export default function AddMemberModal({ isOpen, onClose }: AddMemberModalProps)
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
 
   const rawPlans = plans && plans.length > 0 ? plans : [
-    { id: 'p_mon', name: 'Monthly Standard', price: 2500, duration: '30 Days' },
-    { id: 'p_qrt', name: 'Quarterly Prime', price: 6500, duration: '90 Days' },
-    { id: 'p_semi', name: 'Semi-Annual Pro', price: 11500, duration: '180 Days' },
-    { id: 'p_ann', name: 'Annual Premium', price: 18000, duration: '365 Days' },
+    { id: 'p_mon', name: '1 MONTH', price: 3000, duration: '30 Days' },
+    { id: 'p_qrt', name: '3 MONTHS', price: 6500, duration: '90 Days' },
+    { id: 'p_semi', name: '6 MONTHS', price: 9500, duration: '180 Days' },
+    { id: 'p_ann', name: 'ANNUAL PREMIUM', price: 14000, duration: '365 Days' },
   ];
 
   const activePlans = deduplicatePackages(rawPlans);
@@ -153,14 +165,24 @@ export default function AddMemberModal({ isOpen, onClose }: AddMemberModalProps)
       if (!snap.empty) {
         const rawEmps = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         const trns = rawEmps.filter((e: any) => {
-          const r = String(e.role || '').toLowerCase();
-          return r.includes('trainer') || r.includes('coach') || e.isTrainer;
+          const r = String(e.role || e.type || '').toLowerCase();
+          const isTrn = r.includes('trainer') || r.includes('coach') || e.isTrainer;
+          const status = String(e.status || 'ACTIVE').toUpperCase();
+          const isActive = status === 'ACTIVE' || status === 'EMPLOYED';
+          return isTrn && isActive;
         });
 
-        // Deduplicate trainers by id/phone/employeeId
+        // Deduplication priority: 1. employee document ID, 2. employeeId/biometricId, 3. phone/email
         const map = new Map<string, any>();
         trns.forEach((t: any) => {
-          const key = String(t.id || t.employeeId || t.phone || '').trim();
+          const key = (t.id && String(t.id).trim())
+            ? String(t.id).trim()
+            : (t.employeeId && String(t.employeeId).trim())
+            ? String(t.employeeId).trim()
+            : (t.phone && String(t.phone).replace(/\D/g, '').length >= 8)
+            ? String(t.phone).replace(/\D/g, '').slice(-10)
+            : String(t.email || '').trim().toLowerCase();
+
           if (key && !map.has(key)) map.set(key, t);
         });
         setTrainersList(Array.from(map.values()));
@@ -350,6 +372,8 @@ export default function AddMemberModal({ isOpen, onClose }: AddMemberModalProps)
       weight,
       height,
       emergencyContact,
+      maritalStatus,
+      anniversaryDate,
     });
 
     if (!parseRes.success) {
@@ -459,11 +483,11 @@ export default function AddMemberModal({ isOpen, onClose }: AddMemberModalProps)
     try {
       const todayStr = new Date().toISOString().split('T')[0];
       const memStartDate = startDate || todayStr;
-      const planName = selectedPlan?.name || 'Monthly Standard';
+      const planName = selectedPlan?.name || '1 MONTH';
       const expiryStr = membershipEngine.calculatePlanExpiryDate(planName, memStartDate, plans);
       const computedStatus = membershipEngine.calculateMembershipStatus(expiryStr, memStartDate);
 
-      const basePrice = Number(selectedPlan?.price) || 2500;
+      const basePrice = Number(selectedPlan?.price) || 3000;
       const disc = Number(discount) || 0;
       const finalBilled = Math.max(0, basePrice - disc);
       const paidAmt = Number(amountPaid) || finalBilled;
@@ -473,6 +497,7 @@ export default function AddMemberModal({ isOpen, onClose }: AddMemberModalProps)
 
       const memInvoiceNo = `INV-${Math.floor(100000 + Math.random() * 900000)}`;
       const ptInvoiceNo = `INV-PT-${Math.floor(100000 + Math.random() * 900000)}`;
+      const onboardingUuid = `add_mem_${normalizedPhone}_${todayStr}_${Math.floor(1000 + Math.random() * 9000)}`;
 
       const trnName = selectedTrainerObj?.name || (selectedTrainerId ? 'Assigned Trainer' : 'Unassigned');
 
@@ -485,6 +510,7 @@ export default function AddMemberModal({ isOpen, onClose }: AddMemberModalProps)
         plan: planName,
         price: basePrice,
         originalAmount: basePrice,
+        packagePrice: basePrice,
         discountAmount: disc,
         discount: disc,
         netPayable: finalBilled,
@@ -506,17 +532,43 @@ export default function AddMemberModal({ isOpen, onClose }: AddMemberModalProps)
         trainerName: trnName,
         isRealTimeToday: true,
         paymentMethod: paymentMethod,
-        idempotencyKey: `add_mem_${normalizedPhone}_${planName.replace(/\s+/g, '_')}_${todayStr}`,
-        age, height, weight, dob, maritalStatus, anniversaryDate, emergencyContact, occupation
+        idempotencyKey: onboardingUuid,
+        invoiceNumber: memInvoiceNo,
+        age, height, weight, dob, maritalStatus,
+        anniversaryDate: maritalStatus === 'married' ? anniversaryDate : null,
+        emergencyContact, occupation
       };
 
-      // Attach PT object if trainer is selected
+      // Attach PT billing details if trainer is selected
       if (hasPt && selectedTrainerObj) {
         const amtNum = Number(ptAmount) || 6000;
         const discNum = Number(ptDiscount) || 0;
         const taxNum = Number(ptTax) || 0;
         const netNum = Math.max(0, amtNum - discNum + taxNum);
         const pAmtPaid = Number(ptAmountPaid) || netNum;
+
+        memberPayload.ptBilling = {
+          enabled: true,
+          trainerId: selectedTrainerObj.id || selectedTrainerObj.employeeId,
+          trainerName: selectedTrainerObj.name,
+          trainerRole: selectedTrainerObj.role || 'Personal Trainer',
+          packageName: `Personal Training (${ptDuration})`,
+          duration: ptDuration,
+          originalAmount: amtNum,
+          packagePrice: amtNum,
+          discountAmount: discNum,
+          discount: discNum,
+          taxAmount: taxNum,
+          netPayable: netNum,
+          amount: netNum,
+          amountPaid: pAmtPaid,
+          paid: pAmtPaid,
+          paymentMethod: ptPaymentMethod,
+          startDate: ptStartDate,
+          expiryDate: ptExpiryDate,
+          invoiceNo: ptInvoiceNo,
+          status: 'ACTIVE'
+        };
 
         memberPayload.pt = {
           enabled: true,
@@ -526,7 +578,7 @@ export default function AddMemberModal({ isOpen, onClose }: AddMemberModalProps)
           trainerAvatar: selectedTrainerObj.photo || selectedTrainerObj.avatarUrl || '',
           packageName: ptDuration,
           duration: ptDuration,
-          amount: pAmtPaid,
+          amount: netNum,
           startDate: ptStartDate,
           expiryDate: ptExpiryDate,
           invoiceNo: ptInvoiceNo,
@@ -534,107 +586,71 @@ export default function AddMemberModal({ isOpen, onClose }: AddMemberModalProps)
         };
       }
 
-      const newMember: any = await addMember(memberPayload);
-      const newMemberDocId = newMember?.id || newMember?.uid || newMember?.memberId;
+      // Add Member via Store (backend createMember handles creation of member + 1 membership invoice + optional 1 PT invoice)
+      const resData: any = await addMember(memberPayload);
 
-      // 1. Create GYM MEMBERSHIP Payment Document in Firestore payments collection
-      try {
-        await addDoc(collection(db, 'payments'), {
-          billingType: 'MEMBERSHIP',
-          memberId: newMemberDocId,
-          memberName: fullName.trim(),
-          invoiceNumber: memInvoiceNo,
-          invoice: memInvoiceNo,
-          plan: planName,
-          originalAmount: basePrice,
-          discountAmount: disc,
-          netPayable: finalBilled,
-          amountPaid: paidAmt,
-          amount: paidAmt,
-          paid: paidAmt,
-          pendingAmount: 0,
-          method: paymentMethod,
-          status: paidAmt >= finalBilled ? 'paid' : 'partial',
-          startDate: memStartDate,
-          expiryDate: expiryStr,
-          date: todayStr,
-          createdAt: new Date().toISOString()
-        });
-      } catch (pErr) {
-        console.warn("Membership payment record creation notice:", pErr);
-      }
+      const createdMem = resData || memberPayload;
+      const memInv = resData?.invoice || {
+        invoiceNumber: memInvoiceNo,
+        invoiceType: 'MEMBERSHIP',
+        billingType: 'MEMBERSHIP',
+        packageName: planName,
+        plan: planName,
+        originalAmount: basePrice,
+        packagePrice: basePrice,
+        discountAmount: disc,
+        discount: disc,
+        netPayable: finalBilled,
+        amount: finalBilled,
+        amountPaid: paidAmt,
+        paid: paidAmt,
+        pendingAmount: Math.max(0, finalBilled - paidAmt),
+        method: paymentMethod,
+        paymentMethod: paymentMethod,
+        status: paidAmt >= finalBilled ? 'paid' : 'partial',
+        date: todayStr,
+        startDate: memStartDate,
+        expiryDate: expiryStr
+      };
 
-      // 2. Create SEPARATE PT Payment Document in Firestore if PT selected
+      setCreatedMember(createdMem);
+      setCreatedInvoice(memInv);
+
       if (hasPt && selectedTrainerObj) {
         const amtNum = Number(ptAmount) || 6000;
         const discNum = Number(ptDiscount) || 0;
         const taxNum = Number(ptTax) || 0;
         const netNum = Math.max(0, amtNum - discNum + taxNum);
         const pAmtPaid = Number(ptAmountPaid) || netNum;
-        const pendingNum = Math.max(0, netNum - pAmtPaid);
 
-        try {
-          await addDoc(collection(db, 'payments'), {
-            billingType: 'PT',
-            memberId: newMemberDocId,
-            memberName: fullName.trim(),
-            trainerId: selectedTrainerObj.id || selectedTrainerObj.employeeId,
-            trainerName: selectedTrainerObj.name,
-            invoiceNumber: ptInvoiceNo,
-            invoice: ptInvoiceNo,
-            package: ptDuration,
-            plan: `PT - ${ptDuration}`,
-            ptDuration: ptDuration,
-            originalAmount: amtNum,
-            discountAmount: discNum,
-            taxAmount: taxNum,
-            netPayable: netNum,
-            amountPaid: pAmtPaid,
-            amount: pAmtPaid,
-            paid: pAmtPaid,
-            pendingAmount: pendingNum,
-            method: ptPaymentMethod,
-            status: pendingNum <= 0 ? 'paid' : (pAmtPaid > 0 ? 'partial' : 'pending'),
-            ptStartDate: ptStartDate,
-            ptEndDate: ptExpiryDate,
-            startDate: ptStartDate,
-            expiryDate: ptExpiryDate,
-            date: todayStr,
-            createdAt: new Date().toISOString()
-          });
-
-          setCreatedPtInvoice({
-            invoiceNumber: ptInvoiceNo,
-            plan: `Personal Training (${ptDuration})`,
-            trainerName: selectedTrainerObj.name,
-            amount: netNum,
-            paid: pAmtPaid,
-            method: ptPaymentMethod,
-            status: pendingNum <= 0 ? 'paid' : 'partial',
-            date: todayStr
-          });
-        } catch (ptErr) {
-          console.warn("PT payment record creation notice:", ptErr);
-        }
+        const ptInv = resData?.ptInvoice || {
+          invoiceNumber: memberPayload.ptBilling?.invoiceNo || ptInvoiceNo,
+          invoiceType: 'PT',
+          billingType: 'PT',
+          packageName: `Personal Training (${ptDuration})`,
+          plan: `Personal Training (${ptDuration})`,
+          trainerName: selectedTrainerObj.name,
+          originalAmount: amtNum,
+          packagePrice: amtNum,
+          discountAmount: discNum,
+          discount: discNum,
+          netPayable: netNum,
+          amount: netNum,
+          amountPaid: pAmtPaid,
+          paid: pAmtPaid,
+          pendingAmount: Math.max(0, netNum - pAmtPaid),
+          method: ptPaymentMethod,
+          paymentMethod: ptPaymentMethod,
+          status: (netNum - pAmtPaid) <= 0 ? 'paid' : 'partial',
+          date: todayStr,
+          startDate: ptStartDate,
+          expiryDate: ptExpiryDate
+        };
+        setCreatedPtInvoice(ptInv);
       }
 
-      fetchPayments();
-
-      const createdInv = {
-        invoiceNumber: memInvoiceNo,
-        plan: planName,
-        amount: finalBilled,
-        paid: paidAmt,
-        discount: disc,
-        method: paymentMethod,
-        status: 'paid',
-        date: todayStr
-      };
-
-      setCreatedMember(newMember || memberPayload);
-      setCreatedInvoice(createdInv);
       setStep(hasPt ? 6 : 5);
-      toast.success(`Member registered & billing records generated!`);
+      toast.success('Member created successfully');
     } catch (err: any) {
       const errMsg = err.message || 'Failed to complete member registration. Please try again.';
       setBackendError(errMsg);

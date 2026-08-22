@@ -242,13 +242,17 @@ export default function BillingTab({ member: initialMember }: { member: any }) {
     }
   };
 
+  // Valid active invoices (ignoring VOID / duplicates)
+  const validInvoices = useMemo(() => invoices.filter((inv: any) => inv.status !== 'VOID' && inv.status !== 'void' && !inv.isDuplicate), [invoices]);
+
   // Separate Membership vs PT Invoices
-  const membershipInvoices = useMemo(() => invoices.filter((inv: any) => inv.billingType !== 'pt' && inv.billingType !== 'PT'), [invoices]);
-  const ptInvoices = useMemo(() => invoices.filter((inv: any) => inv.billingType === 'pt' || inv.billingType === 'PT'), [invoices]);
+  const membershipInvoices = useMemo(() => validInvoices.filter((inv: any) => inv.billingType !== 'pt' && inv.billingType !== 'PT' && inv.invoiceType !== 'PT'), [validInvoices]);
+  const ptInvoices = useMemo(() => validInvoices.filter((inv: any) => inv.billingType === 'pt' || inv.billingType === 'PT' || inv.invoiceType === 'PT'), [validInvoices]);
+  const hasPtData = useMemo(() => ptInvoices.length > 0 || Boolean(member?.pt?.enabled || (member?.trainerId && member?.trainerId !== 'null' && member?.trainer !== 'Unassigned')), [ptInvoices, member]);
 
   const calcStats = (invList: any[]) => {
     const billed = invList.reduce((s: number, inv: any) => {
-      const origAmt = Number(inv.originalAmount !== undefined ? inv.originalAmount : (inv.price || inv.amount || 0));
+      const origAmt = Number(inv.originalAmount !== undefined ? inv.originalAmount : (inv.packagePrice || inv.price || inv.amount || 0));
       const discAmt = Number(inv.discountAmount !== undefined ? inv.discountAmount : (inv.discount || 0));
       const taxAmt = Number(inv.taxAmount !== undefined ? inv.taxAmount : (inv.tax || inv.gst || 0));
       const othAmt = Number(inv.otherCharges || 0);
@@ -347,8 +351,8 @@ export default function BillingTab({ member: initialMember }: { member: any }) {
       {/* ── KPI Cards Header (Separate Membership & PT Totals) ───────────────────────── */}
       <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-7 gap-3">
         
-        {/* MEMBERSHIP STATS GROUP (3 Cards) */}
-        <div className="lg:col-span-3 bg-blue-50/50 p-3.5 rounded-3xl border border-blue-200/80 space-y-2">
+        {/* MEMBERSHIP STATS GROUP */}
+        <div className={`${hasPtData ? 'lg:col-span-3' : 'lg:col-span-6'} bg-blue-50/50 p-3.5 rounded-3xl border border-blue-200/80 space-y-2`}>
           <span className="text-[10px] font-black uppercase tracking-widest text-[#0b5cbe] block">MEMBERSHIP FINANCIALS</span>
           <div className="grid grid-cols-3 gap-2">
             <div className="bg-white rounded-2xl p-3 border border-[#d9e7f7]">
@@ -366,24 +370,26 @@ export default function BillingTab({ member: initialMember }: { member: any }) {
           </div>
         </div>
 
-        {/* PT STATS GROUP (3 Cards) */}
-        <div className="lg:col-span-3 bg-amber-50/50 p-3.5 rounded-3xl border border-amber-200/80 space-y-2">
-          <span className="text-[10px] font-black uppercase tracking-widest text-amber-800 block">PERSONAL TRAINING (PT) FINANCIALS</span>
-          <div className="grid grid-cols-3 gap-2">
-            <div className="bg-white rounded-2xl p-3 border border-amber-200">
-              <p className="text-[9px] font-bold text-slate-500 uppercase">PT Billed</p>
-              <p className="text-base font-black text-[#10233f] font-mono">{fmt(ptStats.billed)}</p>
-            </div>
-            <div className="bg-white rounded-2xl p-3 border border-amber-300">
-              <p className="text-[9px] font-bold text-amber-800 uppercase">PT Collected</p>
-              <p className="text-base font-black text-amber-700 font-mono">{fmt(ptStats.paid)}</p>
-            </div>
-            <div className="bg-white rounded-2xl p-3 border border-slate-200">
-              <p className="text-[9px] font-bold text-slate-500 uppercase">PT Pending</p>
-              <p className={`text-base font-black font-mono ${ptStats.outstanding > 0 ? 'text-red-600' : 'text-amber-800'}`}>{fmt(ptStats.outstanding)}</p>
+        {/* PT STATS GROUP (Only rendered if PT exists for member) */}
+        {hasPtData && (
+          <div className="lg:col-span-3 bg-amber-50/50 p-3.5 rounded-3xl border border-amber-200/80 space-y-2">
+            <span className="text-[10px] font-black uppercase tracking-widest text-amber-800 block">PERSONAL TRAINING (PT) FINANCIALS</span>
+            <div className="grid grid-cols-3 gap-2">
+              <div className="bg-white rounded-2xl p-3 border border-amber-200">
+                <p className="text-[9px] font-bold text-slate-500 uppercase">PT Billed</p>
+                <p className="text-base font-black text-[#10233f] font-mono">{fmt(ptStats.billed)}</p>
+              </div>
+              <div className="bg-white rounded-2xl p-3 border border-amber-300">
+                <p className="text-[9px] font-bold text-amber-800 uppercase">PT Collected</p>
+                <p className="text-base font-black text-amber-700 font-mono">{fmt(ptStats.paid)}</p>
+              </div>
+              <div className="bg-white rounded-2xl p-3 border border-slate-200">
+                <p className="text-[9px] font-bold text-slate-500 uppercase">PT Pending</p>
+                <p className={`text-base font-black font-mono ${ptStats.outstanding > 0 ? 'text-red-600' : 'text-amber-800'}`}>{fmt(ptStats.outstanding)}</p>
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
         {/* Create New Bill Action Card (1 Card) */}
         <div className="lg:col-span-1 bg-gradient-to-br from-[#0b5cbe] to-[#2876d0] rounded-3xl p-3.5 text-white shadow-md flex flex-col justify-between">

@@ -224,16 +224,22 @@ export const createMember = async (req: Request, res: Response) => {
       paymentStatus: finalPaymentStatus
     });
 
-    // Generate ONE authoritative invoice for new member
+    // 1. Generate ONE authoritative MEMBERSHIP invoice for new member
     const invoiceNumber = req.body.invoiceNumber || `INV-${Math.floor(100000 + Math.random() * 900000)}`;
     const payment = await db.addPayment({
       memberId: member.id,
       memberName: member.name,
       memberPhone: member.phone,
+      invoiceType: 'MEMBERSHIP',
+      billingType: 'MEMBERSHIP',
+      packageId: matchedPlan ? (matchedPlan.id || matchedPlan.name) : 'p_mon',
+      packageName: plan || 'Monthly Standard',
+      packagePrice: origAmount,
       originalAmount: origAmount,
       discountAmount: discAmount,
       discount: discAmount,
       taxAmount: taxAmount,
+      tax: taxAmount,
       otherCharges: othCharges,
       netPayable: netPayable,
       amount: netPayable,
@@ -241,16 +247,70 @@ export const createMember = async (req: Request, res: Response) => {
       paid: amountPaid,
       outstandingAmount: outstandingAmount,
       pendingAmount: outstandingAmount,
-      plan: plan || 'Monthly',
+      plan: plan || 'Monthly Standard',
+      paymentMethod: paymentMethod || 'UPI',
       method: paymentMethod || 'UPI',
       status: finalPaymentStatus,
       invoiceNumber: invoiceNumber,
       invoice: invoiceNumber,
+      billingDate: startJoinDate,
       date: startJoinDate,
-      startDate: startJoinDate,
+      startDate: memStartDate,
+      endDate: finalExpiry,
       expiryDate: finalExpiry,
       idempotencyKey: idempotencyKey
     });
+
+    // 2. Generate SEPARATE PT invoice if Personal Trainer is selected
+    let ptPayment = null;
+    const ptData = req.body.ptBilling || req.body.pt;
+    if (ptData && (ptData.enabled || ptData.trainerId || ptData.trainerName)) {
+      const ptAmt = Number(ptData.originalAmount !== undefined ? ptData.originalAmount : (ptData.amount || ptData.price || 6000));
+      const ptDisc = Number(ptData.discountAmount !== undefined ? ptData.discountAmount : (ptData.discount || 0));
+      const ptTax = Number(ptData.taxAmount !== undefined ? ptData.taxAmount : (ptData.tax || 0));
+      const ptNet = Math.max(0, ptAmt - ptDisc + ptTax);
+      const ptPaid = Number(ptData.amountPaid !== undefined ? ptData.amountPaid : (ptData.paid !== undefined ? ptData.paid : ptNet));
+      const ptPending = Math.max(0, ptNet - ptPaid);
+      const ptInvNo = ptData.invoiceNo || ptData.invoiceNumber || `INV-PT-${Math.floor(100000 + Math.random() * 900000)}`;
+      const ptStart = ptData.startDate || ptData.ptStartDate || startJoinDate;
+      const ptEnd = ptData.expiryDate || ptData.ptEndDate || ptData.ptExpiryDate || calculateBackendPlanExpiry(ptData.duration || '3 Months', ptStart, []);
+
+      ptPayment = await db.addPayment({
+        memberId: member.id,
+        memberName: member.name,
+        memberPhone: member.phone,
+        invoiceType: 'PT',
+        billingType: 'PT',
+        trainerId: ptData.trainerId || req.body.trainerId || '',
+        trainerName: ptData.trainerName || req.body.trainer || 'Personal Trainer',
+        packageId: ptData.packageId || `pt_${ptData.duration || '3_months'}`,
+        packageName: ptData.packageName || `Personal Training (${ptData.duration || '3 Months'})`,
+        packagePrice: ptAmt,
+        originalAmount: ptAmt,
+        discountAmount: ptDisc,
+        discount: ptDisc,
+        taxAmount: ptTax,
+        tax: ptTax,
+        netPayable: ptNet,
+        amount: ptNet,
+        amountPaid: ptPaid,
+        paid: ptPaid,
+        outstandingAmount: ptPending,
+        pendingAmount: ptPending,
+        plan: `PT - ${ptData.duration || '3 Months'}`,
+        paymentMethod: ptData.paymentMethod || ptData.method || paymentMethod || 'UPI',
+        method: ptData.paymentMethod || ptData.method || paymentMethod || 'UPI',
+        status: ptPending <= 0 ? 'paid' : (ptPaid > 0 ? 'partial' : 'pending'),
+        invoiceNumber: ptInvNo,
+        invoice: ptInvNo,
+        billingDate: ptStart,
+        date: ptStart,
+        startDate: ptStart,
+        endDate: ptEnd,
+        expiryDate: ptEnd,
+        idempotencyKey: `pt_${idempotencyKey}`
+      });
+    }
 
     console.log(`[Credentials Notification] Sent credentials to ${name} (${loginEmail}) via simulated SMS & WhatsApp. Password: ${password || '1234567'}`);
 
@@ -260,7 +320,7 @@ export const createMember = async (req: Request, res: Response) => {
       triggerPaymentEmail(payment).catch(err => console.error('[Automation] Payment email failed:', err));
     }
 
-    res.status(201).json({ ...member, invoice: payment });
+    res.status(201).json({ ...member, invoice: payment, ptInvoice: ptPayment });
   } catch (error: any) {
     console.error('Failed to create member:', error);
     res.status(500).json({ error: error.message });

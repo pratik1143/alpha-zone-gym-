@@ -130,8 +130,9 @@ export default function BillingPage() {
     return () => unsub();
   }, [members, todayStr]);
 
-  // Derived stats
-  const paidPayments = useMemo(() => payments.filter(p => (p.status || '').toLowerCase() === 'paid'), [payments]);
+  // Derived stats (ignoring VOID and duplicate invoices)
+  const validPayments = useMemo(() => payments.filter(p => p && p.status !== 'VOID' && p.status !== 'void' && !p.isDuplicate), [payments]);
+  const paidPayments = useMemo(() => validPayments.filter(p => (p.status || '').toLowerCase() === 'paid'), [validPayments]);
   
   // Today's Real Collections (includes cash, UPI, card payments collected today)
   const todaysRealCollection = useMemo(() => {
