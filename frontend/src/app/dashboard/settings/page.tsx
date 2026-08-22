@@ -6,14 +6,15 @@ import {
   Settings, Shield, User, Bell, Wifi, WifiOff, RefreshCw,
   CheckCircle2, AlertTriangle, Fingerprint, Server, Plus,
   Trash2, Activity, Lock, ChevronRight, Zap, Database, Edit2, Play, Info,
-  Upload, Terminal, Cpu, Check, X, Sliders, Globe, Layers, ArrowUpRight, Copy, Building2
+  Upload, Terminal, Cpu, Check, X, Sliders, Globe, Layers, ArrowUpRight, Copy, Building2, Download
 } from 'lucide-react';
-import { useAuthStore } from '@/store';
+import { useAuthStore, useGymStore } from '@/store';
 import toast from 'react-hot-toast';
 import API from '@/services/api';
 import { useRouter } from 'next/navigation';
 import { db as fDb, isFirebaseReady } from '@/lib/firebase';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
+import BiometricMappingModal from '../members/components/BiometricMappingModal';
 
 interface Device {
   id: string;
@@ -57,7 +58,44 @@ export default function SettingsGodLevelPage() {
   const [contactEmail, setContactEmail] = useState(user?.email || 'admin@alphazone.com');
   const [contactPhone, setContactPhone] = useState('+91 98765 43210');
   const [savingBranch, setSavingBranch] = useState(false);
-  const [activeTab, setActiveTab] = useState<'hardware' | 'logs' | 'branch' | 'security'>('hardware');
+  const [activeTab, setActiveTab] = useState<'hardware' | 'logs' | 'branch' | 'security' | 'data-tools'>('hardware');
+  const [showBiometricMappingModal, setShowBiometricMappingModal] = useState(false);
+
+  const handleExportCSV = () => {
+    const members = useGymStore.getState().members || [];
+    if (members.length === 0) {
+      toast.error("No member records available to export");
+      return;
+    }
+    const HEADERS = ["ID", "Name", "Phone", "Email", "Gender", "Age", "Plan", "Branch", "Trainer", "Status", "Join Date", "Expiry Date", "Address"];
+    const escape = (val: any) => String(val ?? "").replace(/"/g, '""');
+    const rows = members.map((m: any) =>
+      [
+        escape(m.id),
+        escape(m.name),
+        escape(m.phone),
+        escape(m.email),
+        escape(m.gender),
+        escape(m.age),
+        escape(m.plan),
+        escape(m.branch || "Mohali, Punjab"),
+        escape(m.trainer),
+        escape(m.status),
+        escape(m.joinDate ? new Date(m.joinDate).toLocaleDateString("en-IN") : ""),
+        escape(m.expiryDate ? new Date(m.expiryDate).toLocaleDateString("en-IN") : ""),
+        escape((m.address || "").replace(/,/g, ";")),
+      ].map((v) => '"' + v + '"').join(",")
+    );
+    const csv = [HEADERS.join(","), ...rows].join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = "alpha-zone-members-" + new Date().toISOString().split("T")[0] + ".csv";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast.success(`Exported ${members.length} member records to CSV!`);
+  };
 
   // Load saved branch settings on mount
   useEffect(() => {
@@ -434,7 +472,8 @@ export default function SettingsGodLevelPage() {
           { id: 'hardware', label: 'Biometric Gate Controller', icon: Server },
           { id: 'logs', label: 'Gate Relay Console Logs', icon: Terminal },
           { id: 'branch', label: 'Branch & Operator Profile', icon: Building2 },
-          { id: 'security', label: 'System Security & Services', icon: Shield }
+          { id: 'security', label: 'System Security & Services', icon: Shield },
+          { id: 'data-tools', label: 'Member Data & Biometric Tools', icon: Database }
         ].map(tab => (
           <button
             key={tab.id}
@@ -740,6 +779,94 @@ export default function SettingsGodLevelPage() {
           </div>
         </div>
       )}
+
+      {/* ── TAB 5: MEMBER DATA & BIOMETRIC TOOLS ── */}
+      {activeTab === 'data-tools' && (
+        <div className="bg-white rounded-3xl p-6 lg:p-8 border border-slate-100 shadow-[0_2px_15px_rgba(0,0,0,0.02)] space-y-6">
+          <div className="pb-5 border-b border-slate-100">
+            <h3 className="text-lg font-black text-slate-900 flex items-center gap-2">
+              <Database className="text-indigo-600" size={20} /> MEMBER DATA &amp; BIOMETRIC TOOLS
+            </h3>
+            <p className="text-xs font-semibold text-slate-400 mt-0.5">
+              Administrative member data mapping, legacy biometric sync, and data exports.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* 1. Map Biometric ID Card */}
+            <div className="bg-slate-50/70 border border-slate-200/80 hover:border-indigo-300 rounded-3xl p-6 space-y-4 transition-all flex flex-col justify-between">
+              <div className="space-y-3">
+                <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 border border-indigo-100 flex items-center justify-center">
+                  <Fingerprint size={24} />
+                </div>
+                <div>
+                  <h4 className="text-base font-black text-slate-900">Map Biometric ID</h4>
+                  <p className="text-xs text-slate-500 font-medium mt-1 leading-relaxed">
+                    Map biometric device slot IDs directly to existing gym members in the system.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowBiometricMappingModal(true)}
+                className="w-full py-3 bg-[#d4ff00] hover:bg-[#c4ef00] text-slate-950 rounded-xl text-xs font-black transition-all shadow-sm border border-[#c4ef00] cursor-pointer flex items-center justify-center gap-2"
+              >
+                <Fingerprint size={16} /> ⚡ Map Biometric ID
+              </button>
+            </div>
+
+            {/* 2. Auto Map Legacy Data Card */}
+            <div className="bg-slate-50/70 border border-slate-200/80 hover:border-blue-300 rounded-3xl p-6 space-y-4 transition-all flex flex-col justify-between">
+              <div className="space-y-3">
+                <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 border border-blue-100 flex items-center justify-center">
+                  <Zap size={24} />
+                </div>
+                <div>
+                  <h4 className="text-base font-black text-slate-900">Auto Map Legacy Data</h4>
+                  <p className="text-xs text-slate-500 font-medium mt-1 leading-relaxed">
+                    Automatically map legacy biometric records using available member information and phone numbers.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => router.push('/dashboard/import')}
+                className="w-full py-3 bg-slate-900 hover:bg-black text-white rounded-xl text-xs font-black transition-all shadow-sm border-none cursor-pointer flex items-center justify-center gap-2"
+              >
+                <Zap size={16} /> Auto Map Legacy Data
+              </button>
+            </div>
+
+            {/* 3. Export Members CSV Card */}
+            <div className="bg-slate-50/70 border border-slate-200/80 hover:border-emerald-300 rounded-3xl p-6 space-y-4 transition-all flex flex-col justify-between">
+              <div className="space-y-3">
+                <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 border border-emerald-100 flex items-center justify-center">
+                  <Download size={24} />
+                </div>
+                <div>
+                  <h4 className="text-base font-black text-slate-900">Export Members CSV</h4>
+                  <p className="text-xs text-slate-500 font-medium mt-1 leading-relaxed">
+                    Export complete gym member records, package status, and contact details as a CSV spreadsheet.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={handleExportCSV}
+                className="w-full py-3 bg-white hover:bg-slate-100 text-slate-800 rounded-xl text-xs font-black transition-all shadow-sm border border-slate-200 cursor-pointer flex items-center justify-center gap-2"
+              >
+                <Download size={16} /> Export Members CSV
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── BIOMETRIC MAPPING MODAL ── */}
+      <BiometricMappingModal
+        isOpen={showBiometricMappingModal}
+        onClose={() => setShowBiometricMappingModal(false)}
+      />
 
       {/* ── MODAL: LINK NEW TERMINAL DEVICE ────────────────────────────────────── */}
       <AnimatePresence>

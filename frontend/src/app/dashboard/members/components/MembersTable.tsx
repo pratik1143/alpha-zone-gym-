@@ -1,14 +1,44 @@
 'use client';
 
-import React, { useState, useMemo, useEffect, useCallback, memo } from 'react';
-import { Search, Filter, MoreHorizontal, Phone, MessageSquare, MapPin, Edit, RefreshCw, Snowflake, Trash2, Eye, Fingerprint, ChevronLeft, ChevronRight } from 'lucide-react';
+import React, { useState, useMemo, useEffect, useCallback, memo, useRef } from 'react';
+import {
+  Search, Filter, MoreHorizontal, Phone, MessageSquare, MapPin, Edit,
+  RefreshCw, Snowflake, Trash2, Eye, Fingerprint, ChevronLeft, ChevronRight,
+  X, AlertCircle, CheckCircle2, User, Sliders, Calendar, RotateCcw
+} from 'lucide-react';
 import { membershipEngine } from '@/lib/engines/membershipEngine';
 import { paymentEngine } from '@/lib/engines/paymentEngine';
-import { calculateRealAttendance, formatDaysLeft, calculateAge } from '@/lib/utils';
+import { calculateRealAttendance, formatDaysLeft, calculateAge, formatDate } from '@/lib/utils';
 import { useGymStore } from '@/store';
 import toast from 'react-hot-toast';
 import { useRouter } from 'next/navigation';
 import MemberAvatar from '../../components/MemberAvatar';
+
+export interface FilterState {
+  gender: string;
+  memberType: string;
+  packagePlan: string;
+  trainer: string;
+  branch: string;
+  membershipStatus: string;
+  paymentStatus: string;
+  joinedFrom: string;
+  joinedTo: string;
+  expiryStatus: string;
+}
+
+const initialFilterState: FilterState = {
+  gender: 'all',
+  memberType: 'all',
+  packagePlan: 'all',
+  trainer: 'all',
+  branch: 'all',
+  membershipStatus: 'all',
+  paymentStatus: 'all',
+  joinedFrom: '',
+  joinedTo: '',
+  expiryStatus: 'all',
+};
 
 interface MembersTableProps {
   members: any[];
@@ -98,160 +128,150 @@ const MemberTableRow = memo(function MemberTableRow({
   const paidTotal    = isPaid ? (invoiceTotal || amountVal) : Number(member.paidAmount || member.totalPaid || 0);
   const payStatus    = isPaid ? 'PAID' : (invoiceTotal > 0
     ? paymentEngine.calculatePaymentStatus(invoiceTotal, paidTotal)
-    : (member.paymentStatus === 'pending' ? 'PENDING' : 'PAID'));
-  const outstanding  = paymentEngine.calculateOutstandingAmount(invoiceTotal, paidTotal);
+    : (member.paymentStatus ? member.paymentStatus.toUpperCase() : 'PENDING'));
 
-  const daysColor = ds === 'expired' ? 'text-slate-400 font-medium' : ds === 'urgent' ? 'text-red-500 font-extrabold' : ds === 'expiring_soon' ? 'text-orange-500 font-bold' : 'text-emerald-600 font-bold';
+  const payBadgeStyle = payStatus === 'PAID'
+    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+    : payStatus === 'PARTIAL'
+      ? 'bg-amber-50 text-amber-700 border-amber-200'
+      : 'bg-rose-50 text-rose-700 border-rose-200';
 
   return (
     <tr 
       onClick={onRowClick}
-      className={`hover:bg-slate-50 transition-colors cursor-pointer ${isSelected ? 'bg-indigo-50/50' : ''}`}
+      className={`hover:bg-slate-50/80 transition-colors cursor-pointer border-b border-slate-100 ${
+        isSelected ? 'bg-indigo-50/40' : ''
+      }`}
     >
-      <td className="px-4 py-4"><input type="checkbox" className="rounded border-slate-300" onClick={e => e.stopPropagation()} /></td>
+      <td className="px-4 py-4" onClick={e => e.stopPropagation()}>
+        <input type="checkbox" className="rounded border-slate-300 cursor-pointer" />
+      </td>
+
+      {/* Member Profile info */}
       <td className="px-4 py-4">
         <div className="flex items-center gap-3">
-          <MemberAvatar member={member} className="w-10 h-10 rounded-full object-cover" />
-          <div>
-            <div className="font-extrabold text-slate-900 text-sm">{member.name}</div>
-            <div className="text-xs font-mono font-semibold text-slate-500 flex items-center gap-1 mt-0.5">
-              {member.clientId || member.customId || (member.memberId && !member.memberId.startsWith('AZ-2026-') ? member.memberId : null) || member.biometricId || member.id}
-            </div>
-            <div className="text-[10px] text-slate-400 font-mono mt-0.5">{member.phone}</div>
-          </div>
-        </div>
-      </td>
-      <td className="px-4 py-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className={`px-2.5 py-1 text-[10px] font-bold rounded-full uppercase tracking-wider ${
-              member.plan?.toLowerCase().includes('gold') ? 'bg-amber-100 text-amber-700' :
-              member.plan?.toLowerCase().includes('platinum') ? 'bg-purple-100 text-purple-700' :
-              member.plan?.toLowerCase().includes('pro') ? 'bg-emerald-100 text-emerald-700' :
-              'bg-blue-100 text-blue-700'
-            }`}>
-              {member.plan || 'Standard'}
-            </span>
-            {amountVal > 0 && (
-              <span className="text-xs font-black text-slate-800 font-mono">₹{amountVal.toLocaleString('en-IN')}</span>
+          <div className="relative shrink-0">
+            <MemberAvatar member={member} className="w-10 h-10 rounded-full border border-slate-200 shadow-2xs object-cover" size={40} />
+            {member.biometricId && (
+              <span className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-emerald-500 text-white flex items-center justify-center text-[8px] font-black shadow-xs" title={`Biometric ID Linked: #${member.biometricId}`}>
+                ✓
+              </span>
             )}
           </div>
-          <div className="text-xs text-slate-500 mt-1 font-medium">Exp: {new Date(member.expiryDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</div>
-        </div>
-      </td>
-      <td className="px-4 py-4">
-        {member.trainer ? (
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded-full bg-slate-200 overflow-hidden">
-              <img src={'https://i.pravatar.cc/150?u=' + member.trainer} alt="trainer" loading="lazy" className="w-full h-full object-cover" />
-            </div>
-            <div>
-              <div className="text-sm font-semibold text-slate-800">{member.trainer}</div>
-              <div className="text-[10px] text-slate-500">Strength</div>
-            </div>
-          </div>
-        ) : (
-          <span className="text-xs text-slate-400 italic">Unassigned</span>
-        )}
-      </td>
-      <td className="px-4 py-4">
-        <div className="flex justify-center">
-          <div className="relative w-10 h-10 flex items-center justify-center">
-            <svg className="absolute inset-0 w-full h-full -rotate-90" viewBox="0 0 36 36">
-              <circle cx="18" cy="18" r="16" fill="none" stroke="#f1f5f9" strokeWidth="3" />
-              <circle cx="18" cy="18" r="16" fill="none" stroke={attColor} strokeWidth="3" strokeDasharray="100" strokeDashoffset={100 - attScore} strokeLinecap="round" />
-            </svg>
-            <div className="flex flex-col items-center justify-center leading-none">
-              <span className="text-[10px] font-bold" style={{ color: attColor }}>{attScore}%</span>
-              {!hasPunched ? (
-                 <span className="text-[6px] text-slate-400 mt-0.5">No Activity</span>
-              ) : (
-                 <span className="text-[7px] text-slate-400 mt-0.5">{member.attendanceCount} visits</span>
+          <div>
+            <div className="font-extrabold text-slate-900 text-sm flex items-center gap-1.5">
+              <span>{member.name}</span>
+              {member.isPt && (
+                <span className="px-1.5 py-0.2 bg-amber-100 text-amber-800 text-[9px] font-black rounded uppercase border border-amber-300">
+                  PT
+                </span>
               )}
             </div>
+            <div className="text-xs text-slate-400 font-mono flex items-center gap-2 mt-0.5">
+              <span>#{member.biometricId || member.memberId || member.id}</span>
+              <span>•</span>
+              <span>{member.phone}</span>
+            </div>
           </div>
         </div>
       </td>
-      <td className="px-4 py-4 text-center">
-        <div className={`text-xs ${daysColor}`}>
-          {formatDaysLeft(member.expiryDate)}
+
+      {/* Membership Plan */}
+      <td className="px-4 py-4">
+        <div className="font-bold text-slate-800 text-xs">{member.plan || 'Standard'}</div>
+        <div className="text-[11px] text-slate-400 font-mono mt-0.5">
+          Exp: {formatDate(member.expiryDate)}
         </div>
       </td>
-      <td className="px-4 py-4 text-center">
-        <div className={`text-xs font-bold ${risk.color}`}>{risk.label}</div>
-        <div className="text-[10px] text-slate-400 mt-0.5">{risk.value}</div>
+
+      {/* Assigned Trainer */}
+      <td className="px-4 py-4 text-xs font-bold text-slate-700">
+        {member.trainer && member.trainer !== 'Unassigned' ? (
+          <span className="inline-flex items-center gap-1 text-slate-800 bg-slate-100 px-2.5 py-1 rounded-lg border border-slate-200">
+            <User size={12} className="text-indigo-600" />
+            <span>{member.trainer}</span>
+          </span>
+        ) : (
+          <span className="text-slate-400 italic">Unassigned</span>
+        )}
       </td>
-      <td className="px-4 py-4">
-        <div className="flex items-center gap-1.5 justify-start">
-          {ds !== 'blocked' && <div className={`w-1.5 h-1.5 rounded-full ${statusConfig.dot}`} />}
-          <span className={`text-[11px] font-bold ${statusConfig.text}`}>
-            {statusConfig.label}
+
+      {/* Attendance Circular Progress */}
+      <td className="px-4 py-4 text-center">
+        <div className="inline-flex items-center justify-center relative">
+          <svg className="w-9 h-9">
+            <circle cx="18" cy="18" r="14" stroke="#f1f5f9" strokeWidth="3" fill="none" />
+            <circle 
+              cx="18" cy="18" r="14" 
+              stroke={attColor} 
+              strokeWidth="3" 
+              fill="none" 
+              strokeDasharray="88" 
+              strokeDashoffset={88 - (88 * Math.min(100, attScore)) / 100}
+              strokeLinecap="round"
+              className="transition-all duration-500 -rotate-90 origin-center"
+            />
+          </svg>
+          <span className="absolute text-[10px] font-black font-mono text-slate-700">
+            {attScore}%
           </span>
         </div>
       </td>
-      <td className="px-4 py-4">
-        {payStatus === 'PAID' ? (
-          <div className="flex flex-col items-start gap-1">
-            <span className="badge-green text-[9px] uppercase font-black px-2 py-0.5">PAID</span>
-            {amountVal > 0 && (
-              <span className="text-xs font-black text-slate-800 font-mono">₹{amountVal.toLocaleString('en-IN')}</span>
-            )}
-          </div>
+
+      {/* Days Left */}
+      <td className="px-4 py-4 text-center font-mono text-xs font-bold">
+        {member.daysLeft < 0 ? (
+          <span className="text-red-500 font-black">Expired {Math.abs(member.daysLeft)}d ago</span>
+        ) : member.daysLeft === 0 ? (
+          <span className="text-orange-500 font-black">Expires Today</span>
         ) : (
-          <div className="flex flex-col items-start gap-1">
-            <span className="badge-yellow text-[9px] uppercase font-black px-2 py-0.5">
-              {payStatus === 'PARTIAL' ? 'Partial' : 'Pending'}
-            </span>
-            {amountVal > 0 && (
-              <span className="text-xs font-black text-slate-800 font-mono">₹{amountVal.toLocaleString('en-IN')}</span>
-            )}
-            {outstanding > 0 && (
-              <span className="text-[9px] text-amber-600 font-black">₹{outstanding.toLocaleString('en-IN')} due</span>
-            )}
-          </div>
+          <span className="text-slate-700">{member.daysLeft} Days</span>
         )}
       </td>
-      <td className="px-4 py-4 text-right" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-end gap-1">
+
+      {/* Renewal Risk */}
+      <td className="px-4 py-4 text-center">
+        <span className={`font-mono text-xs font-black ${risk.color}`}>
+          {risk.label} ({risk.value})
+        </span>
+      </td>
+
+      {/* Status */}
+      <td className="px-4 py-4">
+        <span className={`inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wider ${statusConfig.text}`}>
+          <span className={`w-1.5 h-1.5 rounded-full ${statusConfig.dot}`} />
+          {statusConfig.label}
+        </span>
+      </td>
+
+      {/* Payment Status */}
+      <td className="px-4 py-4">
+        <span className={`px-2.5 py-1 rounded-lg text-[10px] font-mono font-black uppercase tracking-wider border ${payBadgeStyle}`}>
+          {payStatus}
+        </span>
+      </td>
+
+      {/* Actions Dropdown / Quick Buttons */}
+      <td className="px-4 py-4 text-right" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-end gap-1.5">
           <button 
-            title="Call Member"
-            onClick={() => window.open(`tel:${member.phone}`)}
-            className="p-1.5 text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors cursor-pointer border-0"
-          >
-            <Phone size={14} />
-          </button>
-          <button 
-            title="Send WhatsApp"
-            onClick={() => window.open(`https://wa.me/91${(member.phone || '').replace(/\D/g, '')}?text=Hello%20${encodeURIComponent(member.name || '')}%20👋,%20greeting%20from%20Alpha%20Zone%20Gym!`)}
-            className="p-1.5 text-emerald-600 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition-colors cursor-pointer border-0"
-          >
-            <MessageSquare size={14} />
-          </button>
-          <button 
-            title={`Map Biometric ID (Current: #${member.biometricId || 'Unmapped'})`}
-            onClick={() => onMapBiometric ? onMapBiometric(member) : null}
-            className="p-1.5 text-purple-600 bg-purple-50 hover:bg-purple-100 rounded-lg transition-colors cursor-pointer border-0"
-          >
-            <Fingerprint size={14} />
-          </button>
-          <button 
-            title="Edit Member Profile"
+            title="Edit Member"
             onClick={() => onEdit ? onEdit(member) : onSelectMember(member)}
-            className="p-1.5 text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors cursor-pointer border-0"
+            className="p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer border-0"
           >
             <Edit size={14} />
           </button>
           <button 
-            title="Renew / Upgrade Membership"
+            title="Renew Membership"
             onClick={() => onRenew ? onRenew(member) : null}
-            className="p-1.5 text-amber-600 bg-amber-50 hover:bg-amber-100 rounded-lg transition-colors cursor-pointer border-0"
+            className="p-1.5 text-emerald-600 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition-colors cursor-pointer border-0"
           >
             <RefreshCw size={14} />
           </button>
           <button 
             title={member.status === 'frozen' ? 'Unfreeze Status' : 'Freeze Status'}
             onClick={() => onFreeze ? onFreeze(member) : null}
-            className="p-1.5 text-cyan-600 bg-cyan-50 hover:bg-cyan-100 rounded-lg transition-colors cursor-pointer border-0"
+            className="p-1.5 text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors cursor-pointer border-0"
           >
             <Snowflake size={14} />
           </button>
@@ -274,10 +294,15 @@ export default function MembersTable({
 }: MembersTableProps) {
   const router = useRouter();
 
-  // Local search state with 300ms debounce
+  // Local search state with 250ms debounce
   const [localSearch, setLocalSearch] = useState(search);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
+
+  // Advanced 9-Field Filter State
+  const [filters, setFilters] = useState<FilterState>(initialFilterState);
+  const [showMoreFilters, setShowMoreFilters] = useState(false);
+  const filterPopoverRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setLocalSearch(search);
@@ -293,11 +318,46 @@ export default function MembersTable({
     return () => clearTimeout(timer);
   }, [localSearch, search, setSearch]);
 
-  // Reset page when filter changes
+  // Reset page when filter or tab changes
   useEffect(() => {
     setPage(1);
-  }, [statusFilter]);
+  }, [statusFilter, filters]);
 
+  // Close popover when clicking outside
+  useEffect(() => {
+    const handleOutside = (e: MouseEvent) => {
+      if (filterPopoverRef.current && !filterPopoverRef.current.contains(e.target as Node)) {
+        setShowMoreFilters(false);
+      }
+    };
+    document.addEventListener('mousedown', handleOutside);
+    return () => document.removeEventListener('mousedown', handleOutside);
+  }, []);
+
+  // Dynamic Options Extracted from Real Members Data
+  const availableBranches = useMemo(() => {
+    const set = new Set<string>();
+    members.forEach(m => { if (m.branch) set.add(m.branch); });
+    const list = Array.from(set);
+    return list.length > 0 ? list : ['Mohali, Punjab', 'Chandigarh', 'Panchkula'];
+  }, [members]);
+
+  const availableTrainers = useMemo(() => {
+    const set = new Set<string>();
+    members.forEach(m => {
+      const tr = m.trainer || m.trainerName;
+      if (tr && tr !== 'Unassigned') set.add(tr);
+    });
+    return Array.from(set);
+  }, [members]);
+
+  const availablePackages = useMemo(() => {
+    const set = new Set<string>();
+    members.forEach(m => { if (m.plan) set.add(m.plan); });
+    return Array.from(set);
+  }, [members]);
+
+  // Real tab counts calculated from actual member data
   const counts = useMemo(() => {
     let all = members.length;
     let active = 0;
@@ -310,17 +370,21 @@ export default function MembersTable({
       if (ds === 'active' || ds === 'expiring_soon' || ds === 'urgent') active++;
       else if (ds === 'expired') expired++;
       else if (ds === 'frozen') frozen++;
-      if (m.trainer) pt++;
+
+      const isPtMember = m.isPt === true || (m.ptHistory && m.ptHistory.length > 0) || (m.plan && String(m.plan).toLowerCase().includes('pt')) || (m.trainer && m.trainer !== 'Unassigned');
+      if (isPtMember) pt++;
     });
 
     return { all, active, expired, frozen, pt };
   }, [members]);
 
+  // Combined Search & 9-Field Filtering Logic
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     const digitsOnly = q.replace(/\D/g, '');
 
     return members.filter(m => {
+      // 1. Text Search Filter
       if (q) {
         const nameMatch = (m.name || m.fullName || '').toLowerCase().includes(q);
         const idMatch = (
@@ -350,20 +414,125 @@ export default function MembersTable({
           phoneMatch = rawPhone.includes(digitsOnly);
         }
         const emailMatch = (m.email || '').toLowerCase().includes(q);
-        const genderMatch = (m.gender || '').toLowerCase().includes(q);
 
-        const ms = nameMatch || idMatch || addressMatch || ageMatch || phoneMatch || emailMatch || genderMatch;
+        const ms = nameMatch || idMatch || addressMatch || ageMatch || phoneMatch || emailMatch;
         if (!ms) return false;
       }
 
+      // 2. Status Tab Filter (from top tabs)
       const dynStatus = getDynamicStatus(m);
-      if (statusFilter === 'active') return (dynStatus === 'active' || dynStatus === 'expiring_soon' || dynStatus === 'urgent');
-      if (statusFilter === 'expired') return dynStatus === 'expired';
-      if (statusFilter === 'frozen') return dynStatus === 'frozen';
-      if (statusFilter === 'pt') return !!m.trainer;
+      if (statusFilter === 'active' && !(dynStatus === 'active' || dynStatus === 'expiring_soon' || dynStatus === 'urgent')) return false;
+      if (statusFilter === 'expired' && dynStatus !== 'expired') return false;
+      if (statusFilter === 'frozen' && m.status !== 'frozen') return false;
+      if (statusFilter === 'pt') {
+        const isPtMember = m.isPt === true || (m.ptHistory && m.ptHistory.length > 0) || (m.plan && String(m.plan).toLowerCase().includes('pt')) || (m.trainer && m.trainer !== 'Unassigned');
+        if (!isPtMember) return false;
+      }
+
+      // 3. Detailed Filters System
+
+      // A. Gender Filter
+      if (filters.gender !== 'all') {
+        if (filters.gender === 'Not Specified') {
+          if (m.gender && m.gender !== 'Not Specified') return false;
+        } else {
+          if (!m.gender || m.gender.toLowerCase() !== filters.gender.toLowerCase()) return false;
+        }
+      }
+
+      // B. Member Type Filter
+      const hasPt = m.isPt === true || (m.ptHistory && m.ptHistory.length > 0) || (m.plan && String(m.plan).toLowerCase().includes('pt'));
+      const hasGym = !hasPt || (m.plan && !String(m.plan).toLowerCase().includes('pt'));
+      if (filters.memberType === 'gym' && (hasPt && !hasGym)) return false;
+      if (filters.memberType === 'pt' && !hasPt) return false;
+      if (filters.memberType === 'gym_pt' && (!hasPt || !hasGym)) return false;
+
+      // C. Package Plan Filter
+      if (filters.packagePlan !== 'all') {
+        if ((m.plan || '').toLowerCase() !== filters.packagePlan.toLowerCase()) return false;
+      }
+
+      // D. Trainer Filter
+      if (filters.trainer !== 'all') {
+        if (filters.trainer === 'unassigned') {
+          if (m.trainer && m.trainer !== 'Unassigned' && m.trainerId) return false;
+        } else {
+          const trName = (m.trainer || m.trainerName || '').toLowerCase();
+          const trId = (m.trainerId || '').toLowerCase();
+          const target = filters.trainer.toLowerCase();
+          if (trName !== target && trId !== target) return false;
+        }
+      }
+
+      // E. Branch Filter
+      if (filters.branch !== 'all') {
+        if ((m.branch || 'Mohali, Punjab').toLowerCase() !== filters.branch.toLowerCase()) return false;
+      }
+
+      // F. Membership Status Filter
+      if (filters.membershipStatus !== 'all') {
+        const days = m.daysLeft !== undefined ? m.daysLeft : membershipEngine.calculateDaysLeft(m.expiryDate);
+        if (filters.membershipStatus === 'active' && (days < 0 || m.status === 'frozen')) return false;
+        if (filters.membershipStatus === 'expired' && days >= 0) return false;
+        if (filters.membershipStatus === 'frozen' && m.status !== 'frozen') return false;
+        if (filters.membershipStatus === 'expiring_soon' && (days < 0 || days > 7)) return false;
+      }
+
+      // G. Payment Status Filter
+      if (filters.paymentStatus !== 'all') {
+        const isPaid = m.paymentStatus === 'paid' || (m.totalPaid && m.totalPaid >= m.totalBilled) || (m.outstandingBalance !== undefined && m.outstandingBalance <= 0);
+        const isPartial = m.paymentStatus === 'partial' || (m.totalPaid > 0 && m.outstandingBalance > 0);
+        const isPending = m.paymentStatus === 'pending' || (Number(m.totalPaid || 0) === 0);
+
+        if (filters.paymentStatus === 'paid' && !isPaid) return false;
+        if (filters.paymentStatus === 'partial' && !isPartial) return false;
+        if (filters.paymentStatus === 'pending' && !isPending) return false;
+      }
+
+      // H. Date Joined Range Filter
+      const mJoin = m.joinDate || m.createdAt;
+      if (mJoin) {
+        const joinStr = typeof mJoin === 'string' ? (mJoin.includes('T') ? mJoin.split('T')[0] : mJoin) : '';
+        if (filters.joinedFrom && joinStr && joinStr < filters.joinedFrom) return false;
+        if (filters.joinedTo && joinStr && joinStr > filters.joinedTo) return false;
+      }
+
+      // I. Expiry Status Filter
+      if (filters.expiryStatus !== 'all') {
+        const days = m.daysLeft !== undefined ? m.daysLeft : membershipEngine.calculateDaysLeft(m.expiryDate);
+        if (filters.expiryStatus === 'expired' && days >= 0) return false;
+        if (filters.expiryStatus === 'today' && days !== 0) return false;
+        if (filters.expiryStatus === 'in_7_days' && (days < 0 || days > 7)) return false;
+        if (filters.expiryStatus === 'in_30_days' && (days < 0 || days > 30)) return false;
+        if (filters.expiryStatus === 'in_60_days' && (days < 0 || days > 60)) return false;
+        if (filters.expiryStatus === 'active_over_60' && days <= 60) return false;
+      }
+
       return true;
     });
-  }, [members, search, statusFilter]);
+  }, [members, search, statusFilter, filters]);
+
+  // Active filter count
+  const activeFilterCount = useMemo(() => {
+    let count = 0;
+    if (filters.gender !== 'all') count++;
+    if (filters.memberType !== 'all') count++;
+    if (filters.packagePlan !== 'all') count++;
+    if (filters.trainer !== 'all') count++;
+    if (filters.branch !== 'all') count++;
+    if (filters.membershipStatus !== 'all') count++;
+    if (filters.paymentStatus !== 'all') count++;
+    if (filters.joinedFrom || filters.joinedTo) count++;
+    if (filters.expiryStatus !== 'all') count++;
+    return count;
+  }, [filters]);
+
+  const dateRangeError = useMemo(() => {
+    if (filters.joinedFrom && filters.joinedTo && filters.joinedTo < filters.joinedFrom) {
+      return 'Joined To date cannot be before Joined From date';
+    }
+    return '';
+  }, [filters.joinedFrom, filters.joinedTo]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const currentPage = Math.min(page, totalPages);
@@ -373,10 +542,10 @@ export default function MembersTable({
   }, [filtered, currentPage, pageSize]);
 
   return (
-    <div className="bg-white rounded-2xl shadow-[0_2px_10px_rgba(0,0,0,0.04)] border border-slate-100 overflow-hidden">
+    <div className="bg-white rounded-2xl shadow-[0_2px_10px_rgba(0,0,0,0.04)] border border-slate-100 overflow-hidden relative">
       
       {/* Top Filter Bar */}
-      <div className="p-4 border-b border-slate-100 flex flex-wrap items-center gap-4">
+      <div className="p-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-4">
         <div className="relative flex-1 min-w-[240px]">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input 
@@ -387,21 +556,361 @@ export default function MembersTable({
             className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-indigo-500 transition-colors" 
           />
         </div>
-        <div className="flex gap-2">
-          <select className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm text-slate-600 focus:outline-none focus:border-indigo-500">
-            <option>All Branches</option>
+
+        <div className="flex items-center gap-2 relative" ref={filterPopoverRef}>
+          {/* Quick Dropdown: Branch */}
+          <select
+            value={filters.branch}
+            onChange={e => setFilters(f => ({ ...f, branch: e.target.value }))}
+            className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:border-indigo-500 cursor-pointer"
+          >
+            <option value="all">All Branches</option>
+            {availableBranches.map(b => (
+              <option key={b} value={b}>{b}</option>
+            ))}
           </select>
-          <select className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm text-slate-600 focus:outline-none focus:border-indigo-500">
-            <option>All Trainers</option>
+
+          {/* Quick Dropdown: Trainer */}
+          <select
+            value={filters.trainer}
+            onChange={e => setFilters(f => ({ ...f, trainer: e.target.value }))}
+            className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:border-indigo-500 cursor-pointer"
+          >
+            <option value="all">All Trainers</option>
+            <option value="unassigned">Unassigned</option>
+            {availableTrainers.map(t => (
+              <option key={t} value={t}>{t}</option>
+            ))}
           </select>
-          <select className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm text-slate-600 focus:outline-none focus:border-indigo-500">
-            <option>All Memberships</option>
+
+          {/* Quick Dropdown: Membership Package */}
+          <select
+            value={filters.packagePlan}
+            onChange={e => setFilters(f => ({ ...f, packagePlan: e.target.value }))}
+            className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:border-indigo-500 cursor-pointer max-w-[160px] truncate"
+          >
+            <option value="all">All Memberships</option>
+            {availablePackages.map(p => (
+              <option key={p} value={p}>{p}</option>
+            ))}
           </select>
-          <button className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-700 hover:bg-slate-50">
-            <Filter size={14} /> More Filters
+
+          {/* More Filters Toggle Button */}
+          <button
+            type="button"
+            onClick={() => setShowMoreFilters(!showMoreFilters)}
+            className={`flex items-center gap-2 px-4 py-2 border rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              activeFilterCount > 0 || showMoreFilters
+                ? 'bg-indigo-50 border-indigo-300 text-indigo-700 shadow-sm'
+                : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+            }`}
+          >
+            <Filter size={14} className={activeFilterCount > 0 ? 'text-indigo-600' : 'text-slate-500'} />
+            <span>More Filters</span>
+            {activeFilterCount > 0 && (
+              <span className="w-5 h-5 rounded-full bg-indigo-600 text-white text-[10px] font-black flex items-center justify-center">
+                {activeFilterCount}
+              </span>
+            )}
           </button>
+
+          {/* ── MORE FILTERS POPOVER / MODAL ────────────────────────────────────── */}
+          {showMoreFilters && (
+            <div className="absolute right-0 top-12 w-full sm:w-[460px] bg-white rounded-3xl shadow-2xl border border-slate-200 p-5 z-[999] space-y-4 text-left select-none animate-in fade-in">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div className="flex items-center gap-2">
+                  <Sliders size={16} className="text-indigo-600" />
+                  <h4 className="text-sm font-black text-slate-900 uppercase tracking-wider">FILTER MEMBERS</h4>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowMoreFilters(false)}
+                  className="p-1 rounded-full text-slate-400 hover:bg-slate-100 border-none bg-transparent cursor-pointer"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              {/* Filter Fields Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs font-bold text-slate-700">
+                {/* 1. Gender */}
+                <div>
+                  <label className="block mb-1 text-[10px] uppercase font-black text-slate-400 tracking-wider">Gender</label>
+                  <select
+                    value={filters.gender}
+                    onChange={e => setFilters(f => ({ ...f, gender: e.target.value }))}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800"
+                  >
+                    <option value="all">All Genders</option>
+                    <option value="Male">Male</option>
+                    <option value="Female">Female</option>
+                    <option value="Other">Other</option>
+                    <option value="Not Specified">Not Specified</option>
+                  </select>
+                </div>
+
+                {/* 2. Member Type */}
+                <div>
+                  <label className="block mb-1 text-[10px] uppercase font-black text-slate-400 tracking-wider">Member Type</label>
+                  <select
+                    value={filters.memberType}
+                    onChange={e => setFilters(f => ({ ...f, memberType: e.target.value }))}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800"
+                  >
+                    <option value="all">All Member Types</option>
+                    <option value="gym">Gym Members</option>
+                    <option value="pt">PT Members</option>
+                    <option value="gym_pt">Gym + PT Members</option>
+                  </select>
+                </div>
+
+                {/* 3. Membership Status */}
+                <div>
+                  <label className="block mb-1 text-[10px] uppercase font-black text-slate-400 tracking-wider">Membership Status</label>
+                  <select
+                    value={filters.membershipStatus}
+                    onChange={e => setFilters(f => ({ ...f, membershipStatus: e.target.value }))}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800"
+                  >
+                    <option value="all">All Statuses</option>
+                    <option value="active">Active</option>
+                    <option value="expired">Expired</option>
+                    <option value="frozen">Frozen</option>
+                    <option value="expiring_soon">Expiring Soon (≤ 7 days)</option>
+                  </select>
+                </div>
+
+                {/* 4. Payment Status */}
+                <div>
+                  <label className="block mb-1 text-[10px] uppercase font-black text-slate-400 tracking-wider">Payment Status</label>
+                  <select
+                    value={filters.paymentStatus}
+                    onChange={e => setFilters(f => ({ ...f, paymentStatus: e.target.value }))}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800"
+                  >
+                    <option value="all">All Payment Statuses</option>
+                    <option value="paid">Fully Paid</option>
+                    <option value="partial">Partially Paid</option>
+                    <option value="pending">Pending</option>
+                  </select>
+                </div>
+
+                {/* 5. Package */}
+                <div>
+                  <label className="block mb-1 text-[10px] uppercase font-black text-slate-400 tracking-wider">Membership Package</label>
+                  <select
+                    value={filters.packagePlan}
+                    onChange={e => setFilters(f => ({ ...f, packagePlan: e.target.value }))}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800"
+                  >
+                    <option value="all">All Packages</option>
+                    {availablePackages.map(p => (
+                      <option key={p} value={p}>{p}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* 6. Trainer */}
+                <div>
+                  <label className="block mb-1 text-[10px] uppercase font-black text-slate-400 tracking-wider">Assigned Trainer</label>
+                  <select
+                    value={filters.trainer}
+                    onChange={e => setFilters(f => ({ ...f, trainer: e.target.value }))}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800"
+                  >
+                    <option value="all">All Trainers</option>
+                    <option value="unassigned">Unassigned</option>
+                    {availableTrainers.map(t => (
+                      <option key={t} value={t}>{t}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* 7. Branch */}
+                <div>
+                  <label className="block mb-1 text-[10px] uppercase font-black text-slate-400 tracking-wider">Branch Location</label>
+                  <select
+                    value={filters.branch}
+                    onChange={e => setFilters(f => ({ ...f, branch: e.target.value }))}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800"
+                  >
+                    <option value="all">All Branches</option>
+                    {availableBranches.map(b => (
+                      <option key={b} value={b}>{b}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* 8. Expiry Filter */}
+                <div>
+                  <label className="block mb-1 text-[10px] uppercase font-black text-slate-400 tracking-wider">Expiry Horizon</label>
+                  <select
+                    value={filters.expiryStatus}
+                    onChange={e => setFilters(f => ({ ...f, expiryStatus: e.target.value }))}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800"
+                  >
+                    <option value="all">All Expiries</option>
+                    <option value="expired">Expired</option>
+                    <option value="today">Expires Today</option>
+                    <option value="in_7_days">Expires in 7 Days</option>
+                    <option value="in_30_days">Expires in 30 Days</option>
+                    <option value="in_60_days">Expires in 60 Days</option>
+                    <option value="active_over_60">Active &gt; 60 Days</option>
+                  </select>
+                </div>
+
+                {/* 9. Date Joined Range */}
+                <div className="col-span-1 sm:col-span-2 bg-slate-50 p-3 rounded-2xl border border-slate-200/80 space-y-2">
+                  <label className="block text-[10px] uppercase font-black text-slate-500 tracking-wider">
+                    Date Joined Range
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <span className="text-[9px] text-slate-400 font-bold block mb-0.5">Joined From</span>
+                      <input
+                        type="date"
+                        value={filters.joinedFrom}
+                        onChange={e => setFilters(f => ({ ...f, joinedFrom: e.target.value }))}
+                        className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800"
+                      />
+                    </div>
+                    <div>
+                      <span className="text-[9px] text-slate-400 font-bold block mb-0.5">Joined To</span>
+                      <input
+                        type="date"
+                        value={filters.joinedTo}
+                        onChange={e => setFilters(f => ({ ...f, joinedTo: e.target.value }))}
+                        className={`w-full px-2.5 py-1.5 bg-white border rounded-xl text-xs font-bold text-slate-800 ${
+                          dateRangeError ? 'border-red-500 bg-red-50/30' : 'border-slate-300'
+                        }`}
+                      />
+                    </div>
+                  </div>
+                  {dateRangeError && (
+                    <p className="text-[11px] font-bold text-red-500 flex items-center gap-1 mt-1">
+                      <AlertCircle size={12} /> {dateRangeError}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* Popover Action Buttons */}
+              <div className="flex items-center justify-between pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setFilters(initialFilterState)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-black rounded-xl transition-all border-none cursor-pointer flex items-center gap-1.5"
+                >
+                  <RotateCcw size={13} /> Clear All
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowMoreFilters(false)}
+                  className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black rounded-xl transition-all border-none cursor-pointer shadow-md"
+                >
+                  Apply Filters
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
+
+      {/* ACTIVE FILTER CHIPS BAR */}
+      {activeFilterCount > 0 && (
+        <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-100 flex flex-wrap items-center gap-2">
+          <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Active Filters:</span>
+
+          {filters.gender !== 'all' && (
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-white border border-slate-200 rounded-full text-xs font-bold text-slate-800 shadow-2xs">
+              Gender: {filters.gender}
+              <button type="button" onClick={() => setFilters(f => ({ ...f, gender: 'all' }))} className="hover:text-red-500 border-none bg-transparent cursor-pointer">
+                <X size={12} />
+              </button>
+            </span>
+          )}
+
+          {filters.memberType !== 'all' && (
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-white border border-slate-200 rounded-full text-xs font-bold text-slate-800 shadow-2xs">
+              Type: {filters.memberType === 'gym' ? 'Gym Members' : filters.memberType === 'pt' ? 'PT Members' : 'Gym + PT'}
+              <button type="button" onClick={() => setFilters(f => ({ ...f, memberType: 'all' }))} className="hover:text-red-500 border-none bg-transparent cursor-pointer">
+                <X size={12} />
+              </button>
+            </span>
+          )}
+
+          {filters.packagePlan !== 'all' && (
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-white border border-slate-200 rounded-full text-xs font-bold text-slate-800 shadow-2xs">
+              Package: {filters.packagePlan}
+              <button type="button" onClick={() => setFilters(f => ({ ...f, packagePlan: 'all' }))} className="hover:text-red-500 border-none bg-transparent cursor-pointer">
+                <X size={12} />
+              </button>
+            </span>
+          )}
+
+          {filters.trainer !== 'all' && (
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-white border border-slate-200 rounded-full text-xs font-bold text-slate-800 shadow-2xs">
+              Trainer: {filters.trainer}
+              <button type="button" onClick={() => setFilters(f => ({ ...f, trainer: 'all' }))} className="hover:text-red-500 border-none bg-transparent cursor-pointer">
+                <X size={12} />
+              </button>
+            </span>
+          )}
+
+          {filters.branch !== 'all' && (
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-white border border-slate-200 rounded-full text-xs font-bold text-slate-800 shadow-2xs">
+              Branch: {filters.branch}
+              <button type="button" onClick={() => setFilters(f => ({ ...f, branch: 'all' }))} className="hover:text-red-500 border-none bg-transparent cursor-pointer">
+                <X size={12} />
+              </button>
+            </span>
+          )}
+
+          {filters.membershipStatus !== 'all' && (
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-white border border-slate-200 rounded-full text-xs font-bold text-slate-800 shadow-2xs">
+              Status: {filters.membershipStatus}
+              <button type="button" onClick={() => setFilters(f => ({ ...f, membershipStatus: 'all' }))} className="hover:text-red-500 border-none bg-transparent cursor-pointer">
+                <X size={12} />
+              </button>
+            </span>
+          )}
+
+          {filters.paymentStatus !== 'all' && (
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-white border border-slate-200 rounded-full text-xs font-bold text-slate-800 shadow-2xs">
+              Payment: {filters.paymentStatus}
+              <button type="button" onClick={() => setFilters(f => ({ ...f, paymentStatus: 'all' }))} className="hover:text-red-500 border-none bg-transparent cursor-pointer">
+                <X size={12} />
+              </button>
+            </span>
+          )}
+
+          {(filters.joinedFrom || filters.joinedTo) && (
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-white border border-slate-200 rounded-full text-xs font-bold text-slate-800 shadow-2xs">
+              Joined: {filters.joinedFrom || 'Start'} → {filters.joinedTo || 'End'}
+              <button type="button" onClick={() => setFilters(f => ({ ...f, joinedFrom: '', joinedTo: '' }))} className="hover:text-red-500 border-none bg-transparent cursor-pointer">
+                <X size={12} />
+              </button>
+            </span>
+          )}
+
+          {filters.expiryStatus !== 'all' && (
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-white border border-slate-200 rounded-full text-xs font-bold text-slate-800 shadow-2xs">
+              Expiry: {filters.expiryStatus}
+              <button type="button" onClick={() => setFilters(f => ({ ...f, expiryStatus: 'all' }))} className="hover:text-red-500 border-none bg-transparent cursor-pointer">
+                <X size={12} />
+              </button>
+            </span>
+          )}
+
+          <button
+            type="button"
+            onClick={() => setFilters(initialFilterState)}
+            className="text-xs font-black text-rose-600 hover:text-rose-700 underline cursor-pointer border-none bg-transparent ml-2"
+          >
+            Clear All Filters
+          </button>
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="px-4 border-b border-slate-100 flex items-center justify-between overflow-x-auto">
@@ -416,19 +925,19 @@ export default function MembersTable({
             <button
               key={tab.id}
               onClick={() => setStatusFilter(tab.id)}
-              className={`px-4 py-3 text-sm font-semibold whitespace-nowrap border-b-2 transition-colors ${
+              className={`px-4 py-3 text-sm font-black whitespace-nowrap border-b-2 transition-colors cursor-pointer ${
                 statusFilter === tab.id 
                   ? 'border-indigo-600 text-indigo-600' 
                   : 'border-transparent text-slate-500 hover:text-slate-800 hover:border-slate-300'
               }`}
             >
-              {tab.label} <span className="text-slate-400 font-normal">({tab.count})</span>
+              {tab.label} <span className="text-slate-400 font-bold">({tab.count})</span>
             </button>
           ))}
         </div>
-        <button className="text-sm font-semibold text-slate-600 px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50">
-          Bulk Actions &or;
-        </button>
+        <div className="text-xs font-bold text-slate-500">
+          Showing <b className="text-slate-900 font-mono">{filtered.length}</b> members
+        </div>
       </div>
 
       {/* Table */}
@@ -451,8 +960,25 @@ export default function MembersTable({
           <tbody className="divide-y divide-slate-100">
             {paginatedMembers.length === 0 ? (
               <tr>
-                <td colSpan={10} className="px-4 py-12 text-center text-slate-400">
-                  No members found matching your search criteria.
+                <td colSpan={10} className="px-4 py-16 text-center text-slate-400">
+                  <div className="max-w-sm mx-auto space-y-3">
+                    <User className="w-12 h-12 text-slate-300 mx-auto" />
+                    <h3 className="text-base font-black text-slate-800">No members found</h3>
+                    <p className="text-xs text-slate-500 font-medium">
+                      Try changing your search keywords or adjusting your selected filters.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setLocalSearch('');
+                        setSearch('');
+                        setFilters(initialFilterState);
+                      }}
+                      className="px-5 py-2.5 bg-slate-900 hover:bg-black text-white text-xs font-black rounded-xl transition-all cursor-pointer shadow-sm border-none"
+                    >
+                      Clear All Filters
+                    </button>
+                  </div>
                 </td>
               </tr>
             ) : (
@@ -527,7 +1053,7 @@ export default function MembersTable({
                 setPageSize(Number(e.target.value));
                 setPage(1);
               }}
-              className="px-2 py-1 border border-slate-200 rounded bg-white font-medium text-slate-700 focus:outline-none"
+              className="px-2 py-1 border border-slate-200 rounded bg-white font-medium text-slate-700 focus:outline-none cursor-pointer"
             >
               <option value={10}>10</option>
               <option value={25}>25</option>

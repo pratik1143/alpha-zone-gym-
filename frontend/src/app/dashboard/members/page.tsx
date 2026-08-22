@@ -885,7 +885,7 @@ export default function MembersPage() {
 
   return (
     <div className="space-y-6 pb-12 w-full text-slate-800 text-left">
-      {/* Header */}
+      {/* Clean Header */}
       <div className="flex flex-wrap items-center justify-between gap-3 mb-2">
         <div>
           <h1 className="text-3xl font-black text-slate-900 tracking-tight font-display">
@@ -895,65 +895,15 @@ export default function MembersPage() {
             Manage your gym members, track attendance, and monitor renewals.
           </p>
         </div>
-        <div className="flex gap-2">
+        <div>
           <button
-            onClick={() => {
-              setMappingTargetMember(null);
-              setShowBiometricMappingModal(true);
-            }}
-            className="flex items-center gap-2 px-4 py-2 bg-[#d4ff00] text-black rounded-xl text-sm font-black hover:bg-[#c4ef00] transition-all shadow-md cursor-pointer border-none"
-          >
-            <Fingerprint size={16} /> ⚡ Map Biometric ID
-          </button>
-          <button
-            onClick={() => router.push('/dashboard/import')}
-            className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-xl text-sm font-bold hover:bg-black transition-all shadow-sm cursor-pointer border-none"
-          >
-            <Zap size={16} /> Auto Map Legacy Data
-          </button>
-          <button
-            onClick={handleExportCSV}
-            className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 hover:bg-slate-50 transition-colors shadow-sm"
-          >
-            <Download size={14} /> Export CSV
-          </button>
-          <button
-            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 transition-colors shadow-sm"
+            className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black transition-all shadow-md cursor-pointer border-none active:scale-95"
             onClick={() => setShowAddModal(true)}
           >
             <Plus size={16} /> Add Member
           </button>
         </div>
       </div>
-
-      {/* Premium Attention Banner */}
-      {expiredMembers.length > 0 && (
-        <motion.div 
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-gradient-to-r from-red-500 via-orange-500 to-amber-500 p-0.5 rounded-2xl shadow-[0_10px_30px_rgba(239,68,68,0.15)] overflow-hidden"
-        >
-          <div className="bg-white/95 backdrop-blur-md px-6 py-4 rounded-[14px] flex flex-wrap items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-red-50 text-red-500 flex items-center justify-center text-lg animate-bounce">
-                🚨
-              </div>
-              <div>
-                <h3 className="text-sm font-black text-slate-900 tracking-tight">MEMBERS REQUIRE ATTENTION</h3>
-                <p className="text-xs text-slate-500 font-medium">
-                  <span className="font-extrabold text-red-500">{expiredMembers.length} memberships</span> have expired and <span className="font-extrabold text-orange-500">{urgentMembers.length} memberships</span> expire within 7 days.
-                </p>
-              </div>
-            </div>
-            <button 
-              onClick={() => setShowRenewalCenter(true)}
-              className="px-5 py-2 bg-slate-900 text-white rounded-xl text-xs font-black uppercase tracking-wider hover:bg-black transition-colors shadow-md cursor-pointer"
-            >
-              Review Now
-            </button>
-          </div>
-        </motion.div>
-      )}
 
       {/* KPI Row */}
       <MembersKPI />
