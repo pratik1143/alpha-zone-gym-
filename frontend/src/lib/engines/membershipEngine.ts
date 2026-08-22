@@ -222,6 +222,105 @@ export const membershipEngine = {
     return membershipEngine.calculateMembershipExpiry(startDateVal, planName);
   },
 
+  rebuildMemberMembershipTimeline: (member: any, remainingBills: any[]) => {
+    const initialJoinDate = member?.joinDate || member?.createdAt?.split('T')[0] || new Date().toISOString().split('T')[0];
+
+    if (!remainingBills || remainingBills.length === 0) {
+      const todayStr = new Date().toISOString().split('T')[0];
+      const expDate = member?.joinDate || todayStr;
+      const days = membershipEngine.calculateDaysLeft(expDate);
+      const status = days > 0 ? 'active' : 'expired';
+
+      return {
+        recalculatedHistory: [],
+        startDate: initialJoinDate,
+        expiryDate: expDate,
+        plan: 'Standard',
+        daysLeft: days,
+        status: status,
+        totalBilled: 0,
+        totalPaid: 0,
+        outstandingBalance: 0,
+      };
+    }
+
+    // Sort remaining bills chronologically by startDate or date
+    const sortedBills = [...remainingBills].sort((a, b) => {
+      const dateA = new Date(a.startDate || a.date || a.createdAt || 0).getTime();
+      const dateB = new Date(b.startDate || b.date || b.createdAt || 0).getTime();
+      return dateA - dateB;
+    });
+
+    const recalculatedHistory: any[] = [];
+    let currentExpiry = '';
+    let overallStartDate = '';
+    let latestPlan = '';
+    let runningBilled = 0;
+    let runningPaid = 0;
+
+    sortedBills.forEach((bill: any, index: number) => {
+      const planName = bill.plan || bill.package || member?.plan || '3 Months (Quarterly)';
+      let itemStart = bill.startDate || bill.date || initialJoinDate;
+
+      // If contiguous extension of previous item, extend from previous expiry date + 1 day
+      if (index > 0 && currentExpiry) {
+        const prevExp = new Date(currentExpiry);
+        const originalStart = new Date(itemStart);
+        const dayDiff = (originalStart.getTime() - prevExp.getTime()) / (1000 * 3600 * 24);
+        if (dayDiff <= 2 && dayDiff >= -30) {
+          const nextStart = new Date(prevExp);
+          nextStart.setDate(nextStart.getDate() + 1);
+          const y = nextStart.getFullYear();
+          const m = String(nextStart.getMonth() + 1).padStart(2, '0');
+          const d = String(nextStart.getDate()).padStart(2, '0');
+          itemStart = `${y}-${m}-${d}`;
+        }
+      }
+
+      if (index === 0) {
+        overallStartDate = itemStart;
+      }
+
+      const itemExpiry = membershipEngine.calculateMembershipExpiry(itemStart, planName);
+      currentExpiry = itemExpiry;
+      latestPlan = planName;
+
+      const netPay = Number(bill.netPayable !== undefined ? bill.netPayable : (bill.amount || 0));
+      const paidAmt = Number(bill.amountPaid !== undefined ? bill.amountPaid : (bill.paid !== undefined ? bill.paid : netPay));
+
+      runningBilled += isNaN(netPay) ? 0 : netPay;
+      runningPaid += isNaN(paidAmt) ? 0 : paidAmt;
+
+      recalculatedHistory.push({
+        id: bill.id || `hist_${index}`,
+        invoiceId: bill.invoiceNumber || bill.invoice || bill.id || `INV-${index}`,
+        plan: planName,
+        startDate: itemStart,
+        expiryDate: itemExpiry,
+        amount: netPay,
+        amountPaid: paidAmt,
+        createdAt: bill.createdAt || new Date().toISOString(),
+      });
+    });
+
+    const today = new Date().toISOString().split('T')[0];
+    const finalDaysLeft = membershipEngine.calculateDaysLeft(currentExpiry);
+    const finalStatus = finalDaysLeft > 0 || currentExpiry >= today ? 'active' : 'expired';
+    const outstanding = Math.max(0, runningBilled - runningPaid);
+
+    return {
+      recalculatedHistory,
+      startDate: overallStartDate || initialJoinDate,
+      expiryDate: currentExpiry,
+      plan: latestPlan,
+      daysLeft: finalDaysLeft,
+      status: finalStatus,
+      totalBilled: runningBilled,
+      totalPaid: runningPaid,
+      outstandingBalance: outstanding,
+    };
+  },
+
   selfHealMemberData: async (member: any) => {
     if (!member || !member.id) return member;
     

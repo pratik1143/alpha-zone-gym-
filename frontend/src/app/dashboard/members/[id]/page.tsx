@@ -366,9 +366,9 @@ export default function ClientProfileSystem() {
         ))}
       </div>
 
-      {/* 3. MAIN CONTENT GRID (CLEAN 3+1 COLUMN LAYOUT) */}
+      {/* 3. MAIN CONTENT GRID (EXPANDED FULL-WIDTH FOR BILLING TAB) */}
       <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
-        <div className="xl:col-span-3">
+        <div className={activeTab === 'Billing' ? 'xl:col-span-4 w-full' : 'xl:col-span-3'}>
           <AnimatePresence mode="wait">
             <motion.div key={activeTab} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.2 }}>
               {activeTab === 'Profile' && <ProfileTab member={member} />}
@@ -386,29 +386,32 @@ export default function ClientProfileSystem() {
           </AnimatePresence>
         </div>
 
-        <div className="xl:col-span-1">
-          <div className="bg-white rounded-[32px] shadow-[0_2px_20px_rgba(0,0,0,0.02)] border border-slate-100 p-6 sticky top-6">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="p-2 bg-slate-50 text-slate-600 rounded-xl border border-slate-100"><Bell size={18} /></div>
-              <h3 className="text-sm font-black text-slate-900 tracking-tight">Activity Alerts</h3>
-            </div>
-            <div className="space-y-4">
-              {rightPanelAlerts.map((alert, i) => (
-                <div key={i} className="flex items-start gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-100 hover:border-slate-200 transition-colors">
-                  <div className="mt-0.5">{alert.icon}</div>
-                  <div>
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5">{alert.type}</span>
-                    <h4 className="text-sm font-bold text-slate-800">{alert.title}</h4>
-                    <span className="text-xs font-semibold text-slate-500 mt-1 block">{alert.time}</span>
+        {/* Activity Alerts Right Panel — Hidden on Billing tab for full-width layout */}
+        {activeTab !== 'Billing' && (
+          <div className="xl:col-span-1">
+            <div className="bg-white rounded-[32px] shadow-[0_2px_20px_rgba(0,0,0,0.02)] border border-slate-100 p-6 sticky top-6">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="p-2 bg-slate-50 text-slate-600 rounded-xl border border-slate-100"><Bell size={18} /></div>
+                <h3 className="text-sm font-black text-slate-900 tracking-tight">Activity Alerts</h3>
+              </div>
+              <div className="space-y-4">
+                {rightPanelAlerts.map((alert, i) => (
+                  <div key={i} className="flex items-start gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-100 hover:border-slate-200 transition-colors">
+                    <div className="mt-0.5">{alert.icon}</div>
+                    <div>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5">{alert.type}</span>
+                      <h4 className="text-sm font-bold text-slate-800">{alert.title}</h4>
+                      <span className="text-xs font-semibold text-slate-500 mt-1 block">{alert.time}</span>
+                    </div>
                   </div>
-                </div>
-              ))}
-              <button className="w-full py-3 bg-white border border-slate-200 text-slate-600 rounded-2xl text-xs font-bold hover:bg-slate-50 transition-all flex items-center justify-center gap-1 mt-6">
-                View All Activity <ChevronRight size={14} />
-              </button>
+                ))}
+                <button className="w-full py-3 bg-white border border-slate-200 text-slate-600 rounded-2xl text-xs font-bold hover:bg-slate-50 transition-all flex items-center justify-center gap-1 mt-6">
+                  View All Activity <ChevronRight size={14} />
+                </button>
+              </div>
             </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* ── PHOTO UPLOAD & CAPTURE MODAL ── */}

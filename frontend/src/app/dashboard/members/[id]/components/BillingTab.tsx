@@ -8,7 +8,8 @@ import {
   FileText, Sparkles, Check, ChevronDown, FileSpreadsheet, FileCode, Trash2
 } from 'lucide-react';
 import { db } from '@/lib/firebase';
-import { collection, query, where, onSnapshot, updateDoc, doc, setDoc, deleteDoc } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, updateDoc, doc, setDoc, deleteDoc, writeBatch } from 'firebase/firestore';
+import { membershipEngine } from '@/lib/engines/membershipEngine';
 import { paymentEngine } from '@/lib/engines/paymentEngine';
 import { cleanPlanName, formatDate } from '@/lib/utils';
 import { useGymStore } from '@/store';
@@ -136,70 +137,80 @@ export default function BillingTab({ member: initialMember }: { member: any }) {
     return () => unsub();
   }, [member]);
 
-  // Execute Delete Bill
+  // Execute Delete Bill (Atomic WriteBatch + Timeline Rebuild)
   const handleExecuteDeleteBill = async () => {
     if (!invoiceToDelete) return;
     setIsDeleting(true);
     try {
       const invId = invoiceToDelete.id;
-
-      // 1. Delete from Firestore payments collection
-      if (invId) {
-        await deleteDoc(doc(db, 'payments', invId));
-      }
-
-      // 2. Optional backend API delete
-      try {
-        const targetInv = invoiceToDelete.invoiceNumber || invoiceToDelete.invoice;
-        if (targetInv) {
-          await API.delete(`/billing/${targetInv}`);
-        }
-      } catch (e) {
-        // Backend API fallback ok
-      }
-
-      // 3. Update member membershipHistory & active coverage
-      const existingHistory = Array.isArray(member.membershipHistory) ? member.membershipHistory : [];
       const targetInvNum = invoiceToDelete.invoiceNumber || invoiceToDelete.invoice;
 
-      const updatedHistory = existingHistory.filter((h: any) => {
-        const hInv = h.invoiceId || h.invoiceNumber || h.invoice;
-        return hInv !== targetInvNum && h.id !== invId;
+      // 1. Calculate remaining invoices & rebuild deterministic timeline
+      const remainingInvoices = invoices.filter((inv: any) => {
+        const iNum = inv.invoiceNumber || inv.invoice;
+        return (inv.id && inv.id !== invId) && (!targetInvNum || iNum !== targetInvNum);
       });
 
-      let newExpiry = member.expiryDate;
-      let newStart = member.startDate;
-      let newPlan = member.plan;
-      let newStatus = member.status;
+      const timeline = membershipEngine.rebuildMemberMembershipTimeline(member, remainingInvoices);
 
-      if (updatedHistory.length > 0) {
-        const sortedHistory = [...updatedHistory].sort((a, b) => new Date(b.expiryDate).getTime() - new Date(a.expiryDate).getTime());
-        const latest = sortedHistory[0];
-        newExpiry = latest.expiryDate;
-        newPlan = latest.plan;
-        const today = new Date().toISOString().split('T')[0];
-        newStatus = newExpiry >= today ? 'active' : 'expired';
+      // 2. Perform Atomic Firestore Batch Operation
+      const batch = writeBatch(db);
+
+      if (invId) {
+        batch.delete(doc(db, 'payments', invId));
       }
 
       if (member.id) {
-        await updateDoc(doc(db, 'members', member.id), {
-          membershipHistory: updatedHistory,
-          expiryDate: newExpiry,
-          plan: newPlan,
-          status: newStatus,
+        batch.update(doc(db, 'members', member.id), {
+          membershipHistory: timeline.recalculatedHistory,
+          startDate: timeline.startDate,
+          expiryDate: timeline.expiryDate,
+          plan: timeline.plan,
+          daysLeft: timeline.daysLeft,
+          status: timeline.status,
+          totalBilled: timeline.totalBilled,
+          totalPaid: timeline.totalPaid,
+          outstandingBalance: timeline.outstandingBalance,
+          amount: timeline.totalBilled,
+          paidAmount: timeline.totalPaid,
+          paymentStatus: timeline.outstandingBalance <= 0 ? 'paid' : (timeline.totalPaid > 0 ? 'partial' : 'pending'),
+          'ai.daysLeft': timeline.daysLeft,
+          updatedAt: new Date().toISOString(),
         });
-        setMember((prev: any) => ({
-          ...prev,
-          membershipHistory: updatedHistory,
-          expiryDate: newExpiry,
-          plan: newPlan,
-          status: newStatus,
-        }));
       }
+
+      await batch.commit();
+
+      // 3. Optional Backend API sync fallback
+      try {
+        if (targetInvNum) {
+          await API.delete(`/billing/${targetInvNum}`);
+        }
+      } catch (e) {
+        // Backend API fallback notice
+      }
+
+      // 4. Update local state immediately
+      setInvoices(remainingInvoices);
+      setMember((prev: any) => ({
+        ...prev,
+        membershipHistory: timeline.recalculatedHistory,
+        startDate: timeline.startDate,
+        expiryDate: timeline.expiryDate,
+        plan: timeline.plan,
+        daysLeft: timeline.daysLeft,
+        status: timeline.status,
+        totalBilled: timeline.totalBilled,
+        totalPaid: timeline.totalPaid,
+        outstandingBalance: timeline.outstandingBalance,
+        paymentStatus: timeline.outstandingBalance <= 0 ? 'paid' : (timeline.totalPaid > 0 ? 'partial' : 'pending'),
+        ai: { ...(prev?.ai || {}), daysLeft: timeline.daysLeft }
+      }));
 
       toast.success('Billing transaction deleted permanently.');
       setInvoiceToDelete(null);
 
+      // 5. Invalidate store cache and refresh all pages
       const { fetchPayments, fetchMembers } = useGymStore.getState();
       await fetchPayments(true);
       await fetchMembers(true);
