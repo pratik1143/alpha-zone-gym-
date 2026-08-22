@@ -8,7 +8,7 @@ import {
   Mail, MapPin, Shield, Cpu, RefreshCw, Eye, Sparkles, Clock, AlertCircle
 } from 'lucide-react';
 import { db } from '@/lib/firebase';
-import { collection, onSnapshot, query, orderBy, doc, addDoc, updateDoc, deleteDoc, where } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy, doc, addDoc, updateDoc, deleteDoc, where, getDocs } from 'firebase/firestore';
 import { formatDate } from '@/lib/utils';
 import API from '@/services/api';
 import toast from 'react-hot-toast';
@@ -16,6 +16,31 @@ import SmartPhotoCapture from '../components/SmartPhotoCapture';
 import SendWhatsAppModal from '../components/SendWhatsAppModal';
 import { MessageSquare } from 'lucide-react';
 import { z } from 'zod';
+
+function deduplicateAllEmployees(rawList: any[]) {
+  const map = new Map<string, any>();
+  rawList.forEach((e) => {
+    const key = (e.phone && String(e.phone).trim().length >= 8)
+      ? String(e.phone).trim()
+      : (e.email && String(e.email).trim().length > 3)
+      ? String(e.email).trim().toLowerCase()
+      : (e.employeeId && !e.employeeId.includes('EMP-AUTO'))
+      ? String(e.employeeId).trim()
+      : String(e.id).trim();
+
+    if (!map.has(key)) {
+      map.set(key, e);
+    } else {
+      const existing = map.get(key);
+      const existingEmpId = String(existing.employeeId || '');
+      const newEmpId = String(e.employeeId || '');
+      if (existingEmpId.includes('AUTO') && !newEmpId.includes('AUTO')) {
+        map.set(key, e);
+      }
+    }
+  });
+  return Array.from(map.values());
+}
 
 export default function EmployeesPage() {
   const [employees, setEmployees] = useState<any[]>([]);
@@ -81,7 +106,8 @@ export default function EmployeesPage() {
     { id: 'emp_504', name: 'Priya Singh', phone: '9877407661', email: 'priya.reception@alphagym.com', role: 'Reception', branch: 'Mohali, Punjab', emergencyContact: '9877407600', address: 'Sector 71, Mohali', biometricId: 504, todayStatus: 'Present', currentStatus: 'Inside', lastPunch: new Date().toISOString() }
   ];
 
-  const activeEmployeesList = employees && employees.length > 0 ? employees : defaultFallbackEmployees;
+  const rawEmployeesList = employees && employees.length > 0 ? employees : defaultFallbackEmployees;
+  const activeEmployeesList = deduplicateAllEmployees(rawEmployeesList);
 
   // Stats
   const totalEmployees = activeEmployeesList.length;
@@ -502,22 +528,45 @@ function AddEmployeeWizard({ onClose, onSuccess }: { onClose: () => void; onSucc
         lastPunch: null
       };
 
+      let existingDocId: string | null = null;
+      try {
+        if (phone) {
+          const qPhone = query(collection(db, 'employees'), where('phone', '==', phone));
+          const snapPhone = await getDocs(qPhone);
+          if (!snapPhone.empty) existingDocId = snapPhone.docs[0].id;
+        }
+        if (!existingDocId && email) {
+          const qEmail = query(collection(db, 'employees'), where('email', '==', email));
+          const snapEmail = await getDocs(qEmail);
+          if (!snapEmail.empty) existingDocId = snapEmail.docs[0].id;
+        }
+      } catch (checkErr) {
+        console.warn('Error checking existing employee doc:', checkErr);
+      }
+
       try {
         await API.post('/employees', payload);
       } catch (apiErr) {
-        console.warn('API employee creation failed, using Firestore client direct:', apiErr);
+        console.warn('API employee creation failed:', apiErr);
       }
 
       try {
-        await addDoc(collection(db, 'employees'), {
-          ...payload,
-          createdAt: new Date().toISOString()
-        });
+        if (existingDocId) {
+          await updateDoc(doc(db, 'employees', existingDocId), {
+            ...payload,
+            updatedAt: new Date().toISOString()
+          });
+        } else {
+          await addDoc(collection(db, 'employees'), {
+            ...payload,
+            createdAt: new Date().toISOString()
+          });
+        }
       } catch (fsErr) {
-        console.warn('Direct Firestore employee add failed:', fsErr);
+        console.warn('Direct Firestore employee save failed:', fsErr);
       }
 
-      toast.success('Employee created successfully!');
+      toast.success(existingDocId ? 'Employee updated successfully!' : 'Employee created successfully!');
       if (onSuccess) onSuccess();
       onClose();
     } catch (err: any) {
