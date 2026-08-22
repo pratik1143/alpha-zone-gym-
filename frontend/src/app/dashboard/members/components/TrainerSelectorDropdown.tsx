@@ -1,29 +1,25 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { User, ChevronDown, Search, Check, UserMinus, Sparkles, Shield, BadgeCheck } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { User, ChevronDown, Search, Check, UserMinus, Sparkles, Shield, BadgeCheck, Dumbbell, AlertTriangle } from 'lucide-react';
 import { db } from '@/lib/firebase';
-import { collection, query, onSnapshot, doc, updateDoc, getDocs, where } from 'firebase/firestore';
+import { collection, query, onSnapshot, doc, updateDoc } from 'firebase/firestore';
 import toast from 'react-hot-toast';
 import API from '@/services/api';
+import PtBillingModal from './PtBillingModal';
 
 const DEFAULT_TRAINERS = [
   { id: 'emp_502', name: 'Karan Verma', employeeId: 'EMP-502', role: 'Trainer', specialization: 'Personal Trainer & Strength', avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150' },
   { id: 'emp_503', name: 'Sneha Kapoor', employeeId: 'EMP-503', role: 'Trainer', specialization: 'Fitness & Cardio Specialist', avatarUrl: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150' },
 ];
 
-/**
- * Deduplicates employee trainer objects by phone, email, or employeeId/id
- */
 function deduplicateTrainers(rawList: any[]) {
   const map = new Map<string, any>();
-
   rawList.forEach((t) => {
-    // Only include actual trainers or coaches
     const r = String(t.role || t.type || '').toLowerCase();
     if (!r.includes('trainer') && !r.includes('coach')) return;
 
-    // Unique key priority: phone > email > employeeId > id
     const key = (t.phone && String(t.phone).trim().length >= 8)
       ? String(t.phone).trim()
       : (t.email && String(t.email).trim().length > 3)
@@ -35,7 +31,6 @@ function deduplicateTrainers(rawList: any[]) {
     if (!map.has(key)) {
       map.set(key, t);
     } else {
-      // If existing item has generic EMP-AUTO and new item has specific EMP-xxx, replace it
       const existing = map.get(key);
       const existingEmpId = String(existing.employeeId || '');
       const newEmpId = String(t.employeeId || '');
@@ -44,7 +39,6 @@ function deduplicateTrainers(rawList: any[]) {
       }
     }
   });
-
   return Array.from(map.values());
 }
 
@@ -60,9 +54,22 @@ export default function TrainerSelectorDropdown({
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Real-time listener + API fallback for employees/trainers
+  // PT Billing Modal & Reassignment Modal States
+  const [showPtBillingModal, setShowPtBillingModal] = useState(false);
+  const [pendingTrainer, setPendingTrainer] = useState<any | null>(null);
+  const [showReassignConfirmModal, setShowReassignConfirmModal] = useState(false);
+
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const [coords, setCoords] = useState<{ top: number; left: number; width: number }>({ top: 0, left: 0, width: 320 });
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  // Fetch & deduplicate trainers
   useEffect(() => {
     setLoading(true);
     const q = query(collection(db, 'employees'));
@@ -74,17 +81,15 @@ export default function TrainerSelectorDropdown({
         setTrainers(deduped);
         setLoading(false);
       } else {
-        // Try API fallback
         API.get('/employees').then(res => {
-          const apiList = res.data || [];
-          const apiDeduped = deduplicateTrainers(apiList);
+          const apiDeduped = deduplicateTrainers(res.data || []);
           setTrainers(apiDeduped.length > 0 ? apiDeduped : DEFAULT_TRAINERS);
         }).catch(() => {
           setTrainers(DEFAULT_TRAINERS);
         }).finally(() => setLoading(false));
       }
     }, (err) => {
-      console.warn("Trainers snapshot listener error, trying API fallback:", err);
+      console.warn("Trainers listener warning:", err);
       API.get('/employees').then(res => {
         const apiDeduped = deduplicateTrainers(res.data || []);
         setTrainers(apiDeduped.length > 0 ? apiDeduped : DEFAULT_TRAINERS);
@@ -96,16 +101,46 @@ export default function TrainerSelectorDropdown({
     return () => unsub();
   }, []);
 
+  // Recalculate position when dropdown opens or window resizes/scrolls
+  const updateCoords = () => {
+    if (buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect();
+      setCoords({
+        top: rect.bottom + window.scrollY + 6,
+        left: Math.max(10, Math.min(rect.left + window.scrollX, window.innerWidth - 330)),
+        width: 320,
+      });
+    }
+  };
+
+  const handleToggleOpen = () => {
+    if (!isOpen) {
+      updateCoords();
+    }
+    setIsOpen(!isOpen);
+  };
+
   // Close dropdown on click outside
   useEffect(() => {
     const handleOutside = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+      if (
+        dropdownRef.current && !dropdownRef.current.contains(e.target as Node) &&
+        buttonRef.current && !buttonRef.current.contains(e.target as Node)
+      ) {
         setIsOpen(false);
       }
     };
-    document.addEventListener('mousedown', handleOutside);
-    return () => document.removeEventListener('mousedown', handleOutside);
-  }, []);
+    if (isOpen) {
+      document.addEventListener('mousedown', handleOutside);
+      window.addEventListener('resize', updateCoords);
+      window.addEventListener('scroll', updateCoords, true);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleOutside);
+      window.removeEventListener('resize', updateCoords);
+      window.removeEventListener('scroll', updateCoords, true);
+    };
+  }, [isOpen]);
 
   const currentTrainerName = member?.trainerName || member?.trainer || 'Unassigned';
   const currentTrainerId = member?.trainerId || null;
@@ -119,14 +154,53 @@ export default function TrainerSelectorDropdown({
     return name.includes(s) || empId.includes(s) || spec.includes(s);
   });
 
-  const handleSelectTrainer = async (trainer: any | null) => {
+  // Unassign Trainer
+  const handleUnassignTrainer = async () => {
     if (!member || !member.id) return;
     setSaving(true);
     try {
-      const newTrainerId = trainer ? (trainer.employeeId || trainer.id) : null;
-      const newTrainerName = trainer ? trainer.name : 'Unassigned';
-      const newTrainerRole = trainer ? (trainer.specialization || trainer.role || 'Personal Trainer & Strength') : '';
-      const newTrainerAvatar = trainer ? (trainer.avatarUrl || `https://i.pravatar.cc/150?u=${encodeURIComponent(trainer.name)}`) : '';
+      const updateData = {
+        trainerId: null,
+        trainerName: 'Unassigned',
+        trainer: 'Unassigned',
+        trainerRole: null,
+        trainerAvatar: null,
+        'pt.enabled': false,
+        'pt.status': 'INACTIVE',
+        updatedAt: new Date().toISOString(),
+      };
+
+      await updateDoc(doc(db, 'members', member.id), updateData);
+
+      member.trainerId = null;
+      member.trainerName = 'Unassigned';
+      member.trainer = 'Unassigned';
+      member.trainerRole = null;
+      member.trainerAvatar = null;
+      if (member.pt) member.pt.enabled = false;
+
+      if (onTrainerUpdated) {
+        onTrainerUpdated({ trainerId: null, trainerName: 'Unassigned' });
+      }
+
+      toast.success('Trainer unassigned');
+      setIsOpen(false);
+    } catch (err: any) {
+      toast.error('Failed to unassign trainer: ' + (err.message || err));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Direct Reassign Without New Bill (for trainer swap)
+  const handleKeepBillingReassign = async () => {
+    if (!member || !member.id || !pendingTrainer) return;
+    setSaving(true);
+    try {
+      const newTrainerId = pendingTrainer.employeeId || pendingTrainer.id;
+      const newTrainerName = pendingTrainer.name;
+      const newTrainerRole = pendingTrainer.specialization || pendingTrainer.role || 'Personal Trainer & Strength';
+      const newTrainerAvatar = pendingTrainer.avatarUrl || `https://i.pravatar.cc/150?u=${encodeURIComponent(newTrainerName)}`;
 
       const updateData = {
         trainerId: newTrainerId,
@@ -134,22 +208,20 @@ export default function TrainerSelectorDropdown({
         trainer: newTrainerName,
         trainerRole: newTrainerRole,
         trainerAvatar: newTrainerAvatar,
+        'pt.trainerId': newTrainerId,
+        'pt.trainerName': newTrainerName,
+        'pt.trainerRole': newTrainerRole,
+        'pt.trainerAvatar': newTrainerAvatar,
         updatedAt: new Date().toISOString(),
       };
 
-      try {
-        await updateDoc(doc(db, 'members', member.id), updateData);
-      } catch (fsErr) {
-        console.warn("Direct Firestore update member trainer failed, trying API:", fsErr);
-        await API.put(`/members/${member.id}`, updateData);
-      }
+      await updateDoc(doc(db, 'members', member.id), updateData);
 
-      // Optimistically update member object in memory
-      member.trainerId = newTrainerId;
-      member.trainerName = newTrainerName;
-      member.trainer = newTrainerName;
-      member.trainerRole = newTrainerRole;
-      member.trainerAvatar = newTrainerAvatar;
+      Object.assign(member, updateData);
+      if (member.pt) {
+        member.pt.trainerId = newTrainerId;
+        member.pt.trainerName = newTrainerName;
+      }
 
       if (onTrainerUpdated) {
         onTrainerUpdated({
@@ -160,7 +232,8 @@ export default function TrainerSelectorDropdown({
         });
       }
 
-      toast.success(trainer ? `Assigned trainer: ${newTrainerName}` : 'Trainer unassigned');
+      toast.success(`Assigned trainer: ${newTrainerName}`);
+      setShowReassignConfirmModal(false);
       setIsOpen(false);
     } catch (err: any) {
       toast.error('Failed to update trainer: ' + (err.message || err));
@@ -169,29 +242,56 @@ export default function TrainerSelectorDropdown({
     }
   };
 
+  // Trigger when a trainer is selected from dropdown
+  const handleSelectTrainerOption = (trainer: any) => {
+    setIsOpen(false);
+    setPendingTrainer(trainer);
+
+    if (isAssigned) {
+      // Member already has an assigned trainer -> Ask reassign confirmation
+      setShowReassignConfirmModal(true);
+    } else {
+      // First-time trainer assignment -> Open PT Billing Modal
+      setShowPtBillingModal(true);
+    }
+  };
+
   return (
-    <div className="relative inline-block text-left" ref={dropdownRef}>
-      <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block mb-1">
-        Assigned Trainer
-      </span>
+    <>
+      <div className="relative inline-block text-left">
+        <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block mb-1">
+          Assigned Trainer
+        </span>
 
-      <button
-        type="button"
-        disabled={saving}
-        onClick={() => setIsOpen(!isOpen)}
-        className={`px-3.5 py-2 border rounded-xl text-xs font-black transition-all flex items-center gap-2 cursor-pointer shadow-sm active:scale-95 disabled:opacity-50 ${
-          isAssigned
-            ? 'bg-indigo-50 border-indigo-200 text-indigo-900 hover:bg-indigo-100'
-            : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
-        }`}
-      >
-        <User size={15} className={isAssigned ? 'text-indigo-600' : 'text-slate-400'} />
-        <span>{saving ? 'Updating...' : currentTrainerName}</span>
-        <ChevronDown size={14} className="text-slate-400" />
-      </button>
+        <button
+          ref={buttonRef}
+          type="button"
+          disabled={saving}
+          onClick={handleToggleOpen}
+          className={`px-3.5 py-2 border rounded-xl text-xs font-black transition-all flex items-center gap-2 cursor-pointer shadow-sm active:scale-95 disabled:opacity-50 ${
+            isAssigned
+              ? 'bg-indigo-50 border-indigo-200 text-indigo-900 hover:bg-indigo-100'
+              : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
+          }`}
+        >
+          <User size={15} className={isAssigned ? 'text-indigo-600' : 'text-slate-400'} />
+          <span>{saving ? 'Updating...' : currentTrainerName}</span>
+          <ChevronDown size={14} className="text-slate-400" />
+        </button>
+      </div>
 
-      {isOpen && (
-        <div className="absolute left-0 mt-2 w-72 sm:w-80 bg-white rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.15)] border border-slate-200 p-3 z-[9999] animate-in fade-in select-none">
+      {/* PORTAL DROPDOWN MENU — Rendered at root document.body with fixed z-[9999] */}
+      {isMounted && isOpen && createPortal(
+        <div
+          ref={dropdownRef}
+          style={{
+            position: 'absolute',
+            top: `${coords.top}px`,
+            left: `${coords.left}px`,
+            width: `${coords.width}px`,
+          }}
+          className="bg-white rounded-2xl shadow-[0_25px_60px_rgba(0,0,0,0.22)] border border-slate-200 p-3 z-[9999] animate-in fade-in select-none font-display text-left"
+        >
           {/* Search bar */}
           <div className="relative mb-2">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -207,7 +307,7 @@ export default function TrainerSelectorDropdown({
           {/* Unassign option */}
           <button
             type="button"
-            onClick={() => handleSelectTrainer(null)}
+            onClick={handleUnassignTrainer}
             className="w-full px-3 py-2.5 text-left hover:bg-rose-50 rounded-xl flex items-center justify-between text-xs font-extrabold text-rose-600 transition-colors border-none bg-transparent cursor-pointer mb-1"
           >
             <div className="flex items-center gap-2">
@@ -230,7 +330,6 @@ export default function TrainerSelectorDropdown({
             ) : (
               filteredTrainers.map((t) => {
                 const isSelected = (currentTrainerId && (currentTrainerId === t.id || currentTrainerId === t.employeeId)) || (currentTrainerName === t.name);
-                // Format clean user-facing employee ID (never show raw 20-char firebase hash)
                 let empIdBadge = t.employeeId;
                 if (!empIdBadge || empIdBadge.length > 15 || empIdBadge.includes('AUTO')) {
                   empIdBadge = `EMP-${t.id ? t.id.slice(0, 5).toUpperCase() : '101'}`;
@@ -242,7 +341,7 @@ export default function TrainerSelectorDropdown({
                   <button
                     key={t.id || t.employeeId || t.name}
                     type="button"
-                    onClick={() => handleSelectTrainer(t)}
+                    onClick={() => handleSelectTrainerOption(t)}
                     className={`w-full p-2.5 rounded-xl text-left transition-all border-none cursor-pointer flex items-center justify-between gap-2 ${
                       isSelected ? 'bg-indigo-50/90 text-indigo-900 font-black border border-indigo-200' : 'hover:bg-slate-50 text-slate-800 font-bold'
                     }`}
@@ -268,8 +367,76 @@ export default function TrainerSelectorDropdown({
               })
             )}
           </div>
+        </div>,
+        document.body
+      )}
+
+      {/* PT BILLING MODAL (Reusable) */}
+      {showPtBillingModal && (
+        <PtBillingModal
+          isOpen={showPtBillingModal}
+          onClose={() => setShowPtBillingModal(false)}
+          member={member}
+          preselectedTrainer={pendingTrainer}
+          onSuccess={(updatedMem: any) => {
+            if (onTrainerUpdated && updatedMem) {
+              onTrainerUpdated({
+                trainerId: updatedMem.trainerId,
+                trainerName: updatedMem.trainerName,
+                trainerRole: updatedMem.trainerRole,
+                trainerAvatar: updatedMem.trainerAvatar,
+              });
+            }
+          }}
+        />
+      )}
+
+      {/* REASSIGN CONFIRMATION MODAL */}
+      {showReassignConfirmModal && (
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 font-display">
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setShowReassignConfirmModal(false)} />
+          <div className="relative bg-white rounded-3xl p-6 shadow-2xl border border-slate-200 max-w-md w-full z-10 text-center space-y-4">
+            <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 border border-amber-200 flex items-center justify-center mx-auto">
+              <AlertTriangle size={24} />
+            </div>
+            <div>
+              <h3 className="font-extrabold text-slate-900 text-lg">CHANGE PERSONAL TRAINER?</h3>
+              <p className="text-xs text-slate-500 font-medium mt-1">
+                Current: <span className="font-black text-slate-800">{currentTrainerName}</span> → New: <span className="font-black text-amber-700">{pendingTrainer?.name}</span>
+              </p>
+              <p className="text-[11px] text-slate-400 mt-2">
+                Choose whether to keep existing PT billing or create a new PT bill.
+              </p>
+            </div>
+            <div className="flex flex-col gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowReassignConfirmModal(false);
+                  setShowPtBillingModal(true);
+                }}
+                className="w-full py-3 bg-amber-500 hover:bg-amber-600 text-slate-950 rounded-xl text-xs font-black transition-all border-none cursor-pointer shadow-md"
+              >
+                + Create New PT Bill
+              </button>
+              <button
+                type="button"
+                onClick={handleKeepBillingReassign}
+                className="w-full py-3 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-extrabold transition-all border-none cursor-pointer"
+              >
+                Keep Existing PT Billing
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowReassignConfirmModal(false)}
+                className="w-full py-2 text-slate-400 hover:text-slate-700 text-xs font-bold border-none bg-transparent cursor-pointer"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
         </div>
       )}
-    </div>
+    </>
   );
 }

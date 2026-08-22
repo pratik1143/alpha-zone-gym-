@@ -347,39 +347,70 @@ export default function ProfileTab({ member }: { member: any }) {
         {hasTrainer && (
           <div className="bg-white rounded-[32px] shadow-[0_2px_20px_rgba(0,0,0,0.02)] border border-slate-100 p-8 flex flex-col items-center text-center justify-between">
             <div className="flex flex-col items-center w-full">
-              <div className="w-12 h-12 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600 mb-4">
-                <Dumbbell size={24} />
+              <div className="w-12 h-12 bg-amber-50 rounded-2xl flex items-center justify-center text-amber-600 mb-3 border border-amber-200">
+                <Dumbbell size={22} />
               </div>
-              <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">PERSONAL TRAINER</h3>
+              <div className="flex items-center gap-2 mb-3">
+                <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest">PERSONAL TRAINER</h3>
+                <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[9px] font-black uppercase border border-emerald-200">
+                  {member?.pt?.status || 'ACTIVE'}
+                </span>
+              </div>
               
-              <div className="w-24 h-24 rounded-full bg-slate-100 border-[4px] border-white shadow-xl overflow-hidden mb-4 relative shrink-0">
+              <div className="w-20 h-20 rounded-full bg-slate-100 border-[3px] border-white shadow-lg overflow-hidden mb-3 relative shrink-0">
                 <img
-                  src={member.trainerAvatar || (`https://i.pravatar.cc/150?u=` + encodeURIComponent(member.trainerName || member.trainer))}
+                  src={member.trainerAvatar || member.pt?.trainerAvatar || (`https://i.pravatar.cc/150?u=` + encodeURIComponent(member.trainerName || member.trainer))}
                   alt="trainer"
                   className="w-full h-full object-cover"
                 />
-                <div className="absolute bottom-0 right-0 bg-emerald-500 p-1.5 rounded-full border-2 border-white text-white">
-                  <BadgeCheck size={12} />
+                <div className="absolute bottom-0 right-0 bg-emerald-500 p-1 rounded-full border-2 border-white text-white">
+                  <BadgeCheck size={10} />
                 </div>
               </div>
 
-              <h4 className="text-xl font-black text-slate-900 leading-tight">{member.trainerName || member.trainer}</h4>
-              <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-3 py-1 rounded-full mt-2">
-                {member.trainerRole || 'Personal Trainer & Strength'}
+              <h4 className="text-lg font-black text-slate-900 leading-tight">{member.trainerName || member.trainer}</h4>
+              <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2.5 py-0.5 rounded-full mt-1">
+                {member.trainerRole || member.pt?.trainerRole || 'Personal Trainer & Strength'}
               </span>
+
+              {/* PT Package & Validity Breakdown */}
+              <div className="w-full mt-4 p-3.5 bg-slate-50 border border-slate-200 rounded-2xl space-y-2 text-xs text-left">
+                <div className="flex justify-between items-center">
+                  <span className="text-[10px] font-black text-slate-400 uppercase">PT Package</span>
+                  <span className="font-black text-slate-900">{member?.pt?.packageName || member?.pt?.duration || '3 Months'}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-[10px] font-black text-slate-400 uppercase">Validity</span>
+                  <span className="font-bold text-slate-700 text-[11px]">
+                    {member?.pt?.startDate || member.joinDate || 'N/A'} → {member?.pt?.expiryDate || 'N/A'}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center pt-1 border-t border-slate-200">
+                  <span className="text-[10px] font-black text-slate-400 uppercase">PT Amount</span>
+                  <span className="font-black font-mono text-amber-700">₹{(member?.pt?.amount || 6000).toLocaleString('en-IN')}</span>
+                </div>
+                {member?.pt?.invoiceNo && (
+                  <div className="flex justify-between items-center">
+                    <span className="text-[10px] font-black text-slate-400 uppercase">Invoice No</span>
+                    <span className="font-mono text-[10px] font-bold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded">
+                      {member?.pt?.invoiceNo}
+                    </span>
+                  </div>
+                )}
+              </div>
             </div>
             
-            <div className="flex gap-2 w-full mt-6">
+            <div className="flex gap-2 w-full mt-4">
               <a
                 href={member.trainerPhone ? `tel:${member.trainerPhone}` : '#'}
-                className="flex-1 py-2.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 no-underline"
+                className="flex-1 py-2.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 no-underline border border-emerald-200"
               >
                 <Phone size={14} /> Call
               </a>
               <button
                 type="button"
                 onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-                className="flex-1 py-2.5 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 border-none cursor-pointer"
+                className="flex-1 py-2.5 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 border-none cursor-pointer"
               >
                 <Repeat size={14} /> Change
               </button>

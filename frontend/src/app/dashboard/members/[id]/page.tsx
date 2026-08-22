@@ -274,7 +274,7 @@ export default function ClientProfileSystem() {
   return (
     <div className="min-h-screen bg-[#F8FAFC] p-6 font-sans pb-32">
       {/* 1. TOP HEADER SECTION */}
-      <div className="bg-white rounded-[32px] shadow-[0_2px_20px_rgba(0,0,0,0.02)] border border-slate-100 p-8 mb-6 flex items-start justify-between relative">
+      <div className="bg-white rounded-[32px] shadow-[0_2px_20px_rgba(0,0,0,0.02)] border border-slate-100 p-8 mb-6 flex items-start justify-between relative z-50">
         <div className="absolute inset-0 rounded-[32px] overflow-hidden pointer-events-none">
           <div className="absolute top-0 right-0 w-[400px] h-[400px] bg-blue-50 rounded-full blur-3xl opacity-50 -translate-y-1/2 translate-x-1/3" />
         </div>
@@ -478,7 +478,8 @@ export default function ClientProfileSystem() {
         isOpen={showPtModal}
         member={member}
         onClose={() => setShowPtModal(false)}
-        onSaved={() => {
+        onSuccess={(updatedMem: any) => {
+          if (updatedMem) setMember({ ...updatedMem });
           useGymStore.getState().fetchMembers();
           useGymStore.getState().fetchPayments();
         }}
