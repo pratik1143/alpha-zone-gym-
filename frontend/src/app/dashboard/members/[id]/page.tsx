@@ -25,18 +25,10 @@ import ProfileTab from './components/ProfileTab';
 import BillingTab from './components/BillingTab';
 import CommunicationTab from './components/CommunicationTab';
 import AttendanceTab from './components/AttendanceTab';
-import BodyMeasurementsTab from './components/BodyMeasurementsTab';
-import WorkoutTab from './components/WorkoutTab';
-import NutritionTab from './components/NutritionTab';
-import DocumentsTab from './components/DocumentsTab';
-import BookingsTab from './components/BookingsTab';
-
 import ActivityTimelineTab from './components/ActivityTimelineTab';
 
 const TABS = [
-  'Profile', 'Billing', 'Communication', 'Attendance', 
-  'Body Measurements', 'Workout', 'Nutrition', 'Documents', 
-  'Bookings', 'Activity Timeline'
+  'Profile', 'Billing', 'Communication', 'Attendance', 'Activity Timeline'
 ];
 
 export default function ClientProfileSystem() {
@@ -327,29 +319,29 @@ export default function ClientProfileSystem() {
             </div>
           </div>
 
-          <div className="flex flex-col gap-2 w-48">
+          <div className="flex items-center gap-2 self-start">
             <button
               onClick={() => {
-                const rawJoin = member.joinDate || member.createdAt;
-                const newExpiry = membershipEngine.calculatePlanExpiryDate(member.plan, rawJoin);
-                updateDoc(doc(db, 'members', member.id), { expiryDate: newExpiry, status: 'active' })
-                  .then(() => toast.success(`\u2705 Auto-synced! Expiry is now ${newExpiry}`))
-                  .catch((e: any) => toast.error('Failed to sync: ' + e.message));
+                const rawPhone = (member.phone || '').replace(/\D/g, '');
+                const cleanPhone = rawPhone.length === 10 ? `91${rawPhone}` : rawPhone;
+                if (cleanPhone) window.open(`https://wa.me/${cleanPhone}`, '_blank');
+                else toast.error('No valid phone number for WhatsApp');
               }}
-              className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black transition-all shadow-md flex justify-center items-center gap-2 cursor-pointer"
+              className="py-2.5 px-4 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-xl flex justify-center items-center gap-1.5 text-xs font-black transition-all cursor-pointer shadow-sm active:scale-95"
+              title="Send WhatsApp Message"
             >
-              ⚡ Auto-Sync Expiry
+              <MessageSquare size={16} /> WhatsApp
             </button>
-            <button 
-              onClick={() => router.push(`/dashboard/members/${encodeURIComponent(id)}/renew`)}
-              className="w-full py-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-xl text-xs font-black transition-all flex justify-center items-center gap-2 cursor-pointer shadow-sm active:scale-95"
+            <button
+              onClick={() => {
+                if (member.phone) window.location.href = `tel:${member.phone}`;
+                else toast.error('No phone number recorded');
+              }}
+              className="py-2.5 px-4 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-xl flex justify-center items-center gap-1.5 text-xs font-black transition-all cursor-pointer shadow-sm active:scale-95"
+              title="Call Member"
             >
-              <DollarSign size={14} /> Renew Membership
+              <Phone size={16} /> Call
             </button>
-            <div className="grid grid-cols-2 gap-2">
-              <button className="py-2.5 bg-slate-50 hover:bg-green-50 text-slate-600 hover:text-green-600 border border-slate-200 rounded-xl flex justify-center items-center transition-all cursor-pointer" title="WhatsApp"><MessageSquare size={16} /></button>
-              <button className="py-2.5 bg-slate-50 hover:bg-blue-50 text-slate-600 hover:text-blue-600 border border-slate-200 rounded-xl flex justify-center items-center transition-all cursor-pointer" title="Call"><Phone size={16} /></button>
-            </div>
           </div>
         </div>
       </div>
@@ -375,12 +367,6 @@ export default function ClientProfileSystem() {
               {activeTab === 'Billing' && <BillingTab member={member} />}
               {activeTab === 'Communication' && <CommunicationTab member={member} />}
               {activeTab === 'Attendance' && <AttendanceTab member={member} />}
-              {activeTab === 'Body Measurements' && <BodyMeasurementsTab member={member} />}
-              {activeTab === 'Workout' && <WorkoutTab member={member} />}
-              {activeTab === 'Nutrition' && <NutritionTab member={member} />}
-              {activeTab === 'Documents' && <DocumentsTab member={member} />}
-              {activeTab === 'Bookings' && <BookingsTab member={member} />}
-
               {activeTab === 'Activity Timeline' && <ActivityTimelineTab member={member} />}
             </motion.div>
           </AnimatePresence>
