@@ -121,6 +121,40 @@ export default function EditBillingModal({
     return 'pending';
   }, [pendingAmount, amountPaid]);
 
+  const validationErrors = useMemo(() => {
+    const errs: Record<string, string> = {};
+    const orig = Number(originalAmount);
+    const disc = Number(discount);
+    const tx = Number(tax);
+    const paid = Number(amountPaid);
+
+    if (isNaN(orig) || orig < 0) errs.originalAmount = 'Original amount cannot be negative.';
+    if (isNaN(disc) || disc < 0) errs.discount = 'Discount cannot be negative.';
+    if (isNaN(tx) || tx < 0) errs.tax = 'Tax cannot be negative.';
+    if (isNaN(paid) || paid < 0) errs.amountPaid = 'Amount paid cannot be negative.';
+
+    const net = Math.max(0, (isNaN(orig) ? 0 : orig) - (isNaN(disc) ? 0 : disc) + (isNaN(tx) ? 0 : tx));
+    if (paid > net) {
+      errs.amountPaid = `Amount paid (₹${paid}) cannot exceed net payable (₹${net.toLocaleString('en-IN')}).`;
+    }
+
+    if (startDate && expiryDate) {
+      const s = new Date(startDate);
+      const e = new Date(expiryDate);
+      if (!isNaN(s.getTime()) && !isNaN(e.getTime())) {
+        const sTime = new Date(s.getFullYear(), s.getMonth(), s.getDate()).getTime();
+        const eTime = new Date(e.getFullYear(), e.getMonth(), e.getDate()).getTime();
+        if (eTime < sTime) {
+          errs.expiryDate = 'Expiry date cannot be earlier than the start date.';
+        }
+      }
+    }
+
+    return errs;
+  }, [originalAmount, discount, tax, amountPaid, startDate, expiryDate]);
+
+  const isValid = Object.keys(validationErrors).length === 0;
+
   // Handle Regenerate Invoice Number
   const handleRegenerateInvoiceNumber = () => {
     const newInv = `INV-${Math.floor(100000 + Math.random() * 900000)}`;
@@ -473,9 +507,18 @@ export default function EditBillingModal({
                     setIsManualExpiry(true);
                   }}
                   className={`w-full px-3 py-2 bg-white border rounded-xl font-bold text-slate-900 focus:outline-none ${
-                    isManualExpiry ? 'border-amber-400 bg-amber-50/30' : 'border-slate-200'
+                    validationErrors.expiryDate 
+                      ? 'border-red-500 bg-red-50/40' 
+                      : isManualExpiry 
+                      ? 'border-amber-400 bg-amber-50/30' 
+                      : 'border-slate-200'
                   }`}
                 />
+                {validationErrors.expiryDate && (
+                  <p className="mt-1 text-[11px] font-bold text-red-500 flex items-center gap-1">
+                    <AlertCircle size={12} className="shrink-0" /> {validationErrors.expiryDate}
+                  </p>
+                )}
               </div>
 
               <div>
@@ -545,9 +588,17 @@ export default function EditBillingModal({
                   type="number"
                   value={originalAmount}
                   onChange={e => setOriginalAmount(Number(e.target.value))}
-                  className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl font-mono font-black text-slate-900 focus:border-pink-500 focus:outline-none text-sm"
+                  className={`w-full px-3 py-2 bg-white border rounded-xl font-mono font-black text-slate-900 focus:outline-none text-sm ${
+                    validationErrors.originalAmount ? 'border-red-500 bg-red-50/40' : 'border-slate-200 focus:border-pink-500'
+                  }`}
                 />
-                <span className="text-[10px] text-slate-400 mt-0.5 block">Actual stored transaction amount</span>
+                {validationErrors.originalAmount ? (
+                  <p className="mt-1 text-[11px] font-bold text-red-500 flex items-center gap-1">
+                    <AlertCircle size={12} className="shrink-0" /> {validationErrors.originalAmount}
+                  </p>
+                ) : (
+                  <span className="text-[10px] text-slate-400 mt-0.5 block">Actual stored transaction amount</span>
+                )}
               </div>
 
               <div>
@@ -556,8 +607,15 @@ export default function EditBillingModal({
                   type="number"
                   value={discount}
                   onChange={e => setDiscount(Number(e.target.value))}
-                  className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl font-mono font-bold text-emerald-600 focus:border-emerald-500 focus:outline-none"
+                  className={`w-full px-3 py-2 bg-white border rounded-xl font-mono font-bold text-emerald-600 focus:outline-none ${
+                    validationErrors.discount ? 'border-red-500 bg-red-50/40' : 'border-slate-200 focus:border-emerald-500'
+                  }`}
                 />
+                {validationErrors.discount && (
+                  <p className="mt-1 text-[11px] font-bold text-red-500 flex items-center gap-1">
+                    <AlertCircle size={12} className="shrink-0" /> {validationErrors.discount}
+                  </p>
+                )}
               </div>
 
               <div>
@@ -566,8 +624,15 @@ export default function EditBillingModal({
                   type="number"
                   value={tax}
                   onChange={e => setTax(Number(e.target.value))}
-                  className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl font-mono font-bold text-slate-600 focus:border-slate-400 focus:outline-none"
+                  className={`w-full px-3 py-2 bg-white border rounded-xl font-mono font-bold text-slate-600 focus:outline-none ${
+                    validationErrors.tax ? 'border-red-500 bg-red-50/40' : 'border-slate-200 focus:border-slate-400'
+                  }`}
                 />
+                {validationErrors.tax && (
+                  <p className="mt-1 text-[11px] font-bold text-red-500 flex items-center gap-1">
+                    <AlertCircle size={12} className="shrink-0" /> {validationErrors.tax}
+                  </p>
+                )}
               </div>
 
               {/* Readonly Net Payable Display */}
@@ -583,8 +648,15 @@ export default function EditBillingModal({
                   type="number"
                   value={amountPaid}
                   onChange={e => setAmountPaid(Number(e.target.value))}
-                  className="w-full px-3 py-2 bg-white border border-emerald-300 rounded-xl font-mono font-black text-emerald-700 focus:border-emerald-500 focus:outline-none text-sm"
+                  className={`w-full px-3 py-2 bg-white border rounded-xl font-mono font-black text-emerald-700 focus:outline-none text-sm ${
+                    validationErrors.amountPaid ? 'border-red-500 bg-red-50/40' : 'border-emerald-300 focus:border-emerald-500'
+                  }`}
                 />
+                {validationErrors.amountPaid && (
+                  <p className="mt-1 text-[11px] font-bold text-red-500 flex items-center gap-1">
+                    <AlertCircle size={12} className="shrink-0" /> {validationErrors.amountPaid}
+                  </p>
+                )}
               </div>
 
               {/* Readonly Pending Amount Display */}

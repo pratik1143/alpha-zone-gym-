@@ -309,17 +309,21 @@ export default function DashboardPage() {
   const todaysCollection = useMemo(() => {
     const todayStr = new Date().toISOString().split('T')[0];
     const todayDateStr = new Date().toDateString();
+    const seen = new Set<string>();
 
     let total = 0;
 
     if (Array.isArray(payments) && payments.length > 0) {
       payments.forEach((p: any) => {
-        if (p.isLegacyImport || p.isHistorical || p.isSample || p.isMock) return;
-        if (!p.isRealTimeToday) return;
-        const pDate = String(p.date || p.createdAt || p.paymentDate || '');
-        if (pDate.startsWith(todayStr) || (pDate && new Date(pDate).toDateString() === todayDateStr)) {
-          const val = Number(p.paid) || Number(p.amount) || 0;
-          total += val;
+        if (!p || p.isSample || p.isMock) return;
+        const key = String(p.id || p.invoiceNumber || p.invoice || '').trim();
+        if (key && seen.has(key)) return;
+        if (key) seen.add(key);
+
+        const pDate = String(p.date || p.createdAt || p.paymentDate || '').split('T')[0];
+        if (pDate === todayStr || (p.createdAt && new Date(p.createdAt).toDateString() === todayDateStr)) {
+          const val = Number(p.amountPaid !== undefined ? p.amountPaid : (p.paid !== undefined ? p.paid : (p.amount || 0)));
+          total += (isNaN(val) ? 0 : val);
         }
       });
     }

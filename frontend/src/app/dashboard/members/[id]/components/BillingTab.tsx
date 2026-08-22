@@ -5,14 +5,15 @@ import { createPortal } from 'react-dom';
 import {
   Receipt, CreditCard, AlertCircle, CheckCircle, Clock, Download, MessageSquare,
   RefreshCw, Plus, Eye, Printer, Mail, ArrowUpRight, Edit3, X, Calendar, Shield,
-  FileText, Sparkles, Check, ChevronDown, FileSpreadsheet, FileCode
+  FileText, Sparkles, Check, ChevronDown, FileSpreadsheet, FileCode, Trash2
 } from 'lucide-react';
 import { db } from '@/lib/firebase';
-import { collection, query, where, onSnapshot, updateDoc, doc, setDoc } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, updateDoc, doc, setDoc, deleteDoc } from 'firebase/firestore';
 import { paymentEngine } from '@/lib/engines/paymentEngine';
 import { cleanPlanName, formatDate } from '@/lib/utils';
 import { useGymStore } from '@/store';
 import toast from 'react-hot-toast';
+import API from '@/services/api';
 import RenewalWizardModal from '../../components/RenewalWizardModal';
 import OfficialInvoiceReceipt from '@/app/dashboard/components/OfficialInvoiceReceipt';
 import EditBillingModal from './EditBillingModal';
@@ -32,6 +33,8 @@ export default function BillingTab({ member: initialMember }: { member: any }) {
   // Modals state
   const [viewInvoice, setViewInvoice] = useState<any | null>(null);
   const [selectedInvoiceForEdit, setSelectedInvoiceForEdit] = useState<any | null>(null);
+  const [invoiceToDelete, setInvoiceToDelete] = useState<any | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [showNewBillModal, setShowNewBillModal] = useState(false);
 
@@ -72,21 +75,6 @@ export default function BillingTab({ member: initialMember }: { member: any }) {
     };
   }, [openDropdown]);
 
-  // Edit Bill Form State
-  const [editForm, setEditForm] = useState({
-    invoiceNumber: '',
-    plan: '',
-    amount: 0,
-    paid: 0,
-    method: 'UPI',
-    status: 'paid',
-    date: '',
-    startDate: '',
-    expiryDate: '',
-  });
-
-
-
   // Real-time listener for member invoices
   useEffect(() => {
     if (!member) return;
@@ -103,18 +91,17 @@ export default function BillingTab({ member: initialMember }: { member: any }) {
       const liveData = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       const combinedMap = new Map<string, any>();
 
-      fallbackInvoices.forEach((inv: any, idx: number) => {
-        const key = inv.invoiceNumber || inv.invoice || inv.id || `inv_${idx}`;
-        combinedMap.set(key, inv);
-      });
-
-      liveData.forEach((inv: any) => {
-        const key = inv.invoiceNumber || inv.invoice || inv.id;
-        combinedMap.set(key, inv);
-      });
-
-      // If no invoices exist in database, auto-generate initial invoice from member package
-      if (combinedMap.size === 0 && member) {
+      if (liveData.length > 0) {
+        liveData.forEach((inv: any) => {
+          const key = inv.id || inv.invoiceNumber || inv.invoice;
+          combinedMap.set(key, inv);
+        });
+      } else if (fallbackInvoices.length > 0) {
+        fallbackInvoices.forEach((inv: any, idx: number) => {
+          const key = inv.id || inv.invoiceNumber || inv.invoice || `inv_${idx}`;
+          combinedMap.set(key, inv);
+        });
+      } else if (member) {
         const baseAmt = Number(member.totalBilled) || Number(member.paid) || Number(member.amount) || 2500;
         const autoInv = {
           id: `inv_auto_${Date.now()}`,
@@ -148,6 +135,80 @@ export default function BillingTab({ member: initialMember }: { member: any }) {
 
     return () => unsub();
   }, [member]);
+
+  // Execute Delete Bill
+  const handleExecuteDeleteBill = async () => {
+    if (!invoiceToDelete) return;
+    setIsDeleting(true);
+    try {
+      const invId = invoiceToDelete.id;
+
+      // 1. Delete from Firestore payments collection
+      if (invId) {
+        await deleteDoc(doc(db, 'payments', invId));
+      }
+
+      // 2. Optional backend API delete
+      try {
+        const targetInv = invoiceToDelete.invoiceNumber || invoiceToDelete.invoice;
+        if (targetInv) {
+          await API.delete(`/billing/${targetInv}`);
+        }
+      } catch (e) {
+        // Backend API fallback ok
+      }
+
+      // 3. Update member membershipHistory & active coverage
+      const existingHistory = Array.isArray(member.membershipHistory) ? member.membershipHistory : [];
+      const targetInvNum = invoiceToDelete.invoiceNumber || invoiceToDelete.invoice;
+
+      const updatedHistory = existingHistory.filter((h: any) => {
+        const hInv = h.invoiceId || h.invoiceNumber || h.invoice;
+        return hInv !== targetInvNum && h.id !== invId;
+      });
+
+      let newExpiry = member.expiryDate;
+      let newStart = member.startDate;
+      let newPlan = member.plan;
+      let newStatus = member.status;
+
+      if (updatedHistory.length > 0) {
+        const sortedHistory = [...updatedHistory].sort((a, b) => new Date(b.expiryDate).getTime() - new Date(a.expiryDate).getTime());
+        const latest = sortedHistory[0];
+        newExpiry = latest.expiryDate;
+        newPlan = latest.plan;
+        const today = new Date().toISOString().split('T')[0];
+        newStatus = newExpiry >= today ? 'active' : 'expired';
+      }
+
+      if (member.id) {
+        await updateDoc(doc(db, 'members', member.id), {
+          membershipHistory: updatedHistory,
+          expiryDate: newExpiry,
+          plan: newPlan,
+          status: newStatus,
+        });
+        setMember((prev: any) => ({
+          ...prev,
+          membershipHistory: updatedHistory,
+          expiryDate: newExpiry,
+          plan: newPlan,
+          status: newStatus,
+        }));
+      }
+
+      toast.success('Billing transaction deleted permanently.');
+      setInvoiceToDelete(null);
+
+      const { fetchPayments, fetchMembers } = useGymStore.getState();
+      await fetchPayments(true);
+      await fetchMembers(true);
+    } catch (err: any) {
+      toast.error('Failed to delete billing transaction: ' + (err?.message || err));
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   // Derived Totals
   const totalBilled = invoices.reduce((s, inv) => {
@@ -397,35 +458,9 @@ export default function BillingTab({ member: initialMember }: { member: any }) {
                         </span>
                       </td>
 
-                      {/* Actions & Dropdown */}
+                      {/* Actions & Dropdown (ONLY ACTION button, no standalone icons) */}
                       <td className="px-4 py-4 text-center whitespace-nowrap">
                         <div className="flex items-center justify-center gap-1.5 relative">
-                          {/* Quick Icon Actions */}
-                          <button
-                            type="button"
-                            title="View Invoice"
-                            onClick={() => setViewInvoice(inv)}
-                            className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-all border-none cursor-pointer"
-                          >
-                            <Eye size={15} />
-                          </button>
-                          <button
-                            type="button"
-                            title="Print Invoice"
-                            onClick={() => handlePrint(inv)}
-                            className="p-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg transition-all border-none cursor-pointer"
-                          >
-                            <Printer size={15} />
-                          </button>
-                          <button
-                            type="button"
-                            title="Send WhatsApp Bill"
-                            onClick={() => handleWhatsApp(inv)}
-                            className="p-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-lg transition-all border-none cursor-pointer"
-                          >
-                            <MessageSquare size={15} />
-                          </button>
-
                           {/* ACTION Dropdown Button */}
                           <button
                             type="button"
@@ -438,7 +473,7 @@ export default function BillingTab({ member: initialMember }: { member: any }) {
                                 setOpenDropdown({ invoice: inv, anchorRect: rect });
                               }
                             }}
-                            className="px-3 py-1.5 bg-[#d32f2f] hover:bg-[#c62828] text-white font-black rounded-lg text-xs uppercase tracking-wider transition-all flex items-center gap-1 cursor-pointer border-none shadow-md active:scale-95"
+                            className="px-3.5 py-1.5 bg-[#d32f2f] hover:bg-[#c62828] text-white font-black rounded-lg text-xs uppercase tracking-wider transition-all flex items-center gap-1 cursor-pointer border-none shadow-md active:scale-95"
                           >
                             <span>ACTION</span>
                             <ChevronDown size={14} />
@@ -543,9 +578,9 @@ export default function BillingTab({ member: initialMember }: { member: any }) {
           style={{
             position: 'fixed',
             left: Math.max(12, Math.min(window.innerWidth - 220, openDropdown.anchorRect.right - 200)),
-            top: window.innerHeight - openDropdown.anchorRect.bottom >= 260
+            top: window.innerHeight - openDropdown.anchorRect.bottom >= 300
               ? openDropdown.anchorRect.bottom + 6
-              : Math.max(12, openDropdown.anchorRect.top - 260),
+              : Math.max(12, openDropdown.anchorRect.top - 300),
             zIndex: 99999
           }}
           className="bg-white border border-slate-200 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.3)] w-52 py-2 text-left text-xs font-bold text-slate-800 animate-in fade-in select-none"
@@ -623,8 +658,86 @@ export default function BillingTab({ member: initialMember }: { member: any }) {
             <MessageSquare size={15} className="text-emerald-600" />
             <span>WhatsApp Bill</span>
           </button>
+
+          <div className="border-t border-slate-100 my-1"></div>
+
+          <button
+            type="button"
+            onClick={() => {
+              setInvoiceToDelete(openDropdown.invoice);
+              setOpenDropdown(null);
+            }}
+            className="w-full px-4 py-2.5 hover:bg-red-50 text-red-600 flex items-center gap-2.5 text-left border-none bg-transparent cursor-pointer font-extrabold transition-colors"
+          >
+            <Trash2 size={15} className="text-red-500" />
+            <span>Delete Bill</span>
+          </button>
         </div>,
         document.body
+      )}
+
+      {/* ── 5. DELETE BILL CONFIRMATION MODAL ───────────────────────────────── */}
+      {invoiceToDelete && (
+        <div className="fixed inset-0 z-[100000] flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full p-6 space-y-4 border border-slate-100 text-left">
+            <div className="flex items-center gap-3 border-b border-slate-100 pb-3">
+              <div className="w-10 h-10 rounded-2xl bg-red-50 text-red-600 flex items-center justify-center font-black">
+                <Trash2 size={20} />
+              </div>
+              <div>
+                <h3 className="text-base font-black text-slate-900">Delete Billing Transaction?</h3>
+                <p className="text-xs text-slate-500 font-medium">This action cannot be undone.</p>
+              </div>
+            </div>
+
+            <div className="bg-slate-50 rounded-2xl p-3.5 space-y-2 text-xs border border-slate-200/80">
+              <div className="flex justify-between">
+                <span className="text-slate-400 font-bold">Member Name:</span>
+                <span className="font-extrabold text-slate-800">{member.name}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400 font-bold">Invoice Number:</span>
+                <span className="font-mono font-extrabold text-blue-600">{invoiceToDelete.invoiceNumber || invoiceToDelete.invoice || 'INV-000'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400 font-bold">Package:</span>
+                <span className="font-extrabold text-slate-800">{invoiceToDelete.plan || member.plan}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400 font-bold">Amount Billed / Paid:</span>
+                <span className="font-mono font-extrabold text-emerald-600">
+                  ₹{Number(invoiceToDelete.netPayable || invoiceToDelete.amount || 0).toLocaleString('en-IN')} / ₹{Number(invoiceToDelete.amountPaid !== undefined ? invoiceToDelete.amountPaid : (invoiceToDelete.paid || 0)).toLocaleString('en-IN')}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400 font-bold">Payment Date:</span>
+                <span className="font-mono font-bold text-slate-700">{invoiceToDelete.date || 'N/A'}</span>
+              </div>
+            </div>
+
+            <p className="text-[11px] text-amber-800 font-bold bg-amber-50 p-2.5 rounded-xl border border-amber-200 leading-snug">
+              ⚠️ Deleting this billing document permanently removes it from Firestore and updates member totals, today's collection, and active membership dates.
+            </p>
+
+            <div className="flex gap-2 pt-1">
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={handleExecuteDeleteBill}
+                className="flex-1 py-3 bg-red-600 hover:bg-red-700 disabled:bg-slate-300 text-white rounded-xl text-xs font-black transition-all border-none cursor-pointer shadow-md flex items-center justify-center gap-1.5"
+              >
+                {isDeleting ? 'Deleting...' : 'Delete Bill'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setInvoiceToDelete(null)}
+                className="py-3 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all border-none cursor-pointer"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* ── 5. EDIT BILLING MODAL (FULL PRODUCTION FLOW) ────────────────────── */}

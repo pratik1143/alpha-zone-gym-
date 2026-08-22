@@ -181,7 +181,6 @@ export default function OverviewCommandCenter() {
   const [sessionCollection, setSessionCollection] = useState(0);
   const [sessionNewClients, setSessionNewClients] = useState(0);
 
-  // Today's Real Collections (strictly today's date, deduplicated by payment/invoice ID)
   const todaysRealCollection = useMemo(() => {
     const seen = new Set<string>();
 
@@ -192,7 +191,7 @@ export default function OverviewCommandCenter() {
         if (status !== 'paid' && status !== 'partial') return false;
 
         const pDate = String(p.date || p.paymentDate || p.createdAt || '').split('T')[0];
-        if (pDate !== todayStr && !p.isRealTimeToday) return false;
+        if (pDate !== todayStr) return false;
 
         const idKey = String(p.id || p.paymentId || p.invoiceNumber || p.invoice || p.idempotencyKey || '').trim();
         if (idKey && seen.has(idKey)) return false;
