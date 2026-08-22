@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import {
   Receipt, CreditCard, AlertCircle, CheckCircle, Clock, Download, MessageSquare,
@@ -137,6 +137,16 @@ export default function BillingTab({ member: initialMember }: { member: any }) {
     return () => unsub();
   }, [member]);
 
+  // Filter for billing types: ALL, MEMBERSHIP, PT
+  const [billingTypeFilter, setBillingTypeFilter] = useState<'all' | 'membership' | 'pt'>('all');
+
+  // Filtered invoices array
+  const filteredInvoices = useMemo(() => {
+    if (billingTypeFilter === 'all') return invoices;
+    if (billingTypeFilter === 'pt') return invoices.filter((inv: any) => inv.billingType === 'pt');
+    return invoices.filter((inv: any) => inv.billingType !== 'pt');
+  }, [invoices, billingTypeFilter]);
+
   // Execute Delete Bill (Atomic WriteBatch + Timeline Rebuild)
   const handleExecuteDeleteBill = async () => {
     if (!invoiceToDelete) return;
@@ -144,14 +154,13 @@ export default function BillingTab({ member: initialMember }: { member: any }) {
     try {
       const invId = invoiceToDelete.id;
       const targetInvNum = invoiceToDelete.invoiceNumber || invoiceToDelete.invoice;
+      const isPtBill = invoiceToDelete.billingType === 'pt';
 
-      // 1. Calculate remaining invoices & rebuild deterministic timeline
+      // 1. Filter out deleted bill from remaining invoices
       const remainingInvoices = invoices.filter((inv: any) => {
         const iNum = inv.invoiceNumber || inv.invoice;
         return (inv.id && inv.id !== invId) && (!targetInvNum || iNum !== targetInvNum);
       });
-
-      const timeline = membershipEngine.rebuildMemberMembershipTimeline(member, remainingInvoices);
 
       // 2. Perform Atomic Firestore Batch Operation
       const batch = writeBatch(db);
@@ -161,22 +170,48 @@ export default function BillingTab({ member: initialMember }: { member: any }) {
       }
 
       if (member.id) {
-        batch.update(doc(db, 'members', member.id), {
-          membershipHistory: timeline.recalculatedHistory,
-          startDate: timeline.startDate,
-          expiryDate: timeline.expiryDate,
-          plan: timeline.plan,
-          daysLeft: timeline.daysLeft,
-          status: timeline.status,
-          totalBilled: timeline.totalBilled,
-          totalPaid: timeline.totalPaid,
-          outstandingBalance: timeline.outstandingBalance,
-          amount: timeline.totalBilled,
-          paidAmount: timeline.totalPaid,
-          paymentStatus: timeline.outstandingBalance <= 0 ? 'paid' : (timeline.totalPaid > 0 ? 'partial' : 'pending'),
-          'ai.daysLeft': timeline.daysLeft,
-          updatedAt: new Date().toISOString(),
-        });
+        if (isPtBill) {
+          // CRITICAL SAFETY RULE: Deleting a PT bill MUST NEVER affect membership expiryDate, startDate, or plan!
+          const updatedPtHistory = (Array.isArray(member.ptHistory) ? member.ptHistory : []).filter((h: any) => {
+            const hNum = h.invoiceNumber || h.invoice || h.id;
+            return hNum !== targetInvNum && h.id !== invId;
+          });
+
+          const netPay = Number(invoiceToDelete.netPayable || invoiceToDelete.amount || 0);
+          const paidAmt = Number(invoiceToDelete.amountPaid !== undefined ? invoiceToDelete.amountPaid : (invoiceToDelete.paid || 0));
+
+          const newTotalBilled = Math.max(0, (Number(member.totalBilled) || 0) - netPay);
+          const newTotalPaid = Math.max(0, (Number(member.totalPaid) || 0) - paidAmt);
+
+          batch.update(doc(db, 'members', member.id), {
+            ptHistory: updatedPtHistory,
+            totalBilled: newTotalBilled,
+            totalPaid: newTotalPaid,
+            outstandingBalance: Math.max(0, newTotalBilled - newTotalPaid),
+            updatedAt: new Date().toISOString(),
+          });
+        } else {
+          // Deleting a membership bill recalculates membership history
+          const remainingMembershipInvoices = remainingInvoices.filter((inv: any) => inv.billingType !== 'pt');
+          const timeline = membershipEngine.rebuildMemberMembershipTimeline(member, remainingMembershipInvoices);
+
+          batch.update(doc(db, 'members', member.id), {
+            membershipHistory: timeline.recalculatedHistory,
+            startDate: timeline.startDate,
+            expiryDate: timeline.expiryDate,
+            plan: timeline.plan,
+            daysLeft: timeline.daysLeft,
+            status: timeline.status,
+            totalBilled: timeline.totalBilled,
+            totalPaid: timeline.totalPaid,
+            outstandingBalance: timeline.outstandingBalance,
+            amount: timeline.totalBilled,
+            paidAmount: timeline.totalPaid,
+            paymentStatus: timeline.outstandingBalance <= 0 ? 'paid' : (timeline.totalPaid > 0 ? 'partial' : 'pending'),
+            'ai.daysLeft': timeline.daysLeft,
+            updatedAt: new Date().toISOString(),
+          });
+        }
       }
 
       await batch.commit();
@@ -192,22 +227,8 @@ export default function BillingTab({ member: initialMember }: { member: any }) {
 
       // 4. Update local state immediately
       setInvoices(remainingInvoices);
-      setMember((prev: any) => ({
-        ...prev,
-        membershipHistory: timeline.recalculatedHistory,
-        startDate: timeline.startDate,
-        expiryDate: timeline.expiryDate,
-        plan: timeline.plan,
-        daysLeft: timeline.daysLeft,
-        status: timeline.status,
-        totalBilled: timeline.totalBilled,
-        totalPaid: timeline.totalPaid,
-        outstandingBalance: timeline.outstandingBalance,
-        paymentStatus: timeline.outstandingBalance <= 0 ? 'paid' : (timeline.totalPaid > 0 ? 'partial' : 'pending'),
-        ai: { ...(prev?.ai || {}), daysLeft: timeline.daysLeft }
-      }));
 
-      toast.success('Billing transaction deleted permanently.');
+      toast.success(`${isPtBill ? 'Personal Training' : 'Billing'} transaction deleted permanently.`);
       setInvoiceToDelete(null);
 
       // 5. Invalidate store cache and refresh all pages
@@ -221,8 +242,8 @@ export default function BillingTab({ member: initialMember }: { member: any }) {
     }
   };
 
-  // Derived Totals
-  const totalBilled = invoices.reduce((s, inv) => {
+  // Derived Totals based on active filter (ALL, MEMBERSHIP, PT)
+  const totalBilled = filteredInvoices.reduce((s: number, inv: any) => {
     const origAmt = Number(inv.originalAmount !== undefined ? inv.originalAmount : (inv.price || inv.amount || 0));
     const discAmt = Number(inv.discountAmount !== undefined ? inv.discountAmount : (inv.discount || 0));
     const taxAmt = Number(inv.taxAmount !== undefined ? inv.taxAmount : (inv.tax || inv.gst || 0));
@@ -231,12 +252,12 @@ export default function BillingTab({ member: initialMember }: { member: any }) {
     const calculatedNet = Math.max(0, origAmt - discAmt + taxAmt + othAmt);
     const net = Number(inv.netPayable !== undefined ? inv.netPayable : (calculatedNet > 0 ? calculatedNet : Number(inv.amount || 0)));
     return s + (isNaN(net) ? 0 : net);
-  }, 0) || Number(member?.totalBilled) || 0;
+  }, 0);
 
-  const totalPaid = invoices.reduce((s, inv) => {
+  const totalPaid = filteredInvoices.reduce((s: number, inv: any) => {
     const paid = Number(inv.amountPaid !== undefined ? inv.amountPaid : (inv.paid !== undefined ? inv.paid : Number(inv.amount || 0)));
     return s + (isNaN(paid) ? 0 : paid);
-  }, 0) || Number(member?.totalPaid) || totalBilled;
+  }, 0);
 
   const totalOutstanding = Math.max(0, totalBilled - totalPaid);
 
@@ -364,9 +385,28 @@ export default function BillingTab({ member: initialMember }: { member: any }) {
               <p className="text-[11px] text-blue-100 font-medium">Complete payment records, invoices, and transaction breakdown</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+
+          <div className="flex items-center gap-3">
+            {/* Filter Tabs: ALL, MEMBERSHIP, PT */}
+            <div className="flex items-center gap-1 bg-blue-900/50 p-1 rounded-xl border border-white/20">
+              {(['all', 'membership', 'pt'] as const).map((bType) => (
+                <button
+                  key={bType}
+                  type="button"
+                  onClick={() => setBillingTypeFilter(bType)}
+                  className={`px-3 py-1 rounded-lg text-xs font-black uppercase tracking-wider transition-all border-none cursor-pointer ${
+                    billingTypeFilter === bType
+                      ? 'bg-white text-blue-900 shadow-sm'
+                      : 'text-blue-100 hover:text-white bg-transparent'
+                  }`}
+                >
+                  {bType === 'all' ? 'ALL' : bType === 'membership' ? 'MEMBERSHIP' : 'PT'}
+                </button>
+              ))}
+            </div>
+
             <span className="text-xs bg-white/20 text-white font-black px-3.5 py-1.5 rounded-full border border-white/20">
-              {member.name} ({invoices.length} Entries)
+              {member.name} ({filteredInvoices.length} Entries)
             </span>
           </div>
         </div>
@@ -391,14 +431,14 @@ export default function BillingTab({ member: initialMember }: { member: any }) {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200 text-slate-800 font-medium">
-              {invoices.length === 0 ? (
+              {filteredInvoices.length === 0 ? (
                 <tr>
                   <td colSpan={12} className="py-16 text-center text-slate-400 font-bold text-sm">
-                    No billing history recorded yet. Click "Create New Bill" to add an entry.
+                    No {billingTypeFilter === 'all' ? 'billing' : billingTypeFilter.toUpperCase()} history recorded yet. Click "Create New Bill" or "+ Add PT Bill" to add an entry.
                   </td>
                 </tr>
               ) : (
-                invoices.map((inv, idx) => {
+                filteredInvoices.map((inv: any, idx: number) => {
                   const invNum = inv.invoiceNumber || inv.invoice || '670';
                   const origItemAmt = Number(inv.originalAmount !== undefined ? inv.originalAmount : (inv.price || inv.amount || 0));
                   const discountAmt = Number(inv.discountAmount !== undefined ? inv.discountAmount : (inv.discount || 0));
@@ -411,9 +451,10 @@ export default function BillingTab({ member: initialMember }: { member: any }) {
                   const pendingAmt = Math.max(0, netPayable - paidAmt);
                   const startDate = inv.startDate || member.joinDate || '20-08-2026';
                   const expiryDate = inv.expiryDate || member.expiryDate || '19-10-2026';
-                  const planTitle = inv.plan || member.plan || 'Gym membership : 2 months';
+                  const planTitle = inv.plan || member.plan || 'Gym membership';
 
                   const displayStatus = pendingAmt <= 0 ? 'PAID' : (paidAmt > 0 ? 'PARTIAL' : 'PENDING');
+                  const isPt = inv.billingType === 'pt';
 
                   return (
                     <tr key={inv.id || idx} className="hover:bg-blue-50/60 transition-colors border-b border-slate-100">
@@ -429,6 +470,20 @@ export default function BillingTab({ member: initialMember }: { member: any }) {
 
                       {/* Item Description & Validity Period */}
                       <td className="px-4 py-4 min-w-[250px]">
+                        <div className="flex items-center gap-1.5 mb-1 flex-wrap">
+                          <span className={`text-[9px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider border ${
+                            isPt
+                              ? 'bg-amber-100 text-amber-900 border-amber-300'
+                              : 'bg-blue-100 text-blue-800 border-blue-300'
+                          }`}>
+                            {isPt ? 'PERSONAL TRAINING' : 'MEMBERSHIP'}
+                          </span>
+                          {isPt && (inv.trainerName || member.trainer) && (
+                            <span className="text-[10px] font-extrabold text-amber-800 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
+                              Trainer: {inv.trainerName || member.trainer}
+                            </span>
+                          )}
+                        </div>
                         <div className="font-extrabold text-slate-900">{planTitle}</div>
                         <div className="text-[11px] text-slate-500 font-mono mt-0.5">({startDate} to {expiryDate})</div>
                       </td>

@@ -3,8 +3,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import {
-  Activity, Calendar, CreditCard, ShieldCheck, CheckCircle2,
-  Clock, MapPin, Zap, User, Sparkles, AlertCircle, ChevronDown
+  Activity, Calendar, CreditCard, ShieldCheck, Dumbbell,
+  Clock, MapPin, Zap, User, ChevronDown, AlertCircle
 } from 'lucide-react';
 import { db } from '@/lib/firebase';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
@@ -87,10 +87,14 @@ export default function ActivityTimelineTab({ member }: { member: any }) {
     if (!member) return [];
 
     const events: any[] = [];
+    const processedInvoiceNums = new Set<string>();
 
-    // A. REAL PAYMENT EVENTS (from payments collection)
+    // A. REAL PAYMENT & PT BILLING EVENTS (Primary single source of truth for billing transactions)
     paymentsList.forEach((p: any) => {
-      const invNum = p.invoiceNumber || p.invoice || 'INV-000';
+      const invNum = (p.invoiceNumber || p.invoice || p.id || 'INV-000').trim();
+      processedInvoiceNums.add(invNum);
+      if (p.id) processedInvoiceNums.add(p.id.trim());
+
       const origAmt = Number(p.originalAmount !== undefined ? p.originalAmount : (p.price || p.amount || 0));
       const discAmt = Number(p.discountAmount !== undefined ? p.discountAmount : (p.discount || 0));
       const taxAmt = Number(p.taxAmount !== undefined ? p.taxAmount : (p.tax || p.gst || 0));
@@ -102,47 +106,89 @@ export default function ActivityTimelineTab({ member }: { member: any }) {
       const pendingAmt = Math.max(0, netPayable - paidAmt);
 
       const rawDate = p.date || p.createdAt || member?.joinDate || new Date().toISOString();
-      const planTitle = cleanPlanName(p.plan || member?.plan || 'Gym Membership');
+      const isPt = p.billingType === 'pt';
 
-      events.push({
-        id: `pay_${p.id || invNum}`,
-        category: 'payments',
-        type: 'PAYMENT RECEIVED',
-        title: planTitle,
-        date: rawDate,
-        time: p.createdAt ? formatTime(p.createdAt) : '10:30 AM',
-        invoice: invNum,
-        startDate: p.startDate || member?.startDate || 'N/A',
-        expiryDate: p.expiryDate || member?.expiryDate || 'N/A',
-        originalAmount: origAmt,
-        discountAmount: discAmt,
-        taxAmount: taxAmt,
-        netPayable,
-        amountPaid: paidAmt,
-        pendingAmount: pendingAmt,
-        paymentMethod: p.method || p.paymentMethod || 'UPI',
-        status: pendingAmt <= 0 ? 'PAID' : (paidAmt > 0 ? 'PARTIAL' : 'PENDING'),
-        icon: CreditCard,
-        color: 'bg-emerald-500 text-white',
-        badgeBg: 'bg-emerald-100 text-emerald-800 border-emerald-300',
-        rawTimestamp: new Date(rawDate).getTime(),
-      });
+      if (isPt) {
+        // SPECIALIZED PT PURCHASE TIMELINE EVENT
+        events.push({
+          id: `pt_pay_${p.id || invNum}`,
+          category: 'payments',
+          subCategory: 'pt',
+          type: 'PERSONAL TRAINING PURCHASE',
+          title: p.package || p.plan || 'Personal Training',
+          trainerName: p.trainerName || member?.trainer || 'Assigned Trainer',
+          sessionCount: p.sessionCount || 12,
+          usedSessions: p.usedSessions || 0,
+          remainingSessions: p.remainingSessions || p.sessionCount || 12,
+          date: rawDate,
+          time: p.createdAt ? formatTime(p.createdAt) : '11:00 AM',
+          invoice: invNum,
+          startDate: p.ptStartDate || p.startDate || 'N/A',
+          expiryDate: p.ptEndDate || p.expiryDate || 'N/A',
+          originalAmount: origAmt,
+          discountAmount: discAmt,
+          taxAmount: taxAmt,
+          netPayable,
+          amountPaid: paidAmt,
+          pendingAmount: pendingAmt,
+          paymentMethod: p.method || p.paymentMethod || 'UPI',
+          status: pendingAmt <= 0 ? 'PAID' : (paidAmt > 0 ? 'PARTIAL' : 'PENDING'),
+          icon: Dumbbell,
+          color: 'bg-amber-600 text-white',
+          badgeBg: 'bg-amber-100 text-amber-900 border-amber-300',
+          rawTimestamp: new Date(rawDate).getTime(),
+        });
+      } else {
+        // STANDARD MEMBERSHIP PAYMENT TIMELINE EVENT
+        const planTitle = cleanPlanName(p.plan || member?.plan || 'Gym Membership');
+        events.push({
+          id: `pay_${p.id || invNum}`,
+          category: 'payments',
+          subCategory: 'membership',
+          type: 'PAYMENT RECEIVED',
+          title: planTitle,
+          date: rawDate,
+          time: p.createdAt ? formatTime(p.createdAt) : '10:30 AM',
+          invoice: invNum,
+          startDate: p.startDate || member?.startDate || 'N/A',
+          expiryDate: p.expiryDate || member?.expiryDate || 'N/A',
+          originalAmount: origAmt,
+          discountAmount: discAmt,
+          taxAmount: taxAmt,
+          netPayable,
+          amountPaid: paidAmt,
+          pendingAmount: pendingAmt,
+          paymentMethod: p.method || p.paymentMethod || 'UPI',
+          status: pendingAmt <= 0 ? 'PAID' : (paidAmt > 0 ? 'PARTIAL' : 'PENDING'),
+          icon: CreditCard,
+          color: 'bg-emerald-500 text-white',
+          badgeBg: 'bg-emerald-100 text-emerald-800 border-emerald-300',
+          rawTimestamp: new Date(rawDate).getTime(),
+        });
+      }
     });
 
-    // B. REAL MEMBERSHIP HISTORY EVENTS (from member.membershipHistory)
+    // B. NON-PAYMENT MEMBERSHIP EVENTS (Deduplicate against payments to prevent duplicate INITIAL MEMBERSHIP events)
     const historyItems = Array.isArray(member?.membershipHistory) ? member.membershipHistory : [];
     historyItems.forEach((h: any, idx: number) => {
+      const invNum = (h.invoiceId || h.invoiceNumber || h.id || '').trim();
+
+      // STRICT RULE: If this transaction already has a payment event generated above, DO NOT generate a duplicate membership history card!
+      if (invNum && processedInvoiceNums.has(invNum)) {
+        return;
+      }
+
       const planTitle = cleanPlanName(h.plan || h.packageName || member?.plan);
       const rawDate = h.createdAt || h.startDate || member?.joinDate || new Date().toISOString();
 
       events.push({
         id: `mem_hist_${h.id || idx}`,
         category: 'memberships',
-        type: idx === 0 ? 'INITIAL MEMBERSHIP' : 'MEMBERSHIP RENEWAL',
+        type: h.type || (idx === 0 ? 'INITIAL MEMBERSHIP' : 'MEMBERSHIP RENEWAL'),
         title: planTitle,
         date: rawDate,
         time: h.createdAt ? formatTime(h.createdAt) : '10:00 AM',
-        invoice: h.invoiceId || h.invoiceNumber || `INV-HIST-${idx + 1}`,
+        invoice: invNum || `INV-HIST-${idx + 1}`,
         startDate: h.startDate || 'N/A',
         expiryDate: h.expiryDate || 'N/A',
         amountPaid: Number(h.amountPaid || h.amount || 0),
@@ -225,7 +271,7 @@ export default function ActivityTimelineTab({ member }: { member: any }) {
   // Filter events by selected category
   const filteredEvents = useMemo(() => {
     if (filter === 'all') return timelineEvents;
-    return timelineEvents.filter((e) => e.category === filter);
+    return timelineEvents.filter((e) => e.category === filter || (filter === 'memberships' && e.subCategory === 'membership'));
   }, [timelineEvents, filter]);
 
   const visibleEvents = filteredEvents.slice(0, displayCount);
@@ -239,10 +285,10 @@ export default function ActivityTimelineTab({ member }: { member: any }) {
             <div className="p-2.5 bg-indigo-50 text-indigo-600 rounded-2xl">
               <Activity size={22} />
             </div>
-            <h2 className="text-xl font-black text-slate-900 tracking-tight">Activity Timeline &amp; Logs</h2>
+            <h2 className="text-xl font-black text-slate-900 tracking-tight">Activity Timeline &amp; Audit Logs</h2>
           </div>
           <p className="text-xs text-slate-500 font-medium mt-1">
-            Complete real-time audit log of billing payments, membership renewals, biometric gate check-ins, and account events.
+            Deduplicated real-time audit log of payments, PT purchases, membership renewals, and gate access.
           </p>
         </div>
 
@@ -314,8 +360,70 @@ export default function ActivityTimelineTab({ member }: { member: any }) {
 
                   {/* ── TYPE SPECIFIC DETAILED CONTENT ── */}
 
-                  {/* 1. PAYMENT CARD DETAILS */}
-                  {evt.category === 'payments' && (
+                  {/* 1. PT PURCHASE CARD DETAILS */}
+                  {evt.type === 'PERSONAL TRAINING PURCHASE' && (
+                    <div className="space-y-3 pt-1">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <h4 className="text-sm font-black text-slate-900 tracking-tight">{evt.title}</h4>
+                          <p className="text-xs text-slate-600 font-medium mt-0.5">
+                            Assigned Trainer: <strong className="text-amber-800 font-extrabold">{evt.trainerName}</strong>
+                          </p>
+                          <p className="text-xs text-slate-500 font-medium mt-0.5">
+                            Validity Period: <strong className="font-mono text-slate-700">{evt.startDate} → {evt.expiryDate}</strong>
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <span className="text-lg font-black text-amber-600 font-mono">₹{evt.amountPaid.toLocaleString('en-IN')}</span>
+                          <span className="text-[10px] font-bold text-slate-400 block uppercase">Paid ({evt.paymentMethod})</span>
+                        </div>
+                      </div>
+
+                      {/* Sessions Breakdown */}
+                      <div className="bg-amber-50/80 border border-amber-200/80 rounded-2xl p-3 flex items-center justify-between text-xs font-bold">
+                        <span className="text-amber-900">Total Sessions: <b className="font-mono text-amber-950">{evt.sessionCount}</b></span>
+                        <span className="text-emerald-700">Used Sessions: <b className="font-mono">{evt.usedSessions}</b></span>
+                        <span className="text-indigo-700">Remaining Sessions: <b className="font-mono">{evt.remainingSessions}</b></span>
+                      </div>
+
+                      {/* Financial Breakdown Table */}
+                      <div className="bg-white rounded-2xl p-3 border border-slate-200/80 grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2 text-xs font-mono">
+                        <div>
+                          <span className="text-[10px] font-bold text-slate-400 uppercase block">Original</span>
+                          <span className="font-bold text-slate-800">₹{evt.originalAmount.toLocaleString('en-IN')}</span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] font-bold text-slate-400 uppercase block">Discount</span>
+                          <span className="font-bold text-emerald-600">₹{evt.discountAmount.toLocaleString('en-IN')}</span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] font-bold text-slate-400 uppercase block">Tax</span>
+                          <span className="font-bold text-slate-600">₹{evt.taxAmount.toLocaleString('en-IN')}</span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] font-bold text-slate-400 uppercase block">Net Payable</span>
+                          <span className="font-black text-slate-900">₹{evt.netPayable.toLocaleString('en-IN')}</span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] font-bold text-slate-400 uppercase block">Amount Paid</span>
+                          <span className="font-black text-amber-600">₹{evt.amountPaid.toLocaleString('en-IN')}</span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] font-bold text-slate-400 uppercase block">Pending</span>
+                          <span className={`font-bold ${evt.pendingAmount > 0 ? 'text-red-500' : 'text-slate-400'}`}>
+                            ₹{evt.pendingAmount.toLocaleString('en-IN')}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] font-bold text-slate-400 uppercase block">Method</span>
+                          <span className="font-bold text-slate-800">{evt.paymentMethod}</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 2. STANDARD PAYMENT CARD DETAILS */}
+                  {evt.type === 'PAYMENT RECEIVED' && (
                     <div className="space-y-3 pt-1">
                       <div className="flex justify-between items-start">
                         <div>
@@ -366,7 +474,7 @@ export default function ActivityTimelineTab({ member }: { member: any }) {
                     </div>
                   )}
 
-                  {/* 2. ATTENDANCE CARD DETAILS */}
+                  {/* 3. ATTENDANCE CARD DETAILS */}
                   {evt.category === 'attendance' && (
                     <div className="flex items-center justify-between pt-1">
                       <div>
@@ -382,8 +490,8 @@ export default function ActivityTimelineTab({ member }: { member: any }) {
                     </div>
                   )}
 
-                  {/* 3. MEMBERSHIP CARD DETAILS */}
-                  {evt.category === 'memberships' && (
+                  {/* 4. NON-PAYMENT MEMBERSHIP CARD DETAILS */}
+                  {evt.category === 'memberships' && evt.type !== 'PAYMENT RECEIVED' && evt.type !== 'PERSONAL TRAINING PURCHASE' && (
                     <div className="flex items-center justify-between pt-1">
                       <div>
                         <h4 className="text-sm font-black text-slate-900 tracking-tight">{evt.title}</h4>

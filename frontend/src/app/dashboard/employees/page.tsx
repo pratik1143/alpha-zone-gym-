@@ -8,7 +8,7 @@ import {
   Mail, MapPin, Shield, Cpu, RefreshCw, Eye, Sparkles, Clock, AlertCircle
 } from 'lucide-react';
 import { db } from '@/lib/firebase';
-import { collection, onSnapshot, query, orderBy, doc, addDoc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy, doc, addDoc, updateDoc, deleteDoc, where } from 'firebase/firestore';
 import { formatDate } from '@/lib/utils';
 import API from '@/services/api';
 import toast from 'react-hot-toast';
@@ -413,6 +413,12 @@ function AddEmployeeWizard({ onClose, onSuccess }: { onClose: () => void; onSucc
   const [address, setAddress] = useState('');
   const [avatarUrl, setAvatarUrl] = useState('');
 
+  // Trainer Specific Fields
+  const [specialization, setSpecialization] = useState('Personal Trainer & Strength');
+  const [experience, setExperience] = useState('3 Years');
+  const [certifications, setCertifications] = useState('ACE Certified, CPR');
+  const [bio, setBio] = useState('');
+
   // Biometric details
   const [device, setDevice] = useState('ESSL K90 Pro');
   const [biometricIdType, setBiometricIdType] = useState<'auto' | 'manual'>('auto');
@@ -443,11 +449,16 @@ function AddEmployeeWizard({ onClose, onSuccess }: { onClose: () => void; onSucc
         phone,
         email,
         role,
+        type: role.toLowerCase(),
         branch,
         emergencyContact,
         address,
         avatarUrl,
         device,
+        specialization: role === 'Trainer' ? specialization : '',
+        experience: role === 'Trainer' ? experience : '',
+        certifications: role === 'Trainer' ? certifications : '',
+        bio: role === 'Trainer' ? bio : '',
         biometricId: biometricIdType === 'auto' ? 'auto' : manualBiometricId,
         deviceUserId: biometricIdType === 'auto' ? '' : manualBiometricId,
         todayStatus: 'Absent',
@@ -564,12 +575,67 @@ function AddEmployeeWizard({ onClose, onSuccess }: { onClose: () => void; onSucc
                     onChange={e => setRole(e.target.value)}
                     className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:border-indigo-500 focus:bg-white text-slate-700 font-semibold cursor-pointer"
                   >
-                    {['Trainer', 'Reception', 'Manager', 'Owner', 'Cleaner', 'Security', 'Nutritionist', 'Sales', 'Custom'].map(r => (
+                    {['Manager', 'Reception', 'Trainer', 'Accountant', 'Staff', 'Other'].map(r => (
                       <option key={r} value={r}>{r}</option>
                     ))}
                   </select>
                 </div>
               </div>
+
+              {/* TRAINER SPECIFIC DETAILS SECTION */}
+              {role === 'Trainer' && (
+                <div className="bg-amber-50/70 border border-amber-200/80 rounded-2xl p-3.5 space-y-3">
+                  <h4 className="text-[10px] font-black text-amber-900 uppercase tracking-wider flex items-center gap-1.5">
+                    <Sparkles size={12} className="text-amber-600" /> Trainer Professional Details
+                  </h4>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[8px] font-black uppercase tracking-wider text-slate-500 mb-1">Specialization</label>
+                      <input 
+                        type="text" 
+                        placeholder="e.g. Weight Loss, Strength & Conditioning" 
+                        value={specialization}
+                        onChange={e => setSpecialization(e.target.value)}
+                        className="w-full text-xs bg-white border border-amber-200 rounded-xl px-3 py-2 focus:outline-none text-slate-800 font-bold"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[8px] font-black uppercase tracking-wider text-slate-500 mb-1">Experience</label>
+                      <input 
+                        type="text" 
+                        placeholder="e.g. 5 Years" 
+                        value={experience}
+                        onChange={e => setExperience(e.target.value)}
+                        className="w-full text-xs bg-white border border-amber-200 rounded-xl px-3 py-2 focus:outline-none text-slate-800 font-bold"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[8px] font-black uppercase tracking-wider text-slate-500 mb-1">Certifications</label>
+                      <input 
+                        type="text" 
+                        placeholder="e.g. ACE Certified, CPR First Aid" 
+                        value={certifications}
+                        onChange={e => setCertifications(e.target.value)}
+                        className="w-full text-xs bg-white border border-amber-200 rounded-xl px-3 py-2 focus:outline-none text-slate-800 font-bold"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[8px] font-black uppercase tracking-wider text-slate-500 mb-1">Bio / About</label>
+                      <input 
+                        type="text" 
+                        placeholder="Short trainer bio" 
+                        value={bio}
+                        onChange={e => setBio(e.target.value)}
+                        className="w-full text-xs bg-white border border-amber-200 rounded-xl px-3 py-2 focus:outline-none text-slate-800 font-bold"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -863,6 +929,135 @@ function EditEmployeeModal({ employee, onClose, onSuccess }: { employee: any, on
   );
 }
 
+// ─── TRAINER PROFILE CARD COMPONENT ───
+function TrainerProfileCard({ employee }: { employee: any }) {
+  const [assignedMembers, setAssignedMembers] = useState<any[]>([]);
+  const [ptPayments, setPtPayments] = useState<any[]>([]);
+
+  const empId = employee.id || employee.employeeId;
+  const empName = String(employee.name || '').trim().toLowerCase();
+
+  useEffect(() => {
+    const qMem = collection(db, 'members');
+    const unsubMem = onSnapshot(qMem, (snap) => {
+      const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const assigned = list.filter((m: any) => {
+        const mTrainerId = m.trainerId || m.ptTrainerId;
+        const mTrainerName = String(m.trainerName || m.trainer || '').trim().toLowerCase();
+        if (empId && mTrainerId === empId) return true;
+        if (empName && mTrainerName === empName) return true;
+        return false;
+      });
+      setAssignedMembers(assigned);
+    });
+
+    const qPay = query(collection(db, 'payments'), where('billingType', '==', 'pt'));
+    const unsubPay = onSnapshot(qPay, (snap) => {
+      const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const trainerPt = list.filter((p: any) => {
+        const pTrainerId = p.trainerId;
+        const pTrainerName = String(p.trainerName || '').trim().toLowerCase();
+        if (empId && pTrainerId === empId) return true;
+        if (empName && pTrainerName === empName) return true;
+        return false;
+      });
+      setPtPayments(trainerPt);
+    });
+
+    return () => {
+      unsubMem();
+      unsubPay();
+    };
+  }, [empId, empName]);
+
+  const totalPtRevenue = ptPayments.reduce((s, p) => s + (Number(p.amountPaid || p.paid || 0)), 0);
+
+  const now = new Date();
+  const currentMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const currentMonthRevenue = ptPayments
+    .filter(p => (p.date || p.createdAt || '').startsWith(currentMonthStr))
+    .reduce((s, p) => s + (Number(p.amountPaid || p.paid || 0)), 0);
+
+  const activePtClients = assignedMembers.filter(m => (m.ptHistory && m.ptHistory.length > 0) || (m.plan && String(m.plan).toLowerCase().includes('pt')));
+
+  return (
+    <div className="space-y-4 text-xs font-semibold bg-amber-50/60 border border-amber-200/80 rounded-3xl p-4">
+      <div className="flex items-center justify-between">
+        <h4 className="text-[10px] font-black text-amber-900 uppercase tracking-wider flex items-center gap-1.5">
+          <Sparkles size={13} className="text-amber-600" /> Personal Trainer Metrics
+        </h4>
+        <span className="px-2 py-0.5 bg-amber-100 text-amber-800 rounded-md text-[9px] font-bold">
+          {employee.specialization || 'PT Trainer'}
+        </span>
+      </div>
+
+      {/* Professional Specs */}
+      <div className="grid grid-cols-2 gap-2 text-[10px]">
+        <div className="bg-white/80 p-2 rounded-xl border border-amber-100">
+          <span className="text-slate-400 font-bold block">Experience</span>
+          <span className="text-slate-800 font-black">{employee.experience || '3 Years'}</span>
+        </div>
+        <div className="bg-white/80 p-2 rounded-xl border border-amber-100">
+          <span className="text-slate-400 font-bold block">Certifications</span>
+          <span className="text-slate-800 font-black">{employee.certifications || 'ACE Certified'}</span>
+        </div>
+      </div>
+
+      {/* 4 Metric Cards */}
+      <div className="grid grid-cols-2 gap-2 font-mono">
+        <div className="bg-white p-3 rounded-2xl border border-amber-200 shadow-sm">
+          <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Assigned Members</span>
+          <span className="text-lg font-black text-slate-900">{assignedMembers.length}</span>
+        </div>
+        <div className="bg-white p-3 rounded-2xl border border-amber-200 shadow-sm">
+          <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Active PT Clients</span>
+          <span className="text-lg font-black text-indigo-600">{activePtClients.length}</span>
+        </div>
+        <div className="bg-white p-3 rounded-2xl border border-amber-200 shadow-sm">
+          <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Total PT Revenue</span>
+          <span className="text-sm font-black text-emerald-600">₹{totalPtRevenue.toLocaleString('en-IN')}</span>
+        </div>
+        <div className="bg-white p-3 rounded-2xl border border-amber-200 shadow-sm">
+          <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">This Month PT</span>
+          <span className="text-sm font-black text-amber-700">₹{currentMonthRevenue.toLocaleString('en-IN')}</span>
+        </div>
+      </div>
+
+      {/* Assigned Members List */}
+      <div>
+        <span className="text-[10px] font-black text-amber-900 uppercase tracking-wider block mb-2">
+          Assigned Gym Members ({assignedMembers.length})
+        </span>
+        <div className="max-h-40 overflow-y-auto space-y-1.5 custom-scrollbar">
+          {assignedMembers.length === 0 ? (
+            <div className="p-3 text-center text-slate-400 font-medium text-[11px] bg-white/60 rounded-xl">
+              No members currently assigned to this trainer.
+            </div>
+          ) : (
+            assignedMembers.map((m) => (
+              <a
+                key={m.id}
+                href={`/dashboard/members/${m.id}`}
+                className="flex items-center justify-between p-2 bg-white hover:bg-amber-100/50 rounded-xl border border-amber-100 transition-colors text-slate-800 no-underline"
+              >
+                <div>
+                  <div className="font-bold text-xs">{m.name}</div>
+                  <div className="text-[10px] text-slate-400 font-mono">Plan: {m.plan || 'Standard'}</div>
+                </div>
+                <div className="text-right">
+                  <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-100">
+                    View Profile →
+                  </span>
+                </div>
+              </a>
+            ))
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── EMPLOYEE PROFILE DRAWER COMPONENT ───
 function EmployeeProfileDrawer({ employee, attendance, onClose, onWhatsApp }: { employee: any, attendance: any[], onClose: () => void, onWhatsApp?: (emp: any) => void }) {
   const avatar = employee.avatarUrl || `https://api.dicebear.com/7.x/adventurer/svg?seed=${employee.name?.replace(/ /g, '')}`;
@@ -943,6 +1138,11 @@ function EmployeeProfileDrawer({ employee, attendance, onClose, onWhatsApp }: { 
               <span className="text-slate-800 font-bold">{employee.address || '—'}</span>
             </div>
           </div>
+
+          {/* ── TRAINER PROFILE SECTION (For Trainer Employees) ── */}
+          {(String(employee.role || '').toLowerCase().includes('trainer') || String(employee.type || '').toLowerCase().includes('trainer')) && (
+            <TrainerProfileCard employee={employee} />
+          )}
 
           {/* Today's Status Banner */}
           <div className="space-y-3.5 text-xs">

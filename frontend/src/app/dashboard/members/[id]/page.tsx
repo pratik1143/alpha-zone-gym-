@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   ArrowLeft, Edit3, Shield, Activity, Droplets, Calendar,
   Clock, DollarSign, MessageSquare, Phone, Mail, Printer, Download,
-  Trash2, Snowflake, Repeat, Sparkles, AlertCircle, Bell, ChevronRight, Camera, User
+  Trash2, Snowflake, Repeat, Sparkles, AlertCircle, Bell, ChevronRight, Camera, User, Dumbbell
 } from 'lucide-react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { db } from '@/lib/firebase';
@@ -19,6 +19,8 @@ import { useGymStore } from '@/store';
 import MemberAvatar from '../../components/MemberAvatar';
 import SmartPhotoCapture from '../../components/SmartPhotoCapture';
 import RenewalWizardModal from '../components/RenewalWizardModal';
+import TrainerSelectorDropdown from '../components/TrainerSelectorDropdown';
+import PtBillingModal from '../components/PtBillingModal';
 
 // Tabs
 import ProfileTab from './components/ProfileTab';
@@ -44,6 +46,7 @@ export default function ClientProfileSystem() {
   const [memberInvoices, setMemberInvoices] = useState<any[]>([]);
   const [showPhotoModal, setShowPhotoModal] = useState(false);
   const [showRenewalModal, setShowRenewalModal] = useState(false);
+  const [showPtModal, setShowPtModal] = useState(false);
 
   useEffect(() => {
     if (searchParams && searchParams.get('renew') === 'true') {
@@ -348,13 +351,25 @@ export default function ClientProfileSystem() {
                 </div>
               </div>
               <div>
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Assigned Trainer</span>
-                <div className="flex items-center gap-1.5 text-sm font-black text-slate-700"><User size={16} className="text-slate-400" /> {member.trainer || 'Unassigned'}</div>
+                <TrainerSelectorDropdown
+                  member={member}
+                  onTrainerUpdated={({ trainerId, trainerName }) => {
+                    setMember((prev: any) => ({ ...prev, trainerId, trainerName, trainer: trainerName }));
+                  }}
+                />
               </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 self-start">
+          <div className="flex items-center gap-2 self-start flex-wrap">
+            <button
+              onClick={() => setShowPtModal(true)}
+              className="py-2.5 px-4 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 rounded-xl flex justify-center items-center gap-1.5 text-xs font-black transition-all cursor-pointer shadow-sm active:scale-95"
+              title="Add Personal Training Bill"
+            >
+              <Dumbbell size={16} className="text-amber-600" /> + Add PT Bill
+            </button>
+
             <button
               onClick={() => {
                 const rawPhone = (member.phone || '').replace(/\D/g, '');
@@ -454,6 +469,17 @@ export default function ClientProfileSystem() {
         isOpen={showRenewalModal}
         member={member}
         onClose={() => setShowRenewalModal(false)}
+      />
+
+      {/* ── PT BILLING MODAL ── */}
+      <PtBillingModal
+        isOpen={showPtModal}
+        member={member}
+        onClose={() => setShowPtModal(false)}
+        onSaved={() => {
+          useGymStore.getState().fetchMembers();
+          useGymStore.getState().fetchPayments();
+        }}
       />
     </div>
   );
