@@ -86,10 +86,52 @@ export default function ClientProfileSystem() {
     }
   };
 
+  const [realAttendanceCount, setRealAttendanceCount] = useState<number>(0);
+
+  // ── Real-time listener for member attendance logs ───────────
+  useEffect(() => {
+    if (!id && !member) return;
+    let isMounted = true;
+
+    const qAtt = collection(db, 'attendance_logs');
+    const unsub = onSnapshot(qAtt, (snap) => {
+      if (!isMounted) return;
+      const rawLogs = snap.docs.map(d => d.data());
+      const mId = member?.id || member?.uid || member?.memberId || id;
+      const mBioId = member?.biometricId || member?.deviceUserId || '';
+      const mPhone = member?.phone ? String(member.phone).replace(/\D/g, '') : '';
+      const mName = String(member?.name || '').trim().toLowerCase();
+
+      const count = rawLogs.filter((log: any) => {
+        if (!log || log.status === 'duplicate') return false;
+        const lMemberId = String(log.memberId || log.memberCode || log.uid || '').trim();
+        const lBioId = String(log.biometricId || log.deviceUserId || log.bioId || '').trim();
+        const lPhone = log.phone ? String(log.phone).replace(/\D/g, '') : '';
+        const lName = String(log.memberName || '').trim().toLowerCase();
+
+        if (mId && lMemberId === String(mId).trim()) return true;
+        if (mBioId && lBioId === String(mBioId).trim()) return true;
+        if (mPhone && lPhone && mPhone === lPhone) return true;
+        if (mName && lName && mName === lName) return true;
+        return false;
+      }).length;
+
+      setRealAttendanceCount(count);
+    }, (error) => {
+      console.warn("Member attendance count snapshot notice:", error.message);
+    });
+
+    return () => {
+      isMounted = false;
+      unsub();
+    };
+  }, [id, member]);
+
   // ── ENGINE DERIVED VALUES (Single Source of Truth) ──────────────
+  const effectiveAttendanceCount = realAttendanceCount || Number(member?.attendanceCount) || 0;
   const daysLeft       = member ? membershipEngine.calculateDaysLeft(member.expiryDate) : 0;
   const riskLevel      = membershipEngine.calculateRenewalRisk(daysLeft);
-  const attendancePct  = member ? calculateRealAttendance(member.joinDate, member.attendanceCount || 0) : 0;
+  const attendancePct  = member ? calculateRealAttendance(member.joinDate, effectiveAttendanceCount) : 0;
   const healthScore    = membershipEngine.calculateHealthScore(daysLeft, attendancePct);
 
   // Payment totals from invoices (Single Source of Truth)
