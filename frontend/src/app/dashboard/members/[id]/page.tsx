@@ -27,10 +27,9 @@ import ProfileTab from './components/ProfileTab';
 import BillingTab from './components/BillingTab';
 import CommunicationTab from './components/CommunicationTab';
 import AttendanceTab from './components/AttendanceTab';
-import ActivityTimelineTab from './components/ActivityTimelineTab';
 
 const TABS = [
-  'Profile', 'Billing', 'Communication', 'Attendance', 'Activity Timeline'
+  'Profile', 'Billing', 'Communication', 'Attendance'
 ];
 
 export default function ClientProfileSystem() {
@@ -418,7 +417,6 @@ export default function ClientProfileSystem() {
             {activeTab === 'Billing' && <BillingTab member={member} />}
             {activeTab === 'Communication' && <CommunicationTab member={member} />}
             {activeTab === 'Attendance' && <AttendanceTab member={member} />}
-            {activeTab === 'Activity Timeline' && <ActivityTimelineTab member={member} />}
           </motion.div>
         </AnimatePresence>
       </div>
