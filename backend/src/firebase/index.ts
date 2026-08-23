@@ -1925,8 +1925,13 @@ export const db = {
 
   addTrainer: async (trainer: any): Promise<any> => {
     const firestore = getFirestoreDb();
+    const cleanPhone = trainer.phone ? String(trainer.phone).trim() : '';
+    const cleanEmail = trainer.email ? String(trainer.email).trim().toLowerCase() : '';
+
     const newTrainer = {
       ...trainer,
+      phone: cleanPhone,
+      email: cleanEmail,
       rating: Number(trainer.rating) || 4.8,
       members: Number(trainer.members) || 0,
       sessions: Number(trainer.sessions) || 0,
@@ -1936,10 +1941,86 @@ export const db = {
       certifications: Array.isArray(trainer.certifications) ? trainer.certifications : 
                       typeof trainer.certifications === 'string' ? trainer.certifications.split(',').map((c: string) => c.trim()) : []
     };
+
     if (firestore) {
+      // 1. Check for duplicate trainer by phone
+      if (cleanPhone) {
+        const dupSnap = await firestore.collection('trainers').where('phone', '==', cleanPhone).get();
+        if (!dupSnap.empty) {
+          throw new Error(`Trainer with phone number ${cleanPhone} already exists.`);
+        }
+      }
+
+      // 2. Create Trainer Document
       const docRef = await firestore.collection('trainers').add(newTrainer);
-      return { id: docRef.id, ...newTrainer };
+      const trainerId = docRef.id;
+
+      // 3. Automatically sync/create employee record in 'employees' collection
+      let employeeId = '';
+      try {
+        let existingEmpDocId: string | null = null;
+        if (cleanPhone) {
+          const empSnap = await firestore.collection('employees').where('phone', '==', cleanPhone).get();
+          if (!empSnap.empty) existingEmpDocId = empSnap.docs[0].id;
+        }
+        if (!existingEmpDocId && cleanEmail) {
+          const empSnapEmail = await firestore.collection('employees').where('email', '==', cleanEmail).get();
+          if (!empSnapEmail.empty) existingEmpDocId = empSnapEmail.docs[0].id;
+        }
+
+        const employeePayload: any = {
+          name: newTrainer.name,
+          phone: cleanPhone,
+          email: cleanEmail || `${cleanPhone || Date.now()}@alphagym.com`,
+          role: 'Trainer',
+          designation: 'Trainer',
+          department: 'Fitness / Training',
+          branch: newTrainer.branch || 'Mohali, Punjab',
+          specialization: newTrainer.specialization || '',
+          experience: newTrainer.experience || 1,
+          salary: newTrainer.salary || 30000,
+          joiningDate: newTrainer.joiningDate || new Date().toISOString().split('T')[0],
+          status: newTrainer.status === 'inactive' ? 'Inactive' : 'Active',
+          trainerId: trainerId,
+          photo: newTrainer.photo || '',
+          avatarUrl: newTrainer.photo || '',
+          biometricId: newTrainer.biometricId || null,
+          updatedAt: new Date().toISOString()
+        };
+
+        if (existingEmpDocId) {
+          employeeId = existingEmpDocId;
+          await firestore.collection('employees').doc(existingEmpDocId).update(employeePayload);
+        } else {
+          // Find max biometric ID or set 500+ for employees
+          const allEmps = await firestore.collection('employees').get();
+          let maxBid = 500;
+          allEmps.forEach(d => {
+            const bid = Number(d.data().biometricId);
+            if (!isNaN(bid) && bid > maxBid) maxBid = bid;
+          });
+          const biometricId = newTrainer.biometricId || (maxBid + 1);
+
+          const newEmpRef = await firestore.collection('employees').add({
+            ...employeePayload,
+            biometricId,
+            todayStatus: 'Absent',
+            currentStatus: 'Outside',
+            lastPunch: null,
+            createdAt: new Date().toISOString()
+          });
+          employeeId = newEmpRef.id;
+        }
+
+        // Link employeeId back to trainer document
+        await firestore.collection('trainers').doc(trainerId).update({ employeeId });
+      } catch (empSyncErr) {
+        console.error('Failed to sync trainer to employees collection:', empSyncErr);
+      }
+
+      return { id: trainerId, employeeId, ...newTrainer };
     }
+
     const id = 't' + (mockTrainers.length + 1);
     const finalTrainer = { id, ...newTrainer };
     mockTrainers.push(finalTrainer);
@@ -1954,7 +2035,40 @@ export const db = {
     if (firestore) {
       await firestore.collection('trainers').doc(id).update(updates);
       const doc = await firestore.collection('trainers').doc(id).get();
-      return { id: doc.id, ...doc.data() };
+      const updatedTrainerData = { id: doc.id, ...doc.data() };
+
+      // Sync updates to linked employee document if present
+      try {
+        const empId = (updatedTrainerData as any).employeeId;
+        const phone = updatedTrainerData.phone;
+        let empDocRef: any = null;
+
+        if (empId) {
+          empDocRef = firestore.collection('employees').doc(empId);
+        } else if (phone) {
+          const empSnap = await firestore.collection('employees').where('phone', '==', phone).get();
+          if (!empSnap.empty) empDocRef = empSnap.docs[0].ref;
+        }
+
+        if (empDocRef) {
+          const empUpdates: any = {};
+          if (updates.name) empUpdates.name = updates.name;
+          if (updates.phone) empUpdates.phone = updates.phone;
+          if (updates.email) empUpdates.email = updates.email;
+          if (updates.salary !== undefined) empUpdates.salary = Number(updates.salary);
+          if (updates.joiningDate) empUpdates.joiningDate = updates.joiningDate;
+          if (updates.status) empUpdates.status = updates.status === 'inactive' ? 'Inactive' : 'Active';
+          if (updates.photo) { empUpdates.photo = updates.photo; empUpdates.avatarUrl = updates.photo; }
+          if (updates.specialization) empUpdates.specialization = updates.specialization;
+          empUpdates.updatedAt = new Date().toISOString();
+
+          await empDocRef.update(empUpdates);
+        }
+      } catch (empUpdateErr) {
+        console.error('Failed to sync updated trainer data to employee record:', empUpdateErr);
+      }
+
+      return updatedTrainerData;
     }
     const idx = mockTrainers.findIndex(t => t.id === id);
     if (idx !== -1) {
@@ -1967,7 +2081,23 @@ export const db = {
   deleteTrainer: async (id: string): Promise<boolean> => {
     const firestore = getFirestoreDb();
     if (firestore) {
+      const doc = await firestore.collection('trainers').doc(id).get();
+      const tData = doc.data();
       await firestore.collection('trainers').doc(id).delete();
+
+      // If linked employee doc exists, deactivate or remove it
+      if (tData) {
+        try {
+          if (tData.employeeId) {
+            await firestore.collection('employees').doc(tData.employeeId).delete().catch(() => {});
+          } else if (tData.phone) {
+            const empSnap = await firestore.collection('employees').where('phone', '==', tData.phone).get();
+            empSnap.forEach(d => d.ref.delete().catch(() => {}));
+          }
+        } catch (e) {
+          console.error('Failed to cleanup linked employee on trainer delete:', e);
+        }
+      }
       return true;
     }
     const idx = mockTrainers.findIndex(t => t.id === id);
@@ -2022,6 +2152,7 @@ export const db = {
 
   getPlans: async (): Promise<any[]> => {
     const firestore = getFirestoreDb();
+    let rawPlans: any[] = [];
     if (firestore) {
       const snapshot = await firestore.collection('plans').get();
       if (snapshot.empty) {
@@ -2029,11 +2160,23 @@ export const db = {
         for (const plan of mockPlans) {
           await firestore.collection('plans').doc(plan.id).set(plan);
         }
-        return mockPlans;
+        rawPlans = mockPlans;
+      } else {
+        rawPlans = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       }
-      return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    } else {
+      rawPlans = mockPlans;
     }
-    return mockPlans;
+
+    // Deduplicate plans strictly by normalized name, price, and durationDays
+    const uniqueMap = new Map();
+    rawPlans.forEach(p => {
+      const key = `${(p.name || '').trim().toLowerCase()}_${p.price}_${p.durationDays}`;
+      if (!uniqueMap.has(key)) {
+        uniqueMap.set(key, p);
+      }
+    });
+    return Array.from(uniqueMap.values());
   },
 
   addPlan: async (plan: any): Promise<any> => {

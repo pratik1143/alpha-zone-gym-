@@ -231,7 +231,17 @@ export default function MembershipsPage() {
     setExpiringMembers(members.filter(m => daysUntilExpiry(m.expiryDate) <= 15));
   }, [members]);
 
-  const activePlans = plans && plans.length > 0 ? plans : defaultPlansData;
+  const rawActivePlans = plans && plans.length > 0 ? plans : defaultPlansData;
+
+  // Deduplicate plans strictly by normalized name, price, and durationDays
+  const uniquePlansMap = new Map();
+  rawActivePlans.forEach(p => {
+    const key = `${(p.name || '').trim().toLowerCase()}_${p.price}_${p.durationDays}`;
+    if (!uniquePlansMap.has(key)) {
+      uniquePlansMap.set(key, p);
+    }
+  });
+  const activePlans = Array.from(uniquePlansMap.values());
 
   const filteredPlans = activePlans.filter(p => {
     if (!searchQuery.trim()) return true;
@@ -447,7 +457,7 @@ export default function MembershipsPage() {
                 <div className={`text-[10px] font-black uppercase tracking-widest mb-0.5 ${
                   isInactive ? 'text-slate-400' : 'text-[#0B5CBE]'
                 }`}>
-                  {plan.duration || `${plan.durationDays} days`} ({plan.durationDays} DAYS)
+                  {plan.duration || `${plan.durationDays} Days`}
                 </div>
                 <h3 className="text-[18px] font-extrabold text-slate-900 leading-tight">
                   {plan.name}

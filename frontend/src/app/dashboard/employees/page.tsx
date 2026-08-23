@@ -446,7 +446,7 @@ function AddEmployeeWizard({ onClose, onSuccess }: { onClose: () => void; onSucc
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
-  const [role, setRole] = useState('Trainer');
+  const [role, setRole] = useState('Reception');
   const [branch, setBranch] = useState('Mohali, Punjab');
   const [emergencyContact, setEmergencyContact] = useState('');
   const [address, setAddress] = useState('');
@@ -465,6 +465,10 @@ function AddEmployeeWizard({ onClose, onSuccess }: { onClose: () => void; onSucc
   const [enrollStatus, setEnrollStatus] = useState<'idle' | 'scanning' | 'success'>('idle');
 
   const validateForm = () => {
+    if (role === 'Trainer') {
+      toast.error('Please register trainers from the dedicated Trainers module.');
+      return false;
+    }
     const res = employeeValidationSchema.safeParse({
       name,
       phone,
@@ -692,65 +696,30 @@ function AddEmployeeWizard({ onClose, onSuccess }: { onClose: () => void; onSucc
                     onChange={e => setRole(e.target.value)}
                     className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:border-indigo-500 focus:bg-white text-slate-800 font-semibold cursor-pointer"
                   >
-                    {['Trainer', 'Manager', 'Reception', 'Accountant', 'Staff', 'Other'].map(r => (
+                    {['Reception', 'Manager', 'Accountant', 'Cleaner', 'Security', 'Staff', 'Other', 'Trainer'].map(r => (
                       <option key={r} value={r}>{r}</option>
                     ))}
                   </select>
                 </div>
               </div>
 
-              {/* TRAINER SPECIFIC DETAILS SECTION */}
+              {/* TRAINER SEPARATION REDIRECT NOTICE */}
               {role === 'Trainer' && (
-                <div className="bg-amber-50/70 border border-amber-200/80 rounded-2xl p-4 space-y-3">
-                  <h4 className="text-[10px] font-black text-amber-900 uppercase tracking-wider flex items-center gap-1.5">
-                    <Sparkles size={13} className="text-amber-600" /> Trainer Professional Details
-                  </h4>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-[9px] font-black uppercase tracking-wider text-slate-500 mb-1">Specialization</label>
-                      <input 
-                        type="text" 
-                        placeholder="e.g. Personal Trainer & Strength" 
-                        value={specialization}
-                        onChange={e => setSpecialization(e.target.value)}
-                        className="w-full text-xs bg-white border border-amber-200 rounded-xl px-3 py-2 focus:outline-none text-slate-800 font-bold"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[9px] font-black uppercase tracking-wider text-slate-500 mb-1">Experience</label>
-                      <input 
-                        type="text" 
-                        placeholder="e.g. 3 Years" 
-                        value={experience}
-                        onChange={e => setExperience(e.target.value)}
-                        className="w-full text-xs bg-white border border-amber-200 rounded-xl px-3 py-2 focus:outline-none text-slate-800 font-bold"
-                      />
-                    </div>
+                <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 space-y-2 text-blue-900">
+                  <div className="flex items-center gap-2 text-xs font-black">
+                    <Sparkles size={16} className="text-blue-600 shrink-0" />
+                    <span>Trainers are managed from the Trainers Module</span>
                   </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-[9px] font-black uppercase tracking-wider text-slate-500 mb-1">Certifications</label>
-                      <input 
-                        type="text" 
-                        placeholder="e.g. ACE Certified, CPR First Aid" 
-                        value={certifications}
-                        onChange={e => setCertifications(e.target.value)}
-                        className="w-full text-xs bg-white border border-amber-200 rounded-xl px-3 py-2 focus:outline-none text-slate-800 font-bold"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[9px] font-black uppercase tracking-wider text-slate-500 mb-1">Bio / About</label>
-                      <input 
-                        type="text" 
-                        placeholder="Short trainer bio" 
-                        value={bio}
-                        onChange={e => setBio(e.target.value)}
-                        className="w-full text-xs bg-white border border-amber-200 rounded-xl px-3 py-2 focus:outline-none text-slate-800 font-bold"
-                      />
-                    </div>
-                  </div>
+                  <p className="text-[11px] text-blue-700 font-medium leading-relaxed">
+                    To maintain clean records, create trainer profiles with specializations and client limits in the Trainers module. They will automatically sync to Employees.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => { window.location.href = '/dashboard/trainers'; }}
+                    className="mt-1 px-4 py-2 bg-[#0B5CBE] hover:bg-blue-700 text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-1.5 cursor-pointer shadow-sm transition-all"
+                  >
+                    <ArrowRight size={14} /> Go to Trainers Module
+                  </button>
                 </div>
               )}
 
