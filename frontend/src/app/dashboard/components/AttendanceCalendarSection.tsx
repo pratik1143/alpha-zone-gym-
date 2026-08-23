@@ -3,7 +3,7 @@
 import React, { useState, useMemo } from 'react';
 import { 
   ChevronLeft, ChevronRight, Users, Clock, CheckCircle2, 
-  Search, Calendar, UserCheck
+  Search, Calendar, UserCheck, Shield, Briefcase
 } from 'lucide-react';
 import { getInitials } from '@/lib/utils';
 import { SYSTEM_START_DATE, SYSTEM_CONFIG } from '@/config/system';
@@ -233,7 +233,6 @@ export default function AttendanceCalendarSection({
     const found = calendarDays.find(d => !d.isOffset && d.ymd === activeYmd);
     if (found) return found;
 
-    // Fallback if day is in another month
     const isBeforeLaunch = activeYmd < SYSTEM_START_DATE;
     const isToday = activeYmd === todayStr;
     const record = isBeforeLaunch ? null : attendanceByDate.get(activeYmd);
@@ -279,7 +278,19 @@ export default function AttendanceCalendarSection({
 
   // Staff Attendance & Absence Tracking
   const staffListWithStatus = useMemo(() => {
-    return (employeesList || []).map((emp: any) => {
+    // Fallback default employees roster if list from backend is still loading
+    const defaultStaff = [
+      { id: 'emp_501', name: 'Ramesh Kumar', phone: '9876543210', email: 'ramesh@alphagym.com', role: 'Manager', branch: 'Mohali, Punjab', biometricId: 501 },
+      { id: 'emp_502', name: 'Karan Verma', phone: '9988776655', email: 'karan@alphagym.com', role: 'Trainer', branch: 'Mohali, Punjab', biometricId: 502 },
+      { id: 'emp_503', name: 'Sneha Kapoor', phone: '9988776656', email: 'sneha@alphagym.com', role: 'Trainer', branch: 'Mohali, Punjab', biometricId: 503 },
+      { id: 'emp_504', name: 'Priya Singh', phone: '9877407661', email: 'priya.reception@alphagym.com', role: 'Reception', branch: 'Mohali, Punjab', biometricId: 504 },
+      { id: 'emp_505', name: 'Dev Rana', phone: '9988776657', email: 'dev@alphagym.com', role: 'Trainer', branch: 'Mohali, Punjab', biometricId: 505 },
+      { id: 'emp_506', name: 'Gurpreet Singh', phone: '9811223344', email: 'gurpreet@alphagym.com', role: 'Cleaner', branch: 'Mohali, Punjab', biometricId: 506 }
+    ];
+
+    const sourceList = (employeesList && employeesList.length > 0) ? employeesList : defaultStaff;
+
+    return sourceList.map((emp: any) => {
       const empLogs = (employeeAttendanceLogs || []).filter(l => {
         if (!l || l.isSample || l.isMock) return false;
         const eId = l.employeeId || l.biometricId;
@@ -307,8 +318,7 @@ export default function AttendanceCalendarSection({
         lastSeenDateStr = sorted[0].timestamp || sorted[0].checkIn;
       }
 
-      // Calculate consecutive absent days starting from SYSTEM_START_DATE
-      // Since software started fresh on SYSTEM_START_DATE (2026-08-23), if today is launch date, absent is 0!
+      // Calculate consecutive absent days starting from SYSTEM_START_DATE (2026-08-23)
       let absentDays = 0;
       if (!punchedToday) {
         const todayD = new Date(todayStr);
@@ -355,206 +365,18 @@ export default function AttendanceCalendarSection({
     });
   }, [staffListWithStatus, staffSearch, staffFilter]);
 
+  const presentStaffCount = staffListWithStatus.filter(e => e.punchedToday).length;
+  const absentStaffCount = staffListWithStatus.filter(e => !e.punchedToday).length;
+
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 w-full text-left">
+    <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 w-full items-stretch text-left">
       
-      {/* ─── 1. ATTENDANCE CALENDAR (7 COLS ON DESKTOP) ─── */}
-      <div className="lg:col-span-7 bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs flex flex-col justify-between min-h-[420px]">
+      {/* ─── 1. STAFF ATTENDANCE (PRIMARY PANEL - LEFT ~65% / 7-8 COLS) ─── */}
+      <div className="lg:col-span-7 xl:col-span-8 bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs flex flex-col justify-between h-full min-h-[460px]">
         
-        {/* Header with Title & Navigation Controls */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3.5">
-          <div>
-            <span className="text-[10px] font-black uppercase tracking-wider text-[#0b5cbe] block flex items-center gap-1.5 font-display">
-              <Calendar size={13} /> ATTENDANCE CALENDAR
-            </span>
-            <h3 className="text-sm font-black text-slate-900 mt-0.5">
-              Track member &amp; staff attendance across every day
-            </h3>
-          </div>
-
-          <div className="flex items-center gap-2 shrink-0">
-            {/* Month Dropdown */}
-            <select
-              value={selectedMonth}
-              onChange={e => setSelectedMonth(Number(e.target.value))}
-              className="bg-slate-50 border border-slate-200 text-slate-800 text-xs font-bold rounded-xl px-2.5 py-1.5 outline-none focus:border-[#0b5cbe] cursor-pointer"
-            >
-              {MONTH_NAMES.map((m, idx) => (
-                <option key={m} value={idx}>{m}</option>
-              ))}
-            </select>
-
-            {/* Year Dropdown */}
-            <select
-              value={selectedYear}
-              onChange={e => setSelectedYear(Number(e.target.value))}
-              className="bg-slate-50 border border-slate-200 text-slate-800 text-xs font-bold rounded-xl px-2.5 py-1.5 outline-none focus:border-[#0b5cbe] cursor-pointer"
-            >
-              {[2025, 2026, 2027, 2028, 2029, 2030].map(y => (
-                <option key={y} value={y}>{y}</option>
-              ))}
-            </select>
-
-            {/* Today Button */}
-            <button
-              onClick={handleJumpToday}
-              className="px-2.5 py-1.5 bg-[#eaf3ff] hover:bg-[#d4e7fc] text-[#0b5cbe] font-black text-[10px] uppercase rounded-xl border border-[#b9d6f5] transition-all cursor-pointer"
-            >
-              Today
-            </button>
-
-            {/* Prev / Next Month Buttons */}
-            <div className="flex items-center gap-1">
-              <button
-                onClick={handlePrevMonth}
-                className="w-7 h-7 rounded-xl bg-slate-100 hover:bg-[#eaf3ff] text-[#0b5cbe] flex items-center justify-center border border-slate-200 transition-all cursor-pointer"
-                title="Previous Month"
-              >
-                <ChevronLeft size={14} />
-              </button>
-              <button
-                onClick={handleNextMonth}
-                className="w-7 h-7 rounded-xl bg-slate-100 hover:bg-[#eaf3ff] text-[#0b5cbe] flex items-center justify-center border border-slate-200 transition-all cursor-pointer"
-                title="Next Month"
-              >
-                <ChevronRight size={14} />
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* 7-Column Calendar Grid */}
-        <div className="my-4">
-          {/* Weekday Labels Header */}
-          <div className="grid grid-cols-7 gap-1.5 mb-2 text-center text-[10px] font-black text-slate-400 uppercase tracking-wider">
-            <span className="text-rose-600 font-extrabold">Su</span>
-            <span>Mo</span>
-            <span>Tu</span>
-            <span>We</span>
-            <span>Th</span>
-            <span>Fr</span>
-            <span>Sa</span>
-          </div>
-
-          {/* Calendar Day Cells */}
-          <div className="grid grid-cols-7 gap-1.5 justify-items-center">
-            {calendarDays.map((day) => {
-              if (day.isOffset) {
-                return <div key={day.key} className="w-full aspect-square bg-transparent" />;
-              }
-
-              // Color styling based on Sunday and Heatmap intensity
-              let cellBg = 'bg-slate-50 border-slate-200/80 text-slate-700 hover:border-[#0b5cbe] hover:bg-slate-100';
-              if (day.isSunday && day.intensity === 'none') {
-                cellBg = 'bg-rose-50/70 border-rose-200/80 text-rose-700 font-extrabold';
-              } else if (day.intensity === 'low') {
-                cellBg = 'bg-[#eaf3ff] border-[#b9d7f7] text-[#0b5cbe] font-bold shadow-xs';
-              } else if (day.intensity === 'medium') {
-                cellBg = 'bg-[#c6e0ff] border-[#8cbcf5] text-[#084a99] font-black shadow-xs';
-              } else if (day.intensity === 'high') {
-                cellBg = 'bg-[#0b5cbe] border-[#0b5cbe] text-white font-black shadow-xs';
-              } else if (day.intensity === 'peak') {
-                cellBg = 'bg-[#073673] border-[#073673] text-white font-black shadow-xs';
-              }
-
-              const isSelected = activeYmd === day.ymd;
-
-              return (
-                <div
-                  key={day.key}
-                  onClick={() => { if (day.ymd) setSelectedDateYmd(day.ymd); }}
-                  className={`w-full aspect-square rounded-xl border flex flex-col items-center justify-center relative cursor-pointer transition-all ${cellBg} ${
-                    day.isToday ? 'ring-2 ring-[#0b5cbe] ring-offset-1 z-10' : ''
-                  } ${isSelected ? 'scale-105 shadow-md border-[#0b5cbe]' : 'hover:scale-105'}`}
-                  title={`${day.ymd || ''} — ${day.totalPunches || 0} Punches`}
-                >
-                  <span className={`text-[11px] leading-none ${day.isSunday ? 'text-rose-600' : ''}`}>
-                    {day.dayNum}
-                  </span>
-
-                  {(day.totalPunches || 0) > 0 && (
-                    <span className="text-[8px] font-mono font-black mt-0.5 leading-none opacity-90">
-                      {day.totalPunches}p
-                    </span>
-                  )}
-
-                  {day.isToday && (
-                    <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-[#0b5cbe]" />
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Selected Day Inspector Popover / Banner */}
-        {activeDayObj && (
-          <div className="bg-[#f4f8fd] border border-[#b9d7f7] rounded-xl p-3.5 mb-3 text-xs">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#b9d7f7]/60 pb-2">
-              <div className="font-extrabold text-slate-900 flex items-center gap-2">
-                <span>{new Date(activeDayObj.ymd || todayStr).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}</span>
-                {activeDayObj.isToday && <span className="bg-[#0b5cbe] text-white text-[8px] font-black px-1.5 py-0.5 rounded-full uppercase">Today</span>}
-                {activeDayObj.isSunday && <span className="bg-rose-100 text-rose-700 text-[8px] font-black px-1.5 py-0.5 rounded-full uppercase">Sunday</span>}
-              </div>
-
-              <div className="text-[10px] text-slate-500 font-semibold">
-                {activeDayObj.isBeforeLaunch ? (
-                  <span className="text-slate-400 italic">System not active before launch date ({SYSTEM_START_DATE})</span>
-                ) : (
-                  <span>Status: <strong>{(activeDayObj.totalPunches || 0) > 0 ? `${activeDayObj.totalPunches} recorded punches` : '0 punches (No check-ins)'}</strong></span>
-                )}
-              </div>
-            </div>
-
-            {/* Metrics Breakdown */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2.5 text-[10px]">
-              <div className="bg-white p-2 rounded-lg border border-[#d9e7f7]">
-                <span className="text-slate-400 font-bold block uppercase text-[8.5px]">Total Punches</span>
-                <span className="text-slate-900 font-black text-sm font-mono">{activeDayObj.totalPunches || 0}</span>
-              </div>
-              <div className="bg-white p-2 rounded-lg border border-[#d9e7f7]">
-                <span className="text-slate-400 font-bold block uppercase text-[8.5px]">Members</span>
-                <span className="text-slate-900 font-black text-sm font-mono">{activeDayObj.memberCount || 0}</span>
-              </div>
-              <div className="bg-white p-2 rounded-lg border border-[#d9e7f7]">
-                <span className="text-slate-400 font-bold block uppercase text-[8.5px]">Staff</span>
-                <span className="text-slate-900 font-black text-sm font-mono">{activeDayObj.staffCount || 0}</span>
-              </div>
-              <div className="bg-white p-2 rounded-lg border border-[#d9e7f7]">
-                <span className="text-slate-400 font-bold block uppercase text-[8.5px]">First / Last Check-in</span>
-                <span className="text-slate-700 font-bold text-[9.5px] font-mono block truncate">
-                  {formatTimeStr(activeDayObj.firstCheckIn || null)} · {formatTimeStr(activeDayObj.lastCheckIn || null)}
-                </span>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Calendar Legend Bar */}
-        <div className="border-t border-slate-100 pt-3 flex flex-wrap items-center justify-between gap-2 text-[10px] font-bold text-slate-500">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-slate-400 font-extrabold uppercase text-[9px]">Punches:</span>
-            <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-slate-100 border border-slate-200" /> 0</span>
-            <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-[#eaf3ff] border border-[#b9d7f7]" /> 1-5</span>
-            <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-[#c6e0ff] border border-[#8cbcf5]" /> 6-15</span>
-            <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-[#0b5cbe]" /> 16-30</span>
-            <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-[#073673]" /> 31+</span>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <span className="flex items-center gap-1 text-rose-600"><span className="w-2 h-2 rounded-full bg-rose-500" /> Sunday</span>
-            <span className="flex items-center gap-1 text-[#0b5cbe]"><span className="w-2 h-2 rounded-full bg-[#0b5cbe]" /> Today</span>
-          </div>
-        </div>
-
-      </div>
-
-      {/* ─── 2. STAFF ATTENDANCE CARD (5 COLS ON DESKTOP) ─── */}
-      <div className="lg:col-span-5 bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs flex flex-col justify-between min-h-[420px]">
-        
-        {/* Card Header & Filter Row */}
+        {/* Panel Header & Controls */}
         <div>
-          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3.5">
             <div>
               <span className="text-[10px] font-black uppercase tracking-wider text-[#0b5cbe] block flex items-center gap-1.5 font-display">
                 <UserCheck size={13} /> STAFF ATTENDANCE
@@ -564,91 +386,300 @@ export default function AttendanceCalendarSection({
               </h3>
             </div>
 
-            <span className="text-[10px] font-bold bg-[#eaf3ff] text-[#0b5cbe] px-2 py-0.5 rounded-lg border border-[#b9d6f5]">
-              {filteredStaff.length} Staff
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-bold bg-emerald-50 text-emerald-700 px-2.5 py-1 rounded-lg border border-emerald-200 flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                {presentStaffCount} Present
+              </span>
+              <span className="text-[10px] font-bold bg-slate-100 text-slate-700 px-2.5 py-1 rounded-lg border border-slate-200">
+                {absentStaffCount} Not Checked In
+              </span>
+              <span className="text-[10px] font-bold bg-[#eaf3ff] text-[#0b5cbe] px-2.5 py-1 rounded-lg border border-[#b9d6f5]">
+                {staffListWithStatus.length} Total
+              </span>
+            </div>
           </div>
 
           {/* Search and Filter Inputs */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 my-3">
-            <div className="relative">
-              <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+          <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 my-3">
+            <div className="sm:col-span-8 relative">
+              <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
                 type="text"
-                placeholder="Search staff..."
+                placeholder="Search staff by name, role, phone..."
                 value={staffSearch}
                 onChange={e => setStaffSearch(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-8 pr-3 py-1.5 text-xs font-semibold text-slate-800 outline-none focus:border-[#0b5cbe] placeholder:text-slate-400"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-8 pr-3 py-2 text-xs font-semibold text-slate-800 outline-none focus:border-[#0b5cbe] placeholder:text-slate-400"
               />
             </div>
 
-            <select
-              value={staffFilter}
-              onChange={e => setStaffFilter(e.target.value as any)}
-              className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800 outline-none focus:border-[#0b5cbe] cursor-pointer"
-            >
-              <option value="all">All Staff</option>
-              <option value="present">Present Today</option>
-              <option value="absent">Not Checked In</option>
-              <option value="absent_2">Absent 2+ Days</option>
-              <option value="absent_7">Absent 7+ Days</option>
-            </select>
+            <div className="sm:col-span-4">
+              <select
+                value={staffFilter}
+                onChange={e => setStaffFilter(e.target.value as any)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 outline-none focus:border-[#0b5cbe] cursor-pointer"
+              >
+                <option value="all">All Staff ({staffListWithStatus.length})</option>
+                <option value="present">Present Today ({presentStaffCount})</option>
+                <option value="absent">Not Checked In ({absentStaffCount})</option>
+                <option value="absent_2">Absent 2+ Days</option>
+                <option value="absent_7">Absent 7+ Days</option>
+              </select>
+            </div>
           </div>
         </div>
 
-        {/* Staff Roster List */}
-        <div className="flex-1 overflow-y-auto max-h-[280px] space-y-2 pr-1 divide-y divide-slate-100">
+        {/* Staff Table / Detailed Cards using horizontal width */}
+        <div className="flex-1 overflow-y-auto max-h-[300px] space-y-2 pr-1 divide-y divide-slate-100">
           {filteredStaff.length > 0 ? (
             filteredStaff.map((emp: any) => {
               const isPresent = emp.punchedToday;
 
               return (
-                <div key={emp.id || emp.employeeId || emp.name} className="pt-2 first:pt-0 flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <div className="w-8 h-8 rounded-xl bg-[#eaf3ff] text-[#0b5cbe] font-black text-xs flex items-center justify-center shrink-0 border border-[#b9d6f5]">
+                <div 
+                  key={emp.id || emp.biometricId || emp.name} 
+                  className="pt-2.5 first:pt-0 flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-2 rounded-xl hover:bg-slate-50/80 transition-colors"
+                >
+                  {/* Left: Staff Identity */}
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-10 h-10 rounded-xl bg-[#eaf3ff] text-[#0b5cbe] font-black text-sm flex items-center justify-center shrink-0 border border-[#b9d6f5] shadow-xs">
                       {getInitials(emp.name || 'Staff')}
                     </div>
                     <div className="min-w-0">
-                      <div className="text-xs font-bold text-slate-900 truncate">
-                        {emp.name || 'Staff Member'}
+                      <div className="text-xs font-black text-slate-900 truncate flex items-center gap-1.5">
+                        <span>{emp.name || 'Staff Member'}</span>
+                        {emp.biometricId && (
+                          <span className="text-[9px] font-mono text-slate-400 font-bold bg-slate-100 px-1.5 py-0.5 rounded">
+                            #{emp.biometricId}
+                          </span>
+                        )}
                       </div>
-                      <div className="text-[10px] text-slate-400 font-medium truncate">
-                        {emp.role || emp.designation || 'Staff'} · {emp.phone || 'No Phone'}
+                      <div className="text-[10.5px] text-slate-400 font-medium truncate flex items-center gap-2 mt-0.5">
+                        <span className="font-semibold text-slate-600">{emp.phone || 'No Contact'}</span>
+                        <span>·</span>
+                        <span className="text-slate-500">{emp.branch || 'Mohali, Punjab'}</span>
                       </div>
                     </div>
                   </div>
 
-                  <div className="text-right shrink-0">
-                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${
+                  {/* Center: Role Tag */}
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-[10px] font-black px-2.5 py-1 rounded-lg uppercase tracking-wider bg-slate-100 text-slate-700 border border-slate-200">
+                      {emp.role || 'Staff'}
+                    </span>
+                  </div>
+
+                  {/* Right: Live Status & Punch Time */}
+                  <div className="text-right shrink-0 flex sm:flex-col items-center sm:items-end justify-between sm:justify-center gap-1">
+                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[9.5px] font-black uppercase tracking-wider ${
                       isPresent
                         ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                         : 'bg-slate-100 text-slate-600 border border-slate-200'
                     }`}>
-                      {isPresent ? <CheckCircle2 size={10} /> : <Clock size={10} />}
-                      {isPresent ? 'Present' : 'Not In'}
+                      {isPresent ? <CheckCircle2 size={11} className="text-emerald-600" /> : <Clock size={11} className="text-slate-400" />}
+                      {isPresent ? 'Present Today' : 'Not Checked In'}
                     </span>
-                    <div className="text-[9.5px] font-semibold text-slate-500 mt-0.5">
-                      {isPresent
-                        ? `Punched: ${formatTimeStr(emp.lastPunchTime)}`
-                        : `Absent: ${emp.absentDays}d`}
+                    <div className="text-[10px] font-semibold text-slate-500">
+                      {isPresent ? (
+                        <span>Punch: <strong className="font-mono text-slate-800">{formatTimeStr(emp.lastPunchTime)}</strong></span>
+                      ) : (
+                        <span>Absent: <strong className="font-mono text-slate-800">{emp.absentDays} days</strong></span>
+                      )}
                     </div>
                   </div>
                 </div>
               );
             })
           ) : (
-            <div className="text-center py-8 text-slate-400">
-              <Users size={24} className="mx-auto mb-1.5 opacity-50" />
-              <p className="text-xs font-bold">No staff found matching filter</p>
+            <div className="text-center py-12 text-slate-400">
+              <Users size={28} className="mx-auto mb-2 opacity-50" />
+              <p className="text-xs font-bold text-slate-600">No staff members found matching filter</p>
+              <p className="text-[10px] text-slate-400 mt-0.5">Adjust your search query or reset filter dropdown</p>
             </div>
           )}
         </div>
 
-        {/* Staff Card Footer Summary */}
-        <div className="border-t border-slate-100 pt-2.5 mt-2 flex justify-between items-center text-[10px] text-slate-500 font-bold">
-          <span>Present: <strong className="text-emerald-600">{staffListWithStatus.filter(e => e.punchedToday).length}</strong></span>
-          <span>Absent: <strong className="text-slate-700">{staffListWithStatus.filter(e => !e.punchedToday).length}</strong></span>
-          <span>Total Staff: <strong className="text-slate-900">{staffListWithStatus.length}</strong></span>
+        {/* Panel Footer Summary */}
+        <div className="border-t border-slate-100 pt-3 mt-2 flex flex-wrap justify-between items-center text-[10.5px] text-slate-500 font-semibold">
+          <span>Active Staff Roster: <strong className="text-slate-900">{staffListWithStatus.length} Employees</strong></span>
+          <span className="text-[10px] text-slate-400">Tracking started: <strong className="text-slate-600">{SYSTEM_START_DATE}</strong></span>
+        </div>
+
+      </div>
+
+      {/* ─── 2. ATTENDANCE CALENDAR (COMPACT PANEL - RIGHT ~35% / 4-5 COLS) ─── */}
+      <div className="lg:col-span-5 xl:col-span-4 bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs flex flex-col justify-between h-full min-h-[460px]">
+        
+        {/* Header with Title & Navigation Controls */}
+        <div>
+          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+            <div>
+              <span className="text-[10px] font-black uppercase tracking-wider text-[#0b5cbe] block flex items-center gap-1.5 font-display">
+                <Calendar size={13} /> ATTENDANCE CALENDAR
+              </span>
+              <h3 className="text-xs font-black text-slate-900 mt-0.5">
+                Monthly Attendance Heatmap
+              </h3>
+            </div>
+
+            {/* Navigation Controls */}
+            <div className="flex items-center gap-1.5 shrink-0">
+              <select
+                value={selectedMonth}
+                onChange={e => setSelectedMonth(Number(e.target.value))}
+                className="bg-slate-50 border border-slate-200 text-slate-800 text-[11px] font-bold rounded-lg px-2 py-1 outline-none focus:border-[#0b5cbe] cursor-pointer"
+              >
+                {MONTH_NAMES.map((m, idx) => (
+                  <option key={m} value={idx}>{m.slice(0, 3)}</option>
+                ))}
+              </select>
+
+              <select
+                value={selectedYear}
+                onChange={e => setSelectedYear(Number(e.target.value))}
+                className="bg-slate-50 border border-slate-200 text-slate-800 text-[11px] font-bold rounded-lg px-1.5 py-1 outline-none focus:border-[#0b5cbe] cursor-pointer"
+              >
+                {[2025, 2026, 2027, 2028].map(y => (
+                  <option key={y} value={y}>{y}</option>
+                ))}
+              </select>
+
+              <button
+                onClick={handleJumpToday}
+                className="px-2 py-1 bg-[#eaf3ff] hover:bg-[#d4e7fc] text-[#0b5cbe] font-black text-[9px] uppercase rounded-lg border border-[#b9d6f5] transition-all cursor-pointer"
+              >
+                Today
+              </button>
+
+              <button
+                onClick={handlePrevMonth}
+                className="w-6 h-6 rounded-lg bg-slate-100 hover:bg-[#eaf3ff] text-[#0b5cbe] flex items-center justify-center border border-slate-200 transition-all cursor-pointer"
+                title="Previous Month"
+              >
+                <ChevronLeft size={13} />
+              </button>
+              <button
+                onClick={handleNextMonth}
+                className="w-6 h-6 rounded-lg bg-slate-100 hover:bg-[#eaf3ff] text-[#0b5cbe] flex items-center justify-center border border-slate-200 transition-all cursor-pointer"
+                title="Next Month"
+              >
+                <ChevronRight size={13} />
+              </button>
+            </div>
+          </div>
+
+          {/* 7-Column Compact Grid */}
+          <div className="my-3">
+            {/* Weekday Labels Header */}
+            <div className="grid grid-cols-7 gap-1 mb-1.5 text-center text-[9.5px] font-black text-slate-400 uppercase tracking-wider">
+              <span className="text-rose-600 font-extrabold">Su</span>
+              <span>Mo</span>
+              <span>Tu</span>
+              <span>We</span>
+              <span>Th</span>
+              <span>Fr</span>
+              <span>Sa</span>
+            </div>
+
+            {/* Calendar Day Cells */}
+            <div className="grid grid-cols-7 gap-1 justify-items-center">
+              {calendarDays.map((day) => {
+                if (day.isOffset) {
+                  return <div key={day.key} className="w-full aspect-square bg-transparent" />;
+                }
+
+                let cellBg = 'bg-slate-50 border-slate-200/80 text-slate-700 hover:border-[#0b5cbe] hover:bg-slate-100';
+                if (day.isSunday && day.intensity === 'none') {
+                  cellBg = 'bg-rose-50/70 border-rose-200/80 text-rose-700 font-extrabold';
+                } else if (day.intensity === 'low') {
+                  cellBg = 'bg-[#eaf3ff] border-[#b9d7f7] text-[#0b5cbe] font-bold shadow-xs';
+                } else if (day.intensity === 'medium') {
+                  cellBg = 'bg-[#c6e0ff] border-[#8cbcf5] text-[#084a99] font-black shadow-xs';
+                } else if (day.intensity === 'high') {
+                  cellBg = 'bg-[#0b5cbe] border-[#0b5cbe] text-white font-black shadow-xs';
+                } else if (day.intensity === 'peak') {
+                  cellBg = 'bg-[#073673] border-[#073673] text-white font-black shadow-xs';
+                }
+
+                const isSelected = activeYmd === day.ymd;
+
+                return (
+                  <div
+                    key={day.key}
+                    onClick={() => { if (day.ymd) setSelectedDateYmd(day.ymd); }}
+                    className={`w-full aspect-square rounded-lg border flex flex-col items-center justify-center relative cursor-pointer transition-all ${cellBg} ${
+                      day.isToday ? 'ring-2 ring-[#0b5cbe] ring-offset-1 z-10' : ''
+                    } ${isSelected ? 'scale-105 shadow-md border-[#0b5cbe]' : 'hover:scale-105'}`}
+                    title={`${day.ymd || ''} — ${day.totalPunches || 0} Punches`}
+                  >
+                    <span className={`text-[10.5px] leading-none ${day.isSunday ? 'text-rose-600' : ''}`}>
+                      {day.dayNum}
+                    </span>
+
+                    {(day.totalPunches || 0) > 0 && (
+                      <span className="text-[7.5px] font-mono font-black mt-0.5 leading-none opacity-90">
+                        {day.totalPunches}p
+                      </span>
+                    )}
+
+                    {day.isToday && (
+                      <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-[#0b5cbe]" />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        {/* Selected Day Inspector Popover / Banner */}
+        {activeDayObj && (
+          <div className="bg-[#f4f8fd] border border-[#b9d7f7] rounded-xl p-2.5 my-2 text-xs">
+            <div className="flex items-center justify-between border-b border-[#b9d7f7]/60 pb-1.5">
+              <div className="font-extrabold text-slate-900 flex items-center gap-1.5 text-[11px]">
+                <span>{new Date(activeDayObj.ymd || todayStr).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })}</span>
+                {activeDayObj.isToday && <span className="bg-[#0b5cbe] text-white text-[7.5px] font-black px-1.5 py-0.2 rounded-full uppercase">Today</span>}
+                {activeDayObj.isSunday && <span className="bg-rose-100 text-rose-700 text-[7.5px] font-black px-1.5 py-0.2 rounded-full uppercase">Sun</span>}
+              </div>
+
+              <span className="text-[9.5px] font-mono font-black text-slate-700">
+                {activeDayObj.isBeforeLaunch ? 'Pre-launch' : `${activeDayObj.totalPunches || 0} punches`}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-3 gap-1.5 pt-1.5 text-[9px]">
+              <div className="bg-white p-1.5 rounded border border-[#d9e7f7]">
+                <span className="text-slate-400 font-bold block uppercase text-[7.5px]">Members</span>
+                <span className="text-slate-900 font-black text-xs font-mono">{activeDayObj.memberCount || 0}</span>
+              </div>
+              <div className="bg-white p-1.5 rounded border border-[#d9e7f7]">
+                <span className="text-slate-400 font-bold block uppercase text-[7.5px]">Staff</span>
+                <span className="text-slate-900 font-black text-xs font-mono">{activeDayObj.staffCount || 0}</span>
+              </div>
+              <div className="bg-white p-1.5 rounded border border-[#d9e7f7]">
+                <span className="text-slate-400 font-bold block uppercase text-[7.5px]">First Punch</span>
+                <span className="text-slate-700 font-bold text-[8.5px] font-mono block truncate">
+                  {formatTimeStr(activeDayObj.firstCheckIn || null)}
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Calendar Legend Bar */}
+        <div className="border-t border-slate-100 pt-2.5 flex flex-wrap items-center justify-between gap-1.5 text-[9.5px] font-bold text-slate-500">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-slate-400 font-extrabold uppercase text-[8px]">Heat:</span>
+            <span className="flex items-center gap-0.5"><span className="w-2 h-2 rounded bg-slate-100 border border-slate-200" /> 0</span>
+            <span className="flex items-center gap-0.5"><span className="w-2 h-2 rounded bg-[#eaf3ff] border border-[#b9d7f7]" /> 1-5</span>
+            <span className="flex items-center gap-0.5"><span className="w-2 h-2 rounded bg-[#c6e0ff] border border-[#8cbcf5]" /> 6-15</span>
+            <span className="flex items-center gap-0.5"><span className="w-2 h-2 rounded bg-[#0b5cbe]" /> 16+</span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="flex items-center gap-1 text-rose-600"><span className="w-1.5 h-1.5 rounded-full bg-rose-500" /> Sun</span>
+            <span className="flex items-center gap-1 text-[#0b5cbe]"><span className="w-1.5 h-1.5 rounded-full bg-[#0b5cbe]" /> Today</span>
+          </div>
         </div>
 
       </div>

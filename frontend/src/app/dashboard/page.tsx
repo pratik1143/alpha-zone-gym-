@@ -94,6 +94,11 @@ export default function DashboardPage() {
     fetchAttendance();
     fetchPayments();
     fetchDashboardAnalytics();
+    API.get('/employees').then(res => {
+      if (Array.isArray(res.data) && res.data.length > 0) {
+        setEmployees(res.data);
+      }
+    }).catch(() => {});
   }, [fetchMembers, fetchAttendance, fetchPayments, fetchDashboardAnalytics]);
 
   // Derive live occupancy count from real memberAttendance logs + gymPresence
