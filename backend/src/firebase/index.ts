@@ -138,10 +138,7 @@ export let mockTrainers = [
   { id: 't6', name: 'Rohit Sharma', email: 'rohit@alphagym.com', phone: '9988776650', specialization: 'Weight Loss Specialist', experience: 8, rating: 4.9, branch: 'Mohali, Punjab', sessions: 22, salary: 50000, status: 'active', certifications: ['ACE', 'CSCS', 'CPR'], photo: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?q=80&w=150', bio: 'Certified weight loss coach with 8 years of experience. Expert in body composition changes.', joiningDate: '2024-05-10', instagram: 'rohit_sharma_coach', achievements: 'Best Weight Loss Coach award 2025' }
 ];
 
-export let mockAttendance: any[] = [
-  { id: 'a1', memberId: 'm1', memberName: 'Sahil', checkIn: new Date(Date.now() - 30*60*1000).toISOString(), checkOut: null, deviceId: 'k90-main-gate', doorName: 'Main Entrance Gate', status: 'active', temp: '36.5', mask: 'yes' },
-  { id: 'a2', memberId: 'm2', memberName: 'Arjun Mehta', checkIn: new Date(Date.now() - 2*60*60*1000).toISOString(), checkOut: new Date(Date.now() - 1*60*60*1000).toISOString(), deviceId: 'k90-main-gate', doorName: 'Main Entrance Gate', status: 'completed' },
-];
+export let mockAttendance: any[] = [];
 export let mockPayments: any[] = [
   { id: 'p1', memberId: 'm1', memberName: 'Sahil', amount: 2500, plan: 'Monthly Standard', method: 'UPI', date: '2026-05-15', status: 'paid', invoice: 'INV-001', gst: 450 },
   { id: 'p2', memberId: 'm2', memberName: 'Arjun Mehta', amount: 6500, plan: 'Quarterly Prime', method: 'Card', date: '2026-04-10', status: 'paid', invoice: 'INV-002', gst: 1170 },

@@ -21,48 +21,13 @@
       "streak": 1,
       "goalWeight": 70,
       "attendancePercent": 100,
-      "referralCode": "ROHI334"
+      "referralCode": "ROHI903"
     }
   ],
-  "mockAttendance": [
-    {
-      "memberId": "m1787501424499",
-      "memberName": "Future Start Member",
-      "checkIn": "2026-08-23T16:10:24.791Z",
-      "checkOut": null,
-      "method": "biometric",
-      "branch": "Mohali, Punjab",
-      "status": "denied",
-      "createdAt": "2026-08-23T16:10:24.791Z",
-      "id": "a3"
-    },
-    {
-      "id": "a1",
-      "memberId": "m1",
-      "memberName": "Sahil",
-      "checkIn": "2026-06-30T04:51:32.685Z",
-      "checkOut": "2026-06-30T05:51:32.685Z",
-      "deviceId": "k90-main-gate",
-      "doorName": "Main Entrance Gate",
-      "status": "active",
-      "temp": "36.5",
-      "mask": "yes",
-      "autoCheckedOut": true
-    },
-    {
-      "id": "a2",
-      "memberId": "m2",
-      "memberName": "Arjun Mehta",
-      "checkIn": "2026-06-30T03:21:32.685Z",
-      "checkOut": "2026-06-30T04:21:32.685Z",
-      "deviceId": "k90-main-gate",
-      "doorName": "Main Entrance Gate",
-      "status": "completed"
-    }
-  ],
+  "mockAttendance": [],
   "mockPayments": [
     {
-      "id": "p_1787501841539",
+      "id": "p_1787502276890",
       "memberId": "m_bal_1",
       "memberName": "Rohit",
       "memberPhone": "9888877777",
@@ -88,10 +53,10 @@
       "idempotencyKey": "pay_m_bal_1_undefined_2026-08-23",
       "isRealTimeToday": true,
       "notes": "Member Payment Invoice",
-      "invoice": "INV-787438",
-      "invoiceNumber": "INV-733206",
+      "invoice": "INV-426252",
+      "invoiceNumber": "INV-299830",
       "gst": 0,
-      "createdAt": "2026-08-23T16:17:21.539Z"
+      "createdAt": "2026-08-23T16:24:36.890Z"
     },
     {
       "id": "inv_pt_1",
@@ -119,7 +84,7 @@
       "netPayable": 2000,
       "outstandingAmount": 0,
       "pendingAmount": 0,
-      "createdAt": "2026-08-23T16:17:21.536Z"
+      "createdAt": "2026-08-23T16:24:36.886Z"
     },
     {
       "id": "inv_new_1",
@@ -147,7 +112,7 @@
       "netPayable": 3000,
       "outstandingAmount": 0,
       "pendingAmount": 0,
-      "createdAt": "2026-08-23T16:17:21.534Z"
+      "createdAt": "2026-08-23T16:24:36.884Z"
     },
     {
       "id": "inv_hist_1",
@@ -164,7 +129,7 @@
       "isHistorical": true,
       "imported": true,
       "isLegacyImport": true,
-      "createdAt": "2026-08-23T16:17:21.533Z"
+      "createdAt": "2026-08-23T16:24:36.883Z"
     },
     {
       "id": "inv_hist_rohit",

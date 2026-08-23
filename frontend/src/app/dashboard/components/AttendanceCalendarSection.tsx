@@ -3,7 +3,7 @@
 import React, { useState, useMemo } from 'react';
 import { 
   ChevronLeft, ChevronRight, Users, Clock, CheckCircle2, 
-  AlertCircle, Search, Filter, Calendar, Star, ShieldCheck, UserCheck, Activity
+  Search, Calendar, UserCheck
 } from 'lucide-react';
 import { getInitials } from '@/lib/utils';
 import { SYSTEM_START_DATE, SYSTEM_CONFIG } from '@/config/system';
@@ -25,7 +25,7 @@ export default function AttendanceCalendarSection({
   const now = new Date();
   const [selectedYear, setSelectedYear] = useState(now.getFullYear());
   const [selectedMonth, setSelectedMonth] = useState(now.getMonth()); // 0-11
-  const [activeDayData, setActiveDayData] = useState<any | null>(null);
+  const [selectedDateYmd, setSelectedDateYmd] = useState<string | null>(null);
 
   // Staff card state
   const [staffSearch, setStaffSearch] = useState('');
@@ -40,6 +40,9 @@ export default function AttendanceCalendarSection({
     });
     return formatter.format(new Date());
   }, []);
+
+  // Default active selected date to today
+  const activeYmd = selectedDateYmd || todayStr;
 
   const MONTH_NAMES = [
     'January', 'February', 'March', 'April', 'May', 'June',
@@ -68,9 +71,28 @@ export default function AttendanceCalendarSection({
     const d = new Date();
     setSelectedYear(d.getFullYear());
     setSelectedMonth(d.getMonth());
+    setSelectedDateYmd(todayStr);
   };
 
-  // Pre-index attendance logs by YYYY-MM-DD date string
+  // Helper to extract YYYY-MM-DD in Asia/Kolkata timezone
+  const extractKolkataYMD = (rawDate: string | null | undefined): string | null => {
+    if (!rawDate) return null;
+    try {
+      if (rawDate.length === 10 && rawDate.includes('-')) return rawDate;
+      const d = new Date(rawDate);
+      if (isNaN(d.getTime())) return null;
+      return new Intl.DateTimeFormat('en-CA', {
+        timeZone: SYSTEM_CONFIG.timezone,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+      }).format(d);
+    } catch {
+      return null;
+    }
+  };
+
+  // Pre-index ONLY valid attendance logs strictly on or after SYSTEM_START_DATE
   const attendanceByDate = useMemo(() => {
     const map = new Map<string, {
       memberPunches: any[];
@@ -81,13 +103,12 @@ export default function AttendanceCalendarSection({
       lastCheckIn: string | null;
     }>();
 
-    // Process Member logs
+    // Process Member logs (Strictly exclude any pre-launch logs)
     (memberAttendanceLogs || []).forEach(log => {
-      if (!log) return;
+      if (!log || log.isSample || log.isMock) return;
       const rawDate = String(log.checkIn || log.timestamp || log.createdAt || '');
-      if (!rawDate) return;
-      const ymd = rawDate.includes('T') ? rawDate.split('T')[0] : rawDate.substring(0, 10);
-      if (!ymd || ymd.length !== 10) return;
+      const ymd = extractKolkataYMD(rawDate);
+      if (!ymd || ymd < SYSTEM_START_DATE) return; // STRICT ZERO BEFORE SYSTEM_START_DATE
 
       if (!map.has(ymd)) {
         map.set(ymd, {
@@ -112,13 +133,12 @@ export default function AttendanceCalendarSection({
       }
     });
 
-    // Process Employee logs
+    // Process Employee logs (Strictly exclude any pre-launch logs)
     (employeeAttendanceLogs || []).forEach(log => {
-      if (!log) return;
+      if (!log || log.isSample || log.isMock) return;
       const rawDate = String(log.timestamp || log.checkIn || log.createdAt || '');
-      if (!rawDate) return;
-      const ymd = rawDate.includes('T') ? rawDate.split('T')[0] : rawDate.substring(0, 10);
-      if (!ymd || ymd.length !== 10) return;
+      const ymd = extractKolkataYMD(rawDate);
+      if (!ymd || ymd < SYSTEM_START_DATE) return; // STRICT ZERO BEFORE SYSTEM_START_DATE
 
       if (!map.has(ymd)) {
         map.set(ymd, {
@@ -169,10 +189,11 @@ export default function AttendanceCalendarSection({
       const isToday = ymd === todayStr;
       const isBeforeLaunch = ymd < SYSTEM_START_DATE;
 
-      const record = attendanceByDate.get(ymd);
+      // When before launch date, punches are strictly 0 and cannot have heatmap
+      const record = isBeforeLaunch ? null : attendanceByDate.get(ymd);
       const memberPunches = record ? record.memberPunches.length : 0;
       const staffPunches = record ? record.employeePunches.length : 0;
-      const totalPunches = memberPunches + staffPunches;
+      const totalPunches = isBeforeLaunch ? 0 : (memberPunches + staffPunches);
       const memberCount = record ? record.uniqueMembers.size : 0;
       const staffCount = record ? record.uniqueEmployees.size : 0;
 
@@ -207,11 +228,44 @@ export default function AttendanceCalendarSection({
     return days;
   }, [selectedYear, selectedMonth, attendanceByDate, todayStr]);
 
+  // Active inspected day object
+  const activeDayObj = useMemo(() => {
+    const found = calendarDays.find(d => !d.isOffset && d.ymd === activeYmd);
+    if (found) return found;
+
+    // Fallback if day is in another month
+    const isBeforeLaunch = activeYmd < SYSTEM_START_DATE;
+    const isToday = activeYmd === todayStr;
+    const record = isBeforeLaunch ? null : attendanceByDate.get(activeYmd);
+    const memberPunches = record ? record.memberPunches.length : 0;
+    const staffPunches = record ? record.employeePunches.length : 0;
+    const totalPunches = isBeforeLaunch ? 0 : (memberPunches + staffPunches);
+
+    return {
+      isOffset: false,
+      key: activeYmd,
+      dayNum: Number(activeYmd.split('-')[2] || '1'),
+      ymd: activeYmd,
+      isSunday: new Date(activeYmd).getDay() === 0,
+      isToday,
+      isBeforeLaunch,
+      totalPunches,
+      memberPunches,
+      staffPunches,
+      memberCount: record ? record.uniqueMembers.size : 0,
+      staffCount: record ? record.uniqueEmployees.size : 0,
+      intensity: 'none',
+      firstCheckIn: record?.firstCheckIn || null,
+      lastCheckIn: record?.lastCheckIn || null,
+    };
+  }, [calendarDays, activeYmd, todayStr, attendanceByDate]);
+
   // Helper to format ISO time to friendly string (e.g. 08:42 AM)
   const formatTimeStr = (iso: string | null) => {
-    if (!iso) return '—';
+    if (!iso) return '--';
     try {
       const d = new Date(iso);
+      if (isNaN(d.getTime())) return '--';
       return d.toLocaleTimeString('en-IN', {
         hour: '2-digit',
         minute: '2-digit',
@@ -219,7 +273,7 @@ export default function AttendanceCalendarSection({
         timeZone: SYSTEM_CONFIG.timezone,
       });
     } catch {
-      return '—';
+      return '--';
     }
   };
 
@@ -227,16 +281,19 @@ export default function AttendanceCalendarSection({
   const staffListWithStatus = useMemo(() => {
     return (employeesList || []).map((emp: any) => {
       const empLogs = (employeeAttendanceLogs || []).filter(l => {
-        if (!l) return false;
+        if (!l || l.isSample || l.isMock) return false;
         const eId = l.employeeId || l.biometricId;
         const targetId = emp.id || emp.biometricId || emp.employeeId;
+        const rawDate = String(l.timestamp || l.checkIn || '');
+        const ymd = extractKolkataYMD(rawDate);
+        if (!ymd || ymd < SYSTEM_START_DATE) return false;
         return (eId && targetId && (String(eId) === String(targetId) || String(l.biometricId) === String(emp.biometricId)));
       });
 
       // Filter logs for today
       const todayLogs = empLogs.filter(l => {
         const rawDate = String(l.timestamp || l.checkIn || '');
-        return rawDate.startsWith(todayStr);
+        return extractKolkataYMD(rawDate) === todayStr;
       });
 
       const punchedToday = todayLogs.length > 0;
@@ -251,14 +308,13 @@ export default function AttendanceCalendarSection({
       }
 
       // Calculate consecutive absent days starting from SYSTEM_START_DATE
-      // If software started today (SYSTEM_START_DATE = todayStr), absent days is strictly 0!
+      // Since software started fresh on SYSTEM_START_DATE (2026-08-23), if today is launch date, absent is 0!
       let absentDays = 0;
       if (!punchedToday) {
         const todayD = new Date(todayStr);
         const startD = new Date(SYSTEM_START_DATE);
         
         if (todayD.getTime() > startD.getTime()) {
-          // If past launch date, count non-Sunday days since last punch or start date
           const refDate = lastSeenDateStr ? new Date(lastSeenDateStr.split('T')[0]) : startD;
           let curr = new Date(refDate);
           curr.setDate(curr.getDate() + 1);
@@ -269,7 +325,7 @@ export default function AttendanceCalendarSection({
             }
             curr.setDate(curr.getDate() + 1);
           }
-          if (todayD.getDay() !== 0) absentDays++; // Count today if workday
+          if (todayD.getDay() !== 0) absentDays++;
         }
       }
 
@@ -401,16 +457,16 @@ export default function AttendanceCalendarSection({
                 cellBg = 'bg-[#073673] border-[#073673] text-white font-black shadow-xs';
               }
 
-              const isSelected = activeDayData?.ymd === day.ymd;
+              const isSelected = activeYmd === day.ymd;
 
               return (
                 <div
                   key={day.key}
-                  onClick={() => setActiveDayData(day)}
+                  onClick={() => { if (day.ymd) setSelectedDateYmd(day.ymd); }}
                   className={`w-full aspect-square rounded-xl border flex flex-col items-center justify-center relative cursor-pointer transition-all ${cellBg} ${
                     day.isToday ? 'ring-2 ring-[#0b5cbe] ring-offset-1 z-10' : ''
                   } ${isSelected ? 'scale-105 shadow-md border-[#0b5cbe]' : 'hover:scale-105'}`}
-                  title={`${day.ymd} — ${(day.totalPunches || 0)} Punches`}
+                  title={`${day.ymd || ''} — ${day.totalPunches || 0} Punches`}
                 >
                   <span className={`text-[11px] leading-none ${day.isSunday ? 'text-rose-600' : ''}`}>
                     {day.dayNum}
@@ -432,27 +488,45 @@ export default function AttendanceCalendarSection({
         </div>
 
         {/* Selected Day Inspector Popover / Banner */}
-        {activeDayData && (
-          <div className="bg-[#f4f8fd] border border-[#b9d7f7] rounded-xl p-3 mb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
-            <div>
+        {activeDayObj && (
+          <div className="bg-[#f4f8fd] border border-[#b9d7f7] rounded-xl p-3.5 mb-3 text-xs">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#b9d7f7]/60 pb-2">
               <div className="font-extrabold text-slate-900 flex items-center gap-2">
-                <span>{new Date(activeDayData.ymd).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}</span>
-                {activeDayData.isToday && <span className="bg-[#0b5cbe] text-white text-[8px] font-black px-1.5 py-0.5 rounded-full uppercase">Today</span>}
-                {activeDayData.isSunday && <span className="bg-rose-100 text-rose-700 text-[8px] font-black px-1.5 py-0.5 rounded-full uppercase">Sunday</span>}
+                <span>{new Date(activeDayObj.ymd || todayStr).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                {activeDayObj.isToday && <span className="bg-[#0b5cbe] text-white text-[8px] font-black px-1.5 py-0.5 rounded-full uppercase">Today</span>}
+                {activeDayObj.isSunday && <span className="bg-rose-100 text-rose-700 text-[8px] font-black px-1.5 py-0.5 rounded-full uppercase">Sunday</span>}
               </div>
-              <p className="text-[10px] text-slate-500 mt-0.5">
-                {activeDayData.totalPunches > 0
-                  ? `Total: ${activeDayData.totalPunches} punches · Members: ${activeDayData.memberCount} · Staff: ${activeDayData.staffCount}`
-                  : (activeDayData.isBeforeLaunch ? 'System not active before launch date' : 'No attendance recorded')}
-              </p>
+
+              <div className="text-[10px] text-slate-500 font-semibold">
+                {activeDayObj.isBeforeLaunch ? (
+                  <span className="text-slate-400 italic">System not active before launch date ({SYSTEM_START_DATE})</span>
+                ) : (
+                  <span>Status: <strong>{(activeDayObj.totalPunches || 0) > 0 ? `${activeDayObj.totalPunches} recorded punches` : '0 punches (No check-ins)'}</strong></span>
+                )}
+              </div>
             </div>
 
-            {activeDayData.totalPunches > 0 && (
-              <div className="flex items-center gap-3 text-[10px] font-mono text-slate-600">
-                <span>First: <strong>{formatTimeStr(activeDayData.firstCheckIn)}</strong></span>
-                <span>Last: <strong>{formatTimeStr(activeDayData.lastCheckIn)}</strong></span>
+            {/* Metrics Breakdown */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2.5 text-[10px]">
+              <div className="bg-white p-2 rounded-lg border border-[#d9e7f7]">
+                <span className="text-slate-400 font-bold block uppercase text-[8.5px]">Total Punches</span>
+                <span className="text-slate-900 font-black text-sm font-mono">{activeDayObj.totalPunches || 0}</span>
               </div>
-            )}
+              <div className="bg-white p-2 rounded-lg border border-[#d9e7f7]">
+                <span className="text-slate-400 font-bold block uppercase text-[8.5px]">Members</span>
+                <span className="text-slate-900 font-black text-sm font-mono">{activeDayObj.memberCount || 0}</span>
+              </div>
+              <div className="bg-white p-2 rounded-lg border border-[#d9e7f7]">
+                <span className="text-slate-400 font-bold block uppercase text-[8.5px]">Staff</span>
+                <span className="text-slate-900 font-black text-sm font-mono">{activeDayObj.staffCount || 0}</span>
+              </div>
+              <div className="bg-white p-2 rounded-lg border border-[#d9e7f7]">
+                <span className="text-slate-400 font-bold block uppercase text-[8.5px]">First / Last Check-in</span>
+                <span className="text-slate-700 font-bold text-[9.5px] font-mono block truncate">
+                  {formatTimeStr(activeDayObj.firstCheckIn || null)} · {formatTimeStr(activeDayObj.lastCheckIn || null)}
+                </span>
+              </div>
+            </div>
           </div>
         )}
 
@@ -462,7 +536,7 @@ export default function AttendanceCalendarSection({
             <span className="text-slate-400 font-extrabold uppercase text-[9px]">Punches:</span>
             <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-slate-100 border border-slate-200" /> 0</span>
             <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-[#eaf3ff] border border-[#b9d7f7]" /> 1-5</span>
-            <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-[#c6e0ff] border-[#8cbcf5]" /> 6-15</span>
+            <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-[#c6e0ff] border border-[#8cbcf5]" /> 6-15</span>
             <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-[#0b5cbe]" /> 16-30</span>
             <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-[#073673]" /> 31+</span>
           </div>
