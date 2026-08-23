@@ -13,6 +13,7 @@ import { collection, addDoc, onSnapshot } from 'firebase/firestore';
 import { db as fDb, isFirebaseReady } from '@/lib/firebase';
 import API from '@/services/api';
 import { useFollowups } from '@/hooks/useFollowups';
+import AttendanceCalendarSection from './components/AttendanceCalendarSection';
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -56,6 +57,12 @@ export default function DashboardPage() {
       console.warn("Firestore employeeAttendance listener error:", err);
     });
 
+    const unsubMemberAtt = onSnapshot(collection(fDb, 'attendance'), (snap) => {
+      setMemberAttendance(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (err) => {
+      console.warn("Firestore attendance listener notice:", err);
+    });
+
     const unsubEnq = onSnapshot(collection(fDb, 'enquiries'), (snap) => {
       setEnquiriesCount(snap.size);
     }, (err) => {
@@ -74,6 +81,7 @@ export default function DashboardPage() {
     return () => {
       unsubEmployees();
       unsubEmpAtt();
+      unsubMemberAtt();
       unsubEnq();
       unsubPayments();
     };
@@ -208,62 +216,6 @@ export default function DashboardPage() {
   const membersAtRisk = evaluatedMembers.filter(m => m.ai.category === 'Orange' || m.ai.category === 'Red').slice(0, 5);
   const membersExpiringSoon = evaluatedMembers.filter(m => m.ai.daysLeft > 0 && m.ai.daysLeft <= 15).slice(0, 5);
   const renewalOpportunities = evaluatedMembers.filter(m => m.ai.renewalChance > 70).slice(0, 5);
-
-  const getAbsenceStats = () => {
-    const SYSTEM_LIVE_DATE = new Date('2026-07-01');
-    const todayStr = new Date().toDateString();
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
-
-    const activeMembers = realtimeMembers ? realtimeMembers.filter((m: any) => m.status === 'active') : [];
-
-    const getEntityStatus = (entity: any, isEmployee: boolean) => {
-      const logs = (isEmployee ? empAttendance : memberAttendance).filter(a => {
-        const checkInDate = new Date(a.checkIn || a.timestamp);
-        return (a.memberId === entity.id || a.employeeId === entity.id || String(a.biometricId) === String(entity.biometricId)) && 
-               checkInDate >= SYSTEM_LIVE_DATE;
-      });
-
-      if (logs.length === 0) {
-        return { punchedToday: false, daysAbsent: 0, hasPunched: false };
-      }
-
-      const punchedToday = logs.some(l => new Date(l.checkIn || l.timestamp).toDateString() === todayStr);
-
-      const timestamps = logs.map(l => new Date(l.checkIn || l.timestamp).getTime());
-      const latestTimestamp = Math.max(...timestamps);
-      const lastActiveDate = new Date(latestTimestamp);
-      lastActiveDate.setHours(0, 0, 0, 0);
-
-      const diffTime = todayStart.getTime() - lastActiveDate.getTime();
-      const daysAbsent = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-
-      return { punchedToday, daysAbsent, hasPunched: true };
-    };
-
-    const membersMissing = activeMembers.filter(m => !getEntityStatus(m, false).punchedToday).length;
-    const employeesMissing = employees.filter(e => !getEntityStatus(e, true).punchedToday).length;
-
-    const candidateAbsents = [
-      ...activeMembers.map(m => ({ ...m, isEmployee: false })),
-      ...employees.map(e => ({ ...e, isEmployee: true }))
-    ].map(item => {
-      const status = getEntityStatus(item, item.isEmployee);
-      return { ...item, ...status };
-    }).filter(item => item.hasPunched && !item.punchedToday && item.daysAbsent >= 1 && !item.onLeave);
-
-    const needsFollowUp = candidateAbsents.filter(item => item.daysAbsent === 2 || item.daysAbsent === 3).length;
-    const critical = candidateAbsents.filter(item => item.daysAbsent >= 10).length;
-
-    return {
-      membersMissing,
-      employeesMissing,
-      needsFollowUp,
-      critical
-    };
-  };
-
-  const { membersMissing, employeesMissing, needsFollowUp, critical } = getAbsenceStats();
 
   const todaysCollection = useMemo(() => {
     const todayStr = new Date().toISOString().split('T')[0];
@@ -505,95 +457,13 @@ export default function DashboardPage() {
         </button>
       </div>
 
-      {/* ─── 4. ATTENDANCE INCONSISTENCY ALERTS ─── */}
-      <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs space-y-3.5 text-left w-full">
-        <div className="flex justify-between items-center">
-          <span className="text-[10px] font-black uppercase tracking-wider text-slate-500 flex items-center gap-1.5 font-display">
-            ⚠️ Attendance Inconsistency Alerts
-          </span>
-          <span className="text-[8px] bg-rose-50 text-rose-600 px-2.5 py-0.5 rounded-full font-black uppercase tracking-widest border border-rose-100">
-            Action Required
-          </span>
-        </div>
-        
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
-          {[
-            { label: 'Members Missing Today', value: membersMissing, sub: 'Needs punch today', color: 'bg-[#f4f8fd] text-slate-800 border-[#b9d7f7]' },
-            { label: 'Employees Missing Today', value: employeesMissing, sub: 'Staff attendance status', color: 'bg-[#f4f8fd] text-slate-800 border-[#b9d7f7]' },
-            { label: 'Needs Follow-up', value: needsFollowUp, sub: '2-3 Days Absent', color: 'bg-[#eaf3ff] text-[#0b5cbe] border-[#b9d7f7]' },
-            { label: 'Critical (10+ Days)', value: critical, sub: 'Inconsistent attendance', color: 'bg-rose-50 text-rose-800 border-rose-200/80' }
-          ].map((item, idx) => (
-            <div key={idx} className={`p-3.5 rounded-xl border flex flex-col justify-between min-h-[76px] ${item.color}`}>
-              <span className="text-[8.5px] font-black uppercase tracking-wider opacity-70 leading-none">{item.label}</span>
-              <div className="text-xl font-black mt-1.5 leading-none font-mono">{item.value}</div>
-              <span className="text-[8.5px] font-bold mt-1 opacity-80 leading-none">{item.sub}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* ─── 5. ACTIVITY HEATMAP CALENDAR (FULL WIDTH) ─── */}
-      <div className="bg-white border border-slate-200/80 p-5 rounded-2xl shadow-xs flex flex-col justify-between min-h-[260px] w-full text-left">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
-          <div>
-            <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">Attendance Logs</span>
-            <h3 className="text-sm font-black text-slate-900 uppercase mt-0.5 font-display">Activity Heatmap</h3>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <div className="flex gap-1.5">
-              {['Yours', 'Mohali'].map((f) => (
-                <button
-                  key={f}
-                  onClick={() => setActiveHeatmapFilter(f)}
-                  className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-wider transition-all border-none cursor-pointer ${
-                    activeHeatmapFilter === f ? 'bg-[#0b5cbe] text-white shadow-xs' : 'bg-slate-100 text-slate-600 hover:bg-[#eaf3ff] hover:text-[#0b5cbe]'
-                  }`}
-                >
-                  {f}
-                </button>
-              ))}
-            </div>
-
-            <div className="flex items-center gap-1.5 text-[10px] font-black text-slate-700">
-              <span>June 2026</span>
-              <div className="flex gap-1">
-                <button className="w-6 h-6 rounded-full bg-slate-100 hover:bg-[#eaf3ff] text-[#0b5cbe] flex items-center justify-center border border-slate-200 cursor-pointer">
-                  <ChevronLeft size={12} />
-                </button>
-                <button className="w-6 h-6 rounded-full bg-slate-100 hover:bg-[#eaf3ff] text-[#0b5cbe] flex items-center justify-center border border-slate-200 cursor-pointer">
-                  <ChevronRight size={12} />
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-7 gap-2.5 my-4 justify-items-center text-[10px] font-black text-slate-400 w-full">
-          {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map(d => (
-            <div key={d} className="w-8 text-center">{d}</div>
-          ))}
-          {[1, 2].map(o => (
-            <div key={`offset-${o}`} className="w-8 h-8 bg-transparent" />
-          ))}
-          {Array.from({ length: daysInMonth }).map((_, idx) => {
-            const dateNum = idx + 1;
-            const hasCheckin = checkinDays.includes(dateNum);
-            return (
-              <div
-                key={idx}
-                className={`w-8 h-8 rounded-xl border transition-all text-[10px] font-bold flex items-center justify-center ${
-                  hasCheckin
-                    ? 'bg-[#0b5cbe] border-[#0b5cbe] text-white font-black shadow-xs'
-                    : 'border-slate-200 bg-slate-50 text-slate-600 hover:border-[#b9d7f7] hover:bg-[#eaf3ff] hover:text-[#0b5cbe] cursor-pointer'
-                }`}
-              >
-                {dateNum}
-              </div>
-            );
-          })}
-        </div>
-      </div>
+      {/* ─── 4. ATTENDANCE CALENDAR & STAFF ATTENDANCE ─── */}
+      <AttendanceCalendarSection
+        memberAttendanceLogs={(memberAttendance && memberAttendance.length > 0) ? memberAttendance : (attendance || [])}
+        employeeAttendanceLogs={empAttendance || []}
+        employeesList={employees || []}
+        membersList={realtimeMembers || members || []}
+      />
 
     </div>
   );
