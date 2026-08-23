@@ -12,11 +12,12 @@ import {
 
 /**
  * Global Premium Toast System — Alpha Zone OS
- * Inspired by Sonner with custom SaaS styling matching Alpha Zone design system:
- * - Crisp white card
- * - Dark slate/navy typography
- * - Subtle border & elevation
- * - Curated semantic accents & icons
+ * Standout SaaS UI with:
+ * - High-visibility card with distinct borders & 3D shadow
+ * - Left status accent indicator
+ * - Icon badge containers with micro-animations
+ * - Ultra-high z-index ensuring visibility over all modals and drawers
+ * - Shimmer sweep entry animation
  */
 
 export interface ToastOptions extends ExternalToast {
@@ -50,17 +51,22 @@ function baseToast(message: string | React.ReactNode, options?: ToastOptions) {
     return sonnerToast.custom(message as any, options);
   }
   return sonnerToast(message, {
-    duration: options?.duration || 3500,
+    duration: options?.duration || 3800,
     ...options
   });
 }
 
 baseToast.success = (message: string | React.ReactNode, options?: ToastOptions) => {
   return sonnerToast.success(message, {
-    duration: options?.duration || 3200,
+    duration: options?.duration || 3500,
     id: options?.id,
     description: options?.description,
-    icon: <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0 mt-0.5" />,
+    className: 'az-toast-success',
+    icon: (
+      <div className="az-toast-icon-badge bg-emerald-50 border border-emerald-200 text-emerald-600 shadow-xs">
+        <CheckCircle2 className="w-5 h-5" />
+      </div>
+    ),
     ...options
   });
 };
@@ -71,27 +77,42 @@ baseToast.error = (message: string | React.ReactNode, options?: ToastOptions) =>
     duration: options?.duration || 5000,
     id: options?.id,
     description: options?.description || (typeof message === 'object' && (message as any)?.message ? sanitizeErrorMessage(message) : undefined),
-    icon: <AlertCircle className="w-5 h-5 text-rose-500 shrink-0 mt-0.5" />,
+    className: 'az-toast-error',
+    icon: (
+      <div className="az-toast-icon-badge bg-rose-50 border border-rose-200 text-rose-600 shadow-xs">
+        <AlertCircle className="w-5 h-5" />
+      </div>
+    ),
     ...options
   });
 };
 
 baseToast.warning = (message: string | React.ReactNode, options?: ToastOptions) => {
   return sonnerToast.warning(message, {
-    duration: options?.duration || 4000,
+    duration: options?.duration || 4200,
     id: options?.id,
     description: options?.description,
-    icon: <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />,
+    className: 'az-toast-warning',
+    icon: (
+      <div className="az-toast-icon-badge bg-amber-50 border border-amber-200 text-amber-600 shadow-xs">
+        <AlertTriangle className="w-5 h-5" />
+      </div>
+    ),
     ...options
   });
 };
 
 baseToast.info = (message: string | React.ReactNode, options?: ToastOptions) => {
   return sonnerToast.info(message, {
-    duration: options?.duration || 3200,
+    duration: options?.duration || 3500,
     id: options?.id,
     description: options?.description,
-    icon: <Info className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />,
+    className: 'az-toast-info',
+    icon: (
+      <div className="az-toast-icon-badge bg-blue-50 border border-blue-200 text-[#0b5cbe] shadow-xs">
+        <Info className="w-5 h-5" />
+      </div>
+    ),
     ...options
   });
 };
@@ -100,7 +121,12 @@ baseToast.loading = (message: string | React.ReactNode, options?: ToastOptions) 
   return sonnerToast.loading(message, {
     id: options?.id,
     description: options?.description,
-    icon: <Loader2 className="w-5 h-5 text-blue-600 animate-spin shrink-0 mt-0.5" />,
+    className: 'az-toast-loading',
+    icon: (
+      <div className="az-toast-icon-badge bg-blue-50 border border-blue-200 text-[#0b5cbe] shadow-xs">
+        <Loader2 className="w-5 h-5 animate-spin" />
+      </div>
+    ),
     ...options
   });
 };
@@ -142,27 +168,32 @@ export function GlobalToaster() {
       richColors={false}
       closeButton={true}
       theme="light"
-      gap={10}
-      offset="20px"
+      gap={12}
+      offset="24px"
+      style={{
+        zIndex: 999999
+      }}
       toastOptions={{
-        className: 'alpha-zone-toast font-sans',
+        className: 'az-global-toast font-sans',
         style: {
           background: '#ffffff',
           color: '#0f172a',
-          border: '1px solid #e2e8f0',
-          borderRadius: '16px',
-          padding: '14px 16px',
-          boxShadow: '0 10px 30px -5px rgba(0, 0, 0, 0.08), 0 4px 12px -2px rgba(0, 0, 0, 0.04)',
-          fontSize: '13px',
-          fontWeight: 600
+          border: '1.5px solid #cbd5e1',
+          borderRadius: '18px',
+          padding: '16px 18px',
+          boxShadow: '0 20px 40px -10px rgba(15, 23, 42, 0.16), 0 8px 16px -4px rgba(15, 23, 42, 0.08), 0 0 0 1px rgba(0, 0, 0, 0.02)',
+          fontSize: '14px',
+          fontWeight: 600,
+          minWidth: '360px',
+          maxWidth: '440px'
         },
         classNames: {
-          toast: 'group bg-white text-slate-900 border border-slate-200/90 shadow-xl rounded-2xl flex items-start gap-3 p-4',
-          title: 'text-[13.5px] font-bold text-slate-900 tracking-tight leading-snug',
-          description: 'text-[12px] font-medium text-slate-500 mt-0.5 leading-normal',
-          closeButton: 'bg-white hover:bg-slate-100 text-slate-400 hover:text-slate-700 border border-slate-200 rounded-lg p-1 transition-colors',
-          actionButton: 'bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-3 py-1.5 rounded-xl shadow-xs',
-          cancelButton: 'bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs px-3 py-1.5 rounded-xl'
+          toast: 'group bg-white text-slate-900 border-2 border-slate-300 shadow-2xl rounded-2xl flex items-start gap-3.5 p-4.5 transition-all',
+          title: 'text-[14.5px] font-extrabold text-slate-900 tracking-tight leading-snug',
+          description: 'text-[12.5px] font-medium text-slate-600 mt-1 leading-normal',
+          closeButton: 'bg-white hover:bg-slate-100 text-slate-400 hover:text-slate-800 border border-slate-300 rounded-lg p-1.5 transition-all shadow-2xs',
+          actionButton: 'bg-[#0b5cbe] hover:bg-blue-700 text-white font-bold text-xs px-3.5 py-2 rounded-xl shadow-sm transition-all',
+          cancelButton: 'bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs px-3.5 py-2 rounded-xl'
         }
       }}
     />
