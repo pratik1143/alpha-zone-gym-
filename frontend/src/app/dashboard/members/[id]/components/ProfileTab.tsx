@@ -13,24 +13,93 @@ import { resolveAvatarUrl, MALE_DEFAULT_AVATAR } from '@/lib/avatar';
 import toast from 'react-hot-toast';
 import { z } from 'zod';
 
+// ── Production-grade Zod schema for Edit Personal Info ─────────────────────
+// Rules aligned with Indian gym member data requirements.
+// All optional fields gracefully accept empty string / null / undefined.
+
+/** Normalize an Indian mobile number to bare 10 digits, or return null if invalid. */
+function normalizeIndianPhone(raw: string): string | null {
+  const stripped = raw.trim().replace(/^\+91[-\s]?/, '').replace(/[-\s]/g, '');
+  if (!/^\d{10}$/.test(stripped)) return null;
+  if (!/^[6-9]/.test(stripped)) return null;
+  if (/^(\d)\1{9}$/.test(stripped)) return null; // all same digit (0000000000, 9999999999, etc.)
+  return stripped;
+}
+
 const personalInfoSchema = z.object({
-  name: z.string().trim().min(2, 'Full Name must be at least 2 characters'),
-  phone: z.string().trim().regex(/^[0-9+\s-]{10,15}$/, 'Enter a valid 10-15 digit phone number'),
-  email: z.string().trim().optional().refine(val => !val || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val), {
-    message: 'Enter a valid email address'
-  }),
-  dob: z.string().optional().refine(val => {
-    if (!val) return true;
-    const d = new Date(val);
-    return !isNaN(d.getTime()) && d <= new Date();
-  }, {
-    message: 'Date of birth cannot be in the future'
-  }),
-  gender: z.string().optional(),
-  occupation: z.string().optional(),
-  emergencyContact: z.string().optional(),
-  address: z.string().optional(),
+  name: z
+    .string()
+    .transform(v => v.trim())
+    .refine(v => v.length > 0, { message: 'Full name is required' })
+    .refine(v => v.length >= 2, { message: 'Full name must be at least 2 characters' })
+    .refine(v => v.length <= 80, { message: 'Full name cannot exceed 80 characters' })
+    .refine(v => /[a-zA-Z]/.test(v), { message: 'Please enter a valid name' }),
+
+  phone: z
+    .string()
+    .refine(v => v.trim().length > 0, { message: 'Phone number is required' })
+    .refine(
+      v => normalizeIndianPhone(v) !== null,
+      { message: 'Enter a valid 10-digit Indian mobile number' }
+    ),
+
+  email: z
+    .string()
+    .optional()
+    .transform(v => (v || '').trim().toLowerCase())
+    .refine(
+      v => v === '' || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v),
+      { message: 'Enter a valid email address' }
+    ),
+
+  dob: z
+    .string()
+    .optional()
+    .refine(v => {
+      if (!v || v.trim() === '') return true;
+      const d = new Date(v);
+      if (isNaN(d.getTime())) return false;
+      return d <= new Date();
+    }, { message: 'Date of birth cannot be in the future' })
+    .refine(v => {
+      if (!v || v.trim() === '') return true;
+      const d = new Date(v);
+      if (isNaN(d.getTime())) return false;
+      const ageMsDiff = Date.now() - d.getTime();
+      const ageYears = ageMsDiff / (1000 * 60 * 60 * 24 * 365.25);
+      return ageYears <= 100;
+    }, { message: 'Please enter a valid date of birth' }),
+
+  gender: z
+    .enum(['Male', 'Female', 'Other', 'Not specified'])
+    .optional()
+    .default('Male'),
+
+  occupation: z
+    .string()
+    .optional()
+    .transform(v => (v || '').trim())
+    .refine(v => v.length <= 100, { message: 'Occupation cannot exceed 100 characters' }),
+
+  // Emergency contact: supports "Father: 9876543210" format.
+  // We extract a 10-digit phone suffix and validate that, while preserving the prefix.
+  emergencyContact: z
+    .string()
+    .optional()
+    .refine(v => {
+      if (!v || v.trim() === '') return true;
+      // Extract last contiguous digit block of 10+ characters
+      const digitPart = v.replace(/[^0-9+]/g, ' ').trim().split(/\s+/).filter(Boolean).pop() || '';
+      return normalizeIndianPhone(digitPart) !== null;
+    }, { message: 'Enter a valid emergency contact number (10-digit Indian mobile)' }),
+
+  address: z
+    .string()
+    .optional()
+    .transform(v => (v || '').trim())
+    .refine(v => v.length <= 250, { message: 'Address cannot exceed 250 characters' }),
 });
+
 
 const healthSchema = z.object({
   weight: z.number().positive('Weight must be a positive number'),
@@ -587,52 +656,58 @@ function Field({ icon: Icon, label, value }: { icon: any; label: string; value: 
   );
 }
 
-// ─── EDIT PERSONAL INFO MODAL COMPONENT ───
+// ─── EDIT PERSONAL INFO MODAL COMPONENT ─────────────────────────────────────
 
 function EditPersonalInfoModal({ member, onClose, onSave }: { member: any; onClose: () => void; onSave: () => void }) {
   const [name, setName] = useState(member.name || '');
   const [phone, setPhone] = useState(member.phone || '');
   const [email, setEmail] = useState(member.email || '');
   const [dob, setDob] = useState(member.dob || '');
-  const [gender, setGender] = useState(member.gender || 'Male');
+  const [gender, setGender] = useState<'Male'|'Female'|'Other'|'Not specified'>(
+    (['Male','Female','Other','Not specified'].includes(member.gender)) ? member.gender : 'Male'
+  );
   const [occupation, setOccupation] = useState(member.occupation || '');
   const [emergencyContact, setEmergencyContact] = useState(member.emergencyContact || '');
   const [address, setAddress] = useState(member.address || '');
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [submitError, setSubmitError] = useState('');
+
+  // Helpers — clear a single field error as user types
+  const clearErr = (field: string) =>
+    setErrors(prev => { if (!prev[field]) return prev; const next = { ...prev }; delete next[field]; return next; });
 
   const handleSave = async () => {
+    setSubmitError('');
     const parseRes = personalInfoSchema.safeParse({
-      name,
-      phone,
-      email,
-      dob,
-      gender,
-      occupation,
-      emergencyContact,
-      address,
+      name, phone, email: email || '', dob: dob || '', gender, occupation: occupation || '', emergencyContact: emergencyContact || '', address: address || '',
     });
 
     if (!parseRes.success) {
       const errMap: Record<string, string> = {};
-      parseRes.error.issues.forEach((issue) => {
-        if (issue.path[0]) errMap[issue.path[0] as string] = issue.message;
+      parseRes.error.issues.forEach(issue => {
+        const key = issue.path[0] as string;
+        if (key && !errMap[key]) errMap[key] = issue.message;
       });
       setErrors(errMap);
       return;
     }
 
+    // Normalize phone to bare 10 digits for storage consistency
+    const normalized = parseRes.data;
+    const normalizedPhone = normalizeIndianPhone(phone) ?? phone.trim();
+
     setSaving(true);
     try {
-      const updatePayload = {
-        name: name.trim(),
-        phone: phone.trim(),
-        email: email.trim(),
-        dob,
-        gender,
-        occupation: occupation.trim(),
-        emergencyContact: emergencyContact.trim(),
-        address: address.trim(),
+      const updatePayload: Record<string, any> = {
+        name: normalized.name,
+        phone: normalizedPhone,
+        email: normalized.email ?? '',
+        dob: normalized.dob ?? '',
+        gender: normalized.gender ?? 'Male',
+        occupation: normalized.occupation ?? '',
+        emergencyContact: (emergencyContact || '').trim(),
+        address: normalized.address ?? '',
         updatedAt: new Date().toISOString(),
       };
 
@@ -644,78 +719,137 @@ function EditPersonalInfoModal({ member, onClose, onSave }: { member: any; onClo
       onSave();
       onClose();
     } catch (err: any) {
-      toast.error('Failed to update personal info: ' + (err.message || err));
+      console.error('[EditPersonalInfo] Firebase update error:', err);
+      setSubmitError('Unable to save changes. Please try again.');
     } finally {
       setSaving(false);
     }
   };
 
+  const inputCls = (field: string) =>
+    `w-full text-xs bg-slate-50 border rounded-xl px-3 py-2.5 focus:outline-none text-slate-800 font-medium transition-colors ${
+      errors[field]
+        ? 'border-red-400 bg-red-50/30 focus:border-red-500'
+        : 'border-slate-200 focus:border-blue-500'
+    }`;
+
   return (
     <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-white rounded-3xl shadow-2xl border border-slate-200 w-full max-w-lg p-6 z-10 text-slate-900 space-y-5">
+      <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => { if (!saving) onClose(); }} />
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="edit-personal-dialog-title"
+        className="relative bg-white rounded-3xl shadow-2xl border border-slate-200 w-full max-w-lg p-6 z-10 text-slate-900 space-y-5"
+      >
+        {/* Header */}
         <div className="flex items-center justify-between border-b border-slate-100 pb-3">
           <div className="flex items-center gap-2">
             <User className="text-blue-600" size={20} />
-            <h3 className="font-extrabold text-slate-900 text-lg">Edit Personal Info</h3>
+            <h3 id="edit-personal-dialog-title" className="font-extrabold text-slate-900 text-lg">Edit Personal Info</h3>
           </div>
-          <button onClick={onClose} className="p-1 text-slate-400 hover:text-slate-700 bg-transparent border-none cursor-pointer">✕</button>
+          <button
+            onClick={() => { if (!saving) onClose(); }}
+            className="p-1 text-slate-400 hover:text-slate-700 bg-transparent border-none cursor-pointer"
+            aria-label="Close dialog"
+          >✕</button>
         </div>
 
-        <div className="space-y-4 max-h-[65vh] overflow-y-auto pr-1 text-xs font-semibold custom-scrollbar">
+        {/* Form Fields */}
+        <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-1 custom-scrollbar">
+          {/* Row 1: Full Name + Phone */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-[9px] font-black uppercase text-slate-500 mb-1">Full Name *</label>
+              <label htmlFor="ep-name" className="block text-[9px] font-black uppercase tracking-wider text-slate-500 mb-1.5">
+                Full Name <span className="text-red-500">*</span>
+              </label>
               <input
+                id="ep-name"
                 type="text"
                 value={name}
-                onChange={(e) => { setName(e.target.value); if (errors.name) setErrors(p => ({ ...p, name: '' })); }}
-                className={`w-full text-xs bg-slate-50 border rounded-xl px-3 py-2.5 focus:outline-none text-slate-800 font-bold ${errors.name ? 'border-red-500 bg-red-50/20' : 'border-slate-200 focus:border-blue-500'}`}
+                autoComplete="name"
+                aria-describedby={errors.name ? 'ep-name-err' : undefined}
+                aria-invalid={!!errors.name}
+                onChange={e => { setName(e.target.value); clearErr('name'); }}
+                className={inputCls('name')}
               />
-              {errors.name && <p className="text-[10px] text-red-500 font-bold mt-1 flex items-center gap-1"><AlertCircle size={11} /> {errors.name}</p>}
+              {errors.name && (
+                <p id="ep-name-err" className="text-[11px] text-red-500 font-semibold mt-1.5 flex items-center gap-1">
+                  <AlertCircle size={11} className="shrink-0" /> {errors.name}
+                </p>
+              )}
             </div>
             <div>
-              <label className="block text-[9px] font-black uppercase text-slate-500 mb-1">Phone Number *</label>
+              <label htmlFor="ep-phone" className="block text-[9px] font-black uppercase tracking-wider text-slate-500 mb-1.5">
+                Phone Number <span className="text-red-500">*</span>
+              </label>
               <input
+                id="ep-phone"
                 type="tel"
                 value={phone}
-                onChange={(e) => { setPhone(e.target.value); if (errors.phone) setErrors(p => ({ ...p, phone: '' })); }}
-                className={`w-full text-xs bg-slate-50 border rounded-xl px-3 py-2.5 focus:outline-none text-slate-800 font-bold ${errors.phone ? 'border-red-500 bg-red-50/20' : 'border-slate-200 focus:border-blue-500'}`}
+                autoComplete="tel"
+                aria-describedby={errors.phone ? 'ep-phone-err' : undefined}
+                aria-invalid={!!errors.phone}
+                onChange={e => { setPhone(e.target.value); clearErr('phone'); }}
+                className={inputCls('phone')}
               />
-              {errors.phone && <p className="text-[10px] text-red-500 font-bold mt-1 flex items-center gap-1"><AlertCircle size={11} /> {errors.phone}</p>}
+              {errors.phone && (
+                <p id="ep-phone-err" className="text-[11px] text-red-500 font-semibold mt-1.5 flex items-center gap-1">
+                  <AlertCircle size={11} className="shrink-0" /> {errors.phone}
+                </p>
+              )}
             </div>
           </div>
 
+          {/* Row 2: Email + DOB */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-[9px] font-black uppercase text-slate-500 mb-1">Email Address</label>
+              <label htmlFor="ep-email" className="block text-[9px] font-black uppercase tracking-wider text-slate-500 mb-1.5">Email Address</label>
               <input
+                id="ep-email"
                 type="email"
                 value={email}
-                onChange={(e) => { setEmail(e.target.value); if (errors.email) setErrors(p => ({ ...p, email: '' })); }}
-                className={`w-full text-xs bg-slate-50 border rounded-xl px-3 py-2.5 focus:outline-none text-slate-800 ${errors.email ? 'border-red-500 bg-red-50/20' : 'border-slate-200 focus:border-blue-500'}`}
+                autoComplete="email"
+                aria-describedby={errors.email ? 'ep-email-err' : undefined}
+                aria-invalid={!!errors.email}
+                onChange={e => { setEmail(e.target.value); clearErr('email'); }}
+                className={inputCls('email')}
               />
-              {errors.email && <p className="text-[10px] text-red-500 font-bold mt-1 flex items-center gap-1"><AlertCircle size={11} /> {errors.email}</p>}
+              {errors.email && (
+                <p id="ep-email-err" className="text-[11px] text-red-500 font-semibold mt-1.5 flex items-center gap-1">
+                  <AlertCircle size={11} className="shrink-0" /> {errors.email}
+                </p>
+              )}
             </div>
             <div>
-              <label className="block text-[9px] font-black uppercase text-slate-500 mb-1">Date of Birth</label>
+              <label htmlFor="ep-dob" className="block text-[9px] font-black uppercase tracking-wider text-slate-500 mb-1.5">Date of Birth</label>
               <input
+                id="ep-dob"
                 type="date"
                 value={dob}
-                onChange={(e) => { setDob(e.target.value); if (errors.dob) setErrors(p => ({ ...p, dob: '' })); }}
-                className={`w-full text-xs bg-slate-50 border rounded-xl px-3 py-2.5 focus:outline-none text-slate-800 ${errors.dob ? 'border-red-500 bg-red-50/20' : 'border-slate-200 focus:border-blue-500'}`}
+                max={new Date().toISOString().split('T')[0]}
+                aria-describedby={errors.dob ? 'ep-dob-err' : undefined}
+                aria-invalid={!!errors.dob}
+                onChange={e => { setDob(e.target.value); clearErr('dob'); }}
+                className={inputCls('dob')}
               />
-              {errors.dob && <p className="text-[10px] text-red-500 font-bold mt-1 flex items-center gap-1"><AlertCircle size={11} /> {errors.dob}</p>}
+              {errors.dob && (
+                <p id="ep-dob-err" className="text-[11px] text-red-500 font-semibold mt-1.5 flex items-center gap-1">
+                  <AlertCircle size={11} className="shrink-0" /> {errors.dob}
+                </p>
+              )}
             </div>
           </div>
 
+          {/* Row 3: Gender + Occupation */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-[9px] font-black uppercase text-slate-500 mb-1">Gender</label>
+              <label htmlFor="ep-gender" className="block text-[9px] font-black uppercase tracking-wider text-slate-500 mb-1.5">Gender</label>
               <select
+                id="ep-gender"
                 value={gender}
-                onChange={(e) => setGender(e.target.value)}
-                className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none text-slate-800 font-semibold cursor-pointer"
+                onChange={e => setGender(e.target.value as any)}
+                className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:border-blue-500 text-slate-800 font-medium cursor-pointer transition-colors"
               >
                 <option value="Male">Male</option>
                 <option value="Female">Female</option>
@@ -724,55 +858,99 @@ function EditPersonalInfoModal({ member, onClose, onSave }: { member: any; onClo
               </select>
             </div>
             <div>
-              <label className="block text-[9px] font-black uppercase text-slate-500 mb-1">Occupation</label>
+              <label htmlFor="ep-occupation" className="block text-[9px] font-black uppercase tracking-wider text-slate-500 mb-1.5">Occupation</label>
               <input
+                id="ep-occupation"
                 type="text"
                 value={occupation}
-                onChange={(e) => setOccupation(e.target.value)}
                 placeholder="e.g. Software Engineer"
-                className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none text-slate-800"
+                aria-describedby={errors.occupation ? 'ep-occupation-err' : undefined}
+                aria-invalid={!!errors.occupation}
+                onChange={e => { setOccupation(e.target.value); clearErr('occupation'); }}
+                className={inputCls('occupation')}
               />
+              {errors.occupation && (
+                <p id="ep-occupation-err" className="text-[11px] text-red-500 font-semibold mt-1.5 flex items-center gap-1">
+                  <AlertCircle size={11} className="shrink-0" /> {errors.occupation}
+                </p>
+              )}
             </div>
           </div>
 
+          {/* Row 4: Emergency Contact + Address */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-[9px] font-black uppercase text-slate-500 mb-1">Emergency Contact</label>
+              <label htmlFor="ep-emergency" className="block text-[9px] font-black uppercase tracking-wider text-slate-500 mb-1.5">Emergency Contact</label>
               <input
+                id="ep-emergency"
                 type="text"
                 value={emergencyContact}
-                onChange={(e) => setEmergencyContact(e.target.value)}
                 placeholder="e.g. Father: 9876543210"
-                className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none text-slate-800"
+                aria-describedby={errors.emergencyContact ? 'ep-emergency-err' : undefined}
+                aria-invalid={!!errors.emergencyContact}
+                onChange={e => { setEmergencyContact(e.target.value); clearErr('emergencyContact'); }}
+                className={inputCls('emergencyContact')}
               />
+              {errors.emergencyContact && (
+                <p id="ep-emergency-err" className="text-[11px] text-red-500 font-semibold mt-1.5 flex items-center gap-1">
+                  <AlertCircle size={11} className="shrink-0" /> {errors.emergencyContact}
+                </p>
+              )}
             </div>
             <div>
-              <label className="block text-[9px] font-black uppercase text-slate-500 mb-1">Residential Address</label>
+              <label htmlFor="ep-address" className="block text-[9px] font-black uppercase tracking-wider text-slate-500 mb-1.5">Residential Address</label>
               <input
+                id="ep-address"
                 type="text"
                 value={address}
-                onChange={(e) => setAddress(e.target.value)}
                 placeholder="e.g. Mohali, Punjab"
-                className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none text-slate-800"
+                aria-describedby={errors.address ? 'ep-address-err' : undefined}
+                aria-invalid={!!errors.address}
+                onChange={e => { setAddress(e.target.value); clearErr('address'); }}
+                className={inputCls('address')}
               />
+              {errors.address && (
+                <p id="ep-address-err" className="text-[11px] text-red-500 font-semibold mt-1.5 flex items-center gap-1">
+                  <AlertCircle size={11} className="shrink-0" /> {errors.address}
+                </p>
+              )}
             </div>
           </div>
+
+          {/* Firebase submit error */}
+          {submitError && (
+            <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-xl px-3.5 py-2.5 text-[11px] text-red-700 font-semibold">
+              <AlertCircle size={13} className="shrink-0" /> {submitError}
+            </div>
+          )}
         </div>
 
+        {/* Footer */}
         <div className="flex justify-end gap-3 pt-3 border-t border-slate-100">
-          <button onClick={onClose} className="px-4 py-2 text-slate-500 hover:text-slate-800 text-xs font-black uppercase border-none cursor-pointer">Cancel</button>
           <button
+            type="button"
+            onClick={() => { if (!saving) onClose(); }}
+            disabled={saving}
+            className="px-4 py-2 text-slate-500 hover:text-slate-800 text-xs font-black uppercase border-none cursor-pointer disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
             onClick={handleSave}
             disabled={saving}
-            className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black uppercase border-none cursor-pointer shadow-md disabled:opacity-50 active:scale-95 transition-all"
+            className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black uppercase border-none cursor-pointer shadow-md disabled:opacity-60 active:scale-95 transition-all flex items-center gap-1.5"
           >
-            {saving ? 'Saving...' : 'Save Changes'}
+            {saving ? (
+              <><svg className="animate-spin w-3 h-3" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg> Saving...</>
+            ) : 'Save Changes'}
           </button>
         </div>
       </div>
     </div>
   );
 }
+
 
 // ─── EDIT HEALTH & MEASUREMENTS MODAL COMPONENT ───
 
