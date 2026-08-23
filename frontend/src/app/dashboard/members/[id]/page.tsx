@@ -272,86 +272,140 @@ export default function ClientProfileSystem() {
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] p-6 font-sans pb-32">
-      {/* 1. TOP HEADER SECTION */}
-      <div className="bg-white rounded-[32px] shadow-[0_2px_20px_rgba(0,0,0,0.02)] border border-slate-100 p-8 mb-6 flex items-start justify-between relative z-50">
-        <div className="absolute inset-0 rounded-[32px] overflow-hidden pointer-events-none">
-          <div className="absolute top-0 right-0 w-[400px] h-[400px] bg-blue-50 rounded-full blur-3xl opacity-50 -translate-y-1/2 translate-x-1/3" />
-        </div>
-        
-        <div className="relative z-10 flex gap-8 w-full">
-          <div className="flex flex-col items-center gap-4">
-            <button onClick={() => router.push('/dashboard/members')} className="w-full flex items-center justify-center gap-2 text-xs font-bold text-slate-500 hover:text-slate-900 bg-slate-50 py-2 rounded-xl border border-slate-200 transition-all hover:bg-slate-100">
-              <ArrowLeft size={14} /> Back
-            </button>
-            <div 
-              onClick={() => setShowPhotoModal(true)}
-              className="w-32 h-32 rounded-3xl bg-slate-100 border-[4px] border-white shadow-xl overflow-hidden relative group cursor-pointer flex-shrink-0"
-              title="Click to Upload / Change Profile Photo"
-            >
-              <MemberAvatar member={member} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" size={128} />
-              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white gap-1">
-                <Camera className="text-white" size={24} />
-                <span className="text-[9px] font-black uppercase tracking-wider">Change Photo</span>
+      {/* ══ PREMIUM HERO CARD ══════════════════════════════════════════════ */}
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.35, ease: 'easeOut' }}
+        className="bg-white rounded-[24px] border border-slate-200/80 shadow-[0_2px_24px_rgba(11,92,190,0.06)] mb-6 overflow-hidden relative"
+      >
+        {/* Subtle corner glow */}
+        <div className="absolute top-0 right-0 w-64 h-64 bg-blue-50 rounded-full blur-3xl opacity-40 -translate-y-1/2 translate-x-1/3 pointer-events-none" />
+
+        <div className="relative z-10 p-5 sm:p-7">
+
+          {/* ── BACK NAV ──────────────────────────────────────────────────── */}
+          <button
+            onClick={() => router.push('/dashboard/members')}
+            className="inline-flex items-center gap-1.5 text-[11px] font-bold text-slate-400 hover:text-slate-700 bg-transparent border-none cursor-pointer mb-5 transition-colors group"
+          >
+            <ArrowLeft size={13} className="group-hover:-translate-x-0.5 transition-transform" />
+            Back to Members
+          </button>
+
+          {/* ── 3-ZONE GRID ───────────────────────────────────────────────── */}
+          <div className="flex flex-col lg:flex-row lg:items-start gap-6">
+
+            {/* ── ZONE 1: IDENTITY ──────────────────────────────────────── */}
+            <div className="flex items-start gap-4 lg:w-[260px] shrink-0">
+              {/* Avatar with camera overlay */}
+              <div
+                onClick={() => setShowPhotoModal(true)}
+                className="relative shrink-0 cursor-pointer group"
+                title="Click to change profile photo"
+              >
+                <div className="w-[88px] h-[88px] sm:w-[96px] sm:h-[96px] rounded-[20px] overflow-hidden border-[3px] border-white shadow-[0_4px_16px_rgba(0,0,0,0.10)] bg-slate-100">
+                  <MemberAvatar member={member} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-400" size={96} />
+                </div>
+                {/* Camera overlay */}
+                <div className="absolute inset-0 rounded-[20px] bg-black/35 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                  <Camera size={18} className="text-white drop-shadow" />
+                </div>
+                {/* Status dot */}
+                <span className={`absolute -bottom-1 -right-1 w-5 h-5 rounded-full border-2 border-white flex items-center justify-center shadow-sm ${daysLeft > 0 ? 'bg-emerald-400' : 'bg-rose-400'}`} />
+              </div>
+
+              {/* Name + Status + ID */}
+              <div className="min-w-0">
+                <h1 className="text-[26px] sm:text-[30px] font-black text-slate-900 tracking-tight leading-tight truncate">
+                  {member.name || 'Member'}
+                </h1>
+                <div className="flex items-center gap-2 mt-1.5 mb-2.5 flex-wrap">
+                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wide border ${
+                    daysLeft > 7
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                      : daysLeft > 0
+                        ? 'bg-amber-50 text-amber-700 border-amber-200'
+                        : 'bg-rose-50 text-rose-700 border-rose-200'
+                  }`}>
+                    {daysLeft > 7 ? 'Active' : daysLeft > 0 ? 'Expiring' : 'Expired'}
+                  </span>
+                </div>
+                <div className="inline-flex items-center gap-1 px-2 py-0.5 bg-indigo-50 border border-indigo-200 rounded-lg">
+                  <span className="text-[10px] font-black text-indigo-500 font-mono">
+                    #{member.clientId || member.memberId || member.id}
+                  </span>
+                </div>
               </div>
             </div>
-            <button
-              type="button"
-              onClick={() => setShowPhotoModal(true)}
-              className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-xl text-[10px] font-extrabold transition-all border border-blue-200 cursor-pointer flex items-center gap-1"
-            >
-              <Camera size={12} />
-              <span>Upload Photo</span>
-            </button>
-          </div>
 
-          <div className="flex-1 flex flex-col justify-center">
-            <div className="flex items-center gap-3 mb-2">
-              <h1 className="text-4xl font-black text-slate-900 tracking-tight">{member.name || 'Member'}</h1>
-              <span className="px-3 py-1 bg-emerald-50 text-emerald-600 rounded-full text-xs font-black uppercase tracking-wider border border-emerald-100">
-                Active
-              </span>
-            </div>
-            
-            <p className="text-sm font-semibold text-slate-500 flex items-center gap-2 mb-6 flex-wrap">
-              <span className="text-slate-400">Bio ID:</span> 
-              <span className="font-mono font-black text-indigo-600 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-lg">
-                #{member.biometricId || member.deviceUserId || member.clientId || member.customId || member.memberId || member.id}
-              </span>
-              <span className="text-slate-300">|</span>
-              <span className="text-slate-400">Ref Code:</span> <span className="font-mono font-bold text-slate-800">{member.memberId || member.id}</span>
-              <span className="text-slate-300">|</span>
-              <span className="text-slate-400">Plan:</span> <span className="font-bold text-slate-800">{member.plan || 'Standard'}</span>
-              <span className="text-slate-300">|</span>
-              <span className="text-slate-400">Branch:</span> <span className="font-bold text-slate-800">{member.branch || 'Mohali, Punjab'}</span>
-            </p>
+            {/* ── ZONE 2: MEMBERSHIP + METADATA ─────────────────────────── */}
+            <div className="flex-1 min-w-0 space-y-4">
 
-            <div className="flex flex-wrap items-center gap-8">
-              <div>
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Health Score</span>
-                <div className={`flex items-center gap-1.5 text-lg font-black ${healthScore < 40 ? 'text-emerald-500' : healthScore < 70 ? 'text-amber-500' : 'text-red-500'}`}>
-                  <Activity size={18} /> {Math.max(0, 100 - healthScore)}%
+              {/* Membership block */}
+              <div className="bg-slate-50/80 border border-slate-200/60 rounded-2xl px-4 py-3.5 space-y-2.5">
+                <div className="flex items-start justify-between gap-4 flex-wrap">
+                  <div>
+                    <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-0.5">Membership</span>
+                    <div className="flex items-baseline gap-2 flex-wrap">
+                      <span className="text-lg font-extrabold text-slate-900">{member.plan || 'Standard'}</span>
+                      {(member.amount || member.price || member.totalBilled) && (
+                        <span className="text-sm font-bold text-[#0b5cbe]">
+                          ₹{Number(member.amount || member.price || member.totalBilled || 0).toLocaleString('en-IN')}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-0.5">Expires</span>
+                    <span className="text-sm font-bold text-slate-800">
+                      {member.expiryDate
+                        ? new Date(member.expiryDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+                        : '—'}
+                    </span>
+                  </div>
                 </div>
+
+                {/* Progress bar */}
+                {(() => {
+                  const totalDays = (() => {
+                    const plan = String(member.plan || '').toLowerCase();
+                    if (plan.includes('annual') || plan.includes('yearly') || plan.includes('12')) return 365;
+                    if (plan.includes('6') || plan.includes('semi')) return 180;
+                    if (plan.includes('3') || plan.includes('quarter')) return 90;
+                    if (plan.includes('2')) return 60;
+                    return 30;
+                  })();
+                  const pct = totalDays > 0 ? Math.max(0, Math.min(100, (daysLeft / totalDays) * 100)) : 0;
+                  const barColor = daysLeft > 14 ? '#10b981' : daysLeft > 7 ? '#f59e0b' : '#ef4444';
+                  return (
+                    <div className="space-y-1">
+                      <div className="h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                        <div className="h-full rounded-full transition-all duration-700" style={{ width: `${pct}%`, backgroundColor: barColor }} />
+                      </div>
+                      <p className="text-[10px] font-bold text-slate-500">
+                        {daysLeft > 0 ? `${daysLeft} days remaining` : 'Membership expired'}
+                      </p>
+                    </div>
+                  );
+                })()}
               </div>
-              <div>
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Attendance</span>
-                <div className="flex items-center gap-1.5 text-lg font-black text-blue-500">
-                  <Calendar size={18} /> {attendancePct}%
-                </div>
-              </div>
-              <div>
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Days Left</span>
-                <div className={`flex items-center gap-1.5 text-lg font-black ${daysLeft <= 0 ? 'text-red-500' : 'text-[#0b5cbe]'}`}>
-                  <Clock size={18} /> {daysLeft > 0 ? `${daysLeft} Days` : 'Expired'}
-                </div>
-              </div>
-              <div>
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Payment</span>
-                <div className={`flex items-center gap-1.5 text-sm font-black ${payStatus === 'PAID' ? 'text-emerald-600' : 'text-orange-500'}`}>
-                  <DollarSign size={16} />
-                  {payStatus === 'PAID' ? 'Fully Paid ✅' : `₹${outstanding.toLocaleString('en-IN')} Due`}
-                </div>
-              </div>
-              <div>
+
+              {/* Compact metadata chips */}
+              <div className="flex flex-wrap items-center gap-2">
+                {/* Branch */}
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-white border border-slate-200 rounded-full text-[11px] font-semibold text-slate-600 shadow-2xs">
+                  <span>📍</span> {member.branch || 'Mohali, Punjab'}
+                </span>
+                {/* Payment status */}
+                <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border shadow-2xs ${
+                  payStatus === 'PAID'
+                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                    : 'bg-amber-50 text-amber-700 border-amber-200'
+                }`}>
+                  {payStatus === 'PAID' ? '✓ Fully Paid' : `₹${outstanding.toLocaleString('en-IN')} Due`}
+                </span>
+                {/* Trainer (compact dropdown) */}
                 <TrainerSelectorDropdown
                   member={member}
                   onTrainerUpdated={({ trainerId, trainerName }) => {
@@ -359,43 +413,83 @@ export default function ClientProfileSystem() {
                   }}
                 />
               </div>
+
+              {/* ── SNAPSHOT METRICS ──────────────────────────────────── */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {[
+                  {
+                    label: 'Health Score',
+                    value: `${Math.max(0, 100 - healthScore)}%`,
+                    color: healthScore < 40 ? '#10b981' : healthScore < 70 ? '#f59e0b' : '#ef4444',
+                    icon: '❤️',
+                  },
+                  {
+                    label: 'Attendance',
+                    value: `${attendancePct}%`,
+                    color: attendancePct > 60 ? '#10b981' : attendancePct > 30 ? '#f59e0b' : '#94a3b8',
+                    icon: '📅',
+                  },
+                  {
+                    label: 'Days Left',
+                    value: daysLeft > 0 ? String(daysLeft) : '0',
+                    color: daysLeft > 14 ? '#0b5cbe' : daysLeft > 0 ? '#f59e0b' : '#ef4444',
+                    icon: '⏱',
+                  },
+                  {
+                    label: 'Payment',
+                    value: payStatus === 'PAID' ? 'Paid' : 'Due',
+                    color: payStatus === 'PAID' ? '#10b981' : '#f59e0b',
+                    icon: '💳',
+                  },
+                ].map(m => (
+                  <div key={m.label} className="bg-white border border-slate-200/80 rounded-xl px-3 py-2.5 flex items-center gap-2 shadow-2xs">
+                    <span className="text-base leading-none">{m.icon}</span>
+                    <div className="min-w-0">
+                      <div className="text-[9px] font-black uppercase tracking-wider text-slate-400 leading-tight">{m.label}</div>
+                      <div className="text-sm font-extrabold leading-tight mt-0.5 truncate" style={{ color: m.color }}>{m.value}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
 
-          <div className="flex items-center gap-2 self-start flex-wrap">
-            <button
-              onClick={() => setShowPtModal(true)}
-              className="py-2.5 px-4 bg-[#eaf3ff] hover:bg-blue-100 text-[#0b5cbe] border border-[#b9d6f5] rounded-xl flex justify-center items-center gap-1.5 text-xs font-black transition-all cursor-pointer shadow-xs active:scale-95"
-              title="Add Personal Training Bill"
-            >
-              <Dumbbell size={16} className="text-[#0b5cbe]" /> + Add PT Bill
-            </button>
+            {/* ── ZONE 3: ACTIONS ───────────────────────────────────────── */}
+            <div className="flex flex-row lg:flex-col gap-2 lg:w-[148px] shrink-0 flex-wrap">
+              <button
+                onClick={() => setShowPtModal(true)}
+                className="flex-1 lg:flex-none py-2.5 px-4 bg-[#0b5cbe] hover:bg-blue-700 text-white rounded-xl flex items-center justify-center gap-1.5 text-xs font-extrabold transition-all cursor-pointer shadow-md hover:shadow-[0_4px_12px_rgba(11,92,190,0.35)] active:scale-[0.98] border-none"
+                title="Add Personal Training Bill"
+              >
+                <Dumbbell size={14} /> + Add PT Bill
+              </button>
+              <button
+                onClick={() => {
+                  const rawPhone = (member.phone || '').replace(/\D/g, '');
+                  const cleanPhone = rawPhone.length === 10 ? `91${rawPhone}` : rawPhone;
+                  if (cleanPhone) window.open(`https://wa.me/${cleanPhone}`, '_blank');
+                  else toast.error('No valid phone number for WhatsApp');
+                }}
+                className="flex-1 lg:flex-none py-2.5 px-4 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-xl flex items-center justify-center gap-1.5 text-xs font-extrabold transition-all cursor-pointer shadow-sm active:scale-[0.98]"
+                title="Send WhatsApp Message"
+              >
+                <MessageSquare size={14} /> WhatsApp
+              </button>
+              <button
+                onClick={() => {
+                  if (member.phone) window.location.href = `tel:${member.phone}`;
+                  else toast.error('No phone number recorded');
+                }}
+                className="flex-1 lg:flex-none py-2.5 px-4 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-xl flex items-center justify-center gap-1.5 text-xs font-extrabold transition-all cursor-pointer shadow-sm active:scale-[0.98]"
+                title="Call Member"
+              >
+                <Phone size={14} /> Call
+              </button>
+            </div>
 
-            <button
-              onClick={() => {
-                const rawPhone = (member.phone || '').replace(/\D/g, '');
-                const cleanPhone = rawPhone.length === 10 ? `91${rawPhone}` : rawPhone;
-                if (cleanPhone) window.open(`https://wa.me/${cleanPhone}`, '_blank');
-                else toast.error('No valid phone number for WhatsApp');
-              }}
-              className="py-2.5 px-4 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-xl flex justify-center items-center gap-1.5 text-xs font-black transition-all cursor-pointer shadow-sm active:scale-95"
-              title="Send WhatsApp Message"
-            >
-              <MessageSquare size={16} /> WhatsApp
-            </button>
-            <button
-              onClick={() => {
-                if (member.phone) window.location.href = `tel:${member.phone}`;
-                else toast.error('No phone number recorded');
-              }}
-              className="py-2.5 px-4 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-xl flex justify-center items-center gap-1.5 text-xs font-black transition-all cursor-pointer shadow-sm active:scale-95"
-              title="Call Member"
-            >
-              <Phone size={16} /> Call
-            </button>
-          </div>
-        </div>
-      </div>
+          </div>{/* end 3-zone grid */}
+        </div>{/* end inner padding */}
+      </motion.div>
+      {/* ══ END HERO CARD ══════════════════════════════════════════════════ */}
 
       {/* 2. PROFILE NAVIGATION */}
       <div className="flex items-center gap-2 overflow-x-auto pb-6 scrollbar-hide">
