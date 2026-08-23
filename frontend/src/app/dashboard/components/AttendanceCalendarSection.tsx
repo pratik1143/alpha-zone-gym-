@@ -508,22 +508,19 @@ export default function AttendanceCalendarSection({
       </div>
 
       {/* ─── 2. ATTENDANCE CALENDAR (COMPACT PANEL - RIGHT ~35% / 4-5 COLS) ─── */}
-      <div className="lg:col-span-5 xl:col-span-4 bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs flex flex-col justify-between h-full min-h-[460px]">
+      <div className="lg:col-span-5 xl:col-span-4 bg-white border border-slate-200/80 rounded-2xl p-4 sm:p-5 shadow-xs flex flex-col justify-between h-full min-h-[460px] min-w-0 overflow-hidden">
         
-        {/* Header with Title & Navigation Controls */}
-        <div>
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
-            <div className="flex items-center gap-1.5 shrink-0">
-              <div className="w-6 h-6 rounded-lg bg-[#eaf3ff] text-[#0b5cbe] flex items-center justify-center">
-                <Calendar size={13} strokeWidth={2.5} />
-              </div>
-              <span className="text-[11.5px] font-black uppercase tracking-wider text-slate-900 font-display">
-                ATTENDANCE CALENDAR
-              </span>
+        {/* Header with 2 Responsive Rows */}
+        <div className="w-full min-w-0">
+          {/* ROW 1: Controls & Navigation Bar */}
+          <div className="flex items-center justify-between gap-1.5 flex-wrap w-full min-w-0 pb-2.5 border-b border-slate-100">
+            {/* Left: Calendar Icon badge */}
+            <div className="w-7 h-7 rounded-lg bg-[#eaf3ff] text-[#0b5cbe] flex items-center justify-center shrink-0 border border-[#b9d6f5]">
+              <Calendar size={14} strokeWidth={2.5} />
             </div>
 
-            {/* Navigation Controls */}
-            <div className="flex items-center gap-1 shrink-0 flex-wrap">
+            {/* Right: Controls (Month, Year, Today, Prev, Next) */}
+            <div className="flex items-center gap-1 flex-wrap shrink-0">
               <select
                 value={selectedMonth}
                 onChange={e => setSelectedMonth(Number(e.target.value))}
@@ -551,27 +548,39 @@ export default function AttendanceCalendarSection({
                 Today
               </button>
 
-              <button
-                onClick={handlePrevMonth}
-                className="w-6 h-6 rounded-lg bg-slate-100 hover:bg-[#eaf3ff] text-[#0b5cbe] flex items-center justify-center border border-slate-200 transition-all cursor-pointer"
-                title="Previous Month"
-              >
-                <ChevronLeft size={13} />
-              </button>
-              <button
-                onClick={handleNextMonth}
-                className="w-6 h-6 rounded-lg bg-slate-100 hover:bg-[#eaf3ff] text-[#0b5cbe] flex items-center justify-center border border-slate-200 transition-all cursor-pointer"
-                title="Next Month"
-              >
-                <ChevronRight size={13} />
-              </button>
+              <div className="flex items-center gap-0.5">
+                <button
+                  onClick={handlePrevMonth}
+                  className="w-6 h-6 rounded-lg bg-slate-100 hover:bg-[#eaf3ff] text-[#0b5cbe] flex items-center justify-center border border-slate-200 transition-all cursor-pointer"
+                  title="Previous Month"
+                >
+                  <ChevronLeft size={13} />
+                </button>
+                <button
+                  onClick={handleNextMonth}
+                  className="w-6 h-6 rounded-lg bg-slate-100 hover:bg-[#eaf3ff] text-[#0b5cbe] flex items-center justify-center border border-slate-200 transition-all cursor-pointer"
+                  title="Next Month"
+                >
+                  <ChevronRight size={13} />
+                </button>
+              </div>
             </div>
           </div>
 
+          {/* ROW 2: Title & Subtitle */}
+          <div className="pt-2 pb-1">
+            <h4 className="text-[12px] font-black uppercase tracking-wider text-slate-900 leading-tight font-display">
+              ATTENDANCE CALENDAR
+            </h4>
+            <p className="text-[10px] text-slate-400 font-medium leading-tight mt-0.5">
+              Track member &amp; staff attendance across every day
+            </p>
+          </div>
+
           {/* 7-Column Compact Grid */}
-          <div className="my-3">
+          <div className="my-2 w-full min-w-0">
             {/* Weekday Labels Header */}
-            <div className="grid grid-cols-7 gap-1 mb-1.5 text-center text-[9.5px] font-black text-slate-400 uppercase tracking-wider">
+            <div className="grid grid-cols-7 gap-1 mb-1 text-center text-[9px] font-black text-slate-400 uppercase tracking-wider w-full min-w-0">
               <span className="text-rose-600 font-extrabold">Su</span>
               <span>Mo</span>
               <span>Tu</span>
@@ -582,10 +591,10 @@ export default function AttendanceCalendarSection({
             </div>
 
             {/* Calendar Day Cells */}
-            <div className="grid grid-cols-7 gap-1 justify-items-center">
+            <div className="grid grid-cols-7 gap-1 justify-items-center w-full min-w-0">
               {calendarDays.map((day) => {
                 if (day.isOffset) {
-                  return <div key={day.key} className="w-full aspect-square bg-transparent" />;
+                  return <div key={day.key} className="w-full aspect-square bg-transparent min-w-0" />;
                 }
 
                 let cellBg = 'bg-slate-50 border-slate-200/80 text-slate-700 hover:border-[#0b5cbe] hover:bg-slate-100';
@@ -607,12 +616,12 @@ export default function AttendanceCalendarSection({
                   <div
                     key={day.key}
                     onClick={() => { if (day.ymd) setSelectedDateYmd(day.ymd); }}
-                    className={`w-full aspect-square rounded-lg border flex flex-col items-center justify-center relative cursor-pointer transition-all ${cellBg} ${
+                    className={`w-full aspect-square min-w-0 rounded-lg border flex flex-col items-center justify-center relative cursor-pointer transition-all ${cellBg} ${
                       day.isToday ? 'ring-2 ring-[#0b5cbe] ring-offset-1 z-10' : ''
                     } ${isSelected ? 'scale-105 shadow-md border-[#0b5cbe]' : 'hover:scale-105'}`}
                     title={`${day.ymd || ''} — ${day.totalPunches || 0} Punches`}
                   >
-                    <span className={`text-[10.5px] leading-none ${day.isSunday ? 'text-rose-600' : ''}`}>
+                    <span className={`text-[10px] leading-none ${day.isSunday ? 'text-rose-600' : ''}`}>
                       {day.dayNum}
                     </span>
 
@@ -634,30 +643,30 @@ export default function AttendanceCalendarSection({
 
         {/* Selected Day Inspector Popover / Banner */}
         {activeDayObj && (
-          <div className="bg-[#f4f8fd] border border-[#b9d7f7] rounded-xl p-2.5 my-2 text-xs">
-            <div className="flex items-center justify-between border-b border-[#b9d7f7]/60 pb-1.5">
-              <div className="font-extrabold text-slate-900 flex items-center gap-1.5 text-[11px]">
-                <span>{new Date(activeDayObj.ymd || todayStr).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })}</span>
-                {activeDayObj.isToday && <span className="bg-[#0b5cbe] text-white text-[7.5px] font-black px-1.5 py-0.2 rounded-full uppercase">Today</span>}
-                {activeDayObj.isSunday && <span className="bg-rose-100 text-rose-700 text-[7.5px] font-black px-1.5 py-0.2 rounded-full uppercase">Sun</span>}
+          <div className="bg-[#f4f8fd] border border-[#b9d7f7] rounded-xl p-2.5 my-1.5 text-xs w-full min-w-0 overflow-hidden">
+            <div className="flex items-center justify-between border-b border-[#b9d7f7]/60 pb-1.5 min-w-0">
+              <div className="font-extrabold text-slate-900 flex items-center gap-1.5 text-[11px] truncate min-w-0">
+                <span className="truncate">{new Date(activeDayObj.ymd || todayStr).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })}</span>
+                {activeDayObj.isToday && <span className="bg-[#0b5cbe] text-white text-[7.5px] font-black px-1.5 py-0.2 rounded-full uppercase shrink-0">Today</span>}
+                {activeDayObj.isSunday && <span className="bg-rose-100 text-rose-700 text-[7.5px] font-black px-1.5 py-0.2 rounded-full uppercase shrink-0">Sun</span>}
               </div>
 
-              <span className="text-[9.5px] font-mono font-black text-slate-700">
+              <span className="text-[9.5px] font-mono font-black text-slate-700 shrink-0 ml-1">
                 {activeDayObj.isBeforeLaunch ? 'Pre-launch' : `${activeDayObj.totalPunches || 0} punches`}
               </span>
             </div>
 
-            <div className="grid grid-cols-3 gap-1.5 pt-1.5 text-[9px]">
-              <div className="bg-white p-1.5 rounded border border-[#d9e7f7]">
-                <span className="text-slate-400 font-bold block uppercase text-[7.5px]">Members</span>
+            <div className="grid grid-cols-3 gap-1.5 pt-1.5 text-[9px] w-full min-w-0">
+              <div className="bg-white p-1.5 rounded border border-[#d9e7f7] min-w-0 overflow-hidden">
+                <span className="text-slate-400 font-bold block uppercase text-[7.5px] truncate">Members</span>
                 <span className="text-slate-900 font-black text-xs font-mono">{activeDayObj.memberCount || 0}</span>
               </div>
-              <div className="bg-white p-1.5 rounded border border-[#d9e7f7]">
-                <span className="text-slate-400 font-bold block uppercase text-[7.5px]">Staff</span>
+              <div className="bg-white p-1.5 rounded border border-[#d9e7f7] min-w-0 overflow-hidden">
+                <span className="text-slate-400 font-bold block uppercase text-[7.5px] truncate">Staff</span>
                 <span className="text-slate-900 font-black text-xs font-mono">{activeDayObj.staffCount || 0}</span>
               </div>
-              <div className="bg-white p-1.5 rounded border border-[#d9e7f7]">
-                <span className="text-slate-400 font-bold block uppercase text-[7.5px]">First Punch</span>
+              <div className="bg-white p-1.5 rounded border border-[#d9e7f7] min-w-0 overflow-hidden">
+                <span className="text-slate-400 font-bold block uppercase text-[7.5px] truncate">First Punch</span>
                 <span className="text-slate-700 font-bold text-[8.5px] font-mono block truncate">
                   {formatTimeStr(activeDayObj.firstCheckIn || null)}
                 </span>
@@ -667,8 +676,8 @@ export default function AttendanceCalendarSection({
         )}
 
         {/* Calendar Legend Bar */}
-        <div className="border-t border-slate-100 pt-2.5 flex flex-wrap items-center justify-between gap-1.5 text-[9.5px] font-bold text-slate-500">
-          <div className="flex items-center gap-1.5 flex-wrap">
+        <div className="border-t border-slate-100 pt-2 flex flex-wrap items-center justify-between gap-1 text-[9px] font-bold text-slate-500 w-full min-w-0">
+          <div className="flex items-center gap-1.5 flex-wrap min-w-0">
             <span className="text-slate-400 font-extrabold uppercase text-[8px]">Heat:</span>
             <span className="flex items-center gap-0.5"><span className="w-2 h-2 rounded bg-slate-100 border border-slate-200" /> 0</span>
             <span className="flex items-center gap-0.5"><span className="w-2 h-2 rounded bg-[#eaf3ff] border border-[#b9d7f7]" /> 1-5</span>
@@ -676,7 +685,7 @@ export default function AttendanceCalendarSection({
             <span className="flex items-center gap-0.5"><span className="w-2 h-2 rounded bg-[#0b5cbe]" /> 16+</span>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             <span className="flex items-center gap-1 text-rose-600"><span className="w-1.5 h-1.5 rounded-full bg-rose-500" /> Sun</span>
             <span className="flex items-center gap-1 text-[#0b5cbe]"><span className="w-1.5 h-1.5 rounded-full bg-[#0b5cbe]" /> Today</span>
           </div>
