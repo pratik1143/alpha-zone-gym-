@@ -512,18 +512,18 @@ export default function AttendanceCalendarSection({
         
         {/* Header with Title & Navigation Controls */}
         <div>
-          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-            <div>
-              <span className="text-[10px] font-black uppercase tracking-wider text-[#0b5cbe] block flex items-center gap-1.5 font-display">
-                <Calendar size={13} /> ATTENDANCE CALENDAR
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
+            <div className="flex items-center gap-1.5 shrink-0">
+              <div className="w-6 h-6 rounded-lg bg-[#eaf3ff] text-[#0b5cbe] flex items-center justify-center">
+                <Calendar size={13} strokeWidth={2.5} />
+              </div>
+              <span className="text-[11.5px] font-black uppercase tracking-wider text-slate-900 font-display">
+                ATTENDANCE CALENDAR
               </span>
-              <h3 className="text-xs font-black text-slate-900 mt-0.5">
-                Monthly Attendance Heatmap
-              </h3>
             </div>
 
             {/* Navigation Controls */}
-            <div className="flex items-center gap-1.5 shrink-0">
+            <div className="flex items-center gap-1 shrink-0 flex-wrap">
               <select
                 value={selectedMonth}
                 onChange={e => setSelectedMonth(Number(e.target.value))}
