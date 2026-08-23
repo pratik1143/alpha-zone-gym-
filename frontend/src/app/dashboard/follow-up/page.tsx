@@ -363,76 +363,34 @@ export default function FollowUpManager() {
   return (
     <div className="min-h-screen bg-slate-50/50 p-4 md:p-8 space-y-6 text-left">
       
-      {/* 1. ELEGANT HEADER */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs">
-        <div>
-          <div className="flex items-center gap-2">
-            <div className="w-10 h-10 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
-              <Phone size={20} />
+      {/* ── 1. ELEGANT HEADER (Unified Alpha Zone OS Style) ── */}
+      <div className="bg-white rounded-3xl p-6 lg:p-8 border border-slate-100 shadow-[0_4px_25px_rgba(0,0,0,0.03)] flex flex-col md:flex-row md:items-center justify-between gap-4 relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-80 h-80 bg-blue-500/5 rounded-full blur-3xl pointer-events-none -translate-y-1/2 translate-x-1/3" />
+        
+        <div className="flex items-center gap-3.5">
+          <div className="w-12 h-12 rounded-2xl bg-blue-50 border border-blue-100 text-[#0b5cbe] flex items-center justify-center font-bold shrink-0 shadow-2xs">
+            <Phone size={22} />
+          </div>
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <span className="px-2.5 py-0.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-[9.5px] font-black uppercase tracking-widest rounded-full shadow-2xs">
+                Follow-Up Engine
+              </span>
+              <span className="text-xs text-slate-400 font-mono font-bold">AZ-FLP-v4.0</span>
             </div>
-            <div>
-              <h1 className="text-xl font-black text-slate-900 tracking-tight">Follow-Up Manager</h1>
-              <p className="text-xs text-slate-500 font-medium">Automatic membership renewals, PT reminders & reception follow-ups</p>
-            </div>
+            <h1 className="text-2xl lg:text-3xl font-black tracking-tight text-slate-900 font-display">Follow-Up Manager</h1>
+            <p className="text-xs text-slate-500 font-medium mt-0.5">Automatic membership renewals, PT reminders & reception follow-ups</p>
           </div>
         </div>
 
-        <div className="flex items-center gap-3 flex-wrap">
-          {/* Main Navigation Queue Tabs */}
-          <div className="bg-slate-100 p-1 rounded-2xl flex items-center gap-1 border border-slate-200/60 flex-wrap">
-            <button
-              onClick={() => { setActiveTab('today'); setIsCustomDateFilterActive(false); }}
-              className={`px-3.5 py-2 text-xs font-black rounded-xl transition-all border-none cursor-pointer flex items-center gap-1.5 ${
-                activeTab === 'today' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <span>Today's Queue</span>
-              <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-extrabold ${activeTab === 'today' ? 'bg-blue-800 text-white' : 'bg-blue-100 text-blue-700'}`}>
-                {todaysCount}
-              </span>
-            </button>
-
-            <button
-              onClick={() => { setActiveTab('active'); }}
-              className={`px-3.5 py-2 text-xs font-bold rounded-xl transition-all border-none cursor-pointer flex items-center gap-1.5 ${
-                activeTab === 'active' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <span>All Active</span>
-              <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-slate-200 text-slate-700">
-                {totalActiveCount}
-              </span>
-            </button>
-
-            <button
-              onClick={() => { setActiveTab('overdue'); }}
-              className={`px-3.5 py-2 text-xs font-bold rounded-xl transition-all border-none cursor-pointer flex items-center gap-1.5 ${
-                activeTab === 'overdue' ? 'bg-red-50 text-red-700 border border-red-200 shadow-xs' : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <span>Overdue</span>
-              {overdueCount > 0 && (
-                <span className="px-1.5 py-0.2 rounded-full text-[10px] font-extrabold bg-red-600 text-white">
-                  {overdueCount}
-                </span>
-              )}
-            </button>
-
-            <button
-              onClick={() => { setActiveTab('history'); }}
-              className={`px-3.5 py-2 text-xs font-bold rounded-xl transition-all border-none cursor-pointer ${
-                activeTab === 'history' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              History
-            </button>
-          </div>
-
+        <div className="flex items-center gap-3 shrink-0 w-full md:w-auto">
           <button
+            type="button"
             onClick={() => setShowAddModal(true)}
-            className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-2xl shadow-md shadow-blue-500/20 transition-all flex items-center gap-1.5 border-none cursor-pointer"
+            className="w-full md:w-auto min-w-[180px] h-12 px-6 bg-gradient-to-r from-[#0b5cbe] to-[#2876d0] hover:from-[#084a99] hover:to-[#0b5cbe] text-white rounded-2xl text-xs font-black uppercase tracking-wider border-none cursor-pointer flex items-center justify-center gap-2 shadow-[0_10px_25px_rgba(11,92,190,0.25)] transition-all hover:scale-[1.02] active:scale-95 shrink-0"
           >
-            <Plus size={16} /> New Follow-up
+            <Plus size={18} />
+            <span>New Follow-up</span>
           </button>
         </div>
       </div>
