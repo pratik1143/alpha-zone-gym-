@@ -47,7 +47,7 @@ export default function FinancialAnalytics() {
   };
 
   return (
-    <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 mt-6 relative">
+    <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 relative">
       <div className="absolute top-0 left-0 w-64 h-64 bg-emerald-50 rounded-full blur-3xl opacity-50 -z-10 pointer-events-none" />
 
       <div className="flex justify-between items-center mb-8">

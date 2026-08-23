@@ -16,15 +16,8 @@ import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import API from "@/services/api";
 
-import PremiumKPICard from "./components/PremiumKPICard";
-import LiveActivityFeed from "./components/LiveActivityFeed";
-import StickyControlPanel from "./components/StickyControlPanel";
-import FollowUpWidget from "./components/FollowUpWidget";
-import MembershipWidget from "./components/MembershipWidget";
 import FinancialAnalytics from "./components/FinancialAnalytics";
-import AIInsights from "./components/AIInsights";
 import PresentMembersModal from "./components/PresentMembersModal";
-import KPIInspectorModal from "./components/KPIInspectorModal";
 import { useFollowups } from "@/hooks/useFollowups";
 
 const fadeUp = (delay = 0) => ({
@@ -497,20 +490,6 @@ export default function OverviewCommandCenter() {
               >
                 <Fingerprint size={14} className="text-blue-300" /> Attendance
               </button>
-
-              <button
-                onClick={() => router.push('/dashboard/billing')}
-                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-slate-200 bg-white/10 hover:bg-white/20 border border-white/10 transition-all cursor-pointer"
-              >
-                <IndianRupee size={14} className="text-blue-300" /> Billing
-              </button>
-
-              <button
-                onClick={() => router.push('/dashboard/analytics')}
-                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-slate-200 bg-white/10 hover:bg-white/20 border border-white/10 transition-all cursor-pointer"
-              >
-                <BarChart3 size={14} className="text-blue-300" /> Analytics
-              </button>
             </motion.div>
           </div>
 
@@ -717,53 +696,10 @@ export default function OverviewCommandCenter() {
           </div>
         </motion.div>
 
-        {/* ─── MAIN CONTENT: 8 + 4 GRID ─── */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-
-          {/* Left wide column */}
-          <div className="lg:col-span-8 space-y-6">
-            {/* Live feed section header */}
-            <motion.div {...fadeUp(0.3)} className="flex items-center gap-3">
-              <h2 className="text-xs font-black text-slate-700 uppercase tracking-[0.15em]">Live Command Center</h2>
-              <div className="h-px flex-1 bg-slate-200" />
-              <span className="text-[9px] font-black uppercase tracking-widest text-emerald-600 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-full">
-                Realtime
-              </span>
-            </motion.div>
-
-            <motion.div {...fadeUp(0.32)}><LiveActivityFeed /></motion.div>
-
-            <motion.div {...fadeUp(0.35)} className="flex items-center gap-3 mt-2">
-              <h2 className="text-xs font-black text-slate-700 uppercase tracking-[0.15em]">Financial Analytics</h2>
-              <div className="h-px flex-1 bg-slate-200" />
-            </motion.div>
-            <motion.div {...fadeUp(0.37)}><FinancialAnalytics /></motion.div>
-
-            <motion.div {...fadeUp(0.40)} className="flex items-center gap-3 mt-2">
-              <h2 className="text-xs font-black text-slate-700 uppercase tracking-[0.15em]">Today's Follow-ups</h2>
-              <div className="h-px flex-1 bg-slate-200" />
-            </motion.div>
-            <motion.div {...fadeUp(0.42)}><FollowUpWidget /></motion.div>
-
-            <motion.div {...fadeUp(0.45)} className="flex items-center gap-3 mt-2">
-              <h2 className="text-xs font-black text-slate-700 uppercase tracking-[0.15em]">Membership Tracker</h2>
-              <div className="h-px flex-1 bg-slate-200" />
-            </motion.div>
-            <motion.div {...fadeUp(0.47)}><MembershipWidget /></motion.div>
-          </div>
-
-          {/* Right narrow column */}
-          <div className="lg:col-span-4 space-y-5">
-            <motion.div {...fadeUp(0.3)} className="flex items-center gap-3">
-              <h2 className="text-xs font-black text-slate-700 uppercase tracking-[0.15em]">System Status</h2>
-              <div className="h-px flex-1 bg-slate-200" />
-            </motion.div>
-            <motion.div {...fadeUp(0.32)}>
-              <StickyControlPanel />
-            </motion.div>
-          </div>
-
-        </div>
+        {/* ─── FINANCIAL ANALYTICS (FULL WIDTH) ─── */}
+        <motion.div {...fadeUp(0.3)} className="w-full">
+          <FinancialAnalytics />
+        </motion.div>
 
       </div>
 
