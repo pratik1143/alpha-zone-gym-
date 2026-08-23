@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import { db } from '@/lib/firebase';
 import { collection, onSnapshot, query, orderBy, doc, setDoc, limit } from 'firebase/firestore';
-import toast from 'react-hot-toast';
+import toast from '@/lib/toast';
 import API from '@/services/api';
 import { useAuthStore } from '@/store';
 

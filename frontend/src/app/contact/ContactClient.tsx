@@ -6,7 +6,7 @@ import { motion } from 'framer-motion';
 import { getGymImage } from '../../lib/gymImages';
 import { db } from '@/lib/firebase';
 import { collection, addDoc } from 'firebase/firestore';
-import toast from 'react-hot-toast';
+import toast from '@/lib/toast';
 import { 
   Phone, Mail, MapPin, Send, CheckCircle, MessageSquare, 
   Smartphone, CheckCircle2, ChevronRight, Share2 

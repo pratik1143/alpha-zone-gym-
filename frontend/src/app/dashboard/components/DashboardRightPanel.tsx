@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import { useAuthStore, useGymStore } from '@/store';
 import { getInitials } from '@/lib/utils';
-import toast from 'react-hot-toast';
+import toast from '@/lib/toast';
 import NotificationCenter from './NotificationCenter';
 import { collection, query, orderBy, limit, onSnapshot } from 'firebase/firestore';
 import { db as fDb, isFirebaseReady } from '@/lib/firebase';

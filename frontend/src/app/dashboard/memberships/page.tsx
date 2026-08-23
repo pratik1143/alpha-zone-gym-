@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { Snowflake, RefreshCw, Send, ShieldAlert, Plus, CheckCircle, Star, Zap, Crown, Shield, Search } from 'lucide-react';
 import { useGymStore } from '@/store';
 import { formatDate, daysUntilExpiry } from '@/lib/utils';
-import toast from 'react-hot-toast';
+import toast from '@/lib/toast';
 
 const IconMap: Record<string, any> = {
   Shield,

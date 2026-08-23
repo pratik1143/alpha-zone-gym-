@@ -10,7 +10,7 @@ import { doc, updateDoc, addDoc, collection } from 'firebase/firestore';
 import { useGymStore } from '@/store';
 import { membershipEngine } from '@/lib/engines/membershipEngine';
 import { resolveAvatarUrl, MALE_DEFAULT_AVATAR } from '@/lib/avatar';
-import toast from 'react-hot-toast';
+import toast from '@/lib/toast';
 import { z } from 'zod';
 
 // ── Production-grade Zod schema for Edit Personal Info ─────────────────────

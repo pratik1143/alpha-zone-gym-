@@ -9,7 +9,7 @@ import {
   Fingerprint, CheckCheck, AlertTriangle, Users, UserX,
   MoreHorizontal, Eye, RefreshCw, UserPlus, User
 } from 'lucide-react';
-import toast from 'react-hot-toast';
+import toast from '@/lib/toast';
 import { collection, onSnapshot, query } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useGymStore } from '@/store';

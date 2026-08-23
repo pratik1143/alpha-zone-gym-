@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import { db, isFirebaseReady } from '@/lib/firebase';
 import { collection, query, where, getDocs, setDoc, doc, addDoc } from 'firebase/firestore';
-import toast, { Toaster } from 'react-hot-toast';
+import { toast } from '@/lib/toast';
 
 const PLAN_OPTIONS = [
   { label: 'Monthly', days: 30, price: 'Rs.1,499', original: 'Rs.2,000', badge: 'Starter' },
@@ -154,7 +154,6 @@ export default function InvitePage() {
 
   return (
     <div style={{ minHeight: '100vh', background: '#0A0A0F', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-      <Toaster position="top-center" />
       <div style={{ position: 'fixed', inset: 0, pointerEvents: 'none' }}>
         <div style={{ position: 'absolute', top: 0, left: '50%', transform: 'translateX(-50%)', width: 384, height: 384, background: 'rgba(212,255,0,0.07)', borderRadius: '50%', filter: 'blur(80px)' }} />
       </div>

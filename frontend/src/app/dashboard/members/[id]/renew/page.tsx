@@ -10,7 +10,7 @@ import {
 import { useParams, useRouter } from 'next/navigation';
 import { db } from '@/lib/firebase';
 import { doc, onSnapshot, updateDoc, addDoc, collection } from 'firebase/firestore';
-import toast from 'react-hot-toast';
+import toast from '@/lib/toast';
 import { membershipEngine } from '@/lib/engines/membershipEngine';
 import { formatCurrency } from '@/lib/utils';
 import API from '@/services/api';

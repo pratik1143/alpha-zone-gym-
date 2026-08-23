@@ -14,7 +14,7 @@ import { collection, onSnapshot, query, orderBy, doc, addDoc, updateDoc, deleteD
 import { formatDate } from '@/lib/utils';
 import { resolveAvatarUrl, normalizeStatus, MALE_DEFAULT_AVATAR, FEMALE_DEFAULT_AVATAR, AccountStatus } from '@/lib/avatar';
 import API from '@/services/api';
-import toast from 'react-hot-toast';
+import toast from '@/lib/toast';
 import SmartPhotoCapture from '../components/SmartPhotoCapture';
 import SendWhatsAppModal from '../components/SendWhatsAppModal';
 import { z } from 'zod';

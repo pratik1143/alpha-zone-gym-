@@ -6,7 +6,7 @@ import {
   Mail, Server, Key, Eye, EyeOff, Save, Play, RefreshCw,
   CheckCircle2, AlertTriangle, Zap, Send, Settings, FileText, Download
 } from 'lucide-react';
-import toast from 'react-hot-toast';
+import toast from '@/lib/toast';
 import API from '@/services/api';
 
 // ── Default HTML Templates ──────────────────────────────────────────

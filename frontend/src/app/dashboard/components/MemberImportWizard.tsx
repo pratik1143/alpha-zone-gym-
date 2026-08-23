@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { useRouter } from 'next/navigation';
-import toast from 'react-hot-toast';
+import toast from '@/lib/toast';
 import API from '@/services/api';
 import { useGymStore } from '@/store';
 import {

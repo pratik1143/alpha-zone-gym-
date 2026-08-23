@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, Send, MessageSquare, FileText } from 'lucide-react';
 import { db } from '@/lib/firebase';
 import { collection, getDocs } from 'firebase/firestore';
-import toast from 'react-hot-toast';
+import toast from '@/lib/toast';
 import API from '@/services/api';
 
 interface SendWhatsAppModalProps {

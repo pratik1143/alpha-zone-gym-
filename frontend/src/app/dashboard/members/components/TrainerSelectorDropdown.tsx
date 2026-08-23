@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom';
 import { User, ChevronDown, Search, Check, UserMinus, Sparkles, Shield, BadgeCheck, Dumbbell, AlertTriangle } from 'lucide-react';
 import { db } from '@/lib/firebase';
 import { collection, query, onSnapshot, doc, updateDoc } from 'firebase/firestore';
-import toast from 'react-hot-toast';
+import toast from '@/lib/toast';
 import API from '@/services/api';
 import PtBillingModal from './PtBillingModal';
 import { resolveAvatarUrl, MALE_DEFAULT_AVATAR, FEMALE_DEFAULT_AVATAR } from '@/lib/avatar';

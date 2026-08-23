@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '@/lib/firebase';
 import { collection, addDoc, doc, getDoc } from 'firebase/firestore';
-import toast, { Toaster } from 'react-hot-toast';
+import { toast } from '@/lib/toast';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Sparkles, ArrowRight, UserPlus, CheckCircle2 } from 'lucide-react';
 import Link from 'next/link';
@@ -92,8 +92,6 @@ export default function PublicEnquiryForm() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-white flex flex-col relative overflow-hidden font-poppins selection:bg-brand-primary/30">
-      <Toaster position="top-center" toastOptions={{ style: { background: '#1e293b', color: '#fff' } }} />
-      
       {/* Background Orbs */}
       <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
         <div className="absolute -top-[20%] -left-[10%] w-[50%] h-[50%] rounded-full bg-brand-primary/10 blur-[120px]" />

@@ -16,7 +16,7 @@ import {
 } from 'firebase/firestore';
 import { useGymStore, useDeviceStore } from '@/store';
 import { getInitials } from '@/lib/utils';
-import toast from 'react-hot-toast';
+import toast from '@/lib/toast';
 import API from '@/services/api';
 
 // Access Method Icons & Config

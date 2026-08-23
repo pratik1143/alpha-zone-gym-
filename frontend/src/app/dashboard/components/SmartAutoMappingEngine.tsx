@@ -8,7 +8,7 @@ import {
   FileText, Check, Cpu, Clock, Terminal, Filter, Eye, Info, Trash2, X, Search, Table
 } from 'lucide-react';
 import { useGymStore, useDeviceStore } from '@/store';
-import toast from 'react-hot-toast';
+import toast from '@/lib/toast';
 import API from '@/services/api';
 import * as XLSX from 'xlsx';
 import PhotoRepairTool from './PhotoRepairTool';

@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import { useGymStore } from '@/store';
 import { getInitials, daysUntilExpiry } from '@/lib/utils';
-import toast from 'react-hot-toast';
+import toast from '@/lib/toast';
 import { collection, addDoc, onSnapshot } from 'firebase/firestore';
 import { db as fDb, isFirebaseReady } from '@/lib/firebase';
 import API from '@/services/api';

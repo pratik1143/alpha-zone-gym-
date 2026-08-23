@@ -6,7 +6,7 @@ import { X, Search, Phone, MessageSquare, Mail, RefreshCw, Ban, User, AlertCircl
 import { formatDaysLeft, getInitials, formatCurrency } from '@/lib/utils';
 import { membershipEngine } from '@/lib/engines/membershipEngine';
 import { useGymStore } from '@/store';
-import toast from 'react-hot-toast';
+import toast from '@/lib/toast';
 import MemberAvatar from '../../components/MemberAvatar';
 
 interface RenewalCenterProps {

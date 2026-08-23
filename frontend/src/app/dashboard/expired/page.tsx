@@ -15,7 +15,7 @@ import { useGymStore } from '@/store';
 import { formatDate, formatCurrency } from '@/lib/utils';
 import { resolveAvatarUrl, MALE_DEFAULT_AVATAR, FEMALE_DEFAULT_AVATAR } from '@/lib/avatar';
 import { formatIndianDate, getTodayInIndia } from '@/lib/dateUtils';
-import toast from 'react-hot-toast';
+import toast from '@/lib/toast';
 import { db } from '@/lib/firebase';
 import { addDoc, collection } from 'firebase/firestore';
 import RenewalWizardModal from '../members/components/RenewalWizardModal';

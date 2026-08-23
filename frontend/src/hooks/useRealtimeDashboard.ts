@@ -17,7 +17,7 @@ import {
 } from 'firebase/firestore';
 import { db, isFirebaseReady } from '@/lib/firebase';
 import API from '@/services/api';
-import toast from 'react-hot-toast';
+import toast from '@/lib/toast';
 import { useGymStore } from '@/store';
 
 export interface LiveActivity {

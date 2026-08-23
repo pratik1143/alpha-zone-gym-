@@ -14,7 +14,7 @@ import {
   FileSpreadsheet
 } from 'lucide-react';
 import API from '@/services/api';
-import toast from 'react-hot-toast';
+import toast from '@/lib/toast';
 import { useGymStore } from '@/store';
 
 interface RepairStats {

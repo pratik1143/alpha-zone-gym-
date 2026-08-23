@@ -5,7 +5,7 @@ import { Phone, Mail, MessageSquare, StickyNote, Filter, CheckCircle2, XCircle, 
 import { motion } from 'framer-motion';
 import { db } from '@/lib/firebase';
 import { collection, query, where, orderBy, onSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
-import toast from 'react-hot-toast';
+import toast from '@/lib/toast';
 
 export default function CommunicationTab({ member }: { member: any }) {
   const [communications, setCommunications] = useState<any[]>([]);

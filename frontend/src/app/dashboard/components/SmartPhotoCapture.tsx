@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import { storage } from '@/lib/firebase';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import toast from 'react-hot-toast';
+import toast from '@/lib/toast';
 
 interface SmartPhotoCaptureProps {
   value?: string;

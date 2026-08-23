@@ -9,7 +9,7 @@ import {
   Upload, Terminal, Cpu, Check, X, Sliders, Globe, Layers, ArrowUpRight, Copy, Building2, Download
 } from 'lucide-react';
 import { useAuthStore, useGymStore } from '@/store';
-import toast from 'react-hot-toast';
+import toast from '@/lib/toast';
 import API from '@/services/api';
 import { useRouter } from 'next/navigation';
 import { db as fDb, isFirebaseReady } from '@/lib/firebase';

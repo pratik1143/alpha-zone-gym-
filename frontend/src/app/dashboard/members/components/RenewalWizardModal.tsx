@@ -7,7 +7,7 @@ import { useGymStore } from '@/store';
 import { formatCurrency } from '@/lib/utils';
 import { membershipEngine } from '@/lib/engines/membershipEngine';
 import API from '@/services/api';
-import toast from 'react-hot-toast';
+import toast from '@/lib/toast';
 
 import OfficialInvoiceReceipt from '../../components/OfficialInvoiceReceipt';
 

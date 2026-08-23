@@ -8,7 +8,7 @@ import {
   Banknote, Wallet, Shield, Clock, Award
 } from 'lucide-react';
 import { z } from 'zod';
-import toast from 'react-hot-toast';
+import toast from '@/lib/toast';
 import { db } from '@/lib/firebase';
 import { doc, updateDoc, addDoc, collection } from 'firebase/firestore';
 import { useGymStore } from '@/store';

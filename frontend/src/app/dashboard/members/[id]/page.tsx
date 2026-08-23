@@ -10,7 +10,7 @@ import {
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { db } from '@/lib/firebase';
 import { doc, onSnapshot, collection, query, where, updateDoc } from 'firebase/firestore';
-import toast from 'react-hot-toast';
+import toast from '@/lib/toast';
 import { membershipEngine } from '@/lib/engines/membershipEngine';
 import { paymentEngine } from '@/lib/engines/paymentEngine';
 import { calculateRealAttendance } from '@/lib/utils';

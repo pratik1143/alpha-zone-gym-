@@ -11,7 +11,7 @@ import {
   Dumbbell, BarChart2, Calendar, Filter, Download, RefreshCw
 } from 'lucide-react';
 import { useGymStore } from '@/store';
-import toast from 'react-hot-toast';
+import toast from '@/lib/toast';
 
 const ACCENT = '#d4ff00';
 const COLORS = ['#0052FF', '#d4ff00', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];

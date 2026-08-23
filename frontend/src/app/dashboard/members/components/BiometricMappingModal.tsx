@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Fingerprint, Search, CheckCircle2, User, Sparkles, RefreshCw, Zap, AlertTriangle, Cpu, ArrowRight } from 'lucide-react';
-import toast from 'react-hot-toast';
+import toast from '@/lib/toast';
 import { useGymStore } from '@/store';
 import API from '@/services/api';
 

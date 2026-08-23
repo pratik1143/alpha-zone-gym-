@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { Trophy, Award, Users, Share2, ArrowUpRight, Flame, Target, Gift } from 'lucide-react';
 import { useGymStore } from '@/store';
 import { getInitials } from '@/lib/utils';
-import toast from 'react-hot-toast';
+import toast from '@/lib/toast';
 
 export default function LeaderboardPage() {
   const { members, fetchMembers } = useGymStore();

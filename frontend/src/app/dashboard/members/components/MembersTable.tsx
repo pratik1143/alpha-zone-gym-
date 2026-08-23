@@ -11,7 +11,7 @@ import { membershipEngine } from '@/lib/engines/membershipEngine';
 import { paymentEngine } from '@/lib/engines/paymentEngine';
 import { calculateRealAttendance, formatDaysLeft, calculateAge, formatDate } from '@/lib/utils';
 import { useGymStore } from '@/store';
-import toast from 'react-hot-toast';
+import toast from '@/lib/toast';
 import { useRouter } from 'next/navigation';
 import MemberAvatar from '../../components/MemberAvatar';
 

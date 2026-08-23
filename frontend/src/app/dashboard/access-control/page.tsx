@@ -7,7 +7,7 @@ import {
   Activity, Play, Fingerprint, AlertTriangle, CheckCircle, Info, Ban, Zap, Clock, Key
 } from 'lucide-react';
 import API from '@/services/api';
-import toast from 'react-hot-toast';
+import toast from '@/lib/toast';
 
 interface Device {
   id: string;

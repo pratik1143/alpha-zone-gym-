@@ -20,7 +20,7 @@ import {
   Sparkles,
   Layers
 } from 'lucide-react';
-import toast from 'react-hot-toast';
+import toast from '@/lib/toast';
 import confetti from 'canvas-confetti';
 import { z } from 'zod';
 import { db } from '@/lib/firebase';

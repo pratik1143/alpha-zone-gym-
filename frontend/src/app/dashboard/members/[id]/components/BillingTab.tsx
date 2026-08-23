@@ -13,7 +13,7 @@ import { membershipEngine } from '@/lib/engines/membershipEngine';
 import { paymentEngine } from '@/lib/engines/paymentEngine';
 import { cleanPlanName, formatDate } from '@/lib/utils';
 import { useGymStore } from '@/store';
-import toast from 'react-hot-toast';
+import toast from '@/lib/toast';
 import API from '@/services/api';
 import RenewalWizardModal from '../../components/RenewalWizardModal';
 import OfficialInvoiceReceipt from '@/app/dashboard/components/OfficialInvoiceReceipt';

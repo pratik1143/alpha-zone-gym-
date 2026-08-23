@@ -50,7 +50,7 @@ import {
   formatCurrency,
 } from "@/lib/utils";
 import { membershipEngine } from '@/lib/engines/membershipEngine';
-import toast from "react-hot-toast";
+import toast from '@/lib/toast';
 import {
   collection,
   doc,

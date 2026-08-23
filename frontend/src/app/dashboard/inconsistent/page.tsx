@@ -11,7 +11,7 @@ import {
 import { db } from '@/lib/firebase';
 import { collection, onSnapshot, addDoc, doc, updateDoc, arrayUnion } from 'firebase/firestore';
 import { formatDate, getInitials, formatCurrency } from '@/lib/utils';
-import toast from 'react-hot-toast';
+import toast from '@/lib/toast';
 import { useRouter } from 'next/navigation';
 
 export default function InconsistentAttendancePage() {
@@ -107,19 +107,20 @@ export default function InconsistentAttendancePage() {
   }, []);
 
   // Recalculate / Manual Refresh action
-  const handleManualRefresh = () => {
+  const handleManualRefresh = async () => {
     setRefreshing(true);
-    toast.promise(
-      new Promise((resolve) => setTimeout(resolve, 600)),
-      {
-        loading: 'Refreshing attendance calculations...',
-        success: '✓ Attendance dataset updated',
-        error: 'Failed to refresh dataset',
-      }
-    ).then(() => {
-      setLastUpdated(new Date().toLocaleTimeString());
-      setRefreshing(false);
+    const refreshPromise = new Promise((resolve) => setTimeout(resolve, 600));
+    toast.promise(refreshPromise, {
+      loading: 'Refreshing attendance calculations...',
+      success: 'Attendance dataset updated',
+      error: 'Failed to refresh dataset',
     });
+    try {
+      await refreshPromise;
+      setLastUpdated(new Date().toLocaleTimeString());
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   // Absence calculation engine for any member or employee entity

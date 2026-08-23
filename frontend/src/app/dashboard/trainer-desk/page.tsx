@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 import { useGymStore, useTrainerStore, useChatStore, useAuthStore, useProgressStore } from '@/store';
 import { getInitials, formatDate, formatCurrency } from '@/lib/utils';
-import toast from 'react-hot-toast';
+import toast from '@/lib/toast';
 import API from '@/services/api';
 import { collection, doc, onSnapshot, setDoc } from 'firebase/firestore';
 import { db as fDb, isFirebaseReady } from '@/lib/firebase';

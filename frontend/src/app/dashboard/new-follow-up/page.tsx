@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Search, Phone, MessageSquare, Plus, CheckCircle, RefreshCw, X, CreditCard } from 'lucide-react';
 import { useGymStore } from '@/store';
 import { formatDate, getInitials } from '@/lib/utils';
-import toast from 'react-hot-toast';
+import toast from '@/lib/toast';
 
 export default function NewFollowUpPage() {
   const { members, fetchMembers, addPayment, updateMember } = useGymStore();

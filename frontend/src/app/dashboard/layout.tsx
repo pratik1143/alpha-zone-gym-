@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { useAuthStore, useGymStore, useDeviceStore } from '@/store';
 import { getInitials } from '@/lib/utils';
-import toast from 'react-hot-toast';
+import toast from '@/lib/toast';
 import { collection, query, orderBy, limit, onSnapshot } from 'firebase/firestore';
 import { db as fDb, isFirebaseReady } from '@/lib/firebase';
 import { useCallback } from 'react';

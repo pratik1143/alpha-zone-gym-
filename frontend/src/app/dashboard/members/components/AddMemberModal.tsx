@@ -8,7 +8,7 @@ import {
   Printer, Download, Sparkles, Fingerprint, Banknote, Wallet, 
   ChevronRight, Dumbbell, Award, AlertCircle, FileText, Upload, Camera, Trash2, RefreshCw, AlertTriangle, Check, SwitchCamera
 } from 'lucide-react';
-import toast from 'react-hot-toast';
+import toast from '@/lib/toast';
 import { useGymStore } from '@/store';
 import OfficialInvoiceReceipt from '@/app/dashboard/components/OfficialInvoiceReceipt';
 import API from '@/services/api';

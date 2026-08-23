@@ -7,7 +7,7 @@ import {
   Shield, Lock, Unlock, Wifi, WifiOff, RefreshCw, User, Database, ArrowLeft, Terminal, Users, ListCollapse, Check, X, Server, AlertCircle, Cpu, Upload
 } from 'lucide-react';
 import API from '@/services/api';
-import toast from 'react-hot-toast';
+import toast from '@/lib/toast';
 import { useRouter } from 'next/navigation';
 
 interface UserInfo {

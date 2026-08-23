@@ -5,7 +5,7 @@ import { collection, query, onSnapshot, updateDoc, doc } from "firebase/firestor
 import { db as fDb, isFirebaseReady } from "@/lib/firebase";
 import { motion } from "framer-motion";
 import { Phone, MessageCircle, CheckCircle, Clock, Calendar, MoreHorizontal } from "lucide-react";
-import toast from "react-hot-toast";
+import toast from '@/lib/toast';
 
 import { useFollowups } from "@/hooks/useFollowups";
 import { getTodayInIndia } from "@/lib/dateUtils";

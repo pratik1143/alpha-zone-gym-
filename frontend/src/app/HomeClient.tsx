@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer } from 'recharts';
 import { useAuthStore } from '../store';
-import toast from 'react-hot-toast';
+import toast from '@/lib/toast';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { setDoc, doc } from 'firebase/firestore';
 import { auth, db as fDb } from '../lib/firebase';

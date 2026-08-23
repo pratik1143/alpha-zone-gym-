@@ -13,7 +13,7 @@ import {
   collection, addDoc, setDoc, doc, onSnapshot, query, orderBy, getDocs, deleteDoc
 } from 'firebase/firestore';
 import { db as fDb, isFirebaseReady } from '@/lib/firebase';
-import toast from 'react-hot-toast';
+import toast from '@/lib/toast';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell 
 } from 'recharts';

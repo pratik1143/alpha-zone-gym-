@@ -6,7 +6,7 @@ import { Upload, Sparkles, Settings, FileText, QrCode, Link as LinkIcon, Plus, T
 import { db, storage } from '@/lib/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
-import toast from 'react-hot-toast';
+import toast from '@/lib/toast';
 import API from '@/services/api';
 
 interface FormField {

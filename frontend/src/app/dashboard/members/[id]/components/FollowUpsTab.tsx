@@ -3,7 +3,7 @@
 import React, { useMemo } from 'react';
 import { useFollowups } from '@/hooks/useFollowups';
 import { Phone, MessageCircle, CheckCircle2, Clock, Calendar, AlertCircle } from 'lucide-react';
-import toast from 'react-hot-toast';
+import toast from '@/lib/toast';
 
 export default function FollowUpsTab({ member }: { member: any }) {
   const { followups, completeFollowup } = useFollowups();

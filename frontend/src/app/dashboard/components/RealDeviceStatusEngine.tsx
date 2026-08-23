@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import { useDeviceStore } from '@/store';
 import { useRouter } from 'next/navigation';
-import toast from 'react-hot-toast';
+import toast from '@/lib/toast';
 
 /**
  * Top Header Small System Issue Badge

@@ -11,7 +11,7 @@ import {
   History, CheckCircle2, MoreHorizontal, Eye, PhoneCall, ChevronRight,
   Filter, ArrowRight
 } from 'lucide-react';
-import toast from 'react-hot-toast';
+import toast from '@/lib/toast';
 import confetti from 'canvas-confetti';
 import { z } from 'zod';
 import { enquiryService, EnquiryItem, EnquiryHistoryItem } from '@/services/enquiry.service';

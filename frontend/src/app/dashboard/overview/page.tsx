@@ -13,7 +13,7 @@ import {
   X, CheckCircle2, Sparkles, AlertCircle, Info
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import toast from "react-hot-toast";
+import toast from '@/lib/toast';
 import API from "@/services/api";
 
 import FinancialAnalytics from "./components/FinancialAnalytics";

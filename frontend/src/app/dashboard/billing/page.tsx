@@ -11,7 +11,7 @@ import { db } from '@/lib/firebase';
 import { updateDoc, doc } from 'firebase/firestore';
 import { formatDate, getInitials } from '@/lib/utils';
 import { useGymStore } from '@/store';
-import toast from 'react-hot-toast';
+import toast from '@/lib/toast';
 import InvoiceBuilderModal from './components/InvoiceBuilderModal';
 import OfficialInvoiceReceipt from '../components/OfficialInvoiceReceipt';
 import { useTodaysPayments, PaymentRecord } from '@/hooks/useTodaysPayments';

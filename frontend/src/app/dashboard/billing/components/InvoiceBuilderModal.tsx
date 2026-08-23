@@ -9,7 +9,7 @@ import { db } from '@/lib/firebase';
 import { collection, doc, setDoc, updateDoc } from 'firebase/firestore';
 import { paymentEngine } from '@/lib/engines/paymentEngine';
 import { membershipEngine } from '@/lib/engines/membershipEngine';
-import toast from 'react-hot-toast';
+import toast from '@/lib/toast';
 import { z } from 'zod';
 
 import { useGymStore } from '@/store';

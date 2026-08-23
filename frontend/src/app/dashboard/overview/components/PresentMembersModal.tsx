@@ -4,7 +4,7 @@ import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Search, Users, Fingerprint, Clock, ExternalLink, Download } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import toast from 'react-hot-toast';
+import toast from '@/lib/toast';
 
 interface PresentMembersModalProps {
   isOpen: boolean;

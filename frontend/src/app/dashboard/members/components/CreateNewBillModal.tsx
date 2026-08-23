@@ -9,7 +9,7 @@ import { membershipEngine } from '@/lib/engines/membershipEngine';
 import { db } from '@/lib/firebase';
 import { doc, setDoc, updateDoc } from 'firebase/firestore';
 import { useGymStore } from '@/store';
-import toast from 'react-hot-toast';
+import toast from '@/lib/toast';
 
 // ── ZOD VALIDATION SCHEMA ──────────────────────────────────────────────────
 const createBillSchema = z.object({

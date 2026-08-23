@@ -7,7 +7,7 @@ import { db as fDb, isFirebaseReady } from '@/lib/firebase';
 import API from '@/services/api';
 import { useGymStore } from '@/store';
 import { membershipEngine } from '@/lib/engines/membershipEngine';
-import toast from 'react-hot-toast';
+import toast from '@/lib/toast';
 
 import SuccessPopup from './popups/SuccessPopup';
 import UnknownPopup from './popups/UnknownPopup';

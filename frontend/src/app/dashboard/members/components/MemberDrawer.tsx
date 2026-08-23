@@ -6,7 +6,7 @@ import { formatDate, getInitials } from '@/lib/utils';
 import { membershipEngine } from '@/lib/engines/membershipEngine';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useGymStore } from '@/store';
-import toast from 'react-hot-toast';
+import toast from '@/lib/toast';
 import MemberAvatar from '../../components/MemberAvatar';
 import { resolveAvatarUrl, MALE_DEFAULT_AVATAR } from '@/lib/avatar';
 
