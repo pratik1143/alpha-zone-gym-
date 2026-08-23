@@ -16,7 +16,7 @@ import confetti from 'canvas-confetti';
 import { z } from 'zod';
 import { enquiryService, EnquiryItem, EnquiryHistoryItem } from '@/services/enquiry.service';
 import { getTodayInIndia, isTodayInIndia, isOverdueInIndia, isUpcomingInIndia, formatIndianDate } from '@/lib/dateUtils';
-import { getRandomColor, getInitials } from '@/lib/utils';
+import { resolveAvatarUrl, MALE_DEFAULT_AVATAR, FEMALE_DEFAULT_AVATAR } from '@/lib/avatar';
 
 type Enquiry = EnquiryItem;
 
@@ -703,7 +703,7 @@ export default function EnquiryGodLevelHub() {
                         const isDueToday = cleanDate === todayStr;
                         const isTaskOverdue = isOverdueInIndia(cleanDate);
                         const repInfo = formatRepInfo(enq.assignedTo);
-                        const avatarBg = getRandomColor(enq.name || 'Enquiry');
+                        const avatar = resolveAvatarUrl(enq);
                         const enqCode = String((enq as any).enquiryId || enq.id || '').slice(-4).toUpperCase();
 
                         return (
@@ -717,11 +717,17 @@ export default function EnquiryGodLevelHub() {
                             {/* 1. LEAD: Merged Avatar + Name + Enquiry ID */}
                             <td className="px-5 py-3.5">
                               <div className="flex items-center gap-3">
-                                <div 
-                                  className="w-11 h-11 rounded-full text-white font-extrabold flex items-center justify-center text-xs shrink-0 shadow-2xs border-2 border-white"
-                                  style={{ backgroundColor: avatarBg }}
-                                >
-                                  {getInitials(enq.name || 'Enquiry')}
+                                <div className="relative shrink-0">
+                                  <img 
+                                    src={avatar} 
+                                    onError={(e) => {
+                                      const target = e.currentTarget;
+                                      const g = String(enq.gender || '').trim().toLowerCase();
+                                      target.src = (g === 'female' || g === 'f') ? FEMALE_DEFAULT_AVATAR : MALE_DEFAULT_AVATAR;
+                                    }}
+                                    className="w-11 h-11 rounded-full bg-slate-100 border-2 border-white shadow-xs object-cover" 
+                                    alt={enq.name} 
+                                  />
                                 </div>
                                 <div className="min-w-0">
                                   <div className="font-extrabold text-slate-900 text-sm leading-tight truncate">
@@ -899,11 +905,17 @@ export default function EnquiryGodLevelHub() {
 
                 {/* Profile Card */}
                 <div className="text-center space-y-1">
-                  <div 
-                    className="w-14 h-14 rounded-2xl text-white font-black text-xl flex items-center justify-center mx-auto shadow-sm mb-2"
-                    style={{ backgroundColor: getRandomColor(selectedEnquiry.name || 'E') }}
-                  >
-                    {getInitials(selectedEnquiry.name || 'E')}
+                  <div className="relative w-14 h-14 mx-auto mb-2 shrink-0">
+                    <img 
+                      src={resolveAvatarUrl(selectedEnquiry)} 
+                      onError={(e) => {
+                        const target = e.currentTarget;
+                        const g = String(selectedEnquiry.gender || '').trim().toLowerCase();
+                        target.src = (g === 'female' || g === 'f') ? FEMALE_DEFAULT_AVATAR : MALE_DEFAULT_AVATAR;
+                      }}
+                      className="w-14 h-14 rounded-full bg-slate-100 border-2 border-white shadow-md object-cover" 
+                      alt={selectedEnquiry.name} 
+                    />
                   </div>
                   <h3 className="text-base font-black text-slate-900">{selectedEnquiry.name}</h3>
                   <p className="text-xs font-bold text-slate-600 flex items-center justify-center gap-1">
