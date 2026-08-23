@@ -879,7 +879,7 @@ export default function MembersPage() {
       <div className="flex flex-wrap items-center justify-between gap-3 mb-2">
         <div>
           <h1 className="text-3xl font-black text-slate-900 tracking-tight font-display">
-            Members Directory
+            Members
           </h1>
           <p className="text-xs text-slate-500 mt-0.5">
             Manage your gym members, track attendance, and monitor renewals.

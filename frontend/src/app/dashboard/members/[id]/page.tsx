@@ -264,7 +264,7 @@ export default function ClientProfileSystem() {
           onClick={() => router.push('/dashboard/members')}
           className="px-6 py-3 bg-[#0052FF] text-white rounded-xl text-xs font-bold hover:bg-blue-700 transition-all flex items-center gap-2 cursor-pointer shadow-md"
         >
-          <ArrowLeft size={16} /> Return to Members Directory
+          <ArrowLeft size={16} /> Return to Members
         </button>
       </div>
     );
