@@ -154,13 +154,10 @@ export default function EmployeesPage() {
     const matchesRole = roleFilter === 'all' || e.role === roleFilter;
     
     const accStatus = normalizeStatus(e.status);
-    const isInside = e.currentStatus === 'Inside';
     
     let matchesStatus = true;
     if (statusFilter === 'Active') matchesStatus = accStatus === 'Active';
     else if (statusFilter === 'Inactive') matchesStatus = accStatus === 'Inactive';
-    else if (statusFilter === 'Inside') matchesStatus = isInside;
-    else if (statusFilter === 'Outside') matchesStatus = !isInside;
 
     return matchesSearch && matchesRole && matchesStatus;
   });
@@ -306,10 +303,8 @@ export default function EmployeesPage() {
             className="text-xs bg-[#fdfdfd] border border-[#d9e7f7] rounded-2xl px-4 py-3 text-[#10233f] focus:outline-none font-bold cursor-pointer hover:bg-white transition-all"
           >
             <option value="all">All Statuses</option>
-            <option value="Active">Status: Active</option>
-            <option value="Inactive">Status: Inactive</option>
-            <option value="Inside">Presence: Inside Gym</option>
-            <option value="Outside">Presence: Outside</option>
+            <option value="Active">Active</option>
+            <option value="Inactive">Inactive</option>
           </select>
         </div>
       </div>
