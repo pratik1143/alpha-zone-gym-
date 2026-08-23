@@ -97,7 +97,7 @@ export default function StickyControlPanel() {
         </div>
       </div>
 
-      <div className="mb-6 space-y-3 px-2">
+      <div className="space-y-3 px-2">
         <div className="flex justify-between items-end border-b border-slate-100 pb-2">
           <span className="text-[11px] font-bold text-slate-600 flex items-center gap-1.5"><IndianRupee size={12}/> Revenue</span>
           <span className="text-sm font-black text-slate-800">₹{todayRevenue.toLocaleString()}</span>
@@ -110,14 +110,6 @@ export default function StickyControlPanel() {
           <span className="text-[11px] font-bold text-slate-650 flex items-center gap-1.5"><TrendingUp size={12}/> Profit</span>
           <span className="text-sm font-black text-emerald-500">₹{profit.toLocaleString()}</span>
         </div>
-      </div>
-
-      <div className="bg-slate-50/50 p-4 rounded-2xl border border-slate-100">
-        <h4 className="text-[10px] font-black text-slate-550 uppercase tracking-widest mb-3">Integrations</h4>
-        {renderStatus("Firestore DB", "online")}
-        {renderStatus("Python Bridge", deviceStatus === 'connected' ? 'online' : deviceStatus === 'syncing' ? 'syncing' : 'offline')}
-        {renderStatus("ESSL Hardware", deviceStatus === 'connected' ? 'online' : deviceStatus === 'syncing' ? 'syncing' : 'offline')}
-        {renderStatus("Internet", online ? 'online' : 'offline')}
       </div>
     </div>
   );

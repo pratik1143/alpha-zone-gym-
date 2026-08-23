@@ -4,12 +4,17 @@ import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Wifi, Cpu, Database, Activity, Shield, Unlock, Lock,
-  AlertTriangle, RefreshCw, CheckCircle2, XCircle, Clock
+  AlertTriangle, RefreshCw, CheckCircle2, XCircle, Clock, Fingerprint
 } from 'lucide-react';
 import { useDeviceStore } from '@/store';
+import { useRouter } from 'next/navigation';
+import toast from 'react-hot-toast';
 
 /**
- * Top Header 6-Pill Health Status Component
+ * Top Header Small System Issue Badge
+ * Replaces the old 6-pill health status bar.
+ * If all systems are fully online, renders nothing (null).
+ * If any service is down, renders a subtle warning badge linking to Settings.
  */
 export function RealDeviceHeaderBadges() {
   const {
@@ -23,6 +28,8 @@ export function RealDeviceHeaderBadges() {
     checkRealDeviceHealth
   } = useDeviceStore();
 
+  const router = useRouter();
+
   useEffect(() => {
     checkRealDeviceHealth();
     const interval = setInterval(() => {
@@ -31,89 +38,225 @@ export function RealDeviceHeaderBadges() {
     return () => clearInterval(interval);
   }, [checkRealDeviceHealth]);
 
-  const items = [
-    { label: 'Internet', status: internetStatus, icon: Wifi },
-    { label: 'Python', status: pythonStatus, icon: Cpu },
-    { label: 'Firebase', status: firebaseStatus, icon: Database },
-    { label: 'ESSL Hardware', status: esslStatus, icon: Activity },
-    { label: 'Listener', status: attendanceListenerStatus, icon: Clock },
-    { label: 'Gate Control', status: gateStatus, icon: gateStatus === 'enabled' ? Unlock : Lock }
-  ];
+  const issueCount = [
+    internetStatus !== 'online',
+    pythonStatus !== 'connected',
+    firebaseStatus !== 'connected',
+    esslStatus !== 'connected',
+    attendanceListenerStatus !== 'listening',
+    gateStatus !== 'enabled'
+  ].filter(Boolean).length;
 
-  const getStatusColor = (status: string) => {
-    if (status === 'online' || status === 'connected' || status === 'listening' || status === 'enabled') {
-      return 'bg-emerald-500/10 text-emerald-700 border-emerald-300';
-    }
-    if (status === 'connecting' || status === 'syncing') {
-      return 'bg-amber-500/10 text-amber-700 border-amber-300 animate-pulse';
-    }
-    return 'bg-red-500/10 text-red-700 border-red-300';
-  };
-
-  const getDotColor = (status: string) => {
-    if (status === 'online' || status === 'connected' || status === 'listening' || status === 'enabled') {
-      return 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)]';
-    }
-    if (status === 'connecting' || status === 'syncing') {
-      return 'bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.6)]';
-    }
-    return 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)]';
-  };
+  if (isDeviceFullyOnline || issueCount === 0) return null;
 
   return (
-    <div className="flex items-center gap-1.5 flex-wrap">
-      {items.map((item, idx) => (
-        <div
-          key={idx}
-          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl border text-[10px] font-black uppercase tracking-wider ${getStatusColor(
-            item.status
-          )}`}
-        >
-          <span className={`w-2 h-2 rounded-full ${getDotColor(item.status)}`} />
-          <item.icon size={11} />
-          <span>{item.label}</span>
-        </div>
-      ))}
-    </div>
+    <button
+      onClick={() => router.push('/dashboard/settings?tab=system-health')}
+      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200/80 text-xs font-black transition-all cursor-pointer shadow-xs animate-pulse shrink-0"
+      title="Click to view System Health & Devices in Settings"
+    >
+      <AlertTriangle size={14} className="text-rose-600" />
+      <span>⚠️ {issueCount} System {issueCount === 1 ? 'Issue' : 'Issues'}</span>
+    </button>
   );
 }
 
 /**
- * Sticky Red Disconnect Banner (shows when offline or disconnected)
+ * Global Disconnect Banner Replacement
+ * Disconnected banner is deactivated on global pages as per centralization requirement.
  */
 export function RealDeviceDisconnectBanner() {
-  const { isDeviceFullyOnline, checkRealDeviceHealth } = useDeviceStore();
+  return null;
+}
 
-  if (isDeviceFullyOnline) return null;
+/**
+ * Full-width Centralized System Health & Devices Component for Settings
+ */
+export function SystemHealthFullSection() {
+  const {
+    internetStatus,
+    pythonStatus,
+    firebaseStatus,
+    esslStatus,
+    attendanceListenerStatus,
+    gateStatus,
+    isDeviceFullyOnline,
+    lastHeartbeat,
+    latencyMs,
+    checkRealDeviceHealth
+  } = useDeviceStore();
+
+  const [isProbing, setIsProbing] = useState(false);
+
+  const handleRetryProbe = async () => {
+    setIsProbing(true);
+    toast.loading('Checking system health...', { id: 'system-health-probe' });
+    await checkRealDeviceHealth();
+    setTimeout(() => {
+      setIsProbing(false);
+      toast.success('System health probe complete', { id: 'system-health-probe' });
+    }, 600);
+  };
+
+  const getHeartbeatAge = () => {
+    if (!lastHeartbeat) return 'N/A';
+    const hb = new Date(lastHeartbeat).getTime();
+    if (isNaN(hb)) return 'N/A';
+    const seconds = Math.max(0, Math.round((Date.now() - hb) / 1000));
+    return `${seconds}s ago`;
+  };
+
+  const formatLastConnectionTime = (hb: string) => {
+    if (!hb) return 'N/A';
+    const d = new Date(hb);
+    return isNaN(d.getTime()) ? 'N/A' : d.toLocaleTimeString();
+  };
+
+  const services = [
+    {
+      id: 'internet',
+      name: 'Internet Connection',
+      status: internetStatus === 'online' ? 'Connected' : 'Disconnected',
+      isOk: internetStatus === 'online',
+      icon: Wifi,
+      detail: internetStatus === 'online' ? `Active high-speed line · ${latencyMs || 12}ms latency` : 'No Internet Connection detected',
+      lastChecked: getHeartbeatAge(),
+    },
+    {
+      id: 'python',
+      name: 'Python Local Bridge',
+      status: pythonStatus === 'connected' ? 'Online' : 'Offline',
+      isOk: pythonStatus === 'connected',
+      icon: Cpu,
+      detail: pythonStatus === 'connected' ? 'Python Microservice Bridge Active (v2.1)' : 'Python Local Server Offline',
+      lastChecked: getHeartbeatAge(),
+    },
+    {
+      id: 'firebase',
+      name: 'Firebase Firestore DB',
+      status: firebaseStatus === 'connected' ? 'Connected' : 'Error',
+      isOk: firebaseStatus === 'connected',
+      icon: Database,
+      detail: firebaseStatus === 'connected' ? 'Bi-directional Realtime Firestore Stream' : 'Firestore Connection Interrupted',
+      lastChecked: getHeartbeatAge(),
+    },
+    {
+      id: 'essl',
+      name: 'ESSL Hardware Terminal',
+      status: esslStatus === 'connected' ? 'Connected' : esslStatus === 'connecting' ? 'Connecting' : 'Disconnected',
+      isOk: esslStatus === 'connected',
+      icon: Activity,
+      detail: esslStatus === 'connected' ? 'ESSL IP 192.168.18.11:4370 Reachable' : 'Terminal Unreachable on LAN',
+      lastChecked: getHeartbeatAge(),
+    },
+    {
+      id: 'listener',
+      name: 'Attendance Realtime Listener',
+      status: attendanceListenerStatus === 'listening' ? 'Running' : attendanceListenerStatus === 'stopped' ? 'Paused' : 'Error',
+      isOk: attendanceListenerStatus === 'listening',
+      icon: Clock,
+      detail: attendanceListenerStatus === 'listening' ? 'Listening for TCP biometric punches on port 4370' : 'Listener Service Paused',
+      lastChecked: getHeartbeatAge(),
+    },
+    {
+      id: 'gate',
+      name: 'Gate Control Relay',
+      status: gateStatus === 'enabled' ? 'Online' : 'Offline',
+      isOk: gateStatus === 'enabled',
+      icon: gateStatus === 'enabled' ? Unlock : Lock,
+      detail: gateStatus === 'enabled' ? 'Turnstile Relay Armed & Ready for Unlock' : 'Turnstile Relay Disarmed',
+      lastChecked: getHeartbeatAge(),
+    },
+    {
+      id: 'biometric',
+      name: 'Biometric Device (K90 Pro)',
+      status: isDeviceFullyOnline ? 'Connected' : 'Disconnected',
+      isOk: isDeviceFullyOnline,
+      icon: Fingerprint,
+      detail: `Model: ESSL K90 Pro · Last Successful Sync: ${formatLastConnectionTime(lastHeartbeat)}`,
+      lastChecked: getHeartbeatAge(),
+    },
+  ];
+
+  const issues = services.filter(s => !s.isOk).length;
 
   return (
-    <AnimatePresence>
-      <motion.div
-        initial={{ height: 0, opacity: 0 }}
-        animate={{ height: 'auto', opacity: 1 }}
-        exit={{ height: 0, opacity: 0 }}
-        className="w-full bg-red-600 text-white px-4 py-2.5 rounded-2xl shadow-lg border border-red-700 flex items-center justify-between gap-3 text-xs font-bold font-poppins"
-      >
-        <div className="flex items-center gap-2.5">
-          <div className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center shrink-0 animate-spin">
-            <RefreshCw size={14} className="text-white" />
+    <div className="bg-white rounded-3xl p-6 lg:p-8 border border-slate-100 shadow-[0_2px_15px_rgba(0,0,0,0.02)] space-y-6">
+      {/* Header Row */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-slate-100">
+        <div>
+          <div className="flex items-center gap-2">
+            <h3 className="text-xl font-black text-slate-900 font-display tracking-wide uppercase">
+              System Health &amp; Infrastructure
+            </h3>
+            {issues === 0 ? (
+              <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-black uppercase rounded-full flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)]" /> Operational
+              </span>
+            ) : (
+              <span className="px-2.5 py-1 bg-rose-50 text-rose-700 border border-rose-200 text-[10px] font-black uppercase rounded-full flex items-center gap-1 animate-pulse">
+                <span className="w-2 h-2 rounded-full bg-rose-500 shadow-[0_0_8px_rgba(239,68,68,0.6)]" /> {issues} {issues === 1 ? 'Issue' : 'Issues'} Detected
+              </span>
+            )}
           </div>
-          <div>
-            <span className="font-extrabold uppercase tracking-wide">Biometric Device Disconnected</span>
-            <span className="opacity-90 ml-2 text-[11px] font-normal">
-              Attendance listener paused & gate control disabled. Retrying health probe every 5s...
-            </span>
-          </div>
+          <p className="text-xs font-semibold text-slate-500 mt-1">
+            Monitor real-time status of Internet, Python bridge, Firebase DB, ESSL terminal, attendance listener, and gate relay.
+          </p>
         </div>
 
+        {/* Retry Probe Action Button */}
         <button
-          onClick={() => checkRealDeviceHealth()}
-          className="px-3 py-1 bg-white text-red-700 rounded-lg text-[10px] font-black uppercase tracking-wider hover:bg-red-50 transition-all cursor-pointer border-none shadow-sm"
+          onClick={handleRetryProbe}
+          disabled={isProbing}
+          className="px-5 py-2.5 bg-slate-900 hover:bg-black text-white rounded-2xl text-xs font-black uppercase tracking-wider transition-all shadow-md flex items-center gap-2 cursor-pointer border-none shrink-0"
         >
-          Retry Probe
+          <RefreshCw size={14} className={isProbing ? 'animate-spin text-[#d4ff00]' : 'text-[#d4ff00]'} />
+          {isProbing ? 'Checking System...' : 'Retry Probe'}
         </button>
-      </motion.div>
-    </AnimatePresence>
+      </div>
+
+      {/* Main Full-Width System Health Services List */}
+      <div className="divide-y divide-slate-100 border border-slate-200/80 rounded-2xl overflow-hidden bg-slate-50/40">
+        {services.map((s) => {
+          const Icon = s.icon;
+          return (
+            <div key={s.id} className="p-4 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-white transition-colors">
+              <div className="flex items-center gap-4 min-w-0">
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border ${
+                  s.isOk ? 'bg-emerald-50 text-emerald-600 border-emerald-200' : 'bg-rose-50 text-rose-600 border-rose-200'
+                }`}>
+                  <Icon size={18} />
+                </div>
+
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-extrabold text-slate-900">{s.name}</span>
+                    <span className="text-[10px] text-slate-400 font-medium hidden sm:inline">• Checked {s.lastChecked}</span>
+                  </div>
+                  <div className="text-xs text-slate-500 font-semibold truncate mt-0.5">{s.detail}</div>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between sm:justify-end gap-4 shrink-0 border-t sm:border-t-0 pt-2 sm:pt-0 border-slate-100">
+                <div className="sm:hidden text-[10px] text-slate-400 font-medium">Checked {s.lastChecked}</div>
+                <div className={`px-3 py-1 rounded-xl text-xs font-black uppercase tracking-wider border flex items-center gap-2 ${
+                  s.isOk
+                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                    : 'bg-rose-50 text-rose-700 border-rose-200'
+                }`}>
+                  <span className={`w-2 h-2 rounded-full ${
+                    s.isOk
+                      ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)]'
+                      : 'bg-rose-500 shadow-[0_0_8px_rgba(239,68,68,0.6)] animate-pulse'
+                  }`} />
+                  <span>{s.status}</span>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
@@ -123,12 +266,10 @@ export function RealDeviceDisconnectBanner() {
 export default function RealDeviceStatusCard() {
   const {
     esslStatus,
-    pythonStatus,
     isDeviceFullyOnline,
     lastHeartbeat,
     latencyMs,
     eventsTodayCount,
-    checkRealDeviceHealth
   } = useDeviceStore();
 
   const getHeartbeatAge = () => {

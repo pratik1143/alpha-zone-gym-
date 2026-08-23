@@ -15,6 +15,7 @@ import { useRouter } from 'next/navigation';
 import { db as fDb, isFirebaseReady } from '@/lib/firebase';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import BiometricMappingModal from '../members/components/BiometricMappingModal';
+import { SystemHealthFullSection } from '../components/RealDeviceStatusEngine';
 
 interface Device {
   id: string;
@@ -58,8 +59,18 @@ export default function SettingsGodLevelPage() {
   const [contactEmail, setContactEmail] = useState(user?.email || 'admin@alphazone.com');
   const [contactPhone, setContactPhone] = useState('+91 98765 43210');
   const [savingBranch, setSavingBranch] = useState(false);
-  const [activeTab, setActiveTab] = useState<'hardware' | 'logs' | 'branch' | 'security' | 'data-tools'>('hardware');
+  const [activeTab, setActiveTab] = useState<'system-health' | 'hardware' | 'logs' | 'branch' | 'security' | 'data-tools'>('system-health');
   const [showBiometricMappingModal, setShowBiometricMappingModal] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const tabParam = params.get('tab');
+      if (tabParam === 'system-health' || tabParam === 'hardware' || tabParam === 'logs' || tabParam === 'branch' || tabParam === 'security' || tabParam === 'data-tools') {
+        setActiveTab(tabParam as any);
+      }
+    }
+  }, []);
 
   const handleExportCSV = () => {
     const members = useGymStore.getState().members || [];
@@ -469,6 +480,7 @@ export default function SettingsGodLevelPage() {
       {/* ── 2. NAVIGATION TABS ───────────────────────────────────────────────────── */}
       <div className="flex items-center gap-2 overflow-x-auto pb-4 mb-6">
         {[
+          { id: 'system-health', label: 'System Health & Devices', icon: Activity },
           { id: 'hardware', label: 'Biometric Gate Controller', icon: Server },
           { id: 'logs', label: 'Gate Relay Console Logs', icon: Terminal },
           { id: 'branch', label: 'Branch & Operator Profile', icon: Building2 },
@@ -491,6 +503,11 @@ export default function SettingsGodLevelPage() {
       </div>
 
       {/* ── 3. TAB CONTENT ───────────────────────────────────────────────────────── */}
+
+      {/* ── TAB 0: SYSTEM HEALTH & DEVICES ───────────────────────────────────────── */}
+      {activeTab === 'system-health' && (
+        <SystemHealthFullSection />
+      )}
 
       {/* ── TAB 1: BIOMETRIC GATE CONTROLLER ────────────────────────────────────── */}
       {activeTab === 'hardware' && (
