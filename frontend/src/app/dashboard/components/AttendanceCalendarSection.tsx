@@ -377,12 +377,12 @@ export default function AttendanceCalendarSection({
         {/* Panel Header & Controls */}
         <div className="w-full">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3.5">
-            <div>
-              <span className="text-[10px] font-black uppercase tracking-wider text-[#0b5cbe] block flex items-center gap-1.5 font-display">
-                <Briefcase size={13} /> STAFF MANAGEMENT
-              </span>
-              <h3 className="text-sm font-black text-slate-900 mt-0.5">
-                Staff roster &amp; real-time attendance tracking
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-[#eaf3ff] text-[#0b5cbe] flex items-center justify-center shrink-0 border border-[#b9d6f5]">
+                <Briefcase size={14} strokeWidth={2.5} />
+              </div>
+              <h3 className="text-xs font-black uppercase tracking-wider text-slate-900 font-display">
+                STAFF MANAGEMENT
               </h3>
             </div>
 
@@ -497,45 +497,6 @@ export default function AttendanceCalendarSection({
               <p className="text-[10px] text-slate-400 mt-0.5">Adjust your search query or reset filter dropdown</p>
             </div>
           )}
-        </div>
-
-        {/* Quick Staff Roster Summary Tiles (Productively filling empty space) */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-3 mt-2 border-t border-slate-100">
-          <div className="bg-slate-50/80 p-2.5 rounded-xl border border-slate-200/70 flex items-center justify-between">
-            <div>
-              <span className="text-[9px] font-extrabold uppercase tracking-wider text-slate-400 block">Trainers</span>
-              <span className="text-xs font-black text-slate-800 font-mono">
-                {staffListWithStatus.filter(e => String(e.role).toLowerCase().includes('trainer')).length} Active
-              </span>
-            </div>
-            <span className="text-[10px] font-bold text-[#0b5cbe] bg-[#eaf3ff] px-2 py-0.5 rounded-md">
-              Fitness Desk
-            </span>
-          </div>
-
-          <div className="bg-slate-50/80 p-2.5 rounded-xl border border-slate-200/70 flex items-center justify-between">
-            <div>
-              <span className="text-[9px] font-extrabold uppercase tracking-wider text-slate-400 block">Front Desk / Mgr</span>
-              <span className="text-xs font-black text-slate-800 font-mono">
-                {staffListWithStatus.filter(e => !String(e.role).toLowerCase().includes('trainer')).length} Active
-              </span>
-            </div>
-            <span className="text-[10px] font-bold text-slate-600 bg-white px-2 py-0.5 rounded-md border border-slate-200">
-              Operations
-            </span>
-          </div>
-
-          <div className="bg-slate-50/80 p-2.5 rounded-xl border border-slate-200/70 flex items-center justify-between">
-            <div>
-              <span className="text-[9px] font-extrabold uppercase tracking-wider text-slate-400 block">Biometric Sync</span>
-              <span className="text-xs font-black text-emerald-600 flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /> Live Bridge
-              </span>
-            </div>
-            <span className="text-[10px] font-bold text-slate-500">
-              eSSL K90
-            </span>
-          </div>
         </div>
 
       </div>
