@@ -1,10 +1,11 @@
 import { Request, Response } from 'express';
 import { db } from '../firebase';
 import { triggerPaymentEmail } from '../services/automation.service';
+import { resolveStaleRenewalFollowups } from '../services/followupAutomation.service';
 
 export const getInvoices = async (req: Request, res: Response) => {
   try {
-    const { memberId, limit } = req.query;
+    const { memberId, limit } = req.query || {};
     const list = await db.getPayments({
       memberId: typeof memberId === 'string' ? memberId : undefined,
       limit: limit ? Number(limit) : undefined
@@ -111,6 +112,17 @@ export const createInvoice = async (req: Request, res: Response) => {
         outstandingBalance: newOutstanding,
         daysLeft: Math.ceil((finalExpiryTime - Date.now()) / (1000 * 60 * 60 * 24))
       });
+
+      // Auto-resolve old stale renewal follow-ups
+      if (txType === 'pt_payment' || req.body.billingType === 'PT') {
+        resolveStaleRenewalFollowups(m.id, 'PT', req.body.ptExpiryDate || req.body.expiryDate || newExpiryString).catch(() => {});
+      } else {
+        resolveStaleRenewalFollowups(m.id, 'MEMBERSHIP', newExpiryString).catch(() => {});
+      }
+
+      if (newOutstanding <= 0) {
+        resolveStaleRenewalFollowups(m.id, 'BALANCE').catch(() => {});
+      }
     }
 
     res.status(201).json(invoice);
@@ -161,6 +173,9 @@ export const markPaymentPaid = async (req: Request, res: Response) => {
 
     // Trigger Email
     triggerPaymentEmail(invoice).catch(err => console.error('[Automation] Payment email failed:', err));
+
+    // Auto-resolve pending balance followups
+    resolveStaleRenewalFollowups(m.id, 'BALANCE').catch(() => {});
 
     res.json({ message: 'Payment marked as paid and invoice sent', invoice });
   } catch (error: any) {

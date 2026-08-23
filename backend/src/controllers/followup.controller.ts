@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { getFirestoreDb } from '../firebase';
+import { generateAutomatedFollowups } from '../services/followupAutomation.service';
 
 export const getFollowups = async (req: Request, res: Response) => {
   try {
@@ -33,25 +34,32 @@ export const createFollowup = async (req: Request, res: Response) => {
       memberPhone: data.memberPhone || data.phone || '',
       name: data.name || data.memberName || '',
       phone: data.phone || data.memberPhone || '',
-      title: data.title || data.notes || 'Follow-up Task',
+      title: data.title || data.reason || data.notes || 'Follow-up Task',
+      reason: data.reason || data.title || data.notes || 'Follow-up Task',
       description: data.description || data.notes || '',
-      type: data.type || 'Renewal Reminder',
+      notes: data.notes || data.description || '',
+      type: data.type || 'General',
       priority: data.priority || 'Medium',
-      assignedTo: data.assignedTo || 'Gym Owner',
+      assignedTo: data.assignedTo || 'Receptionist',
       scheduledDate,
+      dueDate: data.dueDate || scheduledDate,
       scheduledTime,
       scheduledTimestamp,
-      status: data.status || 'Pending',
-      createdAt: new Date().toISOString(),
+      status: data.status || 'pending',
+      source: data.source || 'manual',
+      automationKey: data.automationKey || null,
+      plan: data.plan || '',
+      pendingAmount: data.pendingAmount !== undefined ? data.pendingAmount : null,
+      createdAt: data.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
 
-    let createdId = data.id || `fol_${Date.now()}`;
+    let createdId = data.id || (data.automationKey ? data.automationKey : `fol_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`);
 
     if (firestore) {
-      if (data.id) {
-        await firestore.collection('followups').doc(data.id).set(payload, { merge: true });
-        createdId = data.id;
+      if (data.id || data.automationKey) {
+        createdId = data.id || data.automationKey;
+        await firestore.collection('followups').doc(createdId).set(payload, { merge: true });
       } else {
         const docRef = await firestore.collection('followups').add(payload);
         createdId = docRef.id;
@@ -102,5 +110,20 @@ export const deleteFollowup = async (req: Request, res: Response) => {
   } catch (error: any) {
     console.error('Error deleting followup:', error);
     return res.status(500).json({ error: error.message || 'Failed to delete follow-up' });
+  }
+};
+
+export const triggerAutomatedFollowups = async (req: Request, res: Response) => {
+  try {
+    const { dateOverride } = req.body || {};
+    const result = await generateAutomatedFollowups(dateOverride);
+    return res.json({
+      success: true,
+      message: 'Automated follow-up generation completed',
+      ...result
+    });
+  } catch (error: any) {
+    console.error('Error in triggerAutomatedFollowups:', error);
+    return res.status(500).json({ error: error.message || 'Failed to generate automated follow-ups' });
   }
 };

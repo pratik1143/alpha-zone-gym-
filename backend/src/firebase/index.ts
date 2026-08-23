@@ -151,6 +151,7 @@ export let mockProgressLogs: any[] = [];
 export let mockChatMessages: any[] = [];
 export let mockReferrals: any[] = [];
 export let mockMigrations: any[] = [];
+export let mockFollowups: any[] = [];
 
 export let mockPlans: any[] = [
   {
@@ -2413,6 +2414,7 @@ export const db = {
     mockChatMessages = [];
     mockReferrals = [];
     mockMigrations = [];
+    mockFollowups = [];
     membersCache = null;
     return {
       members: 0,
@@ -2423,8 +2425,63 @@ export const db = {
       cheatMeals: 0,
       logs: 0,
       referrals: 0,
-      migrations: 0
+      migrations: 0,
+      followups: 0
     };
+  },
+
+  getFollowups: async (): Promise<any[]> => {
+    const firestore = getFirestoreDb();
+    if (firestore) {
+      const snap = await firestore.collection('followups').orderBy('scheduledTimestamp', 'asc').get();
+      return snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    }
+    return mockFollowups;
+  },
+
+  addFollowup: async (followup: any): Promise<any> => {
+    const firestore = getFirestoreDb();
+    const id = followup.id || (followup.automationKey ? followup.automationKey : `fol_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`);
+    const docData = { ...followup, id };
+    if (firestore) {
+      await firestore.collection('followups').doc(id).set(docData, { merge: true });
+      return docData;
+    }
+    const idx = mockFollowups.findIndex(f => f.id === id || (followup.automationKey && f.automationKey === followup.automationKey));
+    if (idx !== -1) {
+      mockFollowups[idx] = { ...mockFollowups[idx], ...docData };
+    } else {
+      mockFollowups.push(docData);
+    }
+    return docData;
+  },
+
+  updateFollowup: async (id: string, updates: any): Promise<any> => {
+    const firestore = getFirestoreDb();
+    if (firestore) {
+      await firestore.collection('followups').doc(id).update(updates);
+      return { id, ...updates };
+    }
+    const idx = mockFollowups.findIndex(f => f.id === id || f.automationKey === id);
+    if (idx !== -1) {
+      mockFollowups[idx] = { ...mockFollowups[idx], ...updates };
+      return mockFollowups[idx];
+    }
+    return null;
+  },
+
+  deleteFollowup: async (id: string): Promise<boolean> => {
+    const firestore = getFirestoreDb();
+    if (firestore) {
+      await firestore.collection('followups').doc(id).delete();
+      return true;
+    }
+    const idx = mockFollowups.findIndex(f => f.id === id || f.automationKey === id);
+    if (idx !== -1) {
+      mockFollowups.splice(idx, 1);
+      return true;
+    }
+    return false;
   }
 };
 

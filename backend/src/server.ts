@@ -7,6 +7,7 @@ import { initDeviceSyncService } from './services/deviceSync.service';
 import { startCleanupJob } from './jobs/cleanup';
 import { startPresenceJob } from './jobs/presence';
 import { initQueueJob } from './jobs/whatsappQueue.job';
+import { startFollowupAutomationJob } from './jobs/followupAutomation.job';
 
 // Trigger reload after Firestore activation by user
 dotenv.config();
@@ -73,6 +74,9 @@ if (process.env.VERCEL) {
 
     // Start the WhatsApp Queue worker
     initQueueJob();
+
+    // Start the Automated Follow-Up Generation Engine
+    startFollowupAutomationJob();
 
     // ⛔ Auto email scheduler DISABLED — emails send only via manual dashboard trigger
     // To re-enable: uncomment the block below

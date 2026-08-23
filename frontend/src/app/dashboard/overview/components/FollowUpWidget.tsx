@@ -88,8 +88,19 @@ export default function FollowUpWidget() {
               </span>
             </div>
 
-            <p className="text-[10px] text-slate-600 mb-3 line-clamp-2 leading-relaxed">
-              {item.notes || 'No reason provided'}
+            <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
+              <span className="text-[8px] font-black px-1.5 py-0.5 rounded uppercase tracking-wider bg-slate-100 text-slate-700">
+                {item.type || 'Follow-up'}
+              </span>
+              {item.priority === 'High' && (
+                <span className="text-[8px] font-bold px-1.5 py-0.5 rounded bg-red-100 text-red-700">
+                  High
+                </span>
+              )}
+            </div>
+
+            <p className="text-[10px] text-slate-700 font-semibold mb-3 line-clamp-2 leading-relaxed">
+              {item.reason || item.notes || item.description || 'Follow-up task'}
             </p>
 
             <div className="flex items-center justify-between gap-2 opacity-0 group-hover:opacity-100 transition-opacity">

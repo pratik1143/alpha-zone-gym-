@@ -3,11 +3,19 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { followupService, FollowUpItem } from '@/services/followup.service';
 
+let autoGenerationTriggeredToday = false;
+
 export function useFollowups() {
   const [dbFollowups, setDbFollowups] = useState<FollowUpItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Run automated generation check once on initial hook mount
+    if (!autoGenerationTriggeredToday) {
+      autoGenerationTriggeredToday = true;
+      followupService.generateAutomatedFollowups().catch(() => {});
+    }
+
     const unsubscribe = followupService.subscribe(
       (data) => {
         setDbFollowups(data);
@@ -34,8 +42,8 @@ export function useFollowups() {
     });
 
     cleanList.sort((a, b) => {
-      const tsA = a.scheduledTimestamp || (a.scheduledDate ? new Date(`${a.scheduledDate}T${a.scheduledTime || '09:00'}`).getTime() : 0);
-      const tsB = b.scheduledTimestamp || (b.scheduledDate ? new Date(`${b.scheduledDate}T${b.scheduledTime || '09:00'}`).getTime() : 0);
+      const tsA = a.scheduledTimestamp || (a.scheduledDate ? new Date(`${a.scheduledDate}T${a.scheduledTime || '10:00'}`).getTime() : 0);
+      const tsB = b.scheduledTimestamp || (b.scheduledDate ? new Date(`${b.scheduledDate}T${b.scheduledTime || '10:00'}`).getTime() : 0);
       return tsA - tsB;
     });
 
@@ -54,7 +62,7 @@ export function useFollowups() {
         f.status === 'Pending' &&
         f.scheduledDate === todayStr &&
         f.scheduledTimestamp <= now
-    ).length;
+      ).length;
   }, [followups]);
 
   const nextHourCount = useMemo(() => {
@@ -166,5 +174,3 @@ export function useFollowups() {
     removeFollowup,
   };
 }
-
-

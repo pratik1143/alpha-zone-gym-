@@ -388,27 +388,36 @@ export default function OverviewCommandCenter() {
   const handleCreateFollowup = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!folTitle || !folSelectedId) {
-      toast.error("Please select a target client and enter a title!");
+      toast.error("Please select a member and enter a reason!");
       return;
     }
     setFolSaving(true);
     try {
-      const targetEntity = folSourceType === 'member'
-        ? members.find((m: any) => m.id === folSelectedId || m.memberId === folSelectedId)
-        : enquiries.find((eq: any) => eq.id === folSelectedId);
+      const targetMember = members.find((m: any) => m.id === folSelectedId || m.memberId === folSelectedId);
+
+      let followUpType = 'General';
+      if (folTitle.includes('Renewal') || folTitle.includes('Membership')) {
+        followUpType = 'GYM MEMBERSHIP RENEWAL';
+      } else if (folTitle.includes('PT') || folTitle.includes('Personal Training')) {
+        followUpType = 'PT RENEWAL';
+      } else if (folTitle.includes('Balance') || folTitle.includes('Payment')) {
+        followUpType = 'PENDING BALANCE';
+      }
 
       await createFollowup({
-        memberId: folSourceType === 'member' ? folSelectedId : null,
-        enquiryId: folSourceType === 'enquiry' ? folSelectedId : null,
-        memberName: targetEntity?.name || 'Client',
-        phone: targetEntity?.phone || '',
+        memberId: folSelectedId,
+        memberName: targetMember?.name || 'Member',
+        phone: targetMember?.phone || '',
         title: folTitle,
+        reason: folTitle,
         notes: folTitle,
+        dueDate: folDate,
         scheduledDate: folDate,
         scheduledTime: folTime,
         scheduledTimestamp: new Date(`${folDate}T${folTime}`).getTime() || Date.now(),
         priority: folPriority,
-        type: folSourceType === 'member' ? 'Renewal' : 'Enquiry',
+        type: followUpType,
+        source: 'manual',
         status: 'Pending',
         createdAt: new Date().toISOString()
       });
@@ -890,21 +899,11 @@ export default function OverviewCommandCenter() {
               </div>
 
               <form onSubmit={handleCreateFollowup} className="p-6 space-y-4">
-                <div className="grid grid-cols-2 gap-2">
-                  <button type="button" onClick={() => { setFolSourceType('member'); setFolSelectedId(''); }} className={`py-2 text-center text-xs font-bold rounded-xl border transition-all cursor-pointer ${folSourceType === 'member' ? 'bg-blue-600 text-white border-blue-600' : 'bg-slate-50 text-slate-600 border-slate-200'}`}>
-                    Member
-                  </button>
-                  <button type="button" onClick={() => { setFolSourceType('enquiry'); setFolSelectedId(''); }} className={`py-2 text-center text-xs font-bold rounded-xl border transition-all cursor-pointer ${folSourceType === 'enquiry' ? 'bg-blue-600 text-white border-blue-600' : 'bg-slate-50 text-slate-600 border-slate-200'}`}>
-                    Enquiry
-                  </button>
-                </div>
-
                 <div>
-                  <label className="text-xs font-bold text-slate-600 block mb-1">Select Client <span className="text-blue-600">*</span></label>
+                  <label className="text-xs font-bold text-slate-600 block mb-1">Select Member <span className="text-blue-600">*</span></label>
                   <select required value={folSelectedId} onChange={e => setFolSelectedId(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-bold text-slate-800 outline-none focus:border-blue-600 cursor-pointer">
-                    <option value="">-- Select {folSourceType} --</option>
-                    {folSourceType === 'member' && members.map((m: any) => <option key={m.id || m.memberId} value={m.id || m.memberId}>{m.name} ({m.phone})</option>)}
-                    {folSourceType === 'enquiry' && enquiries.map((eq: any) => <option key={eq.id} value={eq.id}>{eq.name} ({eq.phone})</option>)}
+                    <option value="">-- Select Member --</option>
+                    {members.map((m: any) => <option key={m.id || m.memberId} value={m.id || m.memberId}>{m.name} ({m.phone})</option>)}
                   </select>
                 </div>
 

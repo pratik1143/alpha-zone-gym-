@@ -12,9 +12,9 @@ export interface FollowUpItem {
   assignedEmployeeId?: string | null;
   assignedEmployeeName?: string;
   assignedTo?: string;
-  priority: 'Critical' | 'High' | 'Medium' | 'Low';
-  type: 'Renewal' | 'PT' | 'Payment' | 'Enquiry' | 'General' | 'Diet' | 'Trainer' | 'Attendance' | 'Birthday' | 'Custom';
-  status: 'Pending' | 'In Progress' | 'Completed' | 'Missed' | 'Cancelled';
+  priority: 'Critical' | 'High' | 'Medium' | 'Low' | string;
+  type: 'GYM MEMBERSHIP RENEWAL' | 'PT RENEWAL' | 'PENDING BALANCE' | 'Renewal' | 'PT' | 'Payment' | 'Enquiry' | 'General' | 'Diet' | 'Trainer' | 'Attendance' | 'Birthday' | 'Custom' | string;
+  status: 'Pending' | 'In Progress' | 'Completed' | 'Missed' | 'Cancelled' | string;
   createdAt: string;
   createdBy?: string;
   dueDate: string;
@@ -25,14 +25,32 @@ export interface FollowUpItem {
   notes?: string;
   description?: string;
   title?: string;
+  reason?: string;
   communicationType?: 'call' | 'whatsapp' | 'visit' | 'email';
-  source?: 'enquiry' | 'renewal' | 'manual' | 'system';
+  source?: 'automatic' | 'manual' | 'enquiry' | 'renewal' | 'system';
+  automationKey?: string | null;
+  pendingAmount?: number | null;
+  plan?: string;
+  expiryDate?: string;
+  ptExpiryDate?: string;
+  paymentDueDate?: string;
   outcome?: string;
   remarks?: string;
   date?: string;
 }
 
 export const followupService = {
+  // Trigger automated generation on backend engine
+  generateAutomatedFollowups: async (dateOverride?: string) => {
+    try {
+      const res = await API.post('/followups/generate-automated', { dateOverride });
+      return res.data;
+    } catch (err: any) {
+      console.warn('[followupService] Error triggering automated followups:', err);
+      return null;
+    }
+  },
+
   // Real-time listener for followups with API fallback
   subscribe: (onData: (items: FollowUpItem[]) => void, onError?: (err: Error) => void) => {
     let firestoreLoaded = false;
@@ -43,7 +61,7 @@ export const followupService = {
         if (Array.isArray(res.data) && res.data.length > 0 && !firestoreLoaded) {
           const list = res.data.map(d => ({
             ...d,
-            status: d.status || 'Pending',
+            status: d.status ? (d.status.charAt(0).toUpperCase() + d.status.slice(1)) : 'Pending',
             scheduledDate: d.scheduledDate || d.dueDate || new Date().toISOString().split('T')[0],
             scheduledTime: d.scheduledTime || '10:00',
             scheduledTimestamp: d.scheduledTimestamp || Date.now()
@@ -78,6 +96,11 @@ export const followupService = {
             ? 'Missed' 
             : 'Pending';
 
+          let itemType = d.type || 'General';
+          if (itemType === 'Renewal') itemType = 'GYM MEMBERSHIP RENEWAL';
+          else if (itemType === 'PT') itemType = 'PT RENEWAL';
+          else if (itemType === 'Payment') itemType = 'PENDING BALANCE';
+
           const item: FollowUpItem = {
             id: docSnap.id,
             memberId: d.memberId || null,
@@ -86,24 +109,31 @@ export const followupService = {
             enquiryId: d.enquiryId || null,
             employeeId: d.employeeId || null,
             assignedEmployeeId: d.assignedEmployeeId || d.employeeId || null,
-            assignedEmployeeName: d.assignedEmployeeName || d.assignedTo || 'Gym Owner',
-            assignedTo: d.assignedTo || 'Gym Owner',
+            assignedEmployeeName: d.assignedEmployeeName || d.assignedTo || 'Receptionist',
+            assignedTo: d.assignedTo || 'Receptionist',
             priority: d.priority || 'Medium',
-            type: d.type || 'Renewal',
+            type: itemType,
             status,
             createdAt: d.createdAt || new Date().toISOString(),
             createdBy: d.createdBy || 'System',
-            dueDate: scheduledDate,
+            dueDate: d.dueDate || scheduledDate,
             scheduledDate,
             scheduledTime,
             scheduledTimestamp,
             date: scheduledDate,
             completedAt: d.completedAt || null,
-            notes: d.notes || d.description || '',
-            description: d.description || d.notes || '',
-            title: d.title || d.notes || 'Follow-up Task',
+            notes: d.notes || d.description || d.reason || '',
+            description: d.description || d.notes || d.reason || '',
+            reason: d.reason || d.title || d.notes || '',
+            title: d.title || d.reason || d.notes || 'Follow-up Task',
             communicationType: d.communicationType || 'call',
-            source: d.source || 'manual',
+            source: d.source || (d.automationKey ? 'automatic' : 'manual'),
+            automationKey: d.automationKey || null,
+            pendingAmount: d.pendingAmount !== undefined ? d.pendingAmount : null,
+            plan: d.plan || '',
+            expiryDate: d.expiryDate || '',
+            ptExpiryDate: d.ptExpiryDate || '',
+            paymentDueDate: d.paymentDueDate || '',
             outcome: d.outcome || '',
             remarks: d.remarks || ''
           };
@@ -118,13 +148,15 @@ export const followupService = {
         const seenSigMap = new Map<string, FollowUpItem>();
 
         for (const item of list) {
-          const sigKey = `${item.memberId || item.memberName}_${item.scheduledDate}_${item.scheduledTime}_${item.title || item.notes}_${item.status}`;
+          const sigKey = item.automationKey 
+            ? item.automationKey 
+            : `${item.memberId || item.memberName}_${item.scheduledDate}_${item.scheduledTime}_${item.title || item.notes}_${item.status}`;
+          
           const existing = seenSigMap.get(sigKey);
 
           if (existing) {
             const timeA = new Date(item.createdAt || 0).getTime();
             const timeB = new Date(existing.createdAt || 0).getTime();
-            // If created within 2 minutes of each other, suppress the duplicate
             if (Math.abs(timeA - timeB) < 120_000 || !item.createdAt || !existing.createdAt) {
               continue;
             }
@@ -150,7 +182,7 @@ export const followupService = {
     const scheduledTime = data.scheduledTime || '10:00';
     const scheduledTimestamp = data.scheduledTimestamp || new Date(`${scheduledDate}T${scheduledTime}`).getTime() || Date.now();
 
-    const createdId = data.id || `fol_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const createdId = data.id || (data.automationKey ? data.automationKey : `fol_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`);
 
     const payload = {
       memberId: data.memberId || null,
@@ -159,22 +191,26 @@ export const followupService = {
       enquiryId: data.enquiryId || null,
       employeeId: data.employeeId || null,
       assignedEmployeeId: data.assignedEmployeeId || null,
-      assignedEmployeeName: data.assignedEmployeeName || data.assignedTo || 'Gym Owner',
-      assignedTo: data.assignedTo || 'Gym Owner',
+      assignedEmployeeName: data.assignedEmployeeName || data.assignedTo || 'Receptionist',
+      assignedTo: data.assignedTo || 'Receptionist',
       priority: data.priority || 'Medium',
-      type: data.type || 'Renewal',
+      type: data.type || 'General',
       status: 'Pending',
       createdAt: new Date().toISOString(),
       createdBy: data.createdBy || 'Receptionist',
-      dueDate: scheduledDate,
+      dueDate: data.dueDate || scheduledDate,
       scheduledDate,
       scheduledTime,
       scheduledTimestamp,
       title: data.title || `Follow-up: ${data.memberName || 'Client'}`,
+      reason: data.reason || data.title || '',
       description: data.description || data.notes || '',
       notes: data.notes || data.description || '',
       communicationType: data.communicationType || 'call',
-      source: data.source || 'manual'
+      source: data.source || (data.automationKey ? 'automatic' : 'manual'),
+      automationKey: data.automationKey || null,
+      pendingAmount: data.pendingAmount !== undefined ? data.pendingAmount : null,
+      plan: data.plan || ''
     };
 
     try {

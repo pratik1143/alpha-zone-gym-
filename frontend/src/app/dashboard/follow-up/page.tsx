@@ -421,10 +421,11 @@ export default function FollowUpManager() {
             value={filterType} onChange={e => setFilterType(e.target.value)}
           >
             <option value="All">All Types</option>
-            <option value="Renewal">Renewal</option>
+            <option value="GYM MEMBERSHIP RENEWAL">GYM MEMBERSHIP RENEWAL</option>
+            <option value="PT RENEWAL">PT RENEWAL</option>
+            <option value="PENDING BALANCE">PENDING BALANCE</option>
             <option value="Enquiry">Enquiry</option>
-            <option value="Payment">Payment</option>
-            <option value="Diet">Diet</option>
+            <option value="General">General</option>
             <option value="Custom">Custom</option>
           </select>
 
@@ -491,7 +492,33 @@ export default function FollowUpManager() {
           filteredTasks.map((task) => {
             const client = getClientDetails(task);
             const isSelected = selectedTasks.includes(task.id);
+            const isAutomatic = task.source === 'automatic' || !!task.automationKey;
             const prevNotes = task.notes || task.description || task.remarks || '';
+
+            let typeBadgeClass = 'bg-slate-100 text-slate-700';
+            let displayReason = task.reason || task.description || task.notes || task.title || '';
+
+            if (task.type === 'GYM MEMBERSHIP RENEWAL' || task.type === 'Renewal') {
+              typeBadgeClass = 'bg-blue-100 text-blue-800 border border-blue-200';
+              displayReason = displayReason || 'Membership renewal due in 7 days';
+            } else if (task.type === 'PT RENEWAL' || task.type === 'PT') {
+              typeBadgeClass = 'bg-purple-100 text-purple-800 border border-purple-200';
+              displayReason = displayReason || 'Personal Training renewal due in 4 days';
+            } else if (task.type === 'PENDING BALANCE' || task.type === 'Payment') {
+              typeBadgeClass = 'bg-amber-100 text-amber-900 border border-amber-200';
+              const pendingAmtStr = task.pendingAmount ? `₹${Number(task.pendingAmount).toLocaleString('en-IN')}` : '';
+              displayReason = pendingAmtStr ? `${pendingAmtStr} pending` : (displayReason || 'Pending membership balance');
+            } else if (task.type === 'Enquiry') {
+              typeBadgeClass = 'bg-indigo-100 text-indigo-800 border border-indigo-200';
+            }
+
+            const normPriority = (task.priority || 'Medium').toLowerCase();
+            const isHighPriority = normPriority === 'high' || normPriority === 'critical' || normPriority === 'urgent';
+            const priorityBadgeClass = isHighPriority 
+              ? 'bg-red-100 text-red-700 font-bold border border-red-200' 
+              : normPriority === 'medium'
+              ? 'bg-blue-100 text-blue-700 font-bold border border-blue-200'
+              : 'bg-slate-100 text-slate-600 font-medium';
 
             return (
               <motion.div
@@ -521,25 +548,28 @@ export default function FollowUpManager() {
 
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <h3 className="text-sm font-bold text-slate-900 truncate">{client.name}</h3>
+                        <h3 className="text-sm font-black text-slate-900 truncate">{client.name}</h3>
                         
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md uppercase tracking-wider ${
-                          task.type === 'Renewal' ? 'bg-blue-100 text-blue-800' :
-                          task.type === 'Enquiry' ? 'bg-indigo-100 text-indigo-800' :
-                          task.type === 'Payment' ? 'bg-emerald-100 text-emerald-800' :
-                          'bg-slate-100 text-slate-700'
-                        }`}>
+                        <span className={`text-[10px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider ${typeBadgeClass}`}>
                           {task.type || 'General'}
                         </span>
 
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
-                          task.priority === 'High' ? 'bg-red-100 text-red-700' :
-                          task.priority === 'Medium' ? 'bg-amber-100 text-amber-800' :
-                          'bg-slate-100 text-slate-600'
-                        }`}>
+                        <span className={`text-[10px] px-2 py-0.5 rounded-md flex items-center gap-1 ${priorityBadgeClass}`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${isHighPriority ? 'bg-red-500' : 'bg-blue-500'}`} />
                           {task.priority || 'Medium'}
                         </span>
+
+                        {isAutomatic && (
+                          <span className="text-[9px] font-extrabold px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-0.5">
+                            ⚡ Auto
+                          </span>
+                        )}
                       </div>
+
+                      {/* Display Reason */}
+                      <p className="text-xs font-semibold text-slate-700 mt-1">
+                        {displayReason}
+                      </p>
 
                       <div className="flex items-center gap-3 text-xs text-slate-500 font-semibold mt-1 flex-wrap">
                         <a href={`tel:${client.phone}`} className="hover:text-blue-600 transition-colors flex items-center gap-1">
@@ -547,14 +577,14 @@ export default function FollowUpManager() {
                         </a>
                         <span>•</span>
                         <span className="flex items-center gap-1 text-slate-700 font-bold">
-                          📅 {task.scheduledDate} · {task.scheduledTime || '10:00'}
+                          📅 Due: {task.dueDate || task.scheduledDate} {task.scheduledTime ? `· ${task.scheduledTime}` : ''}
                         </span>
                         <span>•</span>
-                        <span>Assigned: {task.assignedTo || 'Staff'}</span>
+                        <span>Assigned: {task.assignedTo || 'Receptionist'}</span>
                       </div>
 
                       {/* Last Conversation Remarks */}
-                      {prevNotes && (
+                      {prevNotes && prevNotes !== displayReason && (
                         <div className="mt-2 bg-slate-50 p-2.5 rounded-xl border border-slate-200/60 text-xs text-slate-700 font-medium">
                           <span className="font-bold text-slate-700">Last Note:</span> "{prevNotes}"
                         </div>
@@ -894,22 +924,22 @@ function AddFollowUpWizard({
   onClose: () => void 
 }) {
   const [selectedMember, setSelectedMember] = useState<any>(null);
-  const [reason, setReason] = useState('Renewal Reminder');
+  const [reason, setReason] = useState('GYM MEMBERSHIP RENEWAL');
   const [customReason, setCustomReason] = useState('');
   const [date, setDate] = useState(() => new Date().toISOString().split('T')[0]);
-  const [time, setTime] = useState('15:30');
+  const [time, setTime] = useState('10:00');
   const [priority, setPriority] = useState<'Low' | 'Medium' | 'High' | 'Urgent'>('Medium');
   const [assignedTo, setAssignedTo] = useState('Receptionist');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
   const REASON_OPTIONS = [
-    'Renewal Reminder',
-    'Payment Follow-up',
-    'Membership Expiry',
-    'PT Follow-up',
-    'Attendance Follow-up',
+    'GYM MEMBERSHIP RENEWAL',
+    'PT RENEWAL',
+    'PENDING BALANCE',
     'General Follow-up',
+    'Attendance Follow-up',
+    'Diet Follow-up',
     'Custom'
   ];
 
@@ -966,6 +996,15 @@ function AddFollowUpWizard({
 
       const operationId = `fol_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
 
+      let followUpType = 'General';
+      if (finalReason === 'GYM MEMBERSHIP RENEWAL' || finalReason.includes('Renewal') || finalReason.includes('Membership')) {
+        followUpType = 'GYM MEMBERSHIP RENEWAL';
+      } else if (finalReason === 'PT RENEWAL' || finalReason.includes('PT') || finalReason.includes('Personal Training')) {
+        followUpType = 'PT RENEWAL';
+      } else if (finalReason === 'PENDING BALANCE' || finalReason.includes('Balance') || finalReason.includes('Payment')) {
+        followUpType = 'PENDING BALANCE';
+      }
+
       const payload = {
         id: operationId,
         memberId,
@@ -973,21 +1012,24 @@ function AddFollowUpWizard({
         phone,
         priority: priority as any,
         title: finalReason,
+        reason: finalReason,
         notes: `Follow-up for ${memberName}: ${finalReason}`,
         description: `Follow-up for ${memberName}: ${finalReason}`,
         assignedTo,
+        dueDate: date,
         scheduledDate: date,
         scheduledTime: time,
         scheduledTimestamp: ts,
         status: 'Pending' as const,
-        type: (finalReason.includes('Renewal') ? 'Renewal' : finalReason.includes('Payment') ? 'Payment' : finalReason.includes('PT') ? 'PT' : 'General') as any,
+        type: followUpType,
+        source: 'manual' as const,
         createdAt: new Date().toISOString()
       };
 
       const createFn = createFollowup || followupService.create;
       await createFn(payload);
 
-      toast.success('✓ Follow-up scheduled successfully');
+      toast.success('✓ Manual follow-up scheduled successfully');
       onClose();
     } catch (err: any) {
       toast.error('Failed to schedule follow-up: ' + (err.response?.data?.error || err.message || 'Error occurred'));

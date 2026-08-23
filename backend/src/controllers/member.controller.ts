@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { db, admin, isFirebaseInitialized } from '../firebase';
 import { triggerWelcomeEmail, triggerPaymentEmail, triggerPtWelcomeEmail } from '../services/automation.service';
+import { resolveStaleRenewalFollowups } from '../services/followupAutomation.service';
 
 export const getMembers = async (req: Request, res: Response) => {
   try {
@@ -363,6 +364,19 @@ export const updateMember = async (req: Request, res: Response) => {
 
     if (isNowPt && !wasPt) {
       triggerPtWelcomeEmail(updated).catch((err: any) => console.error('[Automation] PT welcome email trigger failed:', err));
+    }
+
+    if (req.body.expiryDate && req.body.expiryDate !== oldMember?.expiryDate) {
+      resolveStaleRenewalFollowups(targetId, 'MEMBERSHIP', req.body.expiryDate).catch(() => {});
+    }
+
+    if (req.body.ptExpiryDate && req.body.ptExpiryDate !== oldMember?.ptExpiryDate) {
+      resolveStaleRenewalFollowups(targetId, 'PT', req.body.ptExpiryDate).catch(() => {});
+    }
+
+    const currentBal = Number(req.body.outstandingBalance ?? req.body.balance ?? 0);
+    if (req.body.outstandingBalance !== undefined && currentBal <= 0) {
+      resolveStaleRenewalFollowups(targetId, 'BALANCE').catch(() => {});
     }
 
     res.json(updated);

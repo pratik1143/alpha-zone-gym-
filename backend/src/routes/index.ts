@@ -156,7 +156,7 @@ router.post('/memberships', createPlanController);
 router.put('/memberships/:id', updatePlanController);
 router.delete('/memberships/:id', deletePlanController);
 
-import { getFollowups, createFollowup, updateFollowup, deleteFollowup } from '../controllers/followup.controller';
+import { getFollowups, createFollowup, updateFollowup, deleteFollowup, triggerAutomatedFollowups } from '../controllers/followup.controller';
 
 // Employee Management
 router.get('/employees', getEmployees);
@@ -168,6 +168,7 @@ router.get('/employee-attendance', getEmployeeAttendance);
 // Followups Management
 router.get('/followups', getFollowups);
 router.post('/followups', createFollowup);
+router.post('/followups/generate-automated', triggerAutomatedFollowups);
 router.put('/followups/:id', updateFollowup);
 router.delete('/followups/:id', deleteFollowup);
 
