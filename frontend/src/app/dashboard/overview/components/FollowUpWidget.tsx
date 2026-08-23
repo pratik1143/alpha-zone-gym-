@@ -8,6 +8,7 @@ import { Phone, MessageCircle, CheckCircle, Clock, Calendar, MoreHorizontal } fr
 import toast from "react-hot-toast";
 
 import { useFollowups } from "@/hooks/useFollowups";
+import { getTodayInIndia } from "@/lib/dateUtils";
 
 export default function FollowUpWidget() {
   const { followups, completeFollowup } = useFollowups();
@@ -22,7 +23,7 @@ export default function FollowUpWidget() {
   };
 
   // Grouping logic
-  const now = new Date();
+  const todayStr = getTodayInIndia();
   const grouped = {
     dueNow: [] as any[],
     upcomingToday: [] as any[],
@@ -31,25 +32,21 @@ export default function FollowUpWidget() {
   };
 
   followups.forEach(f => {
-    const dateStr = f.scheduledDate || f.dueDate || f.date || new Date().toISOString().split('T')[0];
-    const timeStr = f.scheduledTime || '10:00';
-    const fDate = new Date(`${dateStr}T${timeStr}`);
-    
     if (f.status === 'Completed') {
       grouped.completed.push(f);
       return;
     }
 
-    if (fDate < now && f.status === 'Pending') {
-      // If it's less than 1 hour overdue, count as Due Now, otherwise Overdue
-      const diffMs = now.getTime() - fDate.getTime();
-      if (diffMs < 3600000) {
+    const itemDate = (f.dueDate || f.scheduledDate || f.date || '').split('T')[0];
+    
+    if (f.status === 'Pending') {
+      if (itemDate < todayStr) {
+        grouped.overdue.push(f);
+      } else if (itemDate === todayStr) {
         grouped.dueNow.push(f);
       } else {
-        grouped.overdue.push(f);
+        grouped.upcomingToday.push(f);
       }
-    } else if (fDate.toDateString() === now.toDateString() && fDate >= now) {
-      grouped.upcomingToday.push(f);
     }
   });
 

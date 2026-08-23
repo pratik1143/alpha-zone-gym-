@@ -54,12 +54,14 @@ export interface AutomatedFollowupResult {
  * 1. UPCOMING GYM MEMBERSHIP RENEWAL (7 days before expiry)
  * 2. PT RENEWAL (4 days before PT expiry)
  * 3. PENDING BALANCE (2 days before payment due date when balance > 0)
+ * 4. PENDING ENQUIRIES (creates idempotent follow-up for every pending enquiry with nextFollowUpDate)
  */
 export async function generateAutomatedFollowups(todayStrOverride?: string): Promise<AutomatedFollowupResult> {
   const todayStr = todayStrOverride || getKolkataDateString();
 
   let members: any[] = [];
   let payments: any[] = [];
+  let enquiries: any[] = [];
   let existingFollowups: any[] = [];
 
   try {
@@ -72,6 +74,12 @@ export async function generateAutomatedFollowups(todayStrOverride?: string): Pro
     payments = await db.getPayments();
   } catch (err) {
     console.error('[Automation Engine] Error fetching payments:', err);
+  }
+
+  try {
+    enquiries = await db.getEnquiries();
+  } catch (err) {
+    console.error('[Automation Engine] Error fetching enquiries:', err);
   }
 
   try {
@@ -98,6 +106,9 @@ export async function generateAutomatedFollowups(todayStrOverride?: string): Pro
 
   const createdFollowups: any[] = [];
 
+  // =============================================================
+  // MEMBERS EVALUATION (RULES 1, 2, 3)
+  // =============================================================
   for (const member of members) {
     const memberId = member.id || member.uid || member.memberId;
     if (!memberId) continue;
@@ -253,7 +264,6 @@ export async function generateAutomatedFollowups(todayStrOverride?: string): Pro
             skippedCount++;
           } else {
             const formattedAmount = `₹${pendingBalance.toLocaleString('en-IN')}`;
-            const reasonText = `Pending membership balance: ${formattedAmount}`;
 
             const payload = {
               id: automationKey,
@@ -292,6 +302,54 @@ export async function generateAutomatedFollowups(todayStrOverride?: string): Pro
     }
   }
 
+  // =============================================================
+  // RULE 4: ENQUIRIES EVALUATION (Pending Enquiries Follow-Ups)
+  // =============================================================
+  for (const enquiry of enquiries) {
+    const enqId = enquiry.id;
+    const enqStatus = (enquiry.status || '').toLowerCase();
+    const followUpDate = enquiry.nextFollowUpDate || enquiry.nextFollowUp || enquiry.followupDate;
+
+    if (enqId && enqStatus === 'pending' && followUpDate && typeof followUpDate === 'string' && followUpDate.trim() !== '') {
+      const cleanEnqDate = followUpDate.split('T')[0];
+      const autoKey = `ENQUIRY_FOLLOWUP_${enqId}_${cleanEnqDate}`;
+
+      if (existingKeyMap.has(autoKey)) {
+        skippedCount++;
+      } else {
+        const payload = {
+          id: autoKey,
+          automationKey: autoKey,
+          enquiryId: enqId,
+          memberId: null,
+          memberName: enquiry.name || 'Enquiry Lead',
+          phone: enquiry.phone || enquiry.contact || '',
+          type: 'Enquiry',
+          title: 'Enquiry Follow-Up',
+          reason: 'Enquiry Follow-Up',
+          description: `Enquiry callback for ${enquiry.name || 'Client'}${enquiry.duration ? ` (${enquiry.duration})` : ''}`,
+          notes: `Enquiry callback for ${enquiry.name || 'Client'}${enquiry.duration ? ` (${enquiry.duration})` : ''}`,
+          priority: enquiry.priority === 'Hot' ? 'High' : 'Medium',
+          dueDate: cleanEnqDate,
+          scheduledDate: cleanEnqDate,
+          scheduledTime: enquiry.followUpTime || '11:00',
+          scheduledTimestamp: new Date(`${cleanEnqDate}T${enquiry.followUpTime || '11:00'}:00+05:30`).getTime() || Date.now(),
+          assignedTo: enquiry.assignedTo || enquiry.attendedBy || 'Veer Chand (manager)',
+          status: 'pending',
+          source: 'automatic',
+          plan: enquiry.duration || enquiry.interestedPlan || '',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
+
+        createdFollowups.push(payload);
+        existingKeyMap.set(autoKey, payload);
+        generatedKeys.push(autoKey);
+        generatedCount++;
+      }
+    }
+  }
+
   // -------------------------------------------------------------
   // SAVE ALL NEW FOLLOW-UPS TO DB / FIRESTORE
   // -------------------------------------------------------------
@@ -308,22 +366,25 @@ export async function generateAutomatedFollowups(todayStrOverride?: string): Pro
 }
 
 /**
- * Resolves stale automated follow-ups when a member renews membership or PT, or pays balance.
+ * Resolves stale automated follow-ups when a member renews or enquiry is closed.
  */
 export async function resolveStaleRenewalFollowups(
-  memberId: string,
-  renewalType: 'MEMBERSHIP' | 'PT' | 'BALANCE',
+  entityId: string,
+  renewalType: 'MEMBERSHIP' | 'PT' | 'BALANCE' | 'ENQUIRY_CLOSED' | 'ENQUIRY_DATE_CHANGED',
   newExpiryOrDueDate?: string
 ): Promise<number> {
-  if (!memberId) return 0;
+  if (!entityId) return 0;
 
   try {
     const allFollowups = await db.getFollowups();
-    const memberFollowups = allFollowups.filter(f => f.memberId === memberId && (f.source === 'automatic' || !!f.automationKey));
+    const matchedFollowups = allFollowups.filter(f => 
+      (f.memberId === entityId || f.enquiryId === entityId || f.id?.includes(entityId)) && 
+      (f.source === 'automatic' || !!f.automationKey)
+    );
 
     let resolvedCount = 0;
 
-    for (const fol of memberFollowups) {
+    for (const fol of matchedFollowups) {
       const currentStatus = (fol.status || '').toLowerCase();
       if (currentStatus !== 'pending' && currentStatus !== 'in progress') continue;
 
@@ -331,7 +392,7 @@ export async function resolveStaleRenewalFollowups(
       let resolveReason = '';
 
       if (renewalType === 'MEMBERSHIP' && (fol.type === 'GYM MEMBERSHIP RENEWAL' || fol.type === 'Renewal')) {
-        if (newExpiryOrDueDate && fol.automationKey !== `AUTO_RENEWAL_${memberId}_${newExpiryOrDueDate}`) {
+        if (newExpiryOrDueDate && fol.automationKey !== `AUTO_RENEWAL_${entityId}_${newExpiryOrDueDate}`) {
           shouldResolve = true;
           resolveReason = `Auto-resolved: Membership renewed to ${newExpiryOrDueDate}`;
         } else if (!newExpiryOrDueDate) {
@@ -339,7 +400,7 @@ export async function resolveStaleRenewalFollowups(
           resolveReason = 'Auto-resolved: Membership renewed';
         }
       } else if (renewalType === 'PT' && (fol.type === 'PT RENEWAL' || fol.type === 'PT')) {
-        if (newExpiryOrDueDate && fol.automationKey !== `AUTO_PT_RENEWAL_${memberId}_${newExpiryOrDueDate}`) {
+        if (newExpiryOrDueDate && fol.automationKey !== `AUTO_PT_RENEWAL_${entityId}_${newExpiryOrDueDate}`) {
           shouldResolve = true;
           resolveReason = `Auto-resolved: PT renewed to ${newExpiryOrDueDate}`;
         } else if (!newExpiryOrDueDate) {
@@ -349,6 +410,14 @@ export async function resolveStaleRenewalFollowups(
       } else if (renewalType === 'BALANCE' && (fol.type === 'PENDING BALANCE' || fol.type === 'Payment')) {
         shouldResolve = true;
         resolveReason = 'Auto-resolved: Outstanding balance cleared';
+      } else if (renewalType === 'ENQUIRY_CLOSED' && (fol.type === 'Enquiry' || fol.type === 'ENQUIRY' || fol.enquiryId === entityId)) {
+        shouldResolve = true;
+        resolveReason = 'Auto-resolved: Enquiry closed';
+      } else if (renewalType === 'ENQUIRY_DATE_CHANGED' && (fol.type === 'Enquiry' || fol.type === 'ENQUIRY' || fol.enquiryId === entityId)) {
+        if (newExpiryOrDueDate && fol.dueDate !== newExpiryOrDueDate) {
+          shouldResolve = true;
+          resolveReason = `Auto-resolved: Enquiry follow-up rescheduled to ${newExpiryOrDueDate}`;
+        }
       }
 
       if (shouldResolve) {

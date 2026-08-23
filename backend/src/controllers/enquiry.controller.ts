@@ -1,5 +1,7 @@
 import { Request, Response } from 'express';
 import { getFirestoreDb, mockEnquiries, mockMembers, saveMockDb, db } from '../firebase';
+import { importEnquiriesFromExcel } from '../services/enquiryImport.service';
+import { resolveStaleRenewalFollowups } from '../services/followupAutomation.service';
 
 export const getEnquiries = async (req: Request, res: Response) => {
   try {
@@ -16,12 +18,46 @@ export const getEnquiries = async (req: Request, res: Response) => {
   }
 };
 
+export const getEnquiryHistory = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const firestore = getFirestoreDb();
+    if (firestore) {
+      const historySnap = await firestore.collection('enquiries').doc(id).collection('history').orderBy('timestamp', 'asc').get();
+      if (!historySnap.empty) {
+        return res.json(historySnap.docs.map(d => ({ id: d.id, ...d.data() })));
+      }
+      const docSnap = await firestore.collection('enquiries').doc(id).get();
+      if (docSnap.exists) {
+        return res.json(docSnap.data()?.history || []);
+      }
+    }
+    const enq = mockEnquiries.find(e => e.id === id);
+    return res.json(enq?.history || []);
+  } catch (error: any) {
+    console.error('Error fetching enquiry history:', error);
+    res.status(500).json({ error: error.message || 'Failed to fetch history' });
+  }
+};
+
 export const createEnquiry = async (req: Request, res: Response) => {
   try {
     const firestore = getFirestoreDb();
     const data = req.body;
 
     const createdId = data.id || `enq_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const nextDate = (data.nextFollowUpDate || data.nextFollowUp || data.followupDate || '').split('T')[0];
+
+    const initialHistory = [{
+      id: `hist_${Date.now()}`,
+      type: 'created',
+      title: 'Enquiry Created',
+      description: 'Manual enquiry entry from dashboard',
+      status: (data.status || 'Pending').toLowerCase(),
+      date: nextDate,
+      assignedTo: data.assignedTo || data.attendedBy || 'Reception Desk',
+      timestamp: new Date().toISOString()
+    }];
 
     const newEnquiry = {
       name: data.name || `${data.firstName || ''} ${data.lastName || ''}`.trim() || 'New Lead',
@@ -32,7 +68,8 @@ export const createEnquiry = async (req: Request, res: Response) => {
       email: data.email || '',
       gender: data.gender || 'Male',
       address: data.address || '',
-      nextFollowUp: data.nextFollowUp || data.followupDate || '',
+      nextFollowUpDate: nextDate,
+      nextFollowUp: nextDate,
       followUpTime: data.followUpTime || data.followupTime || '11:00',
       trialDate: data.trialDate || '',
       status: data.status || 'Pending',
@@ -40,7 +77,9 @@ export const createEnquiry = async (req: Request, res: Response) => {
       priority: data.priority || 'Warm',
       source: data.source || 'Walk-in',
       interestedPlan: data.interestedPlan || data.inquiryFor || 'Monthly Access',
+      duration: data.duration || data.interestedPlan || '1 month',
       remarks: data.remarks || '',
+      history: initialHistory,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
@@ -48,33 +87,34 @@ export const createEnquiry = async (req: Request, res: Response) => {
     if (firestore) {
       await firestore.collection('enquiries').doc(createdId).set(newEnquiry, { merge: true });
 
-      // Automatically sync follow-up if nextFollowUp date exists
-      if (newEnquiry.nextFollowUp && newEnquiry.nextFollowUp.trim() !== '') {
-        const followUpId = `fol_enq_${createdId}`;
-        const priorityMap: Record<string, string> = { Hot: 'High', Warm: 'Medium', Cold: 'Low' };
-        await firestore.collection('followups').doc(followUpId).set({
-          id: followUpId,
-          sourceType: 'enquiry',
-          sourceId: createdId,
-          entityType: 'enquiry',
-          entityId: createdId,
+      // Create history subcollection doc
+      await firestore.collection('enquiries').doc(createdId).collection('history').doc(initialHistory[0].id).set(initialHistory[0], { merge: true });
+
+      // Automatically create follow-up if status is Pending and date exists
+      if (newEnquiry.status === 'Pending' && nextDate) {
+        const autoKey = `ENQUIRY_FOLLOWUP_${createdId}_${nextDate}`;
+        await firestore.collection('followups').doc(autoKey).set({
+          id: autoKey,
+          automationKey: autoKey,
           enquiryId: createdId,
           memberId: null,
           memberName: newEnquiry.name,
           phone: newEnquiry.phone,
-          title: `Follow-up: ${newEnquiry.name}`,
+          title: 'Enquiry Follow-Up',
+          reason: 'Enquiry Follow-Up',
           description: newEnquiry.remarks ? `Enquiry remarks: ${newEnquiry.remarks}` : `Lead follow-up for ${newEnquiry.name}`,
           notes: newEnquiry.remarks ? `Enquiry remarks: ${newEnquiry.remarks}` : `Lead follow-up for ${newEnquiry.name}`,
-          scheduledDate: newEnquiry.nextFollowUp,
-          dueDate: newEnquiry.nextFollowUp,
+          scheduledDate: nextDate,
+          dueDate: nextDate,
           scheduledTime: newEnquiry.followUpTime || '11:00',
-          scheduledTimestamp: new Date(`${newEnquiry.nextFollowUp}T${newEnquiry.followUpTime || '11:00'}`).getTime() || Date.now(),
+          scheduledTimestamp: new Date(`${nextDate}T${newEnquiry.followUpTime || '11:00'}`).getTime() || Date.now(),
           status: 'Pending',
-          priority: priorityMap[newEnquiry.priority] || 'Medium',
+          priority: newEnquiry.priority === 'Hot' ? 'High' : 'Medium',
           assignedTo: newEnquiry.assignedTo || 'Reception Desk',
           type: 'Enquiry',
-          source: 'enquiry',
-          createdAt: new Date().toISOString()
+          source: 'automatic',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
         }, { merge: true });
       }
     }
@@ -106,27 +146,90 @@ export const updateEnquiry = async (req: Request, res: Response) => {
     updates.updatedAt = new Date().toISOString();
 
     const firestore = getFirestoreDb();
+    let currentEnquiry: any = null;
+
+    if (firestore) {
+      const docSnap = await firestore.collection('enquiries').doc(id).get();
+      if (docSnap.exists) currentEnquiry = docSnap.data();
+    } else {
+      currentEnquiry = mockEnquiries.find(e => e.id === id);
+    }
+
+    const newStatus = updates.status || currentEnquiry?.status;
+    const isClosedNow = (newStatus || '').toLowerCase() === 'closed' || (newStatus || '').toLowerCase() === 'close';
+    const wasClosedBefore = (currentEnquiry?.status || '').toLowerCase() === 'closed';
+
+    // Status changed to Closed
+    if (isClosedNow && !wasClosedBefore) {
+      await resolveStaleRenewalFollowups(id, 'ENQUIRY_CLOSED');
+
+      const closeHistoryItem = {
+        id: `hist_${Date.now()}`,
+        type: 'closed',
+        title: 'Enquiry Closed',
+        description: updates.remarks ? `Closing notes: ${updates.remarks}` : 'Enquiry marked as closed',
+        status: 'closed',
+        timestamp: new Date().toISOString()
+      };
+
+      if (firestore) {
+        await firestore.collection('enquiries').doc(id).collection('history').doc(closeHistoryItem.id).set(closeHistoryItem);
+      }
+      if (currentEnquiry) {
+        if (!Array.isArray(currentEnquiry.history)) currentEnquiry.history = [];
+        currentEnquiry.history.push(closeHistoryItem);
+      }
+    }
+
+    // Follow-up Date changed on pending enquiry
+    const newFollowUpDate = (updates.nextFollowUpDate || updates.nextFollowUp || '').split('T')[0];
+    const oldFollowUpDate = (currentEnquiry?.nextFollowUpDate || currentEnquiry?.nextFollowUp || '').split('T')[0];
+
+    if (!isClosedNow && newFollowUpDate && newFollowUpDate !== oldFollowUpDate) {
+      await resolveStaleRenewalFollowups(id, 'ENQUIRY_DATE_CHANGED', newFollowUpDate);
+
+      const rescheduleItem = {
+        id: `hist_${Date.now()}`,
+        type: 'rescheduled',
+        title: 'Follow-up Rescheduled',
+        description: `Follow-up rescheduled from ${oldFollowUpDate || 'None'} to ${newFollowUpDate}`,
+        status: 'pending',
+        date: newFollowUpDate,
+        timestamp: new Date().toISOString()
+      };
+
+      if (firestore) {
+        await firestore.collection('enquiries').doc(id).collection('history').doc(rescheduleItem.id).set(rescheduleItem);
+
+        const autoKey = `ENQUIRY_FOLLOWUP_${id}_${newFollowUpDate}`;
+        await firestore.collection('followups').doc(autoKey).set({
+          id: autoKey,
+          automationKey: autoKey,
+          enquiryId: id,
+          memberId: null,
+          memberName: updates.name || currentEnquiry?.name || 'Enquiry Lead',
+          phone: updates.phone || currentEnquiry?.phone || '',
+          title: 'Enquiry Follow-Up',
+          reason: 'Enquiry Follow-Up',
+          description: `Enquiry callback for ${updates.name || currentEnquiry?.name}`,
+          notes: `Enquiry callback for ${updates.name || currentEnquiry?.name}`,
+          scheduledDate: newFollowUpDate,
+          dueDate: newFollowUpDate,
+          scheduledTime: updates.followUpTime || currentEnquiry?.followUpTime || '11:00',
+          scheduledTimestamp: new Date(`${newFollowUpDate}T${updates.followUpTime || currentEnquiry?.followUpTime || '11:00'}`).getTime() || Date.now(),
+          status: 'Pending',
+          priority: updates.priority === 'Hot' ? 'High' : 'Medium',
+          assignedTo: updates.assignedTo || currentEnquiry?.assignedTo || 'Reception Desk',
+          type: 'Enquiry',
+          source: 'automatic',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        }, { merge: true });
+      }
+    }
+
     if (firestore) {
       await firestore.collection('enquiries').doc(id).set(updates, { merge: true });
-
-      if (updates.nextFollowUp !== undefined) {
-        const followUpId = `fol_enq_${id}`;
-        if (!updates.nextFollowUp || updates.nextFollowUp.trim() === '') {
-          await firestore.collection('followups').doc(followUpId).delete().catch(() => {});
-        } else {
-          const docSnap = await firestore.collection('enquiries').doc(id).get();
-          const currentData = docSnap.exists ? docSnap.data() : {};
-          const scheduledDate = updates.nextFollowUp;
-          const scheduledTime = updates.followUpTime || currentData?.followUpTime || '11:00';
-          await firestore.collection('followups').doc(followUpId).set({
-            scheduledDate,
-            dueDate: scheduledDate,
-            scheduledTime,
-            scheduledTimestamp: new Date(`${scheduledDate}T${scheduledTime}`).getTime() || Date.now(),
-            updatedAt: new Date().toISOString()
-          }, { merge: true });
-        }
-      }
     }
 
     const idx = mockEnquiries.findIndex(e => e.id === id);
@@ -151,7 +254,7 @@ export const deleteEnquiry = async (req: Request, res: Response) => {
     const firestore = getFirestoreDb();
     if (firestore) {
       await firestore.collection('enquiries').doc(id).delete();
-      await firestore.collection('followups').doc(`fol_enq_${id}`).delete().catch(() => {});
+      await resolveStaleRenewalFollowups(id, 'ENQUIRY_CLOSED');
     }
 
     const idx = mockEnquiries.findIndex(e => e.id === id);
@@ -179,8 +282,8 @@ export const convertEnquiryToMember = async (req: Request, res: Response) => {
     let enquiry: any = null;
 
     if (firestore) {
-      const doc = await firestore.collection('enquiries').doc(id).get();
-      if (doc.exists) enquiry = { id: doc.id, ...doc.data() };
+      const docSnap = await firestore.collection('enquiries').doc(id).get();
+      if (docSnap.exists) enquiry = { id: docSnap.id, ...docSnap.data() };
     }
 
     if (!enquiry) {
@@ -198,7 +301,7 @@ export const convertEnquiryToMember = async (req: Request, res: Response) => {
       email: enquiry.email || '',
       gender: enquiry.gender || 'Male',
       address: enquiry.address || '',
-      plan: plan || enquiry.interestedPlan || 'Monthly Access',
+      plan: plan || enquiry.interestedPlan || 'Monthly Standard',
       totalBilled: Number(price) || 3000,
       totalPaid: Number(price) || 3000,
       status: 'active',
@@ -210,14 +313,34 @@ export const convertEnquiryToMember = async (req: Request, res: Response) => {
 
     const createdMember = await db.addMember(newMemberData);
 
-    // Update enquiry status to Converted
-    const updatePayload = { status: 'Converted', convertedMemberId: createdMember.id || createdMember.memberId, updatedAt: new Date().toISOString() };
+    // Auto-resolve any pending enquiry follow-up
+    await resolveStaleRenewalFollowups(id, 'ENQUIRY_CLOSED');
+
+    // Update enquiry status to Converted and record in history
+    const convertHistoryItem = {
+      id: `hist_${Date.now()}`,
+      type: 'converted',
+      title: 'Converted to Member',
+      description: `Converted to active member (${createdMember.id || createdMember.memberId}) on plan: ${newMemberData.plan}`,
+      status: 'converted',
+      timestamp: new Date().toISOString()
+    };
+
+    const updatePayload = { 
+      status: 'Converted', 
+      convertedMemberId: createdMember.id || createdMember.memberId, 
+      updatedAt: new Date().toISOString() 
+    };
+
     if (firestore) {
       await firestore.collection('enquiries').doc(id).set(updatePayload, { merge: true });
+      await firestore.collection('enquiries').doc(id).collection('history').doc(convertHistoryItem.id).set(convertHistoryItem);
     }
     const idx = mockEnquiries.findIndex(e => e.id === id);
     if (idx !== -1) {
       mockEnquiries[idx] = { ...mockEnquiries[idx], ...updatePayload };
+      if (!Array.isArray(mockEnquiries[idx].history)) mockEnquiries[idx].history = [];
+      mockEnquiries[idx].history.push(convertHistoryItem);
       saveMockDb();
     }
 
@@ -229,6 +352,40 @@ export const convertEnquiryToMember = async (req: Request, res: Response) => {
   } catch (error: any) {
     console.error('Error converting enquiry:', error);
     res.status(500).json({ error: error.message || 'Failed to convert enquiry' });
+  }
+};
+
+export const importEnquiriesExcel = async (req: Request, res: Response) => {
+  try {
+    let fileBuffer: Buffer | null = null;
+    let filePath: string | null = null;
+
+    if ((req as any).file) {
+      fileBuffer = (req as any).file.buffer;
+    } else if (req.body?.fileBase64) {
+      fileBuffer = Buffer.from(req.body.fileBase64, 'base64');
+    } else if (req.body?.filePath) {
+      filePath = req.body.filePath;
+    } else {
+      // Default local server path fallback if none provided in request
+      filePath = 'C:\\Users\\HP CONNECT\\Downloads\\inquiries 230826.xlsx';
+    }
+
+    const target = fileBuffer || filePath;
+    if (!target) {
+      return res.status(400).json({ error: 'No Excel file provided for import' });
+    }
+
+    const report = await importEnquiriesFromExcel(target);
+
+    res.json({
+      success: true,
+      message: 'Enquiries imported successfully',
+      report
+    });
+  } catch (error: any) {
+    console.error('Error in importEnquiriesExcel:', error);
+    res.status(500).json({ error: error.message || 'Failed to import enquiries Excel' });
   }
 };
 

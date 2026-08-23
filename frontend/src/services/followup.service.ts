@@ -1,6 +1,7 @@
 import { db } from '@/lib/firebase';
-import { collection, onSnapshot, query, doc, updateDoc, setDoc, addDoc, deleteDoc } from 'firebase/firestore';
+import { collection, onSnapshot, query, doc, updateDoc, setDoc, addDoc, deleteDoc, getDocs } from 'firebase/firestore';
 import API from '@/services/api';
+import { getTodayInIndia, getCalendarDaysDiff, isTodayInIndia } from '@/lib/dateUtils';
 
 export interface FollowUpItem {
   id: string;
@@ -40,20 +41,212 @@ export interface FollowUpItem {
 }
 
 export const followupService = {
-  // Trigger automated generation on backend engine
+  // Trigger automated generation on backend engine and Firestore client fallback
   generateAutomatedFollowups: async (dateOverride?: string) => {
+    const todayStr = dateOverride || getTodayInIndia();
+
+    // 1. Trigger backend API
     try {
-      const res = await API.post('/followups/generate-automated', { dateOverride });
-      return res.data;
-    } catch (err: any) {
-      console.warn('[followupService] Error triggering automated followups:', err);
-      return null;
+      await API.post('/followups/generate-automated', { dateOverride: todayStr });
+    } catch (_) {}
+
+    // 2. Direct client-side Firestore scanner (guarantees real-time execution even if backend is sleeping)
+    try {
+      const [membersSnap, followupsSnap] = await Promise.all([
+        getDocs(collection(db, 'members')).catch(() => null),
+        getDocs(collection(db, 'followups')).catch(() => null)
+      ]);
+
+      if (!membersSnap || membersSnap.empty) return;
+
+      const existingKeySet = new Set<string>();
+      if (followupsSnap && !followupsSnap.empty) {
+        followupsSnap.docs.forEach(docSnap => {
+          const data = docSnap.data();
+          if (data.automationKey) existingKeySet.add(data.automationKey);
+          existingKeySet.add(docSnap.id);
+        });
+      }
+
+      for (const memberDoc of membersSnap.docs) {
+        const member = memberDoc.data();
+        const memberId = memberDoc.id || member.id || member.memberId;
+        if (!memberId) continue;
+
+        const memberName = member.name || 'Member';
+        const memberPhone = member.phone || '';
+        const memberStatus = (member.status || '').toLowerCase();
+        const assignedStaff = member.trainer || member.assignedStaff || 'Receptionist';
+
+        // RULE 1: GYM MEMBERSHIP RENEWAL (7 days before expiry)
+        const membershipExpiry = member.expiryDate ? member.expiryDate.split('T')[0] : null;
+        if (membershipExpiry && (memberStatus === 'active' || memberStatus === 'upcoming' || memberStatus === 'frozen')) {
+          const daysToExpiry = getCalendarDaysDiff(membershipExpiry, todayStr);
+          if (daysToExpiry === 7) {
+            const key = `AUTO_RENEWAL_${memberId}_${membershipExpiry}`;
+            if (!existingKeySet.has(key)) {
+              existingKeySet.add(key);
+              const payload = {
+                id: key,
+                automationKey: key,
+                memberId,
+                memberName,
+                phone: memberPhone,
+                type: 'GYM MEMBERSHIP RENEWAL',
+                reason: 'Membership renewal due in 7 days',
+                title: 'GYM MEMBERSHIP RENEWAL',
+                description: 'Membership renewal due in 7 days',
+                notes: 'Membership renewal due in 7 days',
+                priority: 'Medium',
+                dueDate: todayStr,
+                scheduledDate: todayStr,
+                scheduledTime: '10:00',
+                scheduledTimestamp: new Date(`${todayStr}T10:00:00+05:30`).getTime() || Date.now(),
+                assignedTo: assignedStaff,
+                status: 'Pending',
+                source: 'automatic',
+                plan: member.plan || 'Monthly Standard',
+                expiryDate: membershipExpiry,
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString()
+              };
+              await setDoc(doc(db, 'followups', key), payload, { merge: true }).catch(() => {});
+            }
+          }
+        }
+
+        // RULE 2: PT RENEWAL (4 days before PT expiry)
+        const ptExpiryDate = (member.ptExpiryDate || member.ptEndDate || '').split('T')[0];
+        if (ptExpiryDate) {
+          const daysToPtExpiry = getCalendarDaysDiff(ptExpiryDate, todayStr);
+          if (daysToPtExpiry === 4) {
+            const key = `AUTO_PT_RENEWAL_${memberId}_${ptExpiryDate}`;
+            if (!existingKeySet.has(key)) {
+              existingKeySet.add(key);
+              const payload = {
+                id: key,
+                automationKey: key,
+                memberId,
+                memberName,
+                phone: memberPhone,
+                type: 'PT RENEWAL',
+                reason: 'Personal Training renewal due in 4 days',
+                title: 'PT RENEWAL',
+                description: 'Personal Training renewal due in 4 days',
+                notes: 'Personal Training renewal due in 4 days',
+                priority: 'High',
+                dueDate: todayStr,
+                scheduledDate: todayStr,
+                scheduledTime: '10:00',
+                scheduledTimestamp: new Date(`${todayStr}T10:00:00+05:30`).getTime() || Date.now(),
+                assignedTo: member.trainer || 'Personal Trainer',
+                status: 'Pending',
+                source: 'automatic',
+                plan: 'Personal Training',
+                ptExpiryDate,
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString()
+              };
+              await setDoc(doc(db, 'followups', key), payload, { merge: true }).catch(() => {});
+            }
+          }
+        }
+
+        // RULE 3: PENDING BALANCE (2 days before payment due date)
+        const rawBalance = Number(member.outstandingBalance ?? member.balance ?? member.balanceAmount ?? 0);
+        const calculatedBalance = Math.max(0, (Number(member.totalBilled) || 0) - (Number(member.totalPaid) || 0));
+        const pendingBalance = Math.max(rawBalance, member.paymentStatus === 'partial' || member.paymentStatus === 'pending' ? calculatedBalance : 0);
+        const paymentDueDate = (member.paymentDueDate || member.balanceDueDate || member.dueDate || '').split('T')[0];
+
+        if (pendingBalance > 0 && paymentDueDate) {
+          const daysToDueDate = getCalendarDaysDiff(paymentDueDate, todayStr);
+          if (daysToDueDate === 2) {
+            const key = `AUTO_BALANCE_${memberId}_${paymentDueDate}`;
+            if (!existingKeySet.has(key)) {
+              existingKeySet.add(key);
+              const formattedAmt = `₹${pendingBalance.toLocaleString('en-IN')}`;
+              const payload = {
+                id: key,
+                automationKey: key,
+                memberId,
+                memberName,
+                phone: memberPhone,
+                type: 'PENDING BALANCE',
+                reason: 'Pending membership balance',
+                title: 'PENDING BALANCE',
+                description: `Member ${memberName} has ${formattedAmt} pending due on ${paymentDueDate}`,
+                notes: `${formattedAmt} pending`,
+                pendingAmount: pendingBalance,
+                priority: 'High',
+                dueDate: todayStr,
+                scheduledDate: todayStr,
+                scheduledTime: '10:00',
+                scheduledTimestamp: new Date(`${todayStr}T10:00:00+05:30`).getTime() || Date.now(),
+                assignedTo: assignedStaff,
+                status: 'Pending',
+                source: 'automatic',
+                plan: member.plan || 'Membership',
+                paymentDueDate,
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString()
+              };
+              await setDoc(doc(db, 'followups', key), payload, { merge: true }).catch(() => {});
+            }
+          }
+        }
+      }
+
+      // RULE 4: PENDING ENQUIRIES EVALUATION
+      const enqSnap = await getDocs(collection(db, 'enquiries')).catch(() => null);
+      if (enqSnap && !enqSnap.empty) {
+        for (const docSnap of enqSnap.docs) {
+          const enq = docSnap.data();
+          const enqId = docSnap.id;
+          const enqStatus = (enq.status || '').toLowerCase();
+          const followUpDate = (enq.nextFollowUpDate || enq.nextFollowUp || enq.followupDate || '').split('T')[0];
+
+          if (enqStatus === 'pending' && followUpDate) {
+            const key = `ENQUIRY_FOLLOWUP_${enqId}_${followUpDate}`;
+            if (!existingKeySet.has(key)) {
+              existingKeySet.add(key);
+              const payload = {
+                id: key,
+                automationKey: key,
+                enquiryId: enqId,
+                memberId: null,
+                memberName: enq.name || 'Enquiry Lead',
+                phone: enq.phone || enq.contact || '',
+                type: 'Enquiry',
+                title: 'Enquiry Follow-Up',
+                reason: 'Enquiry Follow-Up',
+                description: `Enquiry callback for ${enq.name || 'Client'}${enq.duration ? ` (${enq.duration})` : ''}`,
+                notes: `Enquiry callback for ${enq.name || 'Client'}${enq.duration ? ` (${enq.duration})` : ''}`,
+                priority: enq.priority === 'Hot' ? 'High' : 'Medium',
+                dueDate: followUpDate,
+                scheduledDate: followUpDate,
+                scheduledTime: enq.followUpTime || '11:00',
+                scheduledTimestamp: new Date(`${followUpDate}T${enq.followUpTime || '11:00'}:00+05:30`).getTime() || Date.now(),
+                assignedTo: enq.assignedTo || enq.attendedBy || 'Veer Chand (manager)',
+                status: 'Pending',
+                source: 'automatic',
+                plan: enq.duration || enq.interestedPlan || '',
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString()
+              };
+              await setDoc(doc(db, 'followups', key), payload, { merge: true }).catch(() => {});
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('[followupService] Direct Firestore check warning:', err);
     }
   },
 
   // Real-time listener for followups with API fallback
   subscribe: (onData: (items: FollowUpItem[]) => void, onError?: (err: Error) => void) => {
     let firestoreLoaded = false;
+    const todayStr = getTodayInIndia();
 
     // Initial fetch via API to avoid empty state latency
     API.get('/followups')
@@ -62,7 +255,8 @@ export const followupService = {
           const list = res.data.map(d => ({
             ...d,
             status: d.status ? (d.status.charAt(0).toUpperCase() + d.status.slice(1)) : 'Pending',
-            scheduledDate: d.scheduledDate || d.dueDate || new Date().toISOString().split('T')[0],
+            dueDate: d.dueDate || d.scheduledDate || todayStr,
+            scheduledDate: d.scheduledDate || d.dueDate || todayStr,
             scheduledTime: d.scheduledTime || '10:00',
             scheduledTimestamp: d.scheduledTimestamp || Date.now()
           }));
@@ -81,7 +275,7 @@ export const followupService = {
 
         snapshot.docs.forEach((docSnap) => {
           const d = docSnap.data();
-          const scheduledDate = d.scheduledDate || d.dueDate || d.date || d.createdAt?.split('T')[0] || new Date().toISOString().split('T')[0];
+          const scheduledDate = d.dueDate || d.scheduledDate || d.date || d.createdAt?.split('T')[0] || todayStr;
           const scheduledTime = d.scheduledTime || '10:00';
           const scheduledTimestamp = d.scheduledTimestamp || (scheduledDate ? new Date(`${scheduledDate}T${scheduledTime}`).getTime() : Date.now());
 
@@ -143,14 +337,14 @@ export const followupService = {
 
         const list = Array.from(itemMap.values());
 
-        // Deduplicate any existing duplicate documents in database (same memberId/memberName + date + time + title)
+        // Deduplicate any existing duplicate documents in database (same automationKey or signature)
         const uniqueList: FollowUpItem[] = [];
         const seenSigMap = new Map<string, FollowUpItem>();
 
         for (const item of list) {
           const sigKey = item.automationKey 
             ? item.automationKey 
-            : `${item.memberId || item.memberName}_${item.scheduledDate}_${item.scheduledTime}_${item.title || item.notes}_${item.status}`;
+            : `${item.memberId || item.memberName}_${item.dueDate}_${item.scheduledTime}_${item.title || item.notes}_${item.status}`;
           
           const existing = seenSigMap.get(sigKey);
 
@@ -178,7 +372,8 @@ export const followupService = {
 
   // Create follow-up via Express Backend API & Firestore
   create: async (data: Partial<FollowUpItem>): Promise<FollowUpItem> => {
-    const scheduledDate = data.scheduledDate || data.dueDate || new Date().toISOString().split('T')[0];
+    const todayStr = getTodayInIndia();
+    const scheduledDate = data.dueDate || data.scheduledDate || todayStr;
     const scheduledTime = data.scheduledTime || '10:00';
     const scheduledTimestamp = data.scheduledTimestamp || new Date(`${scheduledDate}T${scheduledTime}`).getTime() || Date.now();
 
@@ -238,9 +433,11 @@ export const followupService = {
     };
 
     try {
-      await API.put(`/followups/${id}`, updates);
-    } catch (_) {
       await updateDoc(doc(db, 'followups', id), updates);
+    } catch (_) {
+      try {
+        await API.put(`/followups/${id}`, updates);
+      } catch (_) {}
     }
 
     if (memberId || enquiryId) {
@@ -269,9 +466,11 @@ export const followupService = {
     };
 
     try {
-      await API.put(`/followups/${task.id}`, updates);
-    } catch (_) {
       await updateDoc(doc(db, 'followups', task.id), updates);
+    } catch (_) {
+      try {
+        await API.put(`/followups/${task.id}`, updates);
+      } catch (_) {}
     }
 
     return { nextHourStr };
@@ -283,18 +482,22 @@ export const followupService = {
     const updates = { status: 'Cancelled', completedAt: now, updatedAt: now };
 
     try {
-      await API.put(`/followups/${id}`, updates);
-    } catch (_) {
       await updateDoc(doc(db, 'followups', id), updates);
+    } catch (_) {
+      try {
+        await API.put(`/followups/${id}`, updates);
+      } catch (_) {}
     }
   },
 
   // Delete task
   remove: async (id: string): Promise<void> => {
     try {
-      await API.delete(`/followups/${id}`);
-    } catch (_) {
       await deleteDoc(doc(db, 'followups', id));
+    } catch (_) {
+      try {
+        await API.delete(`/followups/${id}`);
+      } catch (_) {}
     }
   }
 };

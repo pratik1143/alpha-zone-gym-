@@ -2482,6 +2482,63 @@ export const db = {
       return true;
     }
     return false;
+  },
+
+  getEnquiries: async (): Promise<any[]> => {
+    const firestore = getFirestoreDb();
+    if (firestore) {
+      const snap = await firestore.collection('enquiries').get();
+      return snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    }
+    return mockEnquiries;
+  },
+
+  addEnquiry: async (enquiry: any): Promise<any> => {
+    const firestore = getFirestoreDb();
+    const id = enquiry.id || `enq_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const docData = { ...enquiry, id };
+    if (firestore) {
+      await firestore.collection('enquiries').doc(id).set(docData, { merge: true });
+      return docData;
+    }
+    const idx = mockEnquiries.findIndex(e => e.id === id);
+    if (idx !== -1) {
+      mockEnquiries[idx] = { ...mockEnquiries[idx], ...docData };
+    } else {
+      mockEnquiries.push(docData);
+    }
+    saveMockDb();
+    return docData;
+  },
+
+  updateEnquiry: async (id: string, updates: any): Promise<any> => {
+    const firestore = getFirestoreDb();
+    if (firestore) {
+      await firestore.collection('enquiries').doc(id).set(updates, { merge: true });
+      return { id, ...updates };
+    }
+    const idx = mockEnquiries.findIndex(e => e.id === id);
+    if (idx !== -1) {
+      mockEnquiries[idx] = { ...mockEnquiries[idx], ...updates };
+      saveMockDb();
+      return mockEnquiries[idx];
+    }
+    return null;
+  },
+
+  deleteEnquiry: async (id: string): Promise<boolean> => {
+    const firestore = getFirestoreDb();
+    if (firestore) {
+      await firestore.collection('enquiries').doc(id).delete();
+      return true;
+    }
+    const idx = mockEnquiries.findIndex(e => e.id === id);
+    if (idx !== -1) {
+      mockEnquiries.splice(idx, 1);
+      saveMockDb();
+      return true;
+    }
+    return false;
   }
 };
 

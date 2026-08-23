@@ -641,15 +641,15 @@ export default function OverviewCommandCenter() {
         className="grid grid-cols-2 sm:grid-cols-4 gap-3 relative z-10"
       >
         {[
-          { title: "Today's Collection", value: `₹${todaysRealCollection.toLocaleString('en-IN')}`, icon: IndianRupee, color: "#0b5cbe" },
+          { title: "Today's Collection", value: `₹${todaysRealCollection.toLocaleString('en-IN')}`, icon: IndianRupee, color: "#0b5cbe", onClick: () => router.push('/dashboard/billing') },
           { title: "Present Today", value: presentTodayCount, icon: UserCheck, color: "#0b5cbe", onClick: () => setShowPresentModal(true) },
-          { title: "Active Members", value: activeMembersCount, icon: Activity, color: "#0b5cbe" },
-          { title: "Today's Follow-ups", value: todaysCount, icon: PhoneCall, color: "#0b5cbe" },
+          { title: "Active Members", value: activeMembersCount, icon: Activity, color: "#0b5cbe", onClick: () => router.push('/dashboard/members') },
+          { title: "Today's Follow-ups", value: todaysCount, icon: PhoneCall, color: "#0b5cbe", onClick: () => router.push('/dashboard/follow-up') },
         ].map((kpi, i) => (
           <div
             key={i}
             onClick={kpi.onClick}
-            className={`bg-white rounded-2xl p-4 border border-blue-100 shadow-[0_4px_20px_-4px_rgba(11,92,190,0.08)] flex items-center gap-3 hover:border-[#0b5cbe] transition-all ${kpi.onClick ? 'cursor-pointer hover:shadow-md hover:scale-[1.02]' : ''}`}
+            className="bg-white rounded-2xl p-4 border border-blue-100 shadow-[0_4px_20px_-4px_rgba(11,92,190,0.08)] flex items-center gap-3 hover:border-[#0b5cbe] transition-all cursor-pointer hover:shadow-md hover:scale-[1.02]"
           >
             <div
               className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-[#eaf3ff] text-[#0b5cbe]"
@@ -659,7 +659,7 @@ export default function OverviewCommandCenter() {
             <div>
               <div className="text-[9.5px] font-bold text-slate-500 uppercase tracking-wider leading-none flex items-center gap-1">
                 {kpi.title}
-                {kpi.onClick && <span className="text-[8px] text-[#0b5cbe] font-black">· Click for list →</span>}
+                <span className="text-[8px] text-[#0b5cbe] font-black">· Click for list →</span>
               </div>
               <div className="text-lg font-black text-slate-900 mt-1 leading-none">{kpi.value}</div>
             </div>

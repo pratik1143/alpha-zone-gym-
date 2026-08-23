@@ -2,18 +2,34 @@
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { followupService, FollowUpItem } from '@/services/followup.service';
+import { getTodayInIndia, isTodayInIndia, isOverdueInIndia, isUpcomingInIndia } from '@/lib/dateUtils';
 
-let autoGenerationTriggeredToday = false;
+let autoGenerationTriggeredDate = '';
+
+/**
+ * Shared helper function to query pending follow-ups due today in Asia/Kolkata timezone.
+ * Single source of truth for Dashboard and Follow-Up Manager.
+ */
+export function getTodayPendingFollowUps(list: FollowUpItem[]): FollowUpItem[] {
+  if (!Array.isArray(list)) return [];
+  const todayStr = getTodayInIndia();
+  return list.filter((f) => {
+    if (!f || f.status !== 'Pending') return false;
+    const itemDueDate = String(f.dueDate || f.scheduledDate || f.date || '').split('T')[0];
+    return itemDueDate === todayStr;
+  });
+}
 
 export function useFollowups() {
   const [dbFollowups, setDbFollowups] = useState<FollowUpItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Run automated generation check once on initial hook mount
-    if (!autoGenerationTriggeredToday) {
-      autoGenerationTriggeredToday = true;
-      followupService.generateAutomatedFollowups().catch(() => {});
+    const todayStr = getTodayInIndia();
+    // Run automated generation check once per calendar day on hook mount
+    if (autoGenerationTriggeredDate !== todayStr) {
+      autoGenerationTriggeredDate = todayStr;
+      followupService.generateAutomatedFollowups(todayStr).catch(() => {});
     }
 
     const unsubscribe = followupService.subscribe(
@@ -50,52 +66,84 @@ export function useFollowups() {
     return cleanList;
   }, [dbFollowups]);
 
-  const pendingCount = useMemo(() => {
-    return followups.filter((f) => f.status === 'Pending').length;
+  // Today's Follow-ups: pending + dueDate is EXACTLY today in Asia/Kolkata
+  const todaysFollowups = useMemo(() => {
+    return getTodayPendingFollowUps(followups);
   }, [followups]);
+
+  const todaysCount = useMemo(() => {
+    return todaysFollowups.length;
+  }, [todaysFollowups]);
+
+  // Overdue Tasks: pending + dueDate < today
+  const overdueFollowups = useMemo(() => {
+    return followups.filter((f) => {
+      if (f.status !== 'Pending') return false;
+      const d = f.dueDate || f.scheduledDate || f.date || '';
+      return isOverdueInIndia(d);
+    });
+  }, [followups]);
+
+  const overdueCount = useMemo(() => {
+    return overdueFollowups.length;
+  }, [overdueFollowups]);
+
+  // Upcoming Tasks: pending + dueDate > today
+  const upcomingFollowups = useMemo(() => {
+    return followups.filter((f) => {
+      if (f.status !== 'Pending') return false;
+      const d = f.dueDate || f.scheduledDate || f.date || '';
+      return isUpcomingInIndia(d);
+    });
+  }, [followups]);
+
+  const upcomingCount = useMemo(() => {
+    return upcomingFollowups.length;
+  }, [upcomingFollowups]);
+
+  // Completed Today: status Completed + completedAt (or dueDate) is today
+  const completedTodayFollowups = useMemo(() => {
+    return followups.filter((f) => {
+      if (f.status !== 'Completed') return false;
+      const completedDate = f.completedAt ? f.completedAt.split('T')[0] : (f.dueDate || f.scheduledDate || '');
+      return isTodayInIndia(completedDate);
+    });
+  }, [followups]);
+
+  const completedTodayCount = useMemo(() => {
+    return completedTodayFollowups.length;
+  }, [completedTodayFollowups]);
+
+  // All Active Tasks: status is Pending
+  const activeFollowups = useMemo(() => {
+    return followups.filter((f) => f.status === 'Pending');
+  }, [followups]);
+
+  const totalActiveCount = useMemo(() => {
+    return activeFollowups.length;
+  }, [activeFollowups]);
 
   const dueNowCount = useMemo(() => {
     const now = Date.now();
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = getTodayInIndia();
     return followups.filter(
       (f) =>
         f.status === 'Pending' &&
-        f.scheduledDate === todayStr &&
+        (f.dueDate === todayStr || f.scheduledDate === todayStr) &&
         f.scheduledTimestamp <= now
-      ).length;
+    ).length;
   }, [followups]);
 
   const nextHourCount = useMemo(() => {
     const now = Date.now();
     const oneHourLater = now + 60 * 60 * 1000;
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = getTodayInIndia();
     return followups.filter(
       (f) =>
         f.status === 'Pending' &&
-        f.scheduledDate === todayStr &&
+        (f.dueDate === todayStr || f.scheduledDate === todayStr) &&
         f.scheduledTimestamp > now &&
         f.scheduledTimestamp <= oneHourLater
-    ).length;
-  }, [followups]);
-
-  const overdueCount = useMemo(() => {
-    const todayStr = new Date().toISOString().split('T')[0];
-    return followups.filter(
-      (f) => f.status === 'Pending' && f.scheduledDate < todayStr
-    ).length;
-  }, [followups]);
-
-  const completedTodayCount = useMemo(() => {
-    const todayStr = new Date().toISOString().split('T')[0];
-    return followups.filter(
-      (f) => f.status === 'Completed' && f.completedAt?.startsWith(todayStr)
-    ).length;
-  }, [followups]);
-
-  const todaysCount = useMemo(() => {
-    const todayStr = new Date().toISOString().split('T')[0];
-    return followups.filter(
-      (f) => f.status === 'Pending' && f.scheduledDate <= todayStr
     ).length;
   }, [followups]);
 
@@ -160,13 +208,21 @@ export function useFollowups() {
 
   return {
     followups,
+    todaysFollowups,
+    overdueFollowups,
+    upcomingFollowups,
+    completedTodayFollowups,
+    activeFollowups,
     loading,
-    pendingCount,
+    pendingCount: totalActiveCount,
+    totalActiveCount,
     todaysCount,
+    overdueCount,
+    upcomingCount,
+    completedTodayCount,
     dueNowCount,
     nextHourCount,
-    overdueCount,
-    completedTodayCount,
+    getTodayPendingFollowUps: () => todaysFollowups,
     createFollowup,
     completeFollowup,
     snoozeFollowup,

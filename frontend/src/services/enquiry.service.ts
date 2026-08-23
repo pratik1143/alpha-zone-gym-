@@ -1,6 +1,20 @@
 import { db } from '@/lib/firebase';
-import { collection, onSnapshot, query, orderBy, doc, updateDoc, setDoc, deleteDoc } from 'firebase/firestore';
+import { collection, onSnapshot, query, doc, updateDoc, setDoc, deleteDoc, getDocs } from 'firebase/firestore';
 import API from '@/services/api';
+
+export interface EnquiryHistoryItem {
+  id?: string;
+  type?: string;
+  title?: string;
+  description?: string;
+  status?: string;
+  date?: string;
+  assignedTo?: string;
+  duration?: string;
+  source?: string;
+  timestamp?: string;
+  importedAt?: string;
+}
 
 export interface EnquiryItem {
   id: string;
@@ -13,14 +27,17 @@ export interface EnquiryItem {
   gender?: string;
   address?: string;
   nextFollowUp?: string;
+  nextFollowUpDate?: string;
   followUpTime?: string;
   trialDate?: string;
-  status: 'Pending' | 'Contacted' | 'Trial Scheduled' | 'Converted' | 'Lost';
+  status: 'Pending' | 'Closed' | 'Contacted' | 'Trial Scheduled' | 'Converted' | 'Lost' | string;
   assignedTo?: string;
-  priority: 'Hot' | 'Warm' | 'Cold';
+  priority: 'Hot' | 'Warm' | 'Cold' | string;
   source?: string;
   interestedPlan?: string;
+  duration?: string;
   remarks?: string;
+  history?: EnquiryHistoryItem[];
   createdAt: string;
   updatedAt?: string;
 }
@@ -34,12 +51,24 @@ export const enquiryService = {
     API.get('/enquiries')
       .then((res) => {
         if (Array.isArray(res.data) && res.data.length > 0 && !firestoreLoaded) {
-          const list = res.data.map(d => ({
-            ...d,
-            status: d.status || 'Pending',
-            priority: d.priority || 'Warm',
-            name: d.name || `${d.firstName || ''} ${d.lastName || ''}`.trim() || 'Enquiry Lead'
-          }));
+          const list: EnquiryItem[] = res.data.map((d: any) => {
+            const rawStatus = (d.status || 'Pending').trim().toLowerCase();
+            const normStatus = rawStatus === 'close' || rawStatus === 'closed' ? 'Closed' : rawStatus === 'converted' ? 'Converted' : 'Pending';
+            const cleanDate = (d.nextFollowUpDate || d.nextFollowUp || d.followupDate || '').split('T')[0];
+
+            return {
+              ...d,
+              status: normStatus,
+              priority: d.priority || 'Warm',
+              name: d.name || `${d.firstName || ''} ${d.lastName || ''}`.trim() || 'Enquiry Lead',
+              phone: d.phone || d.contact || '',
+              duration: d.duration || d.interestedPlan || d.inquiryFor || '1 month',
+              interestedPlan: d.interestedPlan || d.duration || '1 month',
+              nextFollowUpDate: cleanDate,
+              nextFollowUp: cleanDate,
+              history: Array.isArray(d.history) ? d.history : []
+            };
+          });
           onData(list);
         }
       })
@@ -54,6 +83,10 @@ export const enquiryService = {
 
         snapshot.docs.forEach((docSnap) => {
           const d = docSnap.data();
+          const rawStatus = (d.status || 'Pending').trim().toLowerCase();
+          const normStatus = rawStatus === 'close' || rawStatus === 'closed' ? 'Closed' : rawStatus === 'converted' ? 'Converted' : 'Pending';
+          const cleanDate = (d.nextFollowUpDate || d.nextFollowUp || d.followupDate || '').split('T')[0];
+
           const item: EnquiryItem = {
             id: docSnap.id,
             name: d.name || `${d.firstName || ''} ${d.lastName || ''}`.trim() || 'Enquiry Lead',
@@ -64,15 +97,18 @@ export const enquiryService = {
             email: d.email || '',
             gender: d.gender || 'Male',
             address: d.address || '',
-            nextFollowUp: d.nextFollowUp || d.followupDate || '',
+            nextFollowUp: cleanDate,
+            nextFollowUpDate: cleanDate,
             followUpTime: d.followUpTime || d.followupTime || '11:00',
             trialDate: d.trialDate || '',
-            status: d.status || 'Pending',
+            status: normStatus,
             assignedTo: d.assignedTo || d.attendedBy || 'Reception Desk',
-            priority: d.priority || 'Warm',
+            priority: d.priority || (normStatus === 'Closed' ? 'Cold' : 'Warm'),
             source: d.source || 'Walk-in',
-            interestedPlan: d.interestedPlan || d.inquiryFor || 'Monthly Access',
+            interestedPlan: d.interestedPlan || d.duration || d.inquiryFor || '1 month',
+            duration: d.duration || d.interestedPlan || '1 month',
             remarks: d.remarks || '',
+            history: Array.isArray(d.history) ? d.history : [],
             createdAt: d.createdAt || new Date().toISOString(),
             updatedAt: d.updatedAt || d.createdAt || new Date().toISOString()
           };
@@ -80,187 +116,96 @@ export const enquiryService = {
           itemMap.set(docSnap.id, item);
         });
 
-        const rawList = Array.from(itemMap.values());
-
-        // Signature deduplication for historical duplicate records
-        const uniqueList: EnquiryItem[] = [];
-        const seenMap = new Map<string, EnquiryItem>();
-
-        for (const item of rawList) {
-          const sig = `${(item.phone || '').trim()}_${(item.name || '').toLowerCase().trim()}_${item.interestedPlan}_${item.nextFollowUp}`;
-          const existing = seenMap.get(sig);
-
-          if (existing) {
-            // Keep the earlier document and suppress duplicate snapshot item
-            const timeA = new Date(item.createdAt || 0).getTime();
-            const timeB = new Date(existing.createdAt || 0).getTime();
-            if (Math.abs(timeA - timeB) < 180_000 || !item.createdAt || !existing.createdAt) {
-              // Delete actual duplicate document from Firestore if it has a different ID
-              if (item.id !== existing.id) {
-                deleteDoc(doc(db, 'enquiries', item.id)).catch(() => {});
-              }
-              continue;
-            }
-          }
-
-          seenMap.set(sig, item);
-          uniqueList.push(item);
-        }
-
-        uniqueList.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-        onData(uniqueList);
+        const list = Array.from(itemMap.values());
+        onData(list);
       },
       (err) => {
-        console.warn('[enquiryService] Snapshot warning:', err.message);
+        console.warn('Enquiries listener warning:', err.message);
         if (onError) onError(err);
       }
     );
   },
 
-  // Create Enquiry and Sync Follow-Up Task
+  // Import Excel File via API
+  importExcel: async (fileOrBase64: File | string): Promise<any> => {
+    let payload: any = {};
+    if (typeof fileOrBase64 === 'string') {
+      payload.fileBase64 = fileOrBase64;
+    } else {
+      const buffer = await fileOrBase64.arrayBuffer();
+      const base64 = Buffer.from(buffer).toString('base64');
+      payload.fileBase64 = base64;
+    }
+
+    const res = await API.post('/enquiries/import-excel', payload);
+    return res.data;
+  },
+
+  // Fetch Enquiry History Timeline
+  getHistory: async (enquiryId: string): Promise<EnquiryHistoryItem[]> => {
+    try {
+      const snap = await getDocs(collection(db, 'enquiries', enquiryId, 'history'));
+      if (!snap.empty) {
+        const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        list.sort((a: any, b: any) => new Date(a.timestamp || a.importedAt || 0).getTime() - new Date(b.timestamp || b.importedAt || 0).getTime());
+        return list;
+      }
+    } catch (_) {}
+
+    try {
+      const res = await API.get(`/enquiries/${enquiryId}/history`);
+      return res.data || [];
+    } catch (_) {
+      return [];
+    }
+  },
+
+  // Create new enquiry
   create: async (data: Partial<EnquiryItem>): Promise<EnquiryItem> => {
     const createdId = data.id || `enq_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-    const fullName = data.name || `${data.firstName || ''} ${data.lastName || ''}`.trim() || 'New Lead';
+    const nextDate = (data.nextFollowUpDate || data.nextFollowUp || '').split('T')[0];
 
-    const payload: EnquiryItem = {
+    const payload = {
+      ...data,
       id: createdId,
-      name: fullName,
-      firstName: data.firstName || fullName.split(' ')[0] || '',
-      lastName: data.lastName || fullName.split(' ').slice(1).join(' ') || '',
-      phone: data.phone || '',
-      altPhone: data.altPhone || '',
-      email: data.email || '',
-      gender: data.gender || 'Male',
-      address: data.address || '',
-      nextFollowUp: data.nextFollowUp || '',
-      followUpTime: data.followUpTime || '11:00',
-      trialDate: data.trialDate || '',
+      name: data.name || `${data.firstName || ''} ${data.lastName || ''}`.trim() || 'New Lead',
+      phone: (data.phone || '').replace(/\D/g, '').slice(-10),
       status: data.status || 'Pending',
-      assignedTo: data.assignedTo || 'Reception Desk',
-      priority: data.priority || 'Warm',
-      source: data.source || 'Walk-in',
-      interestedPlan: data.interestedPlan || 'Monthly Access',
-      remarks: data.remarks || '',
+      nextFollowUpDate: nextDate,
+      nextFollowUp: nextDate,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
 
-    // 1. Write to Firestore 'enquiries' collection using explicit doc ID
     try {
       await setDoc(doc(db, 'enquiries', createdId), payload);
-    } catch (err) {
-      console.warn('[enquiryService] Firestore setDoc warning:', err);
-    }
+    } catch (_) {}
 
-    // 2. Call Express backend endpoint
     try {
       await API.post('/enquiries', payload);
     } catch (_) {}
 
-    // 3. AUTOMATIC FOLLOW-UP SYNC if nextFollowUp date is provided
-    if (payload.nextFollowUp && payload.nextFollowUp.trim() !== '') {
-      await enquiryService.syncFollowUp(payload);
-    }
-
-    return payload;
+    return payload as EnquiryItem;
   },
 
-  // Update Enquiry and Sync/Update Associated Follow-Up
+  // Update enquiry
   update: async (id: string, updates: Partial<EnquiryItem>): Promise<void> => {
-    const updatedAt = new Date().toISOString();
-    const payload = { ...updates, updatedAt };
+    const payload = {
+      ...updates,
+      updatedAt: new Date().toISOString()
+    };
 
     try {
-      await setDoc(doc(db, 'enquiries', id), payload, { merge: true });
-    } catch (err) {
-      console.warn('[enquiryService] Firestore update warning:', err);
-    }
+      await updateDoc(doc(db, 'enquiries', id), payload);
+    } catch (_) {}
 
     try {
       await API.put(`/enquiries/${id}`, payload);
     } catch (_) {}
-
-    // Follow-up sync check if nextFollowUp was updated
-    if (updates.nextFollowUp !== undefined || updates.followUpTime !== undefined || updates.remarks !== undefined || updates.assignedTo !== undefined || updates.name !== undefined) {
-      // Fetch current full enquiry state to perform sync
-      try {
-        const fullEnquiry: EnquiryItem = {
-          id,
-          name: updates.name || '',
-          phone: updates.phone || '',
-          nextFollowUp: updates.nextFollowUp || '',
-          followUpTime: updates.followUpTime || '11:00',
-          assignedTo: updates.assignedTo || 'Reception Desk',
-          priority: updates.priority || 'Warm',
-          remarks: updates.remarks || '',
-          createdAt: new Date().toISOString(),
-          status: updates.status || 'Pending'
-        };
-        await enquiryService.syncFollowUp(fullEnquiry);
-      } catch (_) {}
-    }
   },
 
-  // Sync Enquiry Follow-up Task to 'followups' Collection
-  syncFollowUp: async (enquiry: EnquiryItem): Promise<void> => {
-    const followUpId = `fol_enq_${enquiry.id}`;
-
-    if (!enquiry.nextFollowUp || enquiry.nextFollowUp.trim() === '') {
-      // If follow-up date removed, delete pending follow-up task
-      try {
-        await deleteDoc(doc(db, 'followups', followUpId));
-      } catch (_) {}
-      return;
-    }
-
-    const scheduledDate = enquiry.nextFollowUp;
-    const scheduledTime = enquiry.followUpTime || '11:00';
-    const scheduledTimestamp = new Date(`${scheduledDate}T${scheduledTime}`).getTime() || Date.now();
-
-    const priorityMap: Record<string, 'Low' | 'Medium' | 'High'> = {
-      'Hot': 'High',
-      'Warm': 'Medium',
-      'Cold': 'Low'
-    };
-
-    const followUpPayload = {
-      id: followUpId,
-      sourceType: 'enquiry',
-      sourceId: enquiry.id,
-      entityType: 'enquiry',
-      entityId: enquiry.id,
-      enquiryId: enquiry.id,
-      memberId: null,
-      memberName: enquiry.name || 'Enquiry Lead',
-      phone: enquiry.phone || '',
-      title: `Follow-up: ${enquiry.name || 'Enquiry Lead'}`,
-      description: enquiry.remarks ? `Enquiry remarks: ${enquiry.remarks}` : `Lead follow-up for ${enquiry.name || 'Client'} (${enquiry.interestedPlan || 'Gym Access'})`,
-      notes: enquiry.remarks ? `Enquiry remarks: ${enquiry.remarks}` : `Lead follow-up for ${enquiry.name || 'Client'} (${enquiry.interestedPlan || 'Gym Access'})`,
-      scheduledDate,
-      dueDate: scheduledDate,
-      scheduledTime,
-      scheduledTimestamp,
-      status: 'Pending',
-      priority: priorityMap[enquiry.priority || 'Warm'] || 'Medium',
-      assignedTo: enquiry.assignedTo || 'Reception Desk',
-      type: 'Enquiry',
-      source: 'enquiry',
-      createdAt: new Date().toISOString()
-    };
-
-    try {
-      await setDoc(doc(db, 'followups', followUpId), followUpPayload, { merge: true });
-    } catch (err) {
-      console.warn('[enquiryService] Follow-up sync setDoc error:', err);
-    }
-
-    try {
-      await API.post('/followups', followUpPayload);
-    } catch (_) {}
-  },
-
-  // Delete Enquiry & Associated Pending Follow-Up
-  delete: async (id: string): Promise<void> => {
+  // Delete enquiry
+  remove: async (id: string): Promise<void> => {
     try {
       await deleteDoc(doc(db, 'enquiries', id));
     } catch (_) {}
@@ -268,10 +213,11 @@ export const enquiryService = {
     try {
       await API.delete(`/enquiries/${id}`);
     } catch (_) {}
+  },
 
-    // Delete associated follow-up
-    try {
-      await deleteDoc(doc(db, 'followups', `fol_enq_${id}`));
-    } catch (_) {}
+  // Convert enquiry to active member
+  convertToMember: async (id: string, plan: string, price: number | string): Promise<any> => {
+    const res = await API.post(`/enquiries/${id}/convert`, { plan, price });
+    return res.data;
   }
 };

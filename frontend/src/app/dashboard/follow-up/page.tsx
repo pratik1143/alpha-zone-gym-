@@ -3,40 +3,80 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  Bell, X, CheckCircle2, MessageSquare, Plus, Search, Trash2, 
-  MessageCircle, Phone, Clock, Calendar, MoreVertical, 
-  AlertTriangle, AlertCircle, Filter, RefreshCw, Check, User, Sparkles
+  Phone, 
+  MessageCircle, 
+  Clock, 
+  CheckCircle2, 
+  Calendar, 
+  Filter, 
+  Search, 
+  Plus, 
+  Trash2, 
+  MoreVertical,
+  Check,
+  AlertCircle,
+  AlertTriangle,
+  MessageSquare,
+  Sparkles,
+  Layers
 } from 'lucide-react';
-import { db } from '@/lib/firebase';
-import { collection, doc, updateDoc, getDocs } from 'firebase/firestore';
 import toast from 'react-hot-toast';
-import { useGymStore } from '@/store';
-import API from '@/services/api';
 import confetti from 'canvas-confetti';
 import { z } from 'zod';
-
+import { db } from '@/lib/firebase';
+import { collection, getDocs, doc, updateDoc } from 'firebase/firestore';
+import API from '@/services/api';
+import { useGymStore } from '@/store';
 import { useFollowups } from '@/hooks/useFollowups';
-import { followupService } from '@/services/followup.service';
+import { followupService, FollowUpItem } from '@/services/followup.service';
+import { getTodayInIndia, isTodayInIndia, isOverdueInIndia, isUpcomingInIndia, formatIndianDate } from '@/lib/dateUtils';
+
+// Zod Schema for validation
+const followUpFormSchema = z.object({
+  memberId: z.string().min(1, 'Please select a member'),
+  reason: z.string().min(2, 'Reason must be at least 2 characters'),
+  date: z.string().min(1, 'Date is required'),
+  time: z.string().min(1, 'Time is required'),
+  priority: z.enum(['Low', 'Medium', 'High', 'Urgent'], { message: 'Select priority' })
+});
 
 export default function FollowUpManager() {
-  const { members, fetchMembers } = useGymStore();
   const { 
-    followups, loading, 
-    dueNowCount, overdueCount, completedTodayCount, todaysCount,
-    createFollowup, completeFollowup, snoozeFollowup, cancelFollowup, removeFollowup
+    followups, 
+    todaysFollowups,
+    overdueFollowups,
+    activeFollowups,
+    completedTodayFollowups,
+    todaysCount,
+    overdueCount,
+    completedTodayCount,
+    totalActiveCount,
+    loading, 
+    createFollowup, 
+    completeFollowup, 
+    snoozeFollowup, 
+    cancelFollowup, 
+    removeFollowup 
   } = useFollowups();
 
+  const { members, fetchMembers } = useGymStore();
   const [enquiries, setEnquiries] = useState<any[]>([]);
   const [employees, setEmployees] = useState<any[]>([]);
+
+  // Default to today in Asia/Kolkata timezone
+  const todayDateStr = useMemo(() => getTodayInIndia(), []);
+
+  // Tabs: 'today' (Default) | 'active' | 'overdue' | 'history'
+  const [activeTab, setActiveTab] = useState<'today' | 'active' | 'overdue' | 'history'>('today');
 
   // Filters
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState('All');
   const [filterStaff, setFilterStaff] = useState('All');
   const [filterPriority, setFilterPriority] = useState('All');
-  const [filterStartDate, setFilterStartDate] = useState(''); 
-  const [filterEndDate, setFilterEndDate] = useState(''); 
-  const [showHistory, setShowHistory] = useState(false);
+  const [filterStartDate, setFilterStartDate] = useState(todayDateStr);
+  const [filterEndDate, setFilterEndDate] = useState(todayDateStr);
+  const [isCustomDateFilterActive, setIsCustomDateFilterActive] = useState(false);
 
   // Selection
   const [selectedTasks, setSelectedTasks] = useState<string[]>([]);
@@ -50,8 +90,6 @@ export default function FollowUpManager() {
   const [nextFollowupDate, setNextFollowupDate] = useState('');
   const [nextFollowupTime, setNextFollowupTime] = useState('10:00');
   const [openActionDropdown, setOpenActionDropdown] = useState<string | null>(null);
-
-  const todayDateStr = useMemo(() => new Date().toISOString().split('T')[0], []);
 
   // Fetch Dependencies
   useEffect(() => {
@@ -87,7 +125,8 @@ export default function FollowUpManager() {
 
   useEffect(() => {
     if (showCompleteModal) {
-      const tomorrowStr = new Date(Date.now() + 86400000).toISOString().split('T')[0];
+      const tomorrow = new Date(Date.now() + 86400000);
+      const tomorrowStr = getTodayInIndia(tomorrow);
       setNextFollowupDate(tomorrowStr);
       setNextFollowupTime('10:00');
     }
@@ -100,14 +139,14 @@ export default function FollowUpManager() {
     let plan = task.plan || 'Standard';
 
     if (task.memberId) {
-      const m = members.find(x => x.id === task.memberId || x.memberId === task.memberId);
+      const m = members.find((x: any) => x.id === task.memberId || x.memberId === task.memberId);
       if (m) {
         name = m.name || name;
         phone = m.phone || phone;
         plan = m.plan || plan;
       }
     } else if (task.enquiryId) {
-      const e = enquiries.find(x => x.id === task.enquiryId);
+      const e = enquiries.find((x: any) => x.id === task.enquiryId);
       if (e) {
         name = e.name || name;
         phone = e.phone || phone;
@@ -120,32 +159,32 @@ export default function FollowUpManager() {
     }
 
     return { 
-      name: name || 'Gym Client', 
-      phone: phone && phone !== 'N/A' ? phone : '9877466899', 
+      name: name || 'Gym Member', 
+      phone: phone && phone !== 'N/A' ? phone : '9876543210', 
       plan: plan || 'Standard' 
     };
   };
 
-  // Filter Logic
+  // Filter Logic based on Active Tab & Search/Dropdowns
   const filteredTasks = useMemo(() => {
-    let result = followups;
+    let result: FollowUpItem[] = [];
 
-    if (showHistory) {
-      result = result.filter(f => f.status === 'Completed' || f.status === 'Cancelled');
-    } else {
-      result = result.filter(f => f.status === 'Pending');
+    if (activeTab === 'today') {
+      result = todaysFollowups;
+    } else if (activeTab === 'active') {
+      result = activeFollowups;
+    } else if (activeTab === 'overdue') {
+      result = overdueFollowups;
+    } else if (activeTab === 'history') {
+      result = followups.filter(f => f.status === 'Completed' || f.status === 'Cancelled');
     }
 
-    // Date range filtering
-    if (filterStartDate && filterEndDate) {
-      result = result.filter(f => f.scheduledDate >= filterStartDate && f.scheduledDate <= filterEndDate);
-    } else if (filterStartDate && !filterEndDate) {
-      result = result.filter(f => f.scheduledDate === filterStartDate);
-    } else if (!filterStartDate && filterEndDate) {
-      result = result.filter(f => f.scheduledDate <= filterEndDate);
-    } else {
-      // Default: show today's tasks & overdue pending tasks
-      result = result.filter(f => f.scheduledDate <= todayDateStr);
+    // If user explicitly modified the date range pickers in Active or History tab
+    if (isCustomDateFilterActive && filterStartDate && filterEndDate) {
+      result = result.filter(f => {
+        const itemDate = (f.dueDate || f.scheduledDate || f.date || '').split('T')[0];
+        return itemDate >= filterStartDate && itemDate <= filterEndDate;
+      });
     }
 
     if (filterType !== 'All') {
@@ -157,19 +196,40 @@ export default function FollowUpManager() {
     }
 
     if (filterPriority !== 'All') {
-      result = result.filter(f => f.priority === filterPriority);
+      result = result.filter(f => (f.priority || '').toLowerCase() === filterPriority.toLowerCase());
     }
 
     if (searchQuery) {
       const sq = searchQuery.toLowerCase();
       result = result.filter(f => {
         const client = getClientDetails(f);
-        return client.name.toLowerCase().includes(sq) || client.phone.includes(sq) || f.title?.toLowerCase().includes(sq);
+        return (
+          client.name.toLowerCase().includes(sq) || 
+          client.phone.includes(sq) || 
+          (f.title || '').toLowerCase().includes(sq) ||
+          (f.reason || '').toLowerCase().includes(sq) ||
+          (f.notes || '').toLowerCase().includes(sq)
+        );
       });
     }
 
     return result;
-  }, [followups, filterType, filterStaff, filterPriority, searchQuery, showHistory, filterStartDate, filterEndDate, members, enquiries, todayDateStr]);
+  }, [
+    activeTab, 
+    todaysFollowups, 
+    activeFollowups, 
+    overdueFollowups, 
+    followups, 
+    isCustomDateFilterActive, 
+    filterStartDate, 
+    filterEndDate, 
+    filterType, 
+    filterStaff, 
+    filterPriority, 
+    searchQuery, 
+    members, 
+    enquiries
+  ]);
 
   // Select all handling
   useEffect(() => {
@@ -209,7 +269,7 @@ export default function FollowUpManager() {
 
     if (outcomeLog === 'Follow-up Scheduled') {
       const client = getClientDetails(task);
-      const targetDate = nextFollowupDate || new Date(Date.now() + 86400000).toISOString().split('T')[0];
+      const targetDate = nextFollowupDate || getTodayInIndia(new Date(Date.now() + 86400000));
       const targetTime = nextFollowupTime || '10:00';
       const scheduledTimestamp = new Date(`${targetDate}T${targetTime}`).getTime() || (Date.now() + 86400000);
 
@@ -218,16 +278,18 @@ export default function FollowUpManager() {
         enquiryId: task.enquiryId || null,
         memberName: client.name,
         phone: client.phone,
-        type: task.type || 'Renewal',
+        type: task.type || 'GYM MEMBERSHIP RENEWAL',
         priority: task.priority || 'Medium',
-        assignedTo: task.assignedTo || 'Gym Owner',
+        assignedTo: task.assignedTo || 'Receptionist',
         scheduledDate: targetDate,
         scheduledTime: targetTime,
         scheduledTimestamp,
         dueDate: targetDate,
         date: targetDate,
         status: 'Pending',
+        source: 'manual',
         title: `Rescheduled: ${client.name}`,
+        reason: remarksLog ? `[Rescheduled Notes]: ${remarksLog}` : `Rescheduled from previous call`,
         notes: remarksLog ? `[Rescheduled Notes]: ${remarksLog}` : `Rescheduled from previous call`,
         description: remarksLog ? `[Rescheduled Notes]: ${remarksLog}` : `Rescheduled from previous call`,
         createdAt: new Date().toISOString()
@@ -293,8 +355,9 @@ export default function FollowUpManager() {
     setFilterType('All');
     setFilterStaff('All');
     setFilterPriority('All');
-    setFilterStartDate('');
-    setFilterEndDate('');
+    setFilterStartDate(todayDateStr);
+    setFilterEndDate(todayDateStr);
+    setIsCustomDateFilterActive(false);
   };
 
   return (
@@ -309,25 +372,59 @@ export default function FollowUpManager() {
             </div>
             <div>
               <h1 className="text-xl font-black text-slate-900 tracking-tight">Follow-Up Manager</h1>
-              <p className="text-xs text-slate-500 font-medium">Manage member calls, renewal reminders & client follow-ups</p>
+              <p className="text-xs text-slate-500 font-medium">Automatic membership renewals, PT reminders & reception follow-ups</p>
             </div>
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
-          {/* History Mode Switch */}
-          <div className="bg-slate-100 p-1 rounded-2xl flex items-center gap-1 border border-slate-200/60">
+        <div className="flex items-center gap-3 flex-wrap">
+          {/* Main Navigation Queue Tabs */}
+          <div className="bg-slate-100 p-1 rounded-2xl flex items-center gap-1 border border-slate-200/60 flex-wrap">
             <button
-              onClick={() => setShowHistory(false)}
-              className={`px-4 py-2 text-xs font-bold rounded-xl transition-all border-none cursor-pointer ${!showHistory ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-800'}`}
+              onClick={() => { setActiveTab('today'); setIsCustomDateFilterActive(false); }}
+              className={`px-3.5 py-2 text-xs font-black rounded-xl transition-all border-none cursor-pointer flex items-center gap-1.5 ${
+                activeTab === 'today' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
+              }`}
             >
-              Active Tasks
+              <span>Today's Queue</span>
+              <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-extrabold ${activeTab === 'today' ? 'bg-blue-800 text-white' : 'bg-blue-100 text-blue-700'}`}>
+                {todaysCount}
+              </span>
             </button>
+
             <button
-              onClick={() => setShowHistory(true)}
-              className={`px-4 py-2 text-xs font-bold rounded-xl transition-all border-none cursor-pointer ${showHistory ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-800'}`}
+              onClick={() => { setActiveTab('active'); }}
+              className={`px-3.5 py-2 text-xs font-bold rounded-xl transition-all border-none cursor-pointer flex items-center gap-1.5 ${
+                activeTab === 'active' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+              }`}
             >
-              Completed History
+              <span>All Active</span>
+              <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-slate-200 text-slate-700">
+                {totalActiveCount}
+              </span>
+            </button>
+
+            <button
+              onClick={() => { setActiveTab('overdue'); }}
+              className={`px-3.5 py-2 text-xs font-bold rounded-xl transition-all border-none cursor-pointer flex items-center gap-1.5 ${
+                activeTab === 'overdue' ? 'bg-red-50 text-red-700 border border-red-200 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <span>Overdue</span>
+              {overdueCount > 0 && (
+                <span className="px-1.5 py-0.2 rounded-full text-[10px] font-extrabold bg-red-600 text-white">
+                  {overdueCount}
+                </span>
+              )}
+            </button>
+
+            <button
+              onClick={() => { setActiveTab('history'); }}
+              className={`px-3.5 py-2 text-xs font-bold rounded-xl transition-all border-none cursor-pointer ${
+                activeTab === 'history' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              History
             </button>
           </div>
 
@@ -342,27 +439,53 @@ export default function FollowUpManager() {
 
       {/* 2. STAT CARDS ROW */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center justify-between">
-          <div>
-            <span className="text-[11px] font-bold uppercase text-slate-400 block tracking-wider">Due Today</span>
-            <span className="text-2xl font-black text-slate-900 mt-1 block">{todaysCount}</span>
+        {/* Card 1: Due Today */}
+        <div 
+          onClick={() => { setActiveTab('today'); setIsCustomDateFilterActive(false); }}
+          className={`bg-white p-5 rounded-2xl border transition-all cursor-pointer shadow-xs hover:shadow-md ${
+            activeTab === 'today' ? 'border-blue-600 ring-2 ring-blue-500/20' : 'border-slate-200/80 hover:border-blue-300'
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <span className="text-[11px] font-bold uppercase text-slate-400 block tracking-wider">Due Today</span>
+              <span className="text-2xl font-black text-slate-900 mt-1 block">{todaysCount}</span>
+            </div>
+            <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
+              <Clock size={22} />
+            </div>
           </div>
-          <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
-            <Clock size={22} />
-          </div>
+          <span className="text-[10px] text-blue-600 font-bold mt-2 block">
+            {activeTab === 'today' ? '● Showing Today\'s Queue' : 'Click to view today\'s queue →'}
+          </span>
         </div>
 
-        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center justify-between">
-          <div>
-            <span className="text-[11px] font-bold uppercase text-slate-400 block tracking-wider">Overdue Tasks</span>
-            <span className="text-2xl font-black text-red-600 mt-1 block">{overdueCount}</span>
+        {/* Card 2: Overdue Tasks */}
+        <div 
+          onClick={() => { setActiveTab('overdue'); }}
+          className={`bg-white p-5 rounded-2xl border transition-all cursor-pointer shadow-xs hover:shadow-md ${
+            activeTab === 'overdue' ? 'border-red-600 ring-2 ring-red-500/20' : 'border-slate-200/80 hover:border-red-300'
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <span className="text-[11px] font-bold uppercase text-slate-400 block tracking-wider">Overdue Tasks</span>
+              <span className="text-2xl font-black text-red-600 mt-1 block">{overdueCount}</span>
+            </div>
+            <div className="w-12 h-12 rounded-2xl bg-red-50 text-red-600 flex items-center justify-center font-bold">
+              <AlertTriangle size={22} />
+            </div>
           </div>
-          <div className="w-12 h-12 rounded-2xl bg-red-50 text-red-600 flex items-center justify-center font-bold">
-            <AlertTriangle size={22} />
-          </div>
+          <span className="text-[10px] text-red-600 font-bold mt-2 block">
+            {activeTab === 'overdue' ? '● Showing Overdue Tasks' : 'Click to view overdue →'}
+          </span>
         </div>
 
-        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center justify-between">
+        {/* Card 3: Completed Today */}
+        <div 
+          onClick={() => { setActiveTab('history'); }}
+          className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center justify-between hover:border-emerald-300 transition-all cursor-pointer"
+        >
           <div>
             <span className="text-[11px] font-bold uppercase text-slate-400 block tracking-wider">Completed Today</span>
             <span className="text-2xl font-black text-emerald-600 mt-1 block">{completedTodayCount}</span>
@@ -372,10 +495,16 @@ export default function FollowUpManager() {
           </div>
         </div>
 
-        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center justify-between">
+        {/* Card 4: Total Active */}
+        <div 
+          onClick={() => { setActiveTab('active'); }}
+          className={`bg-white p-5 rounded-2xl border transition-all cursor-pointer shadow-xs hover:shadow-md ${
+            activeTab === 'active' ? 'border-blue-600 ring-2 ring-blue-500/20' : 'border-slate-200/80 hover:border-blue-300'
+          }`}
+        >
           <div>
             <span className="text-[11px] font-bold uppercase text-slate-400 block tracking-wider">Total Active</span>
-            <span className="text-2xl font-black text-blue-600 mt-1 block">{followups.filter(f => f.status === 'Pending').length}</span>
+            <span className="text-2xl font-black text-blue-600 mt-1 block">{totalActiveCount}</span>
           </div>
           <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
             <MessageSquare size={22} />
@@ -391,26 +520,26 @@ export default function FollowUpManager() {
             <Search size={14} className="absolute left-3.5 top-3 text-slate-400" />
             <input 
               type="text" 
-              placeholder="Search member name, phone or title..."
+              placeholder="Search member name, phone or reason..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-9 pr-4 py-2 text-xs font-semibold text-slate-800 rounded-xl border border-slate-200 outline-none focus:border-blue-600 transition-all placeholder-slate-400"
             />
           </div>
 
-          {/* Date Pickers */}
+          {/* Date Picker (Auto-selected to Today) */}
           <div className="flex items-center gap-1.5 bg-slate-50 p-1 rounded-xl border border-slate-200">
             <input 
               type="date" 
               value={filterStartDate}
-              onChange={(e) => setFilterStartDate(e.target.value)}
+              onChange={(e) => { setFilterStartDate(e.target.value); setIsCustomDateFilterActive(true); }}
               className="px-2.5 py-1 text-xs font-bold text-slate-700 bg-transparent outline-none cursor-pointer"
             />
             <span className="text-xs text-slate-400 font-bold">to</span>
             <input 
               type="date" 
               value={filterEndDate}
-              onChange={(e) => setFilterEndDate(e.target.value)}
+              onChange={(e) => { setFilterEndDate(e.target.value); setIsCustomDateFilterActive(true); }}
               className="px-2.5 py-1 text-xs font-bold text-slate-700 bg-transparent outline-none cursor-pointer"
             />
           </div>
@@ -450,12 +579,12 @@ export default function FollowUpManager() {
           </select>
         </div>
 
-        {(searchQuery || filterType !== 'All' || filterStaff !== 'All' || filterPriority !== 'All' || filterStartDate || filterEndDate) && (
+        {(searchQuery || filterType !== 'All' || filterStaff !== 'All' || filterPriority !== 'All' || isCustomDateFilterActive) && (
           <button 
             onClick={resetFilters}
             className="px-3 py-2 text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 rounded-xl transition-all border-none cursor-pointer"
           >
-            Clear Filters
+            Reset Filters
           </button>
         )}
       </div>
@@ -474,7 +603,9 @@ export default function FollowUpManager() {
               />
               <span className="font-bold text-slate-700">Select All ({filteredTasks.length} tasks)</span>
             </label>
-            <span>Showing {showHistory ? 'Completed/Cancelled' : 'Pending'} tasks</span>
+            <span className="font-semibold text-slate-600">
+              Showing {activeTab === 'today' ? "Today's Follow-Ups" : activeTab === 'overdue' ? 'Overdue Tasks' : activeTab === 'history' ? 'Completed History' : 'Active Tasks'}
+            </span>
           </div>
         )}
 
@@ -483,9 +614,15 @@ export default function FollowUpManager() {
             <div className="w-12 h-12 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mx-auto font-bold">
               <Check size={24} />
             </div>
-            <h3 className="text-base font-bold text-slate-800">No Follow-up Tasks Found</h3>
+            <h3 className="text-base font-bold text-slate-800">
+              {activeTab === 'today' ? "No Follow-ups Due Today" : "No Follow-up Tasks Found"}
+            </h3>
             <p className="text-xs text-slate-500 max-w-sm mx-auto font-medium">
-              {showHistory ? 'No completed or cancelled follow-up history records yet.' : 'All caught up! No pending follow-up calls scheduled for this view.'}
+              {activeTab === 'today' 
+                ? "All caught up! There are currently no automated renewal or balance follow-ups due today." 
+                : activeTab === 'history' 
+                ? "No completed or cancelled follow-up records found." 
+                : "No matching follow-up tasks for the selected view."}
             </p>
           </div>
         ) : (
@@ -519,6 +656,10 @@ export default function FollowUpManager() {
               : normPriority === 'medium'
               ? 'bg-blue-100 text-blue-700 font-bold border border-blue-200'
               : 'bg-slate-100 text-slate-600 font-medium';
+
+            const cleanDueDate = (task.dueDate || task.scheduledDate || '').split('T')[0];
+            const isDueToday = cleanDueDate === todayDateStr;
+            const isTaskOverdue = isOverdueInIndia(cleanDueDate);
 
             return (
               <motion.div
@@ -554,14 +695,20 @@ export default function FollowUpManager() {
                           {task.type || 'General'}
                         </span>
 
-                        <span className={`text-[10px] px-2 py-0.5 rounded-md flex items-center gap-1 ${priorityBadgeClass}`}>
+                        {isAutomatic && (
+                          <span className="text-[9px] font-black px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-0.5 uppercase tracking-wider">
+                            ⚡ AUTO
+                          </span>
+                        )}
+
+                        <span className={`text-[10px] px-2 py-0.5 rounded-md flex items-center gap-1 uppercase tracking-wider ${priorityBadgeClass}`}>
                           <span className={`w-1.5 h-1.5 rounded-full ${isHighPriority ? 'bg-red-500' : 'bg-blue-500'}`} />
                           {task.priority || 'Medium'}
                         </span>
 
-                        {isAutomatic && (
-                          <span className="text-[9px] font-extrabold px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-0.5">
-                            ⚡ Auto
+                        {task.status === 'Completed' && (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800">
+                            Completed
                           </span>
                         )}
                       </div>
@@ -576,8 +723,8 @@ export default function FollowUpManager() {
                           📞 {client.phone}
                         </a>
                         <span>•</span>
-                        <span className="flex items-center gap-1 text-slate-700 font-bold">
-                          📅 Due: {task.dueDate || task.scheduledDate} {task.scheduledTime ? `· ${task.scheduledTime}` : ''}
+                        <span className={`flex items-center gap-1 font-bold ${isTaskOverdue ? 'text-red-600' : isDueToday ? 'text-blue-700 font-black' : 'text-slate-700'}`}>
+                          📅 {isDueToday ? 'Due Today' : `Due: ${formatIndianDate(cleanDueDate)}`} {task.scheduledTime ? `· ${task.scheduledTime}` : ''}
                         </span>
                         <span>•</span>
                         <span>Assigned: {task.assignedTo || 'Receptionist'}</span>
@@ -669,137 +816,105 @@ export default function FollowUpManager() {
             </button>
             <button
               onClick={handleBulkDelete}
-              className="px-3.5 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-xl transition-all border-none cursor-pointer"
+              className="px-3.5 py-1.5 bg-red-500 hover:bg-red-600 text-white text-xs font-bold rounded-xl transition-all border-none cursor-pointer"
             >
-              Delete Selected
+              Delete
+            </button>
+            <button
+              onClick={() => setSelectedTasks([])}
+              className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-xl transition-all border-none cursor-pointer"
+            >
+              Cancel
             </button>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* 6. MODALS */}
-
-      {/* Add Follow-up Modal */}
-      <AnimatePresence>
-        {showAddModal && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setShowAddModal(false)} />
-            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="relative bg-white border border-slate-200 rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden text-left">
-              <div className="bg-blue-600 px-6 py-4 flex items-center justify-between text-white">
-                <div>
-                  <h2 className="text-sm font-bold uppercase tracking-wide">NEW FOLLOW-UP</h2>
-                  <p className="text-[11px] text-blue-100 font-medium mt-0.5">Create a follow-up reminder for a member.</p>
-                </div>
-                <button onClick={() => setShowAddModal(false)} className="text-white/80 hover:text-white border-none cursor-pointer bg-transparent p-1">
-                  <X size={18} />
-                </button>
-              </div>
-              <AddFollowUpWizard 
-                members={members} 
-                employees={employees} 
-                createFollowup={createFollowup}
-                onClose={() => setShowAddModal(false)} 
-              />
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* Complete & Reschedule Log Modal */}
+      {/* 6. COMPLETE TASK MODAL */}
       <AnimatePresence>
         {showCompleteModal && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setShowCompleteModal(null)} />
-            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="bg-white rounded-3xl shadow-2xl border border-slate-100 w-full max-w-lg overflow-hidden relative text-left">
-              <div className="bg-emerald-600 px-6 py-4 flex items-center justify-between text-white">
-                <div>
-                  <h3 className="font-bold uppercase tracking-wide text-xs flex items-center gap-2">
-                    <MessageCircle size={16}/> Add Follow-up Log & Reschedule
-                  </h3>
-                  <p className="text-[10px] text-emerald-100 font-medium mt-0.5">Log call outcome and set next reminder</p>
-                </div>
-                <button onClick={() => setShowCompleteModal(null)} className="text-white/80 hover:text-white border-none cursor-pointer bg-transparent"><X size={18}/></button>
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl border border-slate-200 space-y-4"
+            >
+              <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                  <CheckCircle2 className="text-emerald-500" size={18} /> Complete Follow-Up
+                </h3>
+                <button onClick={() => setShowCompleteModal(null)} className="p-1 rounded-lg text-slate-400 hover:bg-slate-100 border-none cursor-pointer">
+                  ✕
+                </button>
               </div>
 
-              {/* Previous Notes Summary */}
-              {(() => {
-                const client = getClientDetails(showCompleteModal);
-                const prevNotes = showCompleteModal.notes || showCompleteModal.description || showCompleteModal.remarks || 'No prior notes recorded.';
-                return (
-                  <div className="bg-slate-50 border-b border-slate-200 px-6 py-3.5 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <span className="text-[10px] font-bold uppercase text-slate-400">Client Details</span>
-                        <h4 className="text-sm font-bold text-slate-800">{client.name}</h4>
-                        <p className="text-xs text-slate-500 font-medium">📞 {client.phone} • {showCompleteModal.type || 'Follow-up'}</p>
-                      </div>
-                      <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${
-                        showCompleteModal.priority === 'High' ? 'bg-red-100 text-red-800' : 'bg-slate-100 text-slate-700'
-                      }`}>
-                        {showCompleteModal.priority || 'Medium'} Priority
-                      </span>
-                    </div>
-                    
-                    <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-xs">
-                      <span className="text-xs font-bold text-slate-800 block">💬 Last Time Kya Baat Hui (Previous Notes):</span>
-                      <p className="text-xs font-medium text-slate-700 mt-0.5 italic">"{prevNotes}"</p>
-                    </div>
-                  </div>
-                );
-              })()}
-
-              <form onSubmit={submitCompleteTask} className="p-6 space-y-4 text-left">
+              <form onSubmit={submitCompleteTask} className="space-y-4 text-left">
                 <div>
-                  <label className="text-xs font-bold text-slate-600 block mb-1.5">Outcome Status</label>
-                  <select value={completeOutcome} onChange={e => setCompleteOutcome(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-bold text-slate-800 outline-none focus:border-emerald-500 cursor-pointer">
-                    <option value="Connected">Connected (Completed)</option>
-                    <option value="Follow-up Scheduled">Follow-up Scheduled (Reschedule Next Call)</option>
-                    <option value="Resolved">Resolved / Deal Closed</option>
-                    <option value="No Answer">No Answer / Missed</option>
+                  <label className="text-xs font-bold text-slate-600 block mb-1">Call Outcome</label>
+                  <select
+                    value={completeOutcome}
+                    onChange={(e) => setCompleteOutcome(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-bold text-slate-800 outline-none focus:border-blue-600 cursor-pointer"
+                  >
+                    <option value="Connected">Connected & Spoke</option>
+                    <option value="Interested in Renewal">Interested in Renewal</option>
+                    <option value="Payment Promised">Payment Promised</option>
+                    <option value="Follow-up Scheduled">Follow-up Rescheduled</option>
+                    <option value="Not Reachable / Busy">Not Reachable / Busy</option>
                     <option value="Not Interested">Not Interested</option>
                   </select>
                 </div>
 
-                {/* Conditional Reschedule Date/Time inputs */}
                 {completeOutcome === 'Follow-up Scheduled' && (
-                  <div className="bg-blue-50/60 border border-blue-100 rounded-2xl p-4 space-y-3">
-                    <div className="flex items-center gap-1.5 text-blue-900 text-xs font-bold">
-                      <Calendar size={14}/> Next Follow-up Date & Time
+                  <div className="grid grid-cols-2 gap-3 p-3 bg-blue-50/50 rounded-2xl border border-blue-100">
+                    <div>
+                      <label className="text-[11px] font-bold text-blue-900 block mb-1">Next Call Date</label>
+                      <input
+                        type="date"
+                        required
+                        value={nextFollowupDate}
+                        onChange={(e) => setNextFollowupDate(e.target.value)}
+                        className="w-full bg-white border border-blue-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 outline-none focus:border-blue-600 cursor-pointer"
+                      />
                     </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="text-[10px] font-bold text-slate-700 uppercase block mb-1">Next Call Date</label>
-                        <input 
-                          type="date" 
-                          required 
-                          value={nextFollowupDate} 
-                          onChange={e => setNextFollowupDate(e.target.value)} 
-                          className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 outline-none focus:border-blue-600" 
-                        />
-                      </div>
-                      <div>
-                        <label className="text-[10px] font-bold text-slate-700 uppercase block mb-1">Next Call Time</label>
-                        <input 
-                          type="time" 
-                          required 
-                          value={nextFollowupTime} 
-                          onChange={e => setNextFollowupTime(e.target.value)} 
-                          className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 outline-none focus:border-blue-600" 
-                        />
-                      </div>
+                    <div>
+                      <label className="text-[11px] font-bold text-blue-900 block mb-1">Next Time</label>
+                      <input
+                        type="time"
+                        required
+                        value={nextFollowupTime}
+                        onChange={(e) => setNextFollowupTime(e.target.value)}
+                        className="w-full bg-white border border-blue-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 outline-none focus:border-blue-600 cursor-pointer"
+                      />
                     </div>
                   </div>
                 )}
 
                 <div>
-                  <label className="text-xs font-bold text-slate-600 block mb-1.5">Remarks / Call Summary</label>
-                  <textarea required value={completeRemarks} onChange={e => setCompleteRemarks(e.target.value)} rows={3} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs font-semibold text-slate-700 outline-none focus:border-emerald-500 resize-none" placeholder="Aaj kya baat hui? Enter conversation details..." />
+                  <label className="text-xs font-bold text-slate-600 block mb-1">Conversation Notes</label>
+                  <textarea
+                    placeholder="Enter what member said during call..."
+                    rows={3}
+                    value={completeRemarks}
+                    onChange={(e) => setCompleteRemarks(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs font-medium text-slate-800 outline-none focus:border-blue-600 resize-none placeholder-slate-400"
+                  />
                 </div>
 
-                <div className="pt-2 flex justify-end gap-3">
-                  <button type="button" onClick={() => setShowCompleteModal(null)} className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-bold text-xs cursor-pointer hover:bg-slate-50">Cancel</button>
-                  <button type="submit" className="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-md shadow-emerald-500/20 uppercase tracking-wider transition-all border-none cursor-pointer">
-                    {completeOutcome === 'Follow-up Scheduled' ? 'Schedule Next Follow-up' : 'Submit Follow-up'}
+                <div className="flex items-center justify-end gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowCompleteModal(null)}
+                    className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors border-none cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-5 py-2 text-xs font-bold text-white bg-emerald-500 hover:bg-emerald-600 rounded-xl transition-all shadow-md shadow-emerald-500/20 border-none cursor-pointer"
+                  >
+                    Save & Complete
                   </button>
                 </div>
               </form>
@@ -808,10 +923,47 @@ export default function FollowUpManager() {
         )}
       </AnimatePresence>
 
+      {/* 7. ADD MANUAL FOLLOW-UP WIZARD */}
+      <AnimatePresence>
+        {showAddModal && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white rounded-3xl max-w-lg w-full shadow-2xl border border-slate-200 overflow-hidden"
+            >
+              <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
+                    <Plus size={16} />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-900">Schedule Manual Follow-Up</h3>
+                    <p className="text-[11px] text-slate-500">Create staff callback task for any gym member</p>
+                  </div>
+                </div>
+                <button onClick={() => setShowAddModal(false)} className="p-1 rounded-lg text-slate-400 hover:bg-slate-100 border-none cursor-pointer">
+                  ✕
+                </button>
+              </div>
+
+              <AddFollowUpWizard 
+                members={members} 
+                employees={employees} 
+                createFollowup={createFollowup} 
+                onClose={() => setShowAddModal(false)} 
+              />
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
     </div>
   );
 }
 
+// Subcomponent: Searchable Member Select
 function SearchableMemberSelect({ 
   members, 
   selectedMemberId, 
@@ -819,83 +971,64 @@ function SearchableMemberSelect({
 }: { 
   members: any[]; 
   selectedMemberId: string; 
-  onSelect: (member: any) => void;
+  onSelect: (m: any) => void;
 }) {
-  const [query, setQuery] = useState('');
   const [isOpen, setIsOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
 
   const selectedMember = useMemo(() => {
-    return members.find(m => (m.id && m.id === selectedMemberId) || (m.memberId && m.memberId === selectedMemberId));
+    return members.find(m => m.id === selectedMemberId || m.memberId === selectedMemberId);
   }, [members, selectedMemberId]);
 
   const filteredMembers = useMemo(() => {
-    if (!query) return members.slice(0, 50);
-    const q = query.toLowerCase();
-    return members.filter(m => {
-      const name = (m.name || '').toLowerCase();
-      const phone = (m.phone || '').toLowerCase();
-      const id = (m.memberId || m.id || '').toLowerCase();
-      return name.includes(q) || phone.includes(q) || id.includes(q);
-    }).slice(0, 50);
-  }, [members, query]);
+    if (!searchTerm) return members.slice(0, 30);
+    const term = searchTerm.toLowerCase();
+    return members.filter(m => 
+      m.name?.toLowerCase().includes(term) || 
+      m.phone?.includes(term) || 
+      m.memberId?.toLowerCase().includes(term)
+    ).slice(0, 30);
+  }, [members, searchTerm]);
 
   return (
     <div className="relative">
       <div 
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full bg-slate-50 border border-slate-200 hover:border-blue-500 rounded-xl px-4 py-2.5 text-xs font-semibold text-slate-800 cursor-pointer flex items-center justify-between transition-all"
+        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-bold text-slate-800 flex items-center justify-between cursor-pointer focus:border-blue-600"
       >
-        {selectedMember ? (
-          <div className="flex items-center gap-2 truncate">
-            <span className="font-bold text-slate-900">{selectedMember.name}</span>
-            <span className="text-[10px] font-bold bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded">
-              {selectedMember.memberId || (selectedMember.id ? selectedMember.id.substring(0, 8) : 'AZM')}
-            </span>
-            <span className="text-slate-500 text-[11px]">📞 {selectedMember.phone || 'N/A'}</span>
-          </div>
-        ) : (
-          <span className="text-slate-400 font-normal">-- Select member --</span>
-        )}
-        <Search size={14} className="text-slate-400 shrink-0" />
+        <span className={selectedMember ? 'text-slate-900' : 'text-slate-400'}>
+          {selectedMember ? `${selectedMember.name} (${selectedMember.phone || 'No Phone'})` : '-- Select Gym Member --'}
+        </span>
+        <span className="text-slate-400 text-[10px]">▼</span>
       </div>
 
       {isOpen && (
-        <div className="absolute left-0 right-0 top-full mt-1.5 bg-white border border-slate-200 rounded-2xl shadow-xl z-50 p-2 text-left">
-          <input 
-            type="text" 
-            autoFocus
-            placeholder="Search member name, ID or phone..." 
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 outline-none focus:border-blue-600 mb-2"
-          />
-          <div className="max-h-48 overflow-y-auto space-y-1">
-            {filteredMembers.length === 0 ? (
-              <p className="text-xs text-slate-400 p-2 text-center font-medium">No members found</p>
-            ) : (
-              filteredMembers.map((m) => (
-                <div 
-                  key={m.id || m.memberId}
-                  onClick={() => {
-                    onSelect(m);
-                    setIsOpen(false);
-                    setQuery('');
-                  }}
-                  className={`p-2.5 rounded-xl text-xs cursor-pointer flex items-center justify-between transition-all ${
-                    (selectedMemberId === m.id || selectedMemberId === m.memberId)
-                      ? 'bg-blue-50 text-blue-900 font-bold'
-                      : 'hover:bg-slate-50 text-slate-700 font-medium'
-                  }`}
-                >
-                  <div>
-                    <span className="font-bold block text-slate-900">{m.name}</span>
-                    <span className="text-[10px] text-slate-500 font-medium">📞 {m.phone || 'No phone'}</span>
-                  </div>
-                  <span className="text-[10px] font-bold bg-slate-100 text-slate-600 px-2 py-0.5 rounded">
-                    {m.memberId || (m.id ? m.id.substring(0, 8) : 'AZM')}
-                  </span>
-                </div>
-              ))
+        <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-xl z-50 p-2 max-h-56 overflow-y-auto">
+          <div className="relative mb-2">
+            <Search size={12} className="absolute left-2.5 top-2.5 text-slate-400" />
+            <input 
+              type="text" 
+              placeholder="Search member name or phone..." 
+              value={searchTerm} 
+              onChange={e => setSearchTerm(e.target.value)} 
+              className="w-full pl-7 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg outline-none focus:border-blue-600 font-semibold"
+              autoFocus
+            />
+          </div>
+
+          <div className="space-y-1">
+            {filteredMembers.map(m => (
+              <div 
+                key={m.id || m.memberId} 
+                onClick={() => { onSelect(m); setIsOpen(false); }}
+                className="px-3 py-1.5 text-xs rounded-lg hover:bg-blue-50 hover:text-blue-700 cursor-pointer flex items-center justify-between transition-colors"
+              >
+                <span className="font-bold text-slate-800">{m.name}</span>
+                <span className="text-[10px] text-slate-400 font-semibold">{m.phone || 'No phone'}</span>
+              </div>
+            ))}
+            {filteredMembers.length === 0 && (
+              <div className="p-3 text-center text-xs text-slate-400">No members found</div>
             )}
           </div>
         </div>
@@ -904,14 +1037,7 @@ function SearchableMemberSelect({
   );
 }
 
-const followUpFormSchema = z.object({
-  memberId: z.string().min(1, 'Please select a member'),
-  reason: z.string().trim().min(2, 'Follow-up reason must be at least 2 characters'),
-  date: z.string().min(1, 'Date is required'),
-  time: z.string().min(1, 'Time is required'),
-  priority: z.enum(['Low', 'Medium', 'High', 'Urgent'], { message: 'Select priority' })
-});
-
+// Subcomponent: Add Follow-up Wizard Modal Form
 function AddFollowUpWizard({ 
   members, 
   employees, 
@@ -921,12 +1047,13 @@ function AddFollowUpWizard({
   members: any[]; 
   employees: any[]; 
   createFollowup?: (data: any) => Promise<any>; 
-  onClose: () => void 
+  onClose: () => void;
 }) {
+  const todayStr = useMemo(() => getTodayInIndia(), []);
   const [selectedMember, setSelectedMember] = useState<any>(null);
   const [reason, setReason] = useState('GYM MEMBERSHIP RENEWAL');
   const [customReason, setCustomReason] = useState('');
-  const [date, setDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [date, setDate] = useState(todayStr);
   const [time, setTime] = useState('10:00');
   const [priority, setPriority] = useState<'Low' | 'Medium' | 'High' | 'Urgent'>('Medium');
   const [assignedTo, setAssignedTo] = useState('Receptionist');
@@ -1080,6 +1207,7 @@ function AddFollowUpWizard({
             className={`w-full mt-2 bg-slate-50 border ${formErrors.reason ? 'border-red-500' : 'border-slate-200'} rounded-xl px-4 py-2 text-xs font-semibold text-slate-800 outline-none focus:border-blue-600`}
           />
         )}
+
         {formErrors.reason && (
           <p className="text-[11px] font-semibold text-red-500 mt-1 flex items-center gap-1">
             <AlertCircle size={12} /> {formErrors.reason}
@@ -1087,7 +1215,7 @@ function AddFollowUpWizard({
         )}
       </div>
 
-      {/* 3. Date & Time */}
+      {/* 3. Schedule Date & Time */}
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="text-xs font-bold text-slate-700 mb-1.5 block">
@@ -1097,13 +1225,8 @@ function AddFollowUpWizard({
             type="date" 
             value={date} 
             onChange={e => { setDate(e.target.value); if (formErrors.date) setFormErrors(prev => ({ ...prev, date: '' })); }} 
-            className={`w-full bg-slate-50 border ${formErrors.date ? 'border-red-500' : 'border-slate-200'} rounded-xl px-4 py-2.5 text-xs font-bold text-slate-800 outline-none focus:border-blue-600 cursor-pointer`}
+            className={`w-full bg-slate-50 border ${formErrors.date ? 'border-red-500' : 'border-slate-200'} rounded-xl px-3 py-2 text-xs font-bold text-slate-800 outline-none focus:border-blue-600 cursor-pointer`}
           />
-          {formErrors.date && (
-            <p className="text-[11px] font-semibold text-red-500 mt-1 flex items-center gap-1">
-              <AlertCircle size={12} /> {formErrors.date}
-            </p>
-          )}
         </div>
         <div>
           <label className="text-xs font-bold text-slate-700 mb-1.5 block">
@@ -1113,37 +1236,21 @@ function AddFollowUpWizard({
             type="time" 
             value={time} 
             onChange={e => { setTime(e.target.value); if (formErrors.time) setFormErrors(prev => ({ ...prev, time: '' })); }} 
-            className={`w-full bg-slate-50 border ${formErrors.time ? 'border-red-500' : 'border-slate-200'} rounded-xl px-4 py-2.5 text-xs font-bold text-slate-800 outline-none focus:border-blue-600 cursor-pointer`}
+            className={`w-full bg-slate-50 border ${formErrors.time ? 'border-red-500' : 'border-slate-200'} rounded-xl px-3 py-2 text-xs font-bold text-slate-800 outline-none focus:border-blue-600 cursor-pointer`}
           />
-          {formErrors.time && (
-            <p className="text-[11px] font-semibold text-red-500 mt-1 flex items-center gap-1">
-              <AlertCircle size={12} /> {formErrors.time}
-            </p>
-          )}
         </div>
       </div>
 
-      {/* 4. Assign To & Priority */}
+      {/* 4. Priority & Assigned Staff */}
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="text-xs font-bold text-slate-700 mb-1.5 block">Assign To</label>
-          <select 
-            value={assignedTo} 
-            onChange={e => setAssignedTo(e.target.value)} 
-            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-bold text-slate-800 outline-none focus:border-blue-600 cursor-pointer"
-          >
-            {staffOptions.map(staff => (
-              <option key={staff} value={staff}>{staff}</option>
-            ))}
-          </select>
-        </div>
-
-        <div>
-          <label className="text-xs font-bold text-slate-700 mb-1.5 block">Priority</label>
+          <label className="text-xs font-bold text-slate-700 mb-1.5 block">
+            Priority <span className="text-blue-600">*</span>
+          </label>
           <select 
             value={priority} 
             onChange={e => setPriority(e.target.value as any)} 
-            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-bold text-slate-800 outline-none focus:border-blue-600 cursor-pointer"
+            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 outline-none focus:border-blue-600 cursor-pointer"
           >
             <option value="Low">Low</option>
             <option value="Medium">Medium</option>
@@ -1151,31 +1258,36 @@ function AddFollowUpWizard({
             <option value="Urgent">Urgent</option>
           </select>
         </div>
+
+        <div>
+          <label className="text-xs font-bold text-slate-700 mb-1.5 block">Assigned Staff</label>
+          <select 
+            value={assignedTo} 
+            onChange={e => setAssignedTo(e.target.value)} 
+            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 outline-none focus:border-blue-600 cursor-pointer"
+          >
+            {staffOptions.map(staff => (
+              <option key={staff} value={staff}>{staff}</option>
+            ))}
+          </select>
+        </div>
       </div>
 
-      {/* 5. Buttons */}
-      <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+      {/* 5. Action Buttons */}
+      <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
         <button 
           type="button" 
           onClick={onClose} 
-          disabled={isSubmitting}
-          className="px-5 py-2.5 border border-slate-200 hover:bg-slate-50 text-slate-600 rounded-xl font-bold text-xs cursor-pointer transition-all disabled:opacity-50"
+          className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors border-none cursor-pointer"
         >
           Cancel
         </button>
         <button 
           type="submit" 
-          disabled={isSubmitting} 
-          className="px-6 py-2.5 bg-blue-600 text-white rounded-xl font-bold text-xs shadow-md shadow-blue-500/20 hover:bg-blue-700 transition-all disabled:opacity-50 border-none cursor-pointer flex items-center gap-2"
+          disabled={isSubmitting}
+          className="px-6 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-all shadow-md shadow-blue-500/20 border-none cursor-pointer disabled:opacity-50"
         >
-          {isSubmitting ? (
-            <>
-              <RefreshCw size={14} className="animate-spin" />
-              <span>SCHEDULING...</span>
-            </>
-          ) : (
-            'Schedule Follow-up'
-          )}
+          {isSubmitting ? 'Scheduling...' : 'Schedule Follow-Up'}
         </button>
       </div>
     </form>
