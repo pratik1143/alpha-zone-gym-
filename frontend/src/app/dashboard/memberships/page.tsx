@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Snowflake, RefreshCw, Send, ShieldAlert, Plus, CheckCircle, Star, Zap, Crown, Shield } from 'lucide-react';
+import { Snowflake, RefreshCw, Send, ShieldAlert, Plus, CheckCircle, Star, Zap, Crown, Shield, Search } from 'lucide-react';
 import { useGymStore } from '@/store';
 import { formatDate, daysUntilExpiry } from '@/lib/utils';
 import toast from 'react-hot-toast';
@@ -13,7 +13,7 @@ const IconMap: Record<string, any> = {
   Crown
 };
 
-// Fallback plans if database hasn't loaded or is empty
+// Fallback plans adhering strictly to Alpha Zone OS (#0B5CBE) theme
 const defaultPlansData = [
   {
     id: 'p_mon',
@@ -22,9 +22,9 @@ const defaultPlansData = [
     duration: '30 Days',
     durationDays: 30,
     icon: 'Shield',
-    accent: '#3b82f6',
-    accentBg: 'rgba(59,130,246,0.08)',
-    border: '2px solid rgba(59,130,246,0.2)',
+    accent: '#0B5CBE',
+    accentBg: '#ffffff',
+    border: '1px solid rgba(226, 232, 240, 0.9)',
     badge: null,
     features: ['Biometric Access Roster', 'Daily facility check-ins', 'Locker Room access'],
   },
@@ -35,9 +35,9 @@ const defaultPlansData = [
     duration: '90 Days',
     durationDays: 90,
     icon: 'Zap',
-    accent: '#8b5cf6',
-    accentBg: 'rgba(139,92,246,0.08)',
-    border: '2px solid rgba(139,92,246,0.2)',
+    accent: '#0B5CBE',
+    accentBg: '#ffffff',
+    border: '1px solid rgba(226, 232, 240, 0.9)',
     badge: 'Popular',
     features: ['All Monthly benefits', '2 PT consultation sessions', 'Steam Bath Access'],
   },
@@ -49,8 +49,8 @@ const defaultPlansData = [
     durationDays: 180,
     icon: 'Star',
     accent: '#10b981',
-    accentBg: 'rgba(16,185,129,0.08)',
-    border: '2px solid rgba(16,185,129,0.2)',
+    accentBg: '#ffffff',
+    border: '1px solid rgba(226, 232, 240, 0.9)',
     badge: 'Best Value',
     features: ['All Quarterly benefits', 'Diet & Nutrition builder', 'Body fat measurements'],
   },
@@ -61,10 +61,10 @@ const defaultPlansData = [
     duration: '365 Days',
     durationDays: 365,
     icon: 'Crown',
-    accent: '#f59e0b',
-    accentBg: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 50%, #fef9ec 100%)',
-    border: '2px solid rgba(245,158,11,0.35)',
-    badge: '🏆 Elite',
+    accent: '#0B5CBE',
+    accentBg: 'linear-gradient(135deg, #EFF6FF 0%, #FFFFFF 100%)',
+    border: '1px solid rgba(191, 217, 245, 0.9)',
+    badge: 'Elite',
     features: ['All Semi-Annual benefits', 'Dedicated coach + personal locker', 'Guest passes (5/month)'],
   },
 ];
@@ -78,6 +78,7 @@ export default function MembershipsPage() {
   const [expiringMembers, setExpiringMembers] = useState<any[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [editingPlan, setEditingPlan] = useState<any | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Form states
   const [planName, setPlanName] = useState('');
@@ -85,7 +86,7 @@ export default function MembershipsPage() {
   const [planDuration, setPlanDuration] = useState('30 Days');
   const [planDurationDays, setPlanDurationDays] = useState(30);
   const [planBadge, setPlanBadge] = useState('');
-  const [planAccent, setPlanAccent] = useState('#3b82f6');
+  const [planAccent, setPlanAccent] = useState('#0B5CBE');
   const [planIcon, setPlanIcon] = useState('Shield');
   const [planFeatures, setPlanFeatures] = useState<string[]>(['']);
 
@@ -99,6 +100,17 @@ export default function MembershipsPage() {
   }, [members]);
 
   const activePlans = plans && plans.length > 0 ? plans : defaultPlansData;
+
+  const filteredPlans = activePlans.filter(p => {
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase();
+    return (
+      p.name?.toLowerCase().includes(q) ||
+      p.duration?.toLowerCase().includes(q) ||
+      p.price?.toString().includes(q) ||
+      (p.badge && p.badge.toLowerCase().includes(q))
+    );
+  });
 
   const handleRenew = async (member: any) => {
     const matchedPlan = activePlans.find(p => p.name === member.plan || p.id === member.plan);
@@ -125,7 +137,7 @@ export default function MembershipsPage() {
     setPlanDuration('30 Days');
     setPlanDurationDays(30);
     setPlanBadge('');
-    setPlanAccent('#3b82f6');
+    setPlanAccent('#0B5CBE');
     setPlanIcon('Shield');
     setPlanFeatures(['']);
     setShowModal(true);
@@ -138,7 +150,7 @@ export default function MembershipsPage() {
     setPlanDuration(plan.duration || '');
     setPlanDurationDays(plan.durationDays || 30);
     setPlanBadge(plan.badge || '');
-    setPlanAccent(plan.accent || '#3b82f6');
+    setPlanAccent(plan.accent || '#0B5CBE');
     setPlanIcon(plan.icon || 'Shield');
     setPlanFeatures(plan.features || ['']);
     setShowModal(true);
@@ -160,10 +172,12 @@ export default function MembershipsPage() {
       return;
     }
 
-    const accentBg = planIcon === 'Crown' 
-      ? `linear-gradient(135deg, ${planAccent}15 0%, ${planAccent}30 100%)`
-      : `${planAccent}0d`; 
-    const border = `2px solid ${planAccent}33`;
+    const accentBg = (planIcon === 'Crown' || (planBadge && planBadge.toLowerCase().includes('elite')))
+      ? 'linear-gradient(135deg, #EFF6FF 0%, #FFFFFF 100%)'
+      : '#ffffff'; 
+    const border = (planIcon === 'Crown' || (planBadge && planBadge.toLowerCase().includes('elite')))
+      ? '1px solid rgba(191, 217, 245, 0.9)'
+      : '1px solid rgba(226, 232, 240, 0.9)';
 
     const planPayload = {
       name: planName,
@@ -172,7 +186,7 @@ export default function MembershipsPage() {
       durationDays: Number(planDurationDays),
       features: planFeatures.filter(f => f.trim() !== ''),
       badge: planBadge || null,
-      accent: planAccent,
+      accent: planAccent || '#0B5CBE',
       accentBg,
       border,
       icon: planIcon
@@ -210,189 +224,196 @@ export default function MembershipsPage() {
   };
 
   return (
-    <div className="space-y-6 pb-12">
+    <div className="space-y-5 pb-10 max-w-7xl mx-auto px-1 sm:px-2">
 
-      {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-5">
+      {/* ─── PAGE HEADER & ACTIONS ─── */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200/80 pb-4">
         <div>
-          <h1 className="text-3xl font-black text-slate-900 tracking-tight font-display">Membership Plans</h1>
-          <p className="text-xs text-slate-500 mt-0.5">Manage subscription packages, contract renewals, and freezes.</p>
+          <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight font-display">
+            Membership Plans
+          </h1>
+          <p className="text-xs text-slate-500 mt-0.5 font-medium">
+            Manage subscription packages, contract renewals, and freezes.
+          </p>
         </div>
         <button
           onClick={openCreateModal}
-          className="btn-cyber-cyan text-xs py-2 px-5 cursor-pointer flex items-center gap-1.5"
+          className="h-11 px-5 bg-[#0B5CBE] hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-md shadow-blue-500/20 transition-all cursor-pointer flex items-center justify-center gap-2 border-none shrink-0"
         >
-          <Plus size={14} /> Create Package
+          <Plus size={16} /> Create Package
         </button>
       </div>
 
-      {/* Plan Grid Cards */}
-      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
-        {activePlans.map(plan => {
+      {/* ─── GLOBAL SEARCH BAR ─── */}
+      <div className="relative max-w-[720px] w-full">
+        <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={e => setSearchQuery(e.target.value)}
+          placeholder="Search by plan name, duration, price, or category..."
+          className="w-full h-11 pl-10 pr-4 bg-white border border-slate-200 focus:border-[#0B5CBE] focus:ring-2 focus:ring-blue-500/10 rounded-xl text-xs font-semibold text-slate-800 placeholder:text-slate-400 outline-none transition-all shadow-2xs"
+        />
+      </div>
+
+      {/* ─── COMPACT PLAN GRID (Responsive 4 -> 3 -> 2 -> 1) ─── */}
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4.5 lg:gap-5">
+        {filteredPlans.map(plan => {
           const Icon = IconMap[plan.icon] || Shield;
-          const isAnnual = plan.icon === 'Crown' || plan.id === 'p_ann';
+          const isElite = plan.icon === 'Crown' || plan.id === 'p_ann' || (plan.badge && plan.badge.toLowerCase().includes('elite'));
+          
+          // Badge theme logic: No purple/yellow/orange
+          let badgeBg = 'bg-blue-50 text-[#0B5CBE] border-blue-200/80';
+          if (plan.badge) {
+            const bLower = plan.badge.toLowerCase();
+            if (bLower.includes('elite') || bLower.includes('crown')) {
+              badgeBg = 'bg-[#0B5CBE] text-white border-transparent shadow-xs shadow-blue-500/20';
+            } else if (bLower.includes('best value')) {
+              badgeBg = 'bg-emerald-50 text-emerald-700 border-emerald-200/80';
+            }
+          }
+
           return (
             <div
               key={plan.id}
-              className="relative rounded-[22px] p-6 flex flex-col justify-between overflow-hidden transition-all duration-300 hover:-translate-y-1"
-              style={{
-                background: isAnnual ? plan.accentBg : '#ffffff',
-                border: plan.border || `2px solid ${plan.accent}33`,
-                boxShadow: isAnnual
-                  ? `0 8px 32px ${plan.accent}20, 0 2px 8px ${plan.accent}10`
-                  : `0 4px 20px rgba(0,0,0,0.07), 0 1px 4px rgba(0,0,0,0.04)`,
-              }}
+              className={`relative rounded-2xl p-4.5 sm:p-5 flex flex-col justify-between transition-all duration-200 hover:-translate-y-0.5 min-h-[310px] ${
+                isElite
+                  ? 'bg-gradient-to-br from-blue-50/90 via-white to-blue-50/50 border border-blue-200/90 shadow-sm shadow-blue-500/5 hover:border-blue-300'
+                  : 'bg-white border border-slate-200/90 shadow-xs hover:shadow-md hover:shadow-blue-500/5 hover:border-blue-300'
+              }`}
             >
-              {/* Badge */}
-              {plan.badge && (
-                <div
-                  className="absolute top-4 right-4 text-[9px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full"
-                  style={{
-                    background: isAnnual ? `${plan.accent}33` : `${plan.accent}18`,
-                    color: plan.accent,
-                    border: `1px solid ${plan.accent}35`,
-                  }}
-                >
-                  {plan.badge}
+              {/* Top Row: Icon + Badge */}
+              <div className="flex items-start justify-between gap-2 mb-3">
+                <div className="w-11 h-11 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center text-[#0B5CBE] shrink-0">
+                  <Icon size={20} className="text-[#0B5CBE]" />
                 </div>
+                {plan.badge && (
+                  <span className={`text-[9px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full border ${badgeBg}`}>
+                    {plan.badge}
+                  </span>
+                )}
+              </div>
+
+              {/* Package Meta: Duration & Title */}
+              <div className="text-left mb-3">
+                <div className="text-[10px] font-black uppercase tracking-widest text-[#0B5CBE] mb-0.5">
+                  {plan.duration || `${plan.durationDays} Days`}
+                </div>
+                <h3 className="text-[18px] font-extrabold text-slate-900 leading-tight">
+                  {plan.name}
+                </h3>
+              </div>
+
+              {/* Price Display */}
+              <div className="flex items-baseline gap-1.5 mb-3">
+                <span className="text-[30px] sm:text-[32px] font-black text-slate-900 leading-none tracking-tight">
+                  ₹{plan.price.toLocaleString('en-IN')}
+                </span>
+                <span className="text-[10px] text-slate-400 font-semibold">
+                  GST incl.
+                </span>
+              </div>
+
+              {/* Compact Features List */}
+              {plan.features && plan.features.length > 0 && (
+                <ul className="space-y-1.5 my-2 text-left flex-1">
+                  {plan.features.slice(0, 3).map((feat: string, idx: number) => (
+                    <li key={idx} className="flex items-center gap-2 text-[11px] text-slate-600 font-medium leading-tight">
+                      <CheckCircle size={13} className="text-[#0B5CBE] shrink-0" />
+                      <span className="truncate">{feat}</span>
+                    </li>
+                  ))}
+                </ul>
               )}
 
-              {/* Icon + Duration */}
-              <div className="mb-5 text-left">
-                <div
-                  className="w-11 h-11 rounded-2xl flex items-center justify-center mb-4"
-                  style={{ background: `${plan.accent}18`, border: `1.5px solid ${plan.accent}30` }}
-                >
-                  <Icon size={20} style={{ color: plan.accent }} />
-                </div>
-                <div className="text-[9px] font-black uppercase tracking-[0.18em] mb-1" style={{ color: plan.accent }}>
-                  {plan.duration}
-                </div>
-                <h3 className="text-[17px] font-black text-slate-900 leading-tight">{plan.name}</h3>
-              </div>
-
-              {/* Price */}
-              <div className="mb-5 flex items-end gap-1">
-                <span className="text-4xl font-black text-slate-900">₹{plan.price.toLocaleString('en-IN')}</span>
-                <span className="text-[10px] text-slate-400 font-semibold pb-1.5">GST incl.</span>
-              </div>
-
-              {/* Features */}
-              <ul className="space-y-2.5 mb-6 text-left">
-                {plan.features.map((feat: string, idx: number) => (
-                  <li key={idx} className="flex items-start gap-2.5 text-[11px] text-slate-600 font-medium">
-                    <CheckCircle size={13} className="mt-0.5 flex-shrink-0" style={{ color: plan.accent }} />
-                    <span>{feat}</span>
-                  </li>
-                ))}
-              </ul>
-
-              {/* CTA */}
+              {/* CTA Action Button */}
               <button
                 onClick={() => openEditModal(plan)}
-                className="w-full py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer border-none"
-                style={{
-                  background: isAnnual
-                    ? `linear-gradient(135deg, ${plan.accent} 0%, #d97706 100%)`
-                    : `${plan.accent}15`,
-                  color: isAnnual ? '#ffffff' : plan.accent,
-                  border: isAnnual ? 'none' : `1.5px solid ${plan.accent}30`,
-                  boxShadow: isAnnual ? `0 4px 14px ${plan.accent}40` : 'none',
-                }}
-                onMouseEnter={e => {
-                  if (!isAnnual) {
-                    (e.currentTarget as HTMLButtonElement).style.background = `${plan.accent}25`;
-                  }
-                }}
-                onMouseLeave={e => {
-                  if (!isAnnual) {
-                    (e.currentTarget as HTMLButtonElement).style.background = `${plan.accent}15`;
-                  }
-                }}
+                className="w-full h-11 mt-3 bg-[#0B5CBE] hover:bg-blue-700 active:bg-blue-800 text-white font-bold text-xs rounded-xl shadow-xs transition-all cursor-pointer flex items-center justify-center gap-1.5 border-none"
               >
-                {isAnnual ? '👑 Configure Elite Plan' : 'Configure Plan'}
+                {isElite ? 'Configure Elite Plan' : 'Configure Plan'}
               </button>
             </div>
           );
         })}
       </div>
 
-      {/* Expiry Alerts Table */}
-      <div
-        className="rounded-[20px] overflow-hidden"
-        style={{
-          background: '#ffffff',
-          border: '1px solid rgba(15,23,42,0.07)',
-          boxShadow: '0 2px 12px rgba(15,23,42,0.06)',
-        }}
-      >
-        {/* Table Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+      {filteredPlans.length === 0 && (
+        <div className="text-center py-12 bg-white rounded-2xl border border-slate-200">
+          <p className="text-sm font-bold text-slate-700">No membership plans match your search.</p>
+          <p className="text-xs text-slate-400 mt-1">Try clearing the search bar filter.</p>
+        </div>
+      )}
+
+      {/* ─── MEMBERSHIP EXPIRY ALERTS TABLE ─── */}
+      <div className="rounded-2xl overflow-hidden bg-white border border-slate-200/90 shadow-xs mt-6">
+        <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-100 bg-slate-50/50">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-red-50 border border-red-100 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-lg bg-red-50 border border-red-100 flex items-center justify-center">
               <ShieldAlert size={15} className="text-red-500" />
             </div>
             <div>
-              <h3 className="font-black text-sm text-slate-900">Membership Expiry Alerts</h3>
-              <p className="text-[10px] text-slate-400 font-medium">Members expiring within 15 days</p>
+              <h3 className="font-extrabold text-xs text-slate-900 uppercase tracking-wide">
+                Membership Expiry Alerts
+              </h3>
+              <p className="text-[10px] text-slate-400 font-medium">
+                Members expiring within 15 days
+              </p>
             </div>
           </div>
-          <span className="text-[9px] font-black uppercase tracking-wider px-3 py-1.5 rounded-full bg-red-50 text-red-600 border border-red-100">
+          <span className="text-[9px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full bg-red-50 text-red-600 border border-red-100">
             {expiringMembers.length} At Risk
           </span>
         </div>
 
         <div className="overflow-x-auto">
           {expiringMembers.length > 0 ? (
-            <table className="cyber-table">
+            <table className="w-full text-left border-collapse">
               <thead>
-                <tr>
-                  <th>Member Name</th>
-                  <th>Contract Plan</th>
-                  <th>Expiry Date</th>
-                  <th>Status</th>
-                  <th>Actions</th>
+                <tr className="border-b border-slate-100 text-[10px] font-extrabold text-slate-400 uppercase tracking-wider bg-slate-50/30">
+                  <th className="py-3 px-5">Member Name</th>
+                  <th className="py-3 px-5">Contract Plan</th>
+                  <th className="py-3 px-5">Expiry Date</th>
+                  <th className="py-3 px-5">Status</th>
+                  <th className="py-3 px-5 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="divide-y divide-slate-100 text-xs font-semibold text-slate-700">
                 {expiringMembers.map(m => {
                   const days = daysUntilExpiry(m.expiryDate);
                   return (
-                    <tr key={m.id}>
-                      <td className="font-bold text-slate-900">{m.name}</td>
-                      <td className="text-slate-500 text-xs">{m.plan}</td>
-                      <td className="text-slate-400 text-xs font-mono">{formatDate(m.expiryDate)}</td>
-                      <td>
+                    <tr key={m.id} className="hover:bg-slate-50/60 transition-colors">
+                      <td className="py-3 px-5 font-bold text-slate-900">{m.name}</td>
+                      <td className="py-3 px-5 text-slate-500">{m.plan}</td>
+                      <td className="py-3 px-5 text-slate-400 font-mono text-[11px]">{formatDate(m.expiryDate)}</td>
+                      <td className="py-3 px-5">
                         <span
-                          className="text-[9px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full"
-                          style={days > 0
-                            ? { background: 'rgba(245,158,11,0.1)', color: '#d97706', border: '1px solid rgba(245,158,11,0.2)' }
-                            : { background: 'rgba(239,68,68,0.1)', color: '#dc2626', border: '1px solid rgba(239,68,68,0.2)' }
-                          }
+                          className={`text-[9px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full border ${
+                            days > 0
+                              ? 'bg-amber-50 text-amber-700 border-amber-200/80'
+                              : 'bg-red-50 text-red-700 border-red-200/80'
+                          }`}
                         >
                           {days > 0 ? `${days}d left` : `${Math.abs(days)}d expired`}
                         </span>
                       </td>
-                      <td>
-                        <div className="flex items-center gap-2">
+                      <td className="py-3 px-5 text-right">
+                        <div className="flex items-center justify-end gap-1.5">
                           <button
                             onClick={() => handleRenew(m)}
-                            className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-[10px] font-black cursor-pointer border-none transition-all"
-                            style={{ background: 'rgba(16,185,129,0.1)', color: '#059669', border: '1px solid rgba(16,185,129,0.2)' }}
+                            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-bold cursor-pointer border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-all"
                           >
                             <RefreshCw size={10} /> Quick Renew
                           </button>
                           <button
                             onClick={() => handleToggleFreeze(m)}
-                            className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-[10px] font-black cursor-pointer border-none transition-all"
-                            style={{ background: 'rgba(100,116,139,0.08)', color: '#64748b', border: '1px solid rgba(100,116,139,0.15)' }}
+                            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-bold cursor-pointer border border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100 transition-all"
                           >
                             <Snowflake size={10} /> {m.status === 'frozen' ? 'Unfreeze' : 'Freeze'}
                           </button>
                           <button
                             onClick={() => toast.success(`WhatsApp alert sent to ${m.name}`)}
-                            className="p-1.5 rounded-lg text-[10px] font-black cursor-pointer border-none transition-all"
-                            style={{ background: 'rgba(34,197,94,0.1)', color: '#16a34a', border: '1px solid rgba(34,197,94,0.2)' }}
+                            className="p-1.5 rounded-lg text-[10px] font-bold cursor-pointer border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-all"
                             title="Send WhatsApp"
                           >
                             <Send size={11} />
@@ -405,69 +426,69 @@ export default function MembershipsPage() {
               </tbody>
             </table>
           ) : (
-            <div className="text-center py-12">
-              <div className="w-12 h-12 rounded-2xl bg-emerald-50 border border-emerald-100 flex items-center justify-center mx-auto mb-3">
-                <CheckCircle size={22} className="text-emerald-500" />
+            <div className="text-center py-8">
+              <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center justify-center mx-auto mb-2 text-emerald-600">
+                <CheckCircle size={20} />
               </div>
-              <p className="text-sm font-bold text-slate-700">All memberships are healthy!</p>
-              <p className="text-xs text-slate-400 mt-1">No members expiring in the next 15 days.</p>
+              <p className="text-xs font-bold text-slate-800">All memberships are active and healthy!</p>
+              <p className="text-[11px] text-slate-400 mt-0.5">No members expiring within the next 15 days.</p>
             </div>
           )}
         </div>
       </div>
 
-      {/* Editor/Creation Modal */}
+      {/* ─── CREATE / EDIT PLAN MODAL ─── */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setShowModal(false)} />
-          <div className="relative w-full max-w-lg bg-white border border-slate-100 rounded-3xl shadow-2xl z-10 overflow-hidden flex flex-col max-h-[90vh]">
-            {/* Header */}
-            <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+          <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-xs" onClick={() => setShowModal(false)} />
+          <div className="relative w-full max-w-lg bg-white border border-slate-200 rounded-2xl shadow-2xl z-10 overflow-hidden flex flex-col max-h-[90vh]">
+            {/* Modal Header */}
+            <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-gradient-to-r from-blue-600 to-indigo-600 text-white">
               <div className="text-left">
-                <h3 className="font-black text-sm text-slate-900 uppercase tracking-tight">
-                  {editingPlan ? 'Edit Membership Plan' : 'Create New Package'}
+                <h3 className="font-extrabold text-sm uppercase tracking-wide flex items-center gap-2">
+                  <Shield size={18} /> {editingPlan ? 'Edit Membership Plan' : 'Create New Package'}
                 </h3>
-                <p className="text-[10px] text-slate-400 mt-0.5 font-bold uppercase tracking-wider">
+                <p className="text-[10px] text-blue-100 mt-0.5 font-medium">
                   Configure subscription details, pricing, and features
                 </p>
               </div>
               <button 
                 onClick={() => setShowModal(false)} 
-                className="text-slate-400 hover:text-slate-600 font-bold border-none bg-transparent cursor-pointer text-xs"
+                className="text-white/80 hover:text-white font-bold border-none bg-transparent cursor-pointer text-sm"
               >
                 ✕
               </button>
             </div>
 
-            {/* Form */}
+            {/* Modal Form */}
             <form onSubmit={handleSavePlan} className="p-6 space-y-4 overflow-y-auto flex-1 text-left">
               <div className="grid grid-cols-2 gap-4">
                 <div className="col-span-2">
-                  <label className="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Plan Name *</label>
+                  <label className="block text-[10px] font-black text-slate-600 uppercase tracking-wider mb-1">Plan Name *</label>
                   <input
                     type="text"
                     required
                     value={planName}
                     onChange={e => setPlanName(e.target.value)}
                     placeholder="e.g. Monthly Standard"
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs text-slate-800 focus:outline-none focus:border-brand-cyan transition-all"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs text-slate-800 font-bold focus:outline-none focus:border-[#0B5CBE] transition-all"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Price (INR) *</label>
+                  <label className="block text-[10px] font-black text-slate-600 uppercase tracking-wider mb-1">Price (INR) *</label>
                   <input
                     type="number"
                     required
                     value={planPrice}
                     onChange={e => setPlanPrice(Number(e.target.value))}
                     placeholder="2500"
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs text-slate-800 focus:outline-none focus:border-brand-cyan transition-all"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs text-slate-800 font-bold focus:outline-none focus:border-[#0B5CBE] transition-all"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Duration (Days) *</label>
+                  <label className="block text-[10px] font-black text-slate-600 uppercase tracking-wider mb-1">Duration (Days) *</label>
                   <input
                     type="number"
                     required
@@ -478,42 +499,40 @@ export default function MembershipsPage() {
                       setPlanDuration(`${d} Days`);
                     }}
                     placeholder="30"
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs text-slate-800 focus:outline-none focus:border-brand-cyan transition-all"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs text-slate-800 font-bold focus:outline-none focus:border-[#0B5CBE] transition-all"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Badge (Optional)</label>
+                  <label className="block text-[10px] font-black text-slate-600 uppercase tracking-wider mb-1">Badge (Optional)</label>
                   <input
                     type="text"
                     value={planBadge}
                     onChange={e => setPlanBadge(e.target.value)}
                     placeholder="e.g. Popular or Elite"
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs text-slate-800 focus:outline-none focus:border-brand-cyan transition-all"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs text-slate-800 font-bold focus:outline-none focus:border-[#0B5CBE] transition-all"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Accent Color & Theme</label>
+                  <label className="block text-[10px] font-black text-slate-600 uppercase tracking-wider mb-1">Theme Accent</label>
                   <select
                     value={planAccent}
                     onChange={e => setPlanAccent(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs text-slate-800 focus:outline-none focus:border-brand-cyan transition-all"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs text-slate-800 font-bold focus:outline-none focus:border-[#0B5CBE] transition-all cursor-pointer"
                   >
-                    <option value="#3b82f6">🔵 Blue (Standard)</option>
-                    <option value="#8b5cf6">🟣 Violet (Prime)</option>
-                    <option value="#10b981">🟢 Emerald (Pro)</option>
-                    <option value="#f59e0b">🟡 Gold (Premium/Elite)</option>
-                    <option value="#ef4444">🔴 Red (Special)</option>
+                    <option value="#0B5CBE">🔵 Primary Blue</option>
+                    <option value="#10b981">🟢 Emerald (Best Value)</option>
+                    <option value="#4f46e5">🟣 Indigo</option>
                   </select>
                 </div>
 
                 <div>
-                  <label className="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Plan Icon symbol</label>
+                  <label className="block text-[10px] font-black text-slate-600 uppercase tracking-wider mb-1">Icon Symbol</label>
                   <select
                     value={planIcon}
                     onChange={e => setPlanIcon(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs text-slate-800 focus:outline-none focus:border-brand-cyan transition-all"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs text-slate-800 font-bold focus:outline-none focus:border-[#0B5CBE] transition-all cursor-pointer"
                   >
                     <option value="Shield">🛡️ Shield</option>
                     <option value="Zap">⚡ Zap</option>
@@ -525,12 +544,12 @@ export default function MembershipsPage() {
 
               {/* Feature bullet rows */}
               <div>
-                <div className="flex justify-between items-center mb-1">
-                  <label className="block text-[9px] font-black text-slate-400 uppercase tracking-widest">Plan Highlights & Features</label>
+                <div className="flex justify-between items-center mb-1.5">
+                  <label className="block text-[10px] font-black text-slate-600 uppercase tracking-wider">Plan Highlights & Features</label>
                   <button
                     type="button"
                     onClick={addFeatureRow}
-                    className="text-[9px] font-black uppercase text-blue-500 hover:underline border-none bg-transparent cursor-pointer"
+                    className="text-[10px] font-bold uppercase text-[#0B5CBE] hover:underline border-none bg-transparent cursor-pointer"
                   >
                     + Add Feature
                   </button>
@@ -543,7 +562,7 @@ export default function MembershipsPage() {
                         value={feat}
                         onChange={e => handleFeatureChange(idx, e.target.value)}
                         placeholder="e.g. Locker Room access"
-                        className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-xs text-slate-800 focus:outline-none focus:border-brand-cyan transition-all"
+                        className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-xs text-slate-800 font-medium focus:outline-none focus:border-[#0B5CBE] transition-all"
                       />
                       {planFeatures.length > 1 && (
                         <button
@@ -565,7 +584,7 @@ export default function MembershipsPage() {
                   <button
                     type="button"
                     onClick={() => handleDeletePlan(editingPlan.id)}
-                    className="px-4 py-2 border border-red-200 text-red-600 hover:bg-red-55 hover:text-red-700 text-xs font-black uppercase tracking-wider rounded-xl transition-all cursor-pointer bg-white"
+                    className="px-4 py-2.5 border border-red-200 text-red-600 hover:bg-red-50 text-xs font-bold rounded-xl transition-all cursor-pointer bg-white"
                   >
                     Delete Plan
                   </button>
@@ -576,13 +595,13 @@ export default function MembershipsPage() {
                   <button
                     type="button"
                     onClick={() => setShowModal(false)}
-                    className="px-4 py-2 border border-slate-200 text-slate-500 hover:bg-slate-50 text-xs font-black uppercase tracking-wider rounded-xl transition-all cursor-pointer bg-white"
+                    className="px-4 py-2.5 border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-bold rounded-xl transition-all cursor-pointer bg-white"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
-                    className="px-5 py-2 bg-black text-white hover:bg-slate-800 text-xs font-black uppercase tracking-wider rounded-xl transition-all cursor-pointer"
+                    className="px-5 py-2.5 bg-[#0B5CBE] hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition-all cursor-pointer border-none shadow-sm"
                   >
                     {editingPlan ? 'Save Changes' : 'Create Package'}
                   </button>
@@ -596,4 +615,3 @@ export default function MembershipsPage() {
     </div>
   );
 }
-
