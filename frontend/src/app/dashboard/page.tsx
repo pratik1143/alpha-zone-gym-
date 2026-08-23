@@ -14,6 +14,7 @@ import { db as fDb, isFirebaseReady } from '@/lib/firebase';
 import API from '@/services/api';
 import { useFollowups } from '@/hooks/useFollowups';
 import AttendanceCalendarSection from './components/AttendanceCalendarSection';
+import { getISTDateStr } from '@/hooks/useTodaysPayments';
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -223,7 +224,8 @@ export default function DashboardPage() {
   const renewalOpportunities = evaluatedMembers.filter(m => m.ai.renewalChance > 70).slice(0, 5);
 
   const todaysCollection = useMemo(() => {
-    const todayStr = new Date().toISOString().split('T')[0];
+    // IST-correct today string (fixes UTC midnight boundary bug)
+    const todayStr = getISTDateStr();
     const seen = new Set<string>();
 
     const activeList = (realtimePayments && realtimePayments.length > 0) ? realtimePayments : (payments || []);
@@ -232,6 +234,8 @@ export default function DashboardPage() {
     if (Array.isArray(activeList) && activeList.length > 0) {
       activeList.forEach((p: any) => {
         if (!p || p.isSample || p.isMock) return;
+        // Exclude soft-deleted payments
+        if (p.deleted === true) return;
 
         // Strictly exclude historical imports from today's collection
         const isHistorical = p.isHistorical === true || p.imported === true || p.isLegacyImport === true || p.transactionType === 'historical_import';
@@ -240,7 +244,7 @@ export default function DashboardPage() {
         const status = String(p.status || p.paymentStatus || 'paid').toLowerCase();
         if (status !== 'paid' && status !== 'partial') return;
 
-        // Payment date must match today (NEVER fall back to createdAt)
+        // Payment date must match today IST (NEVER fall back to createdAt)
         const pDate = String(p.paymentDate || p.date || '').split('T')[0];
         if (pDate !== todayStr && !p.isRealTimeToday) return;
 

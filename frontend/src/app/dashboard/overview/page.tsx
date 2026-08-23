@@ -20,6 +20,7 @@ import FinancialAnalytics from "./components/FinancialAnalytics";
 import PresentMembersModal from "./components/PresentMembersModal";
 import { useFollowups } from "@/hooks/useFollowups";
 import { SYSTEM_START_DATE, SYSTEM_CONFIG } from "@/config/system";
+import { useTodaysPayments } from "@/hooks/useTodaysPayments";
 
 const fadeUp = (delay = 0) => ({
   initial: { opacity: 0, y: 18 },
@@ -34,8 +35,12 @@ export default function OverviewCommandCenter() {
   const {
     members, fetchMembers,
     attendance,
-    payments, fetchPayments,
   } = useGymStore();
+
+  // Live payment data — single source of truth
+  const { todaysTotal: todaysRealCollection, allPayments } = useTodaysPayments();
+  // alias for range/PT analytics that use the full payment list
+  const payments = allPayments;
 
   // Helper to format date in YYYY-MM-DD in Asia/Kolkata timezone
   const getLocalDateStr = (d: Date = new Date()) => {
@@ -186,31 +191,7 @@ export default function OverviewCommandCenter() {
     };
   }, [fromDate, toDate, todayStr]);
 
-  // 1. TODAY'S COLLECTION (Floating KPI Strip - strictly for today)
-  const todaysRealCollection = useMemo(() => {
-    const seen = new Set<string>();
-    return payments
-      .filter((p: any) => {
-        if (!p || p.isSample || p.isMock) return false;
-        const isHistorical = p.isHistorical === true || p.imported === true || p.isLegacyImport === true || p.transactionType === 'historical_import';
-        if (isHistorical) return false;
-
-        const status = String(p.status || p.paymentStatus || 'paid').toLowerCase();
-        if (status !== 'paid' && status !== 'partial') return false;
-
-        const pDate = String(p.paymentDate || p.date || '').split('T')[0];
-        if (pDate !== todayStr && !p.isRealTimeToday) return false;
-
-        const idKey = String(p.id || p.paymentId || p.invoiceNumber || p.invoice || p.idempotencyKey || '').trim();
-        if (idKey && seen.has(idKey)) return false;
-        if (idKey) seen.add(idKey);
-        return true;
-      })
-      .reduce((sum: number, p: any) => {
-        const val = Number(p.amountPaid !== undefined ? p.amountPaid : (p.paid !== undefined ? p.paid : (p.amount || 0)));
-        return sum + (isNaN(val) ? 0 : val);
-      }, 0);
-  }, [payments, todayStr]);
+  // TODAY'S COLLECTION is now provided by useTodaysPayments hook above (live Firestore listener)
 
   // 2. PRESENT TODAY (Unique member attendance for today)
   const presentTodayCount = useMemo(() => {
@@ -499,7 +480,7 @@ export default function OverviewCommandCenter() {
       setShowNewMemberModal(false);
       setMemName(''); setMemPhone(''); setMemPaid('6500');
       fetchMembers();
-      fetchPayments();
+      // Payment list refreshes automatically via useTodaysPayments hook listener
     } catch (err: any) {
       toast.error("Failed to add member: " + err.message);
     } finally {

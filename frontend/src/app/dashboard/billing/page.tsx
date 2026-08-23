@@ -1,19 +1,20 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   CreditCard, IndianRupee, Receipt, AlertCircle, Plus, Download, Search, 
   TrendingUp, X, RefreshCw, Printer, Share2, 
-  CheckCircle2, Phone, Calendar, Filter, Check, Wallet, Smartphone, Banknote, Landmark, Clock, Eye
+  CheckCircle2, Smartphone, Banknote, Landmark, Clock, Eye, Trash2
 } from 'lucide-react';
 import { db } from '@/lib/firebase';
-import { collection, onSnapshot, orderBy, query, updateDoc, doc } from 'firebase/firestore';
+import { updateDoc, doc } from 'firebase/firestore';
 import { formatDate, getInitials } from '@/lib/utils';
 import { useGymStore } from '@/store';
 import toast from 'react-hot-toast';
 import InvoiceBuilderModal from './components/InvoiceBuilderModal';
 import OfficialInvoiceReceipt from '../components/OfficialInvoiceReceipt';
+import { useTodaysPayments, PaymentRecord } from '@/hooks/useTodaysPayments';
 
 // ── Payment Methods Map ──────────────────────────────────────
 const payMethodsConfig: Record<string, { icon: any; label: string; color: string; bg: string }> = {
@@ -31,23 +32,48 @@ const fadeUp = (delay = 0) => ({
 
 export default function BillingPage() {
   const { members, fetchPayments: refreshStorePayments } = useGymStore();
-  const [payments, setPayments] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+
+  // ── Central payment hook (single source of truth) ─────────────────────────
+  const {
+    allPayments,
+    todaysTotal: todaysRealCollection,
+    todayMethodTotals: methodTotals,
+    allTimeTotal: totalCollected,
+    pendingCount,
+    todayStr,
+    loading,
+    deletePayment,
+  } = useTodaysPayments();
+
+  // payments list used for table = all non-deleted payments (sorted newest first)
+  const payments = useMemo(
+    () => [...allPayments].sort((a, b) => {
+      const ta = new Date(a.createdAt || a.date || 0).getTime();
+      const tb = new Date(b.createdAt || b.date || 0).getTime();
+      return tb - ta;
+    }),
+    [allPayments]
+  );
+
   const [search, setSearch] = useState('');
   const [localSearch, setLocalSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'paid' | 'pending' | 'failed'>('all');
   const [methodFilter, setMethodFilter] = useState<string>('all');
   const [dateFilter, setDateFilter] = useState<string>('all'); // all, today, 7days, 30days
-  
-  const [selectedReceipt, setSelectedReceipt] = useState<any | null>(null);
+
+  const [selectedReceipt, setSelectedReceipt] = useState<PaymentRecord | null>(null);
   const [showInvoiceModal, setShowInvoiceModal] = useState<string | null>(null);
   const [markingPaid, setMarkingPaid] = useState<string | null>(null);
-  
+
+  // Delete confirmation state
+  const [deleteTarget, setDeleteTarget] = useState<PaymentRecord | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
 
   // Debounced search
-  useEffect(() => {
+  React.useEffect(() => {
     const timer = setTimeout(() => {
       setSearch(localSearch);
       setPage(1);
@@ -55,113 +81,13 @@ export default function BillingPage() {
     return () => clearTimeout(timer);
   }, [localSearch]);
 
-  const todayStr = useMemo(() => {
-    const d = new Date();
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${y}-${m}-${day}`;
-  }, []);
+  // Average payment (all-time)
+  const avgPayment = useMemo(() => {
+    const paid = allPayments.filter(p => (p.status || '').toLowerCase() === 'paid');
+    return paid.length ? totalCollected / paid.length : 0;
+  }, [allPayments, totalCollected]);
 
-  // Real-time Firestore listener with fallback
-  useEffect(() => {
-    setLoading(true);
-
-    const getFallbackPayments = () => {
-      const allInvoices: any[] = [];
-      members.forEach((m: any) => {
-        const history = Array.isArray(m.billingHistory) && m.billingHistory.length > 0
-          ? m.billingHistory
-          : (Array.isArray(m.payments) && m.payments.length > 0 ? m.payments : []);
-
-        history.forEach((inv: any, idx: number) => {
-          allInvoices.push({
-            id: inv.id || `pay_${m.id || m.memberId}_${idx}`,
-            invoice: inv.invoice || inv.invoiceNumber || `AZ-INV-${String(idx + 1).padStart(6, '0')}`,
-            memberId: m.id || m.memberId,
-            memberName: m.name || 'Member',
-            memberPhone: m.phone || '',
-            plan: inv.plan || inv.package || m.plan || 'Monthly Access',
-            amount: Number(inv.amount) || Number(m.totalBilled) || 2500,
-            paid: Number(inv.paid) || Number(inv.amount) || 2500,
-            pendingAmount: 0,
-            status: inv.status || 'paid',
-            method: inv.method || inv.paymentMethod || inv.paymentMode || m.paymentMethod || m.method || 'Cash',
-            date: inv.date || inv.createdAt || m.joinDate || todayStr,
-            isRealTimeToday: inv.isRealTimeToday || false
-          });
-        });
-      });
-      return allInvoices.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    };
-
-    const q = query(collection(db, 'payments'), orderBy('date', 'desc'));
-    const unsub = onSnapshot(q, (snap) => {
-      const data = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any[];
-      const fallbacks = getFallbackPayments();
-      
-      const combinedMap = new Map<string, any>();
-      fallbacks.forEach(item => combinedMap.set(item.invoice || item.id, item));
-      data.forEach(item => combinedMap.set(item.invoice || item.id, item));
-
-      const merged = Array.from(combinedMap.values()).sort((a: any, b: any) => {
-        const timeA = new Date(a.createdAt || a.date || 0).getTime();
-        const timeB = new Date(b.createdAt || b.date || 0).getTime();
-        return timeB - timeA;
-      });
-
-      setPayments(merged.length > 0 ? merged : fallbacks);
-      setLoading(false);
-    }, (err) => {
-      console.warn('Realtime payments error, fallback active:', err);
-      setPayments(getFallbackPayments());
-      setLoading(false);
-    });
-
-    return () => unsub();
-  }, [members, todayStr]);
-
-  // Derived stats
-  const validPayments = useMemo(() => payments.filter(p => p && p.status !== 'VOID' && p.status !== 'void' && !p.isDuplicate), [payments]);
-  const paidPayments = useMemo(() => validPayments.filter(p => (p.status || '').toLowerCase() === 'paid'), [validPayments]);
-  
-  // Today's Collection (Strictly excludes historical/imported payments)
-  const todaysRealCollection = useMemo(() => {
-    return paidPayments
-      .filter(p => {
-        if (!p) return false;
-        const isHistorical = p.isHistorical === true || p.imported === true || p.isLegacyImport === true || p.transactionType === 'historical_import';
-        if (isHistorical) return false;
-        const pDate = String(p.paymentDate || p.date || '').split('T')[0];
-        return pDate === todayStr || p.isRealTimeToday;
-      })
-      .reduce((s, p) => s + (Number(p.paid) || Number(p.amountPaid) || Number(p.amount) || 0), 0);
-  }, [paidPayments, todayStr]);
-
-  const totalCollected = useMemo(() => paidPayments.reduce((s, p) => s + (Number(p.paid) || Number(p.amount) || 0), 0), [paidPayments]);
-  const pendingCount   = useMemo(() => validPayments.filter(p => (p.status || '').toLowerCase() === 'pending' || (p.status || '').toLowerCase() === 'overdue').length, [validPayments]);
-  const avgPayment     = useMemo(() => paidPayments.length ? totalCollected / paidPayments.length : 0, [paidPayments, totalCollected]);
-
-  // Method breakdown totals
-  const methodTotals = useMemo(() => {
-    const counts: Record<string, { total: number; count: number }> = {
-      UPI: { total: 0, count: 0 },
-      Cash: { total: 0, count: 0 },
-      Card: { total: 0, count: 0 },
-      'Net Banking': { total: 0, count: 0 },
-    };
-
-    paidPayments.forEach(p => {
-      const m = String(p.method || p.paymentMethod || 'UPI').trim();
-      const norm = m.includes('Cash') ? 'Cash' : m.includes('Card') ? 'Card' : m.includes('Net') ? 'Net Banking' : 'UPI';
-      counts[norm].total += Number(p.paid || p.amount || 0);
-      counts[norm].count += 1;
-    });
-
-    return counts;
-  }, [paidPayments]);
-
-  const handleMarkPaid = async (p: any) => {
+  const handleMarkPaid = async (p: PaymentRecord) => {
     if (!window.confirm(`Mark ₹${(Number(p.amount)||0).toLocaleString('en-IN')} invoice as PAID for ${p.memberName}?`)) return;
     setMarkingPaid(p.id);
     try {
@@ -172,7 +98,6 @@ export default function BillingPage() {
         pendingAmount: 0,
         isRealTimeToday: true
       });
-      
       if (p.memberId) {
         await updateDoc(doc(db, 'members', p.memberId), {
           paymentStatus: 'paid',
@@ -181,14 +106,28 @@ export default function BillingPage() {
           status: 'active'
         });
       }
-
       toast.success(`Payment marked as PAID for ${p.memberName}! 🎉`);
       refreshStorePayments();
-    } catch (err: any) {
-      toast.error('Failed to update: ' + err.message);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      toast.error('Failed to update: ' + msg);
     } finally {
       setMarkingPaid(null);
     }
+  };
+
+  // Delete handler — called after confirmation
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    const ok = await deletePayment(deleteTarget);
+    if (ok) {
+      toast.success('Payment deleted successfully.');
+      setDeleteTarget(null);
+    } else {
+      toast.error('Unable to delete payment. Please try again.');
+    }
+    setDeleting(false);
   };
 
   const handleShareWhatsApp = (p: any) => {
@@ -374,7 +313,7 @@ export default function BillingPage() {
       {/* ── 3. PAYMENT METHOD BREAKDOWN STRIP ── */}
       <motion.div {...fadeUp(0.1)} className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {Object.entries(payMethodsConfig).map(([key, item]) => {
-          const stats = methodTotals[key] || { total: 0, count: 0 };
+          const stats = methodTotals[key as keyof typeof methodTotals] || { total: 0, count: 0 };
           const IconComp = item.icon;
           const isSelected = methodFilter === key;
 
@@ -628,6 +567,13 @@ export default function BillingPage() {
                             >
                               <Share2 size={13} />
                             </button>
+                            <button
+                              onClick={() => setDeleteTarget(p)}
+                              className="p-1.5 text-rose-500 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 rounded-lg border border-rose-200 cursor-pointer transition-colors"
+                              title="Delete Payment"
+                            >
+                              <Trash2 size={13} />
+                            </button>
                           </div>
                         </td>
                       </tr>
@@ -690,6 +636,13 @@ export default function BillingPage() {
                         >
                           <Share2 size={13} />
                         </button>
+                        <button
+                          onClick={() => setDeleteTarget(p)}
+                          className="p-1.5 text-rose-500 bg-rose-50 rounded-lg border border-rose-200 cursor-pointer"
+                          title="Delete Payment"
+                        >
+                          <Trash2 size={13} />
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -737,6 +690,81 @@ export default function BillingPage() {
         onClose={() => setShowInvoiceModal(null)}
         members={members}
       />
+
+      {/* ── DELETE PAYMENT CONFIRMATION MODAL ── */}
+      <AnimatePresence>
+        {deleteTarget && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm"
+              onClick={() => { if (!deleting) setDeleteTarget(null); }}
+            />
+            <motion.div
+              initial={{ scale: 0.92, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.92, opacity: 0 }}
+              className="relative bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-sm z-10 p-6 space-y-4"
+            >
+              {/* Header */}
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-rose-50 border border-rose-200 text-rose-600 flex items-center justify-center shrink-0">
+                  <Trash2 size={18} />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-slate-900 text-sm">Delete Payment?</h3>
+                  <p className="text-xs text-slate-500 font-medium">This action cannot be undone.</p>
+                </div>
+              </div>
+
+              {/* Payment Details */}
+              <div className="bg-slate-50 rounded-xl border border-slate-200 divide-y divide-slate-100 text-xs">
+                <div className="flex justify-between px-4 py-2.5">
+                  <span className="text-slate-500 font-semibold">Member</span>
+                  <span className="font-extrabold text-slate-900">{deleteTarget.memberName || '—'}</span>
+                </div>
+                <div className="flex justify-between px-4 py-2.5">
+                  <span className="text-slate-500 font-semibold">Amount</span>
+                  <span className="font-extrabold text-slate-900">₹{(Number(deleteTarget.paid) || Number(deleteTarget.amount) || 0).toLocaleString('en-IN')}</span>
+                </div>
+                <div className="flex justify-between px-4 py-2.5">
+                  <span className="text-slate-500 font-semibold">Method</span>
+                  <span className="font-extrabold text-slate-900">{deleteTarget.method || deleteTarget.paymentMethod || 'UPI'}</span>
+                </div>
+                <div className="flex justify-between px-4 py-2.5">
+                  <span className="text-slate-500 font-semibold">Date</span>
+                  <span className="font-extrabold text-slate-900">{formatDate(deleteTarget.date || deleteTarget.paymentDate || deleteTarget.createdAt || '')}</span>
+                </div>
+              </div>
+
+              {/* Warning */}
+              <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 font-semibold leading-relaxed">
+                ⚠️ Deleting this payment will remove it from today's collection and payment totals.
+              </p>
+
+              {/* Buttons */}
+              <div className="flex gap-2 pt-1">
+                <button
+                  onClick={() => setDeleteTarget(null)}
+                  disabled={deleting}
+                  className="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-700 font-bold text-xs hover:bg-slate-50 cursor-pointer disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleConfirmDelete}
+                  disabled={deleting}
+                  className="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-xs cursor-pointer disabled:opacity-70 flex items-center justify-center gap-1.5 border-none"
+                >
+                  {deleting ? (
+                    <><RefreshCw size={13} className="animate-spin" /> Deleting...</>
+                  ) : (
+                    <><Trash2 size={13} /> Delete Payment</>
+                  )}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* ── INVOICE RECEIPT MODAL ── */}
       <AnimatePresence>
