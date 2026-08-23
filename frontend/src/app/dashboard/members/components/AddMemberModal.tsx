@@ -41,6 +41,7 @@ const step1Schema = z.object({
     .refine((val) => !val || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val), {
       message: 'Enter a valid email address',
     }),
+  gender: z.enum(['Male', 'Female', 'Other']).default('Male'),
   membershipPackageId: z.string().min(1, 'Please select a membership package'),
   startDate: z.string().min(1, 'Please select a start date'),
 });
@@ -412,6 +413,7 @@ export default function AddMemberModal({ isOpen, onClose }: AddMemberModalProps)
   const validateStep1 = () => {
     const parseRes = step1Schema.safeParse({
       fullName,
+      gender: gender as any,
       mobile,
       email: email || undefined,
       membershipPackageId: selectedPlan?.id || selectedPlan?.name || '',
@@ -965,26 +967,48 @@ export default function AddMemberModal({ isOpen, onClose }: AddMemberModalProps)
                   {/* ── RIGHT COLUMN: BASIC INFO & MEMBERSHIP PACKAGE ── */}
                   <div className="md:col-span-2 space-y-4">
                     
-                    {/* Full Name */}
-                    <div>
-                      <label className="block text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1">Full Name *</label>
-                      <input 
-                        type="text" 
-                        value={fullName} 
-                        onChange={(e) => {
-                          setFullName(e.target.value);
-                          if (step1Errors.fullName) setStep1Errors(prev => ({ ...prev, fullName: '' }));
-                        }}
-                        placeholder="e.g. Rahul Sharma"
-                        className={`w-full h-11 bg-slate-50 border rounded-xl px-4 text-xs font-bold text-slate-900 focus:outline-none transition-all ${
-                          step1Errors.fullName ? 'border-red-500 bg-red-50/20' : 'border-slate-300 focus:border-blue-600 focus:bg-white'
-                        }`}
-                      />
-                      {step1Errors.fullName && (
-                        <p className="text-[10px] font-bold text-red-500 mt-1 flex items-center gap-1">
-                          <AlertCircle size={11} /> {step1Errors.fullName}
-                        </p>
-                      )}
+                    {/* Full Name & Gender */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                      <div className="sm:col-span-2">
+                        <label className="block text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1">Full Name *</label>
+                        <input 
+                          type="text" 
+                          value={fullName} 
+                          onChange={(e) => {
+                            setFullName(e.target.value);
+                            if (step1Errors.fullName) setStep1Errors(prev => ({ ...prev, fullName: '' }));
+                          }}
+                          placeholder="e.g. Rahul Sharma"
+                          className={`w-full h-11 bg-slate-50 border rounded-xl px-4 text-xs font-bold text-slate-900 focus:outline-none transition-all ${
+                            step1Errors.fullName ? 'border-red-500 bg-red-50/20' : 'border-slate-300 focus:border-blue-600 focus:bg-white'
+                          }`}
+                        />
+                        {step1Errors.fullName && (
+                          <p className="text-[10px] font-bold text-red-500 mt-1 flex items-center gap-1">
+                            <AlertCircle size={11} /> {step1Errors.fullName}
+                          </p>
+                        )}
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1">Gender *</label>
+                        <div className="flex h-11 bg-slate-100/80 border border-slate-300 rounded-xl p-1 gap-1">
+                          {(['Male', 'Female', 'Other'] as const).map((g) => (
+                            <button
+                              key={g}
+                              type="button"
+                              onClick={() => setGender(g)}
+                              className={`flex-1 rounded-lg text-xs font-black transition-all border-none cursor-pointer ${
+                                gender === g
+                                  ? 'bg-blue-600 text-white shadow-xs'
+                                  : 'bg-transparent text-slate-600 hover:bg-slate-200/60'
+                              }`}
+                            >
+                              {g}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
                     </div>
 
                     {/* Mobile Number & Email */}
