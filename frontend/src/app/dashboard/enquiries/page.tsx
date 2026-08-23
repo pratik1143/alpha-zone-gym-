@@ -1,23 +1,21 @@
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Search, Plus, Filter, Phone, MessageSquare, Mail, Calendar, Clock,
-  User, Shield, Sparkles, ArrowRight, CheckCircle2, AlertCircle, Trash2, Edit3,
-  UserCheck, Flame, Sun, Snowflake, LayoutGrid, List, ChevronRight, Zap,
-  RefreshCw, X, Download, Upload, Send, Check, UserPlus, FileText, Activity, TrendingUp,
-  Building, MapPin, Award, Layers, History, CheckCircle, AlertTriangle
+  Search, Plus, Phone, MessageSquare, Mail, Calendar, Clock,
+  User, Shield, Sparkles, AlertCircle, Trash2, Edit, Edit3,
+  UserCheck, LayoutGrid, List,
+  X, Upload, UserPlus, FileText,
+  History, CheckCircle2, MoreHorizontal, Eye, PhoneCall, ChevronRight
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import confetti from 'canvas-confetti';
-import { db } from '@/lib/firebase';
-import { collection, onSnapshot, query, doc, addDoc, updateDoc, deleteDoc } from 'firebase/firestore';
-import API from '@/services/api';
-import { useGymStore } from '@/store';
 import { z } from 'zod';
 import { enquiryService, EnquiryItem, EnquiryHistoryItem } from '@/services/enquiry.service';
 import { getTodayInIndia, isTodayInIndia, isOverdueInIndia, isUpcomingInIndia, formatIndianDate } from '@/lib/dateUtils';
+import { getRandomColor, getInitials } from '@/lib/utils';
 
 type Enquiry = EnquiryItem;
 
@@ -35,8 +33,6 @@ const enquiryFormSchema = z.object({
 });
 
 export default function EnquiryGodLevelHub() {
-  const { addMember, fetchMembers } = useGymStore();
-
   const [enquiries, setEnquiries] = useState<Enquiry[]>([]);
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -45,11 +41,21 @@ export default function EnquiryGodLevelHub() {
   const [selectedEnquiry, setSelectedEnquiry] = useState<Enquiry | null>(null);
   const [enquiryHistoryList, setEnquiryHistoryList] = useState<EnquiryHistoryItem[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
+
+  // Modals & Drawers
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showConvertModal, setShowConvertModal] = useState<Enquiry | null>(null);
   const [showImportModal, setShowImportModal] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [importReport, setImportReport] = useState<any | null>(null);
+
+  // Actions Dropdown & Custom Modals State
+  const [actionsMenu, setActionsMenu] = useState<{ enquiry: Enquiry; rect: DOMRect } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Enquiry | null>(null);
+  const [deletingEnquiry, setDeletingEnquiry] = useState(false);
+  const [editingEnquiry, setEditingEnquiry] = useState<Enquiry | null>(null);
+  const [schedulingEnquiry, setSchedulingEnquiry] = useState<Enquiry | null>(null);
+  const [newScheduleDate, setNewScheduleDate] = useState('');
 
   // Default Today
   const todayStr = useMemo(() => getTodayInIndia(), []);
@@ -59,10 +65,10 @@ export default function EnquiryGodLevelHub() {
 
   // Filters
   const [searchQuery, setSearchQuery] = useState('');
-  const [priorityFilter, setPriorityFilter] = useState<string>('All');
+  const [statusFilter, setStatusFilter] = useState<string>('All');
   const [staffFilter, setStaffFilter] = useState<string>('All');
 
-  // Form State
+  // Form State for New Lead
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [contact, setContact] = useState('');
@@ -79,9 +85,37 @@ export default function EnquiryGodLevelHub() {
   const [inquiryFor, setInquiryFor] = useState('1 month');
   const [remarks, setRemarks] = useState('');
 
+  // Edit Lead Form State
+  const [editName, setEditName] = useState('');
+  const [editPhone, setEditPhone] = useState('');
+  const [editEmail, setEditEmail] = useState('');
+  const [editPlan, setEditPlan] = useState('1 month');
+  const [editRep, setEditRep] = useState('Veer Chand (manager)');
+  const [editFollowupDate, setEditFollowupDate] = useState(todayStr);
+  const [editRemarks, setEditRemarks] = useState('');
+  const [editStatus, setEditStatus] = useState('Pending');
+
   // Convert to Member Form State
   const [convertPlan, setConvertPlan] = useState('Monthly Standard');
   const [convertPrice, setConvertPrice] = useState('2500');
+
+  // Close floating actions menu on outside click or scroll
+  useEffect(() => {
+    if (!actionsMenu) return;
+    const handleClose = (e: MouseEvent | Event) => {
+      const target = e.target as HTMLElement;
+      if (target?.closest('.enquiry-actions-portal-menu')) return;
+      setActionsMenu(null);
+    };
+    window.addEventListener('scroll', handleClose, true);
+    window.addEventListener('resize', handleClose);
+    window.addEventListener('mousedown', handleClose);
+    return () => {
+      window.removeEventListener('scroll', handleClose, true);
+      window.removeEventListener('resize', handleClose);
+      window.removeEventListener('mousedown', handleClose);
+    };
+  }, [actionsMenu]);
 
   // ── REALTIME FIRESTORE LISTENER ──────────────
   useEffect(() => {
@@ -156,16 +190,25 @@ export default function EnquiryGodLevelHub() {
       if (activeFilterTab === 'overdue' && (item.status !== 'Pending' || !isOverdueInIndia(fDate))) return false;
       if (activeFilterTab === 'upcoming' && (item.status !== 'Pending' || !isUpcomingInIndia(fDate))) return false;
 
+      // Dropdown Status Filter
+      if (statusFilter !== 'All') {
+        if (statusFilter === 'Pending' && item.status !== 'Pending') return false;
+        if (statusFilter === 'Closed' && item.status !== 'Closed') return false;
+        if (statusFilter === 'Converted' && item.status !== 'Converted') return false;
+      }
+
       // Search & Dropdown Filters
-      const nameMatch = (item.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-                        (item.phone || '').includes(searchQuery) ||
-                        (item.interestedPlan || '').toLowerCase().includes(searchQuery.toLowerCase());
-      const priorityMatch = priorityFilter === 'All' || item.priority === priorityFilter;
+      const q = searchQuery.toLowerCase();
+      const nameMatch = (item.name || '').toLowerCase().includes(q) ||
+                        (item.phone || '').includes(q) ||
+                        (item.email || '').toLowerCase().includes(q) ||
+                        (item.interestedPlan || '').toLowerCase().includes(q) ||
+                        String(item.id || '').toLowerCase().includes(q);
       const staffMatch = staffFilter === 'All' || item.assignedTo === staffFilter;
 
-      return nameMatch && priorityMatch && staffMatch;
+      return nameMatch && staffMatch;
     });
-  }, [enquiries, activeFilterTab, searchQuery, priorityFilter, staffFilter]);
+  }, [enquiries, activeFilterTab, searchQuery, statusFilter, staffFilter]);
 
   // Reset Create Form
   const resetForm = () => {
@@ -240,6 +283,74 @@ export default function EnquiryGodLevelHub() {
     }
   };
 
+  // Open Edit Modal
+  const handleOpenEdit = (enq: Enquiry) => {
+    setEditingEnquiry(enq);
+    setEditName(enq.name || '');
+    setEditPhone(enq.phone || '');
+    setEditEmail(enq.email || '');
+    setEditPlan(enq.duration || enq.interestedPlan || '1 month');
+    setEditRep(enq.assignedTo || 'Veer Chand (manager)');
+    setEditFollowupDate((enq.nextFollowUpDate || enq.nextFollowUp || todayStr).split('T')[0]);
+    setEditRemarks(enq.remarks || '');
+    setEditStatus(enq.status || 'Pending');
+  };
+
+  // Submit Edit Lead
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingEnquiry) return;
+    try {
+      await enquiryService.update(editingEnquiry.id, {
+        name: editName,
+        phone: editPhone,
+        email: editEmail,
+        duration: editPlan,
+        interestedPlan: editPlan,
+        assignedTo: editRep,
+        nextFollowUpDate: editFollowupDate,
+        nextFollowUp: editFollowupDate,
+        remarks: editRemarks,
+        status: editStatus as any,
+        updatedAt: new Date().toISOString()
+      });
+      toast.success('Enquiry updated successfully!');
+      setEditingEnquiry(null);
+      if (selectedEnquiry?.id === editingEnquiry.id) {
+        setSelectedEnquiry(prev => prev ? ({ ...prev, name: editName, phone: editPhone, email: editEmail, duration: editPlan, assignedTo: editRep, nextFollowUpDate: editFollowupDate, status: editStatus as any }) : null);
+      }
+    } catch (err: any) {
+      toast.error('Failed to update enquiry: ' + err.message);
+    }
+  };
+
+  // Open Schedule Follow-up Modal
+  const handleOpenScheduleFollowup = (enq: Enquiry) => {
+    setSchedulingEnquiry(enq);
+    setNewScheduleDate((enq.nextFollowUpDate || enq.nextFollowUp || todayStr).split('T')[0]);
+  };
+
+  // Submit Schedule Follow-up
+  const handleScheduleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!schedulingEnquiry || !newScheduleDate) return;
+    try {
+      await enquiryService.update(schedulingEnquiry.id, {
+        nextFollowUpDate: newScheduleDate,
+        nextFollowUp: newScheduleDate,
+        status: 'Pending',
+        updatedAt: new Date().toISOString()
+      });
+      toast.success('Follow-up scheduled for ' + formatIndianDate(newScheduleDate));
+      setSchedulingEnquiry(null);
+      if (selectedEnquiry?.id === schedulingEnquiry.id) {
+        setSelectedEnquiry(prev => prev ? ({ ...prev, nextFollowUpDate: newScheduleDate, status: 'Pending' }) : null);
+      }
+    } catch (err: any) {
+      toast.error('Failed to schedule follow-up: ' + err.message);
+    }
+  };
+
   // Update Status
   const handleUpdateStatus = async (id: string, newStatus: string) => {
     try {
@@ -253,15 +364,19 @@ export default function EnquiryGodLevelHub() {
     }
   };
 
-  // Delete Lead
-  const handleDeleteEnquiry = async (id: string) => {
-    if (!window.confirm('Are you sure you want to delete this enquiry lead?')) return;
+  // Custom Delete Handler (NO window.confirm)
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
+    setDeletingEnquiry(true);
     try {
-      await enquiryService.remove(id);
-      toast.success('Enquiry lead deleted');
-      if (selectedEnquiry?.id === id) setSelectedEnquiry(null);
+      await enquiryService.remove(deleteTarget.id);
+      toast.success('Enquiry lead deleted successfully.');
+      if (selectedEnquiry?.id === deleteTarget.id) setSelectedEnquiry(null);
+      setDeleteTarget(null);
     } catch (err: any) {
-      toast.error('Failed to delete enquiry');
+      toast.error('Failed to delete enquiry: ' + (err.message || 'Unknown error'));
+    } finally {
+      setDeletingEnquiry(false);
     }
   };
 
@@ -307,62 +422,75 @@ export default function EnquiryGodLevelHub() {
     window.open(`https://wa.me/91${cleanPhone}?text=${encodeURIComponent(msg)}`, '_blank');
   };
 
+  // Parse Representative display
+  const formatRepInfo = (assignedTo?: string) => {
+    if (!assignedTo || assignedTo === 'Unassigned') {
+      return { name: 'Unassigned', role: '' };
+    }
+    const match = assignedTo.match(/^(.+?)\s*\((.*?)\)$/);
+    if (match) {
+      return { name: match[1].trim(), role: match[2].trim() };
+    }
+    return { name: assignedTo, role: 'Staff' };
+  };
+
   return (
-    <div className="min-h-screen bg-slate-50/50 p-4 md:p-8 space-y-6 text-left">
+    <div className="space-y-6 pb-12 w-full text-slate-800 text-left font-sans">
       
-      {/* ── 1. HEADER ────────────────────────────────────────── */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs">
+      {/* ── 1. HEADER (Design matching Members & Employees) ── */}
+      <div className="bg-white rounded-3xl p-6 lg:p-8 border border-slate-100 shadow-[0_4px_25px_rgba(0,0,0,0.03)] flex flex-col md:flex-row md:items-center justify-between gap-4 relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-80 h-80 bg-blue-500/5 rounded-full blur-3xl pointer-events-none -translate-y-1/2 translate-x-1/3" />
+        
         <div>
-          <div className="flex items-center gap-2">
-            <div className="w-10 h-10 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
-              <UserPlus size={20} />
-            </div>
-            <div>
-              <h1 className="text-xl font-black text-slate-900 tracking-tight">Enquiries & Leads Hub</h1>
-              <p className="text-xs text-slate-500 font-medium">Real client enquiries, automatic follow-up reminders & closed lead history</p>
-            </div>
+          <div className="flex items-center gap-2.5 mb-2">
+            <span className="px-3 py-1 bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-[10px] font-black uppercase tracking-widest rounded-full shadow-sm">
+              Leads & Inquiries Engine
+            </span>
+            <span className="text-xs text-slate-400 font-mono font-bold">AZ-ENQ-v4.0</span>
           </div>
+          <h1 className="text-2xl lg:text-3xl font-black tracking-tight text-slate-900 font-display">Enquiries & Leads Hub</h1>
+          <p className="text-xs text-slate-500 font-medium mt-1">Real client enquiries, automatic follow-up reminders & closed lead history.</p>
         </div>
 
-        <div className="flex items-center gap-2.5 flex-wrap">
+        <div className="flex items-center gap-2.5 flex-wrap shrink-0">
           <button
             onClick={() => setShowImportModal(true)}
-            className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs rounded-2xl transition-all flex items-center gap-1.5 border border-slate-200 cursor-pointer"
+            className="px-4 py-3 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs rounded-2xl transition-all flex items-center gap-1.5 border border-slate-200 cursor-pointer shadow-2xs"
           >
             <Upload size={15} /> Import Excel (.xlsx)
           </button>
 
           <button
-            onClick={() => setShowCreateModal(true)}
-            className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-2xl shadow-md shadow-blue-500/20 transition-all flex items-center gap-1.5 border-none cursor-pointer"
+            onClick={() => { resetForm(); setShowCreateModal(true); }}
+            className="px-6 py-3.5 bg-gradient-to-r from-[#0b5cbe] to-[#2876d0] hover:from-[#084a99] hover:to-[#0b5cbe] text-white rounded-2xl text-xs font-black uppercase tracking-wider border-none cursor-pointer flex items-center justify-center gap-2 shadow-[0_10px_25px_rgba(11,92,190,0.25)] transition-all hover:scale-[1.02] active:scale-95 shrink-0"
           >
             <Plus size={16} /> New Enquiry
           </button>
         </div>
       </div>
 
-      {/* ── 2. DYNAMIC FILTER TABS ───────────────────────────── */}
-      <div className="bg-white p-2 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-1 overflow-x-auto custom-scrollbar">
+      {/* ── 2. DYNAMIC FILTER TABS ── */}
+      <div className="bg-white p-2 rounded-3xl border border-[#d9e7f7] shadow-[0_4px_20px_rgba(11,92,190,0.02)] flex items-center gap-1.5 overflow-x-auto custom-scrollbar">
         {[
           { id: 'all', label: 'All', count: allCount, color: 'bg-slate-100 text-slate-800' },
           { id: 'pending', label: 'Pending', count: pendingCount, color: 'bg-amber-100 text-amber-800' },
           { id: 'today', label: "Today's Follow-up", count: todayCount, color: 'bg-blue-100 text-blue-800' },
-          { id: 'overdue', label: 'Overdue', count: overdueCount, color: 'bg-red-100 text-red-800' },
+          { id: 'overdue', label: 'Overdue', count: overdueCount, color: 'bg-rose-100 text-rose-800' },
           { id: 'upcoming', label: 'Upcoming', count: upcomingCount, color: 'bg-indigo-100 text-indigo-800' },
           { id: 'closed', label: 'Closed History', count: closedCount, color: 'bg-emerald-100 text-emerald-800' },
         ].map(tab => (
           <button
             key={tab.id}
             onClick={() => setActiveFilterTab(tab.id as any)}
-            className={`px-4 py-2 text-xs font-bold rounded-xl transition-all border-none cursor-pointer flex items-center gap-2 whitespace-nowrap ${
+            className={`px-4 py-2 text-xs font-bold rounded-2xl transition-all border-none cursor-pointer flex items-center gap-2 whitespace-nowrap ${
               activeFilterTab === tab.id
-                ? 'bg-blue-600 text-white shadow-xs'
+                ? 'bg-[#0b5cbe] text-white shadow-xs font-extrabold'
                 : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
             }`}
           >
             <span>{tab.label}</span>
             <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
-              activeFilterTab === tab.id ? 'bg-blue-800 text-white' : tab.color
+              activeFilterTab === tab.id ? 'bg-blue-900 text-white' : tab.color
             }`}>
               {tab.count}
             </span>
@@ -370,26 +498,25 @@ export default function EnquiryGodLevelHub() {
         ))}
       </div>
 
-      {/* ── 3. SEARCH & CONTROLS BAR ─────────────────────────── */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-3 flex-1">
-          {/* Search Box */}
-          <div className="relative min-w-[220px] flex-1">
-            <Search size={14} className="absolute left-3.5 top-3 text-slate-400" />
-            <input
-              type="text"
-              placeholder="Search by name, phone, or plan..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 text-xs font-semibold text-slate-800 rounded-xl border border-slate-200 outline-none focus:border-blue-600 transition-all placeholder-slate-400"
-            />
-          </div>
+      {/* ── 3. FILTER & SEARCH BAR ── */}
+      <div className="bg-white border border-[#d9e7f7] rounded-3xl p-4 flex flex-wrap gap-4 items-center shadow-[0_4px_20px_rgba(11,92,190,0.02)]">
+        <div className="relative flex-1 min-w-[240px]">
+          <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input 
+            type="text"
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            placeholder="Search by name, phone or enquiry ID..."
+            className="w-full text-xs bg-[#fdfdfd] border border-[#d9e7f7] rounded-2xl pl-11 pr-4 py-3 focus:outline-none focus:border-[#0b5cbe] focus:bg-white transition-all text-[#10233f] font-semibold placeholder:text-slate-400"
+          />
+        </div>
 
+        <div className="flex flex-wrap gap-2.5 items-center">
           {/* Representative Filter */}
-          <select
+          <select 
             value={staffFilter}
-            onChange={(e) => setStaffFilter(e.target.value)}
-            className="px-3 py-2 text-xs font-bold text-slate-700 bg-slate-50 rounded-xl border border-slate-200 outline-none cursor-pointer focus:border-blue-600"
+            onChange={e => setStaffFilter(e.target.value)}
+            className="text-xs bg-[#fdfdfd] border border-[#d9e7f7] rounded-2xl px-4 py-3 text-[#10233f] focus:outline-none font-bold cursor-pointer hover:bg-white transition-all"
           >
             <option value="All">All Representatives</option>
             {STAFF_LIST.map(st => (
@@ -397,66 +524,71 @@ export default function EnquiryGodLevelHub() {
             ))}
           </select>
 
-          {/* Priority Filter */}
-          <select
-            value={priorityFilter}
-            onChange={(e) => setPriorityFilter(e.target.value)}
-            className="px-3 py-2 text-xs font-bold text-slate-700 bg-slate-50 rounded-xl border border-slate-200 outline-none cursor-pointer focus:border-blue-600"
+          {/* Status Filter */}
+          <select 
+            value={statusFilter}
+            onChange={e => setStatusFilter(e.target.value)}
+            className="text-xs bg-[#fdfdfd] border border-[#d9e7f7] rounded-2xl px-4 py-3 text-[#10233f] focus:outline-none font-bold cursor-pointer hover:bg-white transition-all"
           >
-            <option value="All">All Priorities</option>
-            <option value="Hot">Hot</option>
-            <option value="Warm">Warm</option>
-            <option value="Cold">Cold</option>
+            <option value="All">All Statuses</option>
+            <option value="Pending">Pending</option>
+            <option value="Closed">Closed</option>
+            <option value="Converted">Converted</option>
           </select>
-        </div>
 
-        {/* View Mode Toggle */}
-        <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200">
-          <button
-            onClick={() => setViewMode('table')}
-            className={`p-1.5 rounded-lg border-none cursor-pointer transition-all ${
-              viewMode === 'table' ? 'bg-white text-blue-600 shadow-xs' : 'text-slate-400 hover:text-slate-700'
-            }`}
-          >
-            <List size={16} />
-          </button>
-          <button
-            onClick={() => setViewMode('kanban')}
-            className={`p-1.5 rounded-lg border-none cursor-pointer transition-all ${
-              viewMode === 'kanban' ? 'bg-white text-blue-600 shadow-xs' : 'text-slate-400 hover:text-slate-700'
-            }`}
-          >
-            <LayoutGrid size={16} />
-          </button>
+          {/* View Mode Toggle */}
+          <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-2xl border border-slate-200">
+            <button
+              onClick={() => setViewMode('table')}
+              className={`p-2 rounded-xl border-none cursor-pointer transition-all ${
+                viewMode === 'table' ? 'bg-white text-[#0b5cbe] shadow-xs' : 'text-slate-400 hover:text-slate-700'
+              }`}
+              title="Table View"
+            >
+              <List size={16} />
+            </button>
+            <button
+              onClick={() => setViewMode('kanban')}
+              className={`p-2 rounded-xl border-none cursor-pointer transition-all ${
+                viewMode === 'kanban' ? 'bg-white text-[#0b5cbe] shadow-xs' : 'text-slate-400 hover:text-slate-700'
+              }`}
+              title="Kanban View"
+            >
+              <LayoutGrid size={16} />
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* ── 4. MAIN CONTENT AREA (TABLE OR KANBAN + INSPECTOR) ─ */}
+      {/* ── 4. MAIN CONTENT AREA (REDESIGNED TABLE OR KANBAN + INSPECTOR) ── */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 items-start">
         
-        {/* Left 2 Cols: Lead List */}
+        {/* Left Col(s): Leads Table/Board */}
         <div className={`${selectedEnquiry ? 'xl:col-span-2' : 'xl:col-span-3'} space-y-4`}>
           {viewMode === 'table' ? (
-            <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden">
+            <div className="bg-white border border-[#d9e7f7] rounded-3xl overflow-hidden shadow-[0_4px_25px_rgba(11,92,190,0.03)]">
               <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs border-collapse">
-                  <thead>
-                    <tr className="bg-slate-50/80 border-b border-slate-100 text-slate-500 font-extrabold uppercase tracking-wider text-[10px]">
-                      <th className="py-3.5 px-4">Name & Contact</th>
-                      <th className="py-3.5 px-4">Plan / Duration</th>
-                      <th className="py-3.5 px-4">Representative</th>
-                      <th className="py-3.5 px-4">Follow-Up Date</th>
-                      <th className="py-3.5 px-4">Status</th>
-                      <th className="py-3.5 px-4 text-right">Actions</th>
+                <table className="w-full text-left text-xs whitespace-nowrap">
+                  <thead className="bg-[#0b5cbe] text-[#fdfdfd] font-extrabold uppercase tracking-wider text-[9.5px] border-b border-[#084a99]">
+                    <tr>
+                      <th className="px-5 py-4 w-[24%] text-[#fdfdfd]">LEAD</th>
+                      <th className="px-5 py-4 w-[18%] text-[#fdfdfd]">CONTACT</th>
+                      <th className="px-5 py-4 w-[14%] text-[#fdfdfd]">PLAN</th>
+                      <th className="px-5 py-4 w-[16%] text-[#fdfdfd]">REPRESENTATIVE</th>
+                      <th className="px-5 py-4 w-[14%] text-[#fdfdfd]">FOLLOW-UP</th>
+                      <th className="px-5 py-4 w-[9%] text-center text-[#fdfdfd]">STATUS</th>
+                      <th className="px-5 py-4 w-[5%] text-right text-[#fdfdfd]">ACTIONS</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 font-medium">
                     {filteredEnquiries.length === 0 ? (
                       <tr>
-                        <td colSpan={6} className="py-12 text-center text-slate-400">
-                          <FileText size={32} className="mx-auto mb-2 opacity-40" />
-                          <p className="font-bold text-sm text-slate-600">No matching enquiries found.</p>
-                          <p className="text-xs text-slate-400 mt-1">Try switching tabs or resetting search filters.</p>
+                        <td colSpan={7} className="text-center py-16 text-slate-400 italic">
+                          <div className="max-w-xs mx-auto text-center space-y-2">
+                            <FileText size={32} className="mx-auto text-slate-300" />
+                            <p className="font-bold text-slate-600 text-sm">No matching enquiries found</p>
+                            <p className="text-xs text-slate-400">Try switching filter tabs or resetting search filters.</p>
+                          </div>
                         </td>
                       </tr>
                     ) : (
@@ -465,80 +597,124 @@ export default function EnquiryGodLevelHub() {
                         const cleanDate = (enq.nextFollowUpDate || enq.nextFollowUp || '').split('T')[0];
                         const isDueToday = cleanDate === todayStr;
                         const isTaskOverdue = isOverdueInIndia(cleanDate);
+                        const repInfo = formatRepInfo(enq.assignedTo);
+                        const avatarBg = getRandomColor(enq.name || 'Enquiry');
+                        const enqCode = String((enq as any).enquiryId || enq.id || '').slice(-4).toUpperCase();
 
                         return (
                           <tr
                             key={enq.id}
                             onClick={() => setSelectedEnquiry(enq)}
-                            className={`hover:bg-blue-50/30 transition-colors cursor-pointer ${
-                              isSelected ? 'bg-blue-50/50 font-semibold' : ''
+                            className={`hover:bg-slate-50/60 transition-colors cursor-pointer ${
+                              isSelected ? 'bg-blue-50/40' : ''
                             }`}
                           >
-                            <td className="py-3.5 px-4">
-                              <div className="flex items-center gap-2.5">
-                                <div className="w-8 h-8 rounded-full bg-slate-100 text-slate-700 font-bold flex items-center justify-center text-xs shrink-0">
-                                  {(enq.name || 'E').charAt(0).toUpperCase()}
+                            {/* 1. LEAD: Merged Avatar + Name + Enquiry ID */}
+                            <td className="px-5 py-3.5">
+                              <div className="flex items-center gap-3">
+                                <div 
+                                  className="w-11 h-11 rounded-full text-white font-extrabold flex items-center justify-center text-xs shrink-0 shadow-2xs border-2 border-white"
+                                  style={{ backgroundColor: avatarBg }}
+                                >
+                                  {getInitials(enq.name || 'Enquiry')}
                                 </div>
-                                <div>
-                                  <span className="font-bold text-slate-900 block">{enq.name}</span>
-                                  <span className="text-[11px] text-slate-500">{enq.phone}</span>
+                                <div className="min-w-0">
+                                  <div className="font-extrabold text-slate-900 text-sm leading-tight truncate">
+                                    {enq.name}
+                                  </div>
+                                  <div className="text-[10px] text-slate-400 font-mono font-bold mt-0.5">
+                                    ENQ-{enqCode}
+                                  </div>
                                 </div>
                               </div>
                             </td>
 
-                            <td className="py-3.5 px-4">
-                              <span className="font-bold text-slate-800 bg-slate-100 px-2 py-0.5 rounded-md">
-                                {enq.duration || enq.interestedPlan || '1 month'}
-                              </span>
-                            </td>
-
-                            <td className="py-3.5 px-4 text-slate-700 font-semibold">
-                              {enq.assignedTo || 'Veer Chand (manager)'}
-                            </td>
-
-                            <td className="py-3.5 px-4">
-                              {cleanDate ? (
-                                <span className={`font-bold flex items-center gap-1 ${
-                                  isTaskOverdue && enq.status === 'Pending' ? 'text-red-600' :
-                                  isDueToday && enq.status === 'Pending' ? 'text-blue-700 font-black' :
-                                  'text-slate-700'
-                                }`}>
-                                  📅 {isDueToday ? 'Today' : formatIndianDate(cleanDate)}
-                                </span>
-                              ) : (
-                                <span className="text-slate-400 italic">Not set</span>
+                            {/* 2. CONTACT: Dedicated Contact Column */}
+                            <td className="px-5 py-3.5">
+                              <div className="font-bold text-slate-800 text-xs flex items-center gap-1">
+                                <span>📞</span> {enq.phone || '—'}
+                              </div>
+                              {enq.email && (
+                                <div className="text-[11px] text-slate-400 font-medium truncate max-w-[180px] mt-0.5">
+                                  {enq.email}
+                                </div>
                               )}
                             </td>
 
-                            <td className="py-3.5 px-4">
-                              <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${
-                                enq.status === 'Converted' ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' :
-                                enq.status === 'Closed' ? 'bg-slate-100 text-slate-700 border border-slate-200' :
-                                'bg-amber-100 text-amber-900 border border-amber-200'
-                              }`}>
-                                {enq.status}
+                            {/* 3. PLAN / DURATION */}
+                            <td className="px-5 py-3.5">
+                              <span className="px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider bg-blue-50 text-[#0b5cbe] border border-blue-200/60 inline-block font-sans">
+                                {enq.duration || enq.interestedPlan || '1 MONTH'}
                               </span>
                             </td>
 
-                            <td className="py-3.5 px-4 text-right">
-                              <div className="flex items-center justify-end gap-1.5" onClick={e => e.stopPropagation()}>
-                                <button
-                                  onClick={() => launchWhatsApp(enq)}
-                                  className="p-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-lg transition-all border border-emerald-200 cursor-pointer"
-                                  title="WhatsApp"
-                                >
-                                  <MessageSquare size={13} />
-                                </button>
-                                
-                                {enq.status === 'Pending' && (
-                                  <button
-                                    onClick={() => setShowConvertModal(enq)}
-                                    className="px-2.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-[11px] font-bold transition-all flex items-center gap-1 border-none cursor-pointer"
-                                  >
-                                    <UserPlus size={12} /> Convert
-                                  </button>
-                                )}
-                              </div>
+                            {/* 4. REPRESENTATIVE */}
+                            <td className="px-5 py-3.5">
+                              {repInfo.name === 'Unassigned' ? (
+                                <span className="text-slate-400 italic font-semibold text-xs">Unassigned</span>
+                              ) : (
+                                <div>
+                                  <div className="font-extrabold text-slate-900 text-xs">{repInfo.name}</div>
+                                  {repInfo.role && (
+                                    <div className="text-[10px] text-slate-400 font-semibold">{repInfo.role}</div>
+                                  )}
+                                </div>
+                              )}
+                            </td>
+
+                            {/* 5. FOLLOW-UP */}
+                            <td className="px-5 py-3.5">
+                              {cleanDate ? (
+                                <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg font-bold text-[10.5px] border ${
+                                  isTaskOverdue && enq.status === 'Pending' 
+                                    ? 'bg-rose-50 text-rose-600 border-rose-200/70 font-extrabold' 
+                                    : isDueToday && enq.status === 'Pending' 
+                                    ? 'bg-amber-50 text-amber-700 border-amber-200/70 font-extrabold' 
+                                    : 'bg-slate-50 text-slate-700 border-slate-200/70'
+                                }`}>
+                                  <span>📅</span>
+                                  <span>{isDueToday && enq.status === 'Pending' ? 'Today' : formatIndianDate(cleanDate)}</span>
+                                </span>
+                              ) : (
+                                <span className="text-slate-400 italic text-xs">Not set</span>
+                              )}
+                            </td>
+
+                            {/* 6. STATUS */}
+                            <td className="px-5 py-3.5 text-center">
+                              <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full font-black text-[9.5px] uppercase tracking-wider border ${
+                                enq.status === 'Converted'
+                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                  : enq.status === 'Closed'
+                                  ? 'bg-slate-100 text-slate-600 border-slate-200'
+                                  : 'bg-amber-50 text-amber-700 border-amber-200'
+                              }`}>
+                                <span className={`w-1.5 h-1.5 rounded-full ${
+                                  enq.status === 'Converted'
+                                    ? 'bg-emerald-500'
+                                    : enq.status === 'Closed'
+                                    ? 'bg-slate-400'
+                                    : 'bg-amber-500'
+                                }`} />
+                                {enq.status || 'PENDING'}
+                              </span>
+                            </td>
+
+                            {/* 7. ACTIONS (Members & Employees Portal Pattern) */}
+                            <td className="px-5 py-3.5 text-right">
+                              <button 
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const rect = e.currentTarget.getBoundingClientRect();
+                                  setActionsMenu({ enquiry: enq, rect });
+                                }}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-[#eaf3ff] hover:text-[#0b5cbe] hover:border-[#b9d6f5] text-slate-700 text-xs font-black uppercase tracking-wider transition-all border border-slate-200 cursor-pointer shadow-2xs active:scale-95"
+                                title="Enquiry Actions"
+                              >
+                                <MoreHorizontal size={14} />
+                                <span>Actions</span>
+                              </button>
                             </td>
                           </tr>
                         );
@@ -549,7 +725,7 @@ export default function EnquiryGodLevelHub() {
               </div>
             </div>
           ) : (
-            /* Kanban Board */
+            /* Kanban Board Mode */
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {(['Pending', 'Closed'] as const).map(colStatus => {
                 const colLeads = filteredEnquiries.filter(e => e.status === colStatus);
@@ -557,7 +733,7 @@ export default function EnquiryGodLevelHub() {
                   <div key={colStatus} className="bg-slate-100/60 rounded-3xl p-4 border border-slate-200 flex flex-col h-full min-h-[500px]">
                     <div className="flex items-center justify-between mb-4">
                       <span className="text-xs font-black text-slate-900 uppercase tracking-wider">{colStatus} Enquiries</span>
-                      <span className="px-2 py-0.5 rounded-full bg-slate-200 text-slate-800 text-[10px] font-black">
+                      <span className="px-2.5 py-0.5 rounded-full bg-slate-200 text-slate-800 text-[10px] font-black">
                         {colLeads.length}
                       </span>
                     </div>
@@ -567,21 +743,21 @@ export default function EnquiryGodLevelHub() {
                         <div
                           key={enq.id}
                           onClick={() => setSelectedEnquiry(enq)}
-                          className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs hover:shadow-md transition-all cursor-pointer space-y-2"
+                          className="bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs hover:shadow-md transition-all cursor-pointer space-y-2"
                         >
                           <div className="flex items-start justify-between">
                             <div>
-                              <h4 className="font-black text-slate-900 text-xs">{enq.name}</h4>
-                              <p className="text-[10px] text-slate-500">📞 {enq.phone}</p>
+                              <h4 className="font-extrabold text-slate-900 text-xs">{enq.name}</h4>
+                              <p className="text-[10px] text-slate-500 font-bold mt-0.5">📞 {enq.phone}</p>
                             </div>
-                            <span className="text-[10px] font-bold bg-slate-100 px-2 py-0.5 rounded">
+                            <span className="text-[9px] font-black bg-blue-50 text-[#0b5cbe] border border-blue-200/60 px-2 py-0.5 rounded uppercase">
                               {enq.duration || '1 month'}
                             </span>
                           </div>
 
-                          <div className="text-[11px] text-slate-600 flex items-center justify-between pt-1 border-t border-slate-100">
-                            <span>Rep: {enq.assignedTo || 'Staff'}</span>
-                            <span className="font-bold text-blue-600">{formatIndianDate(enq.nextFollowUpDate || enq.nextFollowUp || '')}</span>
+                          <div className="text-[11px] text-slate-600 flex items-center justify-between pt-2 border-t border-slate-100">
+                            <span>Rep: <b>{formatRepInfo(enq.assignedTo).name}</b></span>
+                            <span className="font-bold text-[#0b5cbe]">{formatIndianDate(enq.nextFollowUpDate || enq.nextFollowUp || '')}</span>
                           </div>
                         </div>
                       ))}
@@ -593,7 +769,7 @@ export default function EnquiryGodLevelHub() {
           )}
         </div>
 
-        {/* Right 1 Col: Lead Inspector & History Timeline */}
+        {/* Right Col: Lead Inspector & History Timeline */}
         <AnimatePresence>
           {selectedEnquiry && (
             <motion.div
@@ -602,32 +778,35 @@ export default function EnquiryGodLevelHub() {
               exit={{ opacity: 0, x: 20 }}
               className="xl:col-span-1"
             >
-              <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-xs sticky top-6 space-y-6">
+              <div className="bg-white rounded-3xl p-6 border border-[#d9e7f7] shadow-[0_4px_20px_rgba(11,92,190,0.03)] sticky top-6 space-y-6">
                 
                 {/* Header */}
                 <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1">
-                    <History size={14} className="text-blue-600" /> Enquiry Timeline & Details
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                    <History size={14} className="text-[#0b5cbe]" /> Enquiry Timeline & Details
                   </span>
                   <button
                     onClick={() => setSelectedEnquiry(null)}
                     className="p-1 rounded-lg hover:bg-slate-100 text-slate-400 border-none cursor-pointer"
                   >
-                    <X size={15} />
+                    <X size={16} />
                   </button>
                 </div>
 
                 {/* Profile Card */}
                 <div className="text-center space-y-1">
-                  <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white font-black text-xl flex items-center justify-center mx-auto shadow-md mb-2">
-                    {(selectedEnquiry.name || 'E').charAt(0).toUpperCase()}
+                  <div 
+                    className="w-14 h-14 rounded-2xl text-white font-black text-xl flex items-center justify-center mx-auto shadow-sm mb-2"
+                    style={{ backgroundColor: getRandomColor(selectedEnquiry.name || 'E') }}
+                  >
+                    {getInitials(selectedEnquiry.name || 'E')}
                   </div>
                   <h3 className="text-base font-black text-slate-900">{selectedEnquiry.name}</h3>
                   <p className="text-xs font-bold text-slate-600 flex items-center justify-center gap-1">
                     📞 {selectedEnquiry.phone}
                   </p>
                   <p className="text-[11px] text-slate-500 font-medium">
-                    Interested Plan: <span className="font-bold text-slate-800">{selectedEnquiry.duration || selectedEnquiry.interestedPlan || '1 month'}</span>
+                    Interested Plan: <span className="font-bold text-[#0b5cbe] bg-blue-50 px-2 py-0.5 rounded border border-blue-200/50">{selectedEnquiry.duration || selectedEnquiry.interestedPlan || '1 month'}</span>
                   </p>
                 </div>
 
@@ -641,7 +820,7 @@ export default function EnquiryGodLevelHub() {
                         onClick={() => handleUpdateStatus(selectedEnquiry.id, st)}
                         className={`py-2 text-xs font-bold rounded-xl transition-all border cursor-pointer ${
                           selectedEnquiry.status === st
-                            ? 'bg-slate-900 text-white border-slate-900'
+                            ? 'bg-[#0b5cbe] text-white border-[#0b5cbe] shadow-xs'
                             : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
                         }`}
                       >
@@ -652,14 +831,14 @@ export default function EnquiryGodLevelHub() {
                 </div>
 
                 {/* Representative & Follow-Up Date */}
-                <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200/70 space-y-2 text-xs">
+                <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200/70 space-y-2 text-xs">
                   <div className="flex justify-between">
-                    <span className="text-slate-500">Representative:</span>
+                    <span className="text-slate-500 font-medium">Representative:</span>
                     <span className="font-bold text-slate-800">{selectedEnquiry.assignedTo || 'Veer Chand (manager)'}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-slate-500">Follow-up Date:</span>
-                    <span className="font-bold text-blue-700">{formatIndianDate(selectedEnquiry.nextFollowUpDate || selectedEnquiry.nextFollowUp || '')}</span>
+                    <span className="text-slate-500 font-medium">Follow-up Date:</span>
+                    <span className="font-bold text-[#0b5cbe]">{formatIndianDate(selectedEnquiry.nextFollowUpDate || selectedEnquiry.nextFollowUp || '')}</span>
                   </div>
                 </div>
 
@@ -701,18 +880,18 @@ export default function EnquiryGodLevelHub() {
                   )}
                 </div>
 
-                {/* Action Buttons */}
+                {/* Quick Action Buttons */}
                 <div className="flex gap-2 pt-2">
                   <button
                     onClick={() => launchWhatsApp(selectedEnquiry)}
-                    className="flex-1 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all border border-emerald-200 cursor-pointer"
+                    className="flex-1 py-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all border border-emerald-200 cursor-pointer"
                   >
                     <MessageSquare size={13} /> WhatsApp
                   </button>
 
                   <a
                     href={`tel:${selectedEnquiry.phone}`}
-                    className="flex-1 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all border border-blue-200 no-underline"
+                    className="flex-1 py-2.5 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all border border-blue-200 no-underline"
                   >
                     <Phone size={13} /> Call
                   </a>
@@ -725,7 +904,365 @@ export default function EnquiryGodLevelHub() {
 
       </div>
 
-      {/* ── 5. EXCEL IMPORT MODAL ────────────────────────────── */}
+      {/* ── 5. FLOATING ACTIONS PORTAL DROPDOWN (Members/Employees Pattern) ── */}
+      {actionsMenu && typeof document !== 'undefined' && createPortal(
+        <div
+          className="enquiry-actions-portal-menu fixed z-[99999] bg-white border border-slate-200 rounded-2xl shadow-[0_15px_40px_rgba(0,0,0,0.18)] py-1.5 w-56 text-left text-xs font-semibold text-slate-800 animate-in fade-in select-none"
+          style={{
+            top: (window.innerHeight - actionsMenu.rect.bottom < 320)
+              ? Math.max(10, actionsMenu.rect.top - 310)
+              : actionsMenu.rect.bottom + 4,
+            left: Math.max(10, Math.min(window.innerWidth - 240, actionsMenu.rect.right - 215)),
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* View Enquiry */}
+          <button
+            type="button"
+            onClick={() => {
+              const enq = actionsMenu.enquiry;
+              setActionsMenu(null);
+              setSelectedEnquiry(enq);
+            }}
+            className="w-full px-3.5 py-2 hover:bg-slate-50 flex items-center gap-2.5 text-left border-none bg-transparent cursor-pointer text-slate-700 transition-colors font-bold"
+          >
+            <Eye size={14} className="text-slate-500" />
+            <span>View Enquiry</span>
+          </button>
+
+          {/* Edit Enquiry */}
+          <button
+            type="button"
+            onClick={() => {
+              const enq = actionsMenu.enquiry;
+              setActionsMenu(null);
+              handleOpenEdit(enq);
+            }}
+            className="w-full px-3.5 py-2 hover:bg-blue-50 hover:text-blue-700 flex items-center gap-2.5 text-left border-none bg-transparent cursor-pointer text-slate-700 transition-colors font-bold"
+          >
+            <Edit size={14} className="text-blue-600" />
+            <span>Edit Enquiry</span>
+          </button>
+
+          {/* Call Lead */}
+          <button
+            type="button"
+            onClick={() => {
+              const enq = actionsMenu.enquiry;
+              setActionsMenu(null);
+              if (enq.phone) window.open(`tel:${enq.phone}`);
+              else toast.error('No phone number recorded');
+            }}
+            className="w-full px-3.5 py-2 hover:bg-slate-50 flex items-center gap-2.5 text-left border-none bg-transparent cursor-pointer text-slate-700 transition-colors font-bold"
+          >
+            <Phone size={14} className="text-slate-500" />
+            <span>Call Lead</span>
+          </button>
+
+          {/* WhatsApp */}
+          <button
+            type="button"
+            onClick={() => {
+              const enq = actionsMenu.enquiry;
+              setActionsMenu(null);
+              launchWhatsApp(enq);
+            }}
+            className="w-full px-3.5 py-2 hover:bg-emerald-50 hover:text-emerald-700 flex items-center gap-2.5 text-left border-none bg-transparent cursor-pointer text-slate-700 transition-colors font-bold"
+          >
+            <MessageSquare size={14} className="text-emerald-600" />
+            <span>WhatsApp</span>
+          </button>
+
+          {/* Schedule Follow-up */}
+          <button
+            type="button"
+            onClick={() => {
+              const enq = actionsMenu.enquiry;
+              setActionsMenu(null);
+              handleOpenScheduleFollowup(enq);
+            }}
+            className="w-full px-3.5 py-2 hover:bg-indigo-50 hover:text-indigo-700 flex items-center gap-2.5 text-left border-none bg-transparent cursor-pointer text-slate-700 transition-colors font-bold"
+          >
+            <Calendar size={14} className="text-indigo-600" />
+            <span>Schedule Follow-up</span>
+          </button>
+
+          {/* Change Status */}
+          <button
+            type="button"
+            onClick={() => {
+              const enq = actionsMenu.enquiry;
+              setActionsMenu(null);
+              const nextStatus = enq.status === 'Pending' ? 'Closed' : 'Pending';
+              handleUpdateStatus(enq.id, nextStatus);
+            }}
+            className="w-full px-3.5 py-2 hover:bg-amber-50 hover:text-amber-700 flex items-center gap-2.5 text-left border-none bg-transparent cursor-pointer text-slate-700 transition-colors font-bold"
+          >
+            <Shield size={14} className="text-amber-600" />
+            <span>{actionsMenu.enquiry.status === 'Pending' ? 'Mark as Closed' : 'Reopen as Pending'}</span>
+          </button>
+
+          {/* Convert to Member */}
+          <button
+            type="button"
+            onClick={() => {
+              const enq = actionsMenu.enquiry;
+              setActionsMenu(null);
+              setShowConvertModal(enq);
+            }}
+            className="w-full px-3.5 py-2 hover:bg-emerald-50 hover:text-emerald-700 flex items-center gap-2.5 text-left border-none bg-transparent cursor-pointer text-emerald-700 transition-colors font-extrabold"
+          >
+            <UserPlus size={14} className="text-emerald-600" />
+            <span>Convert to Member</span>
+          </button>
+
+          <div className="h-px bg-slate-100 my-1" />
+
+          {/* Delete Enquiry */}
+          <button
+            type="button"
+            onClick={() => {
+              const enq = actionsMenu.enquiry;
+              setActionsMenu(null);
+              setDeleteTarget(enq);
+            }}
+            className="w-full px-3.5 py-2 hover:bg-rose-50 flex items-center gap-2.5 text-left border-none bg-transparent cursor-pointer text-rose-600 transition-colors font-bold"
+          >
+            <Trash2 size={14} className="text-rose-600" />
+            <span>Delete Enquiry</span>
+          </button>
+        </div>,
+        document.body
+      )}
+
+      {/* ── 6. CUSTOM DELETE CONFIRMATION MODAL (NO window.confirm) ── */}
+      <AnimatePresence>
+        {deleteTarget && (
+          <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              className="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-md w-full p-6 text-slate-900 relative space-y-4"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-2xl bg-rose-50 border border-rose-100 flex items-center justify-center text-rose-600 shrink-0">
+                  <Trash2 size={22} />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-slate-900 text-lg">Delete Enquiry Lead?</h3>
+                  <p className="text-xs text-slate-400 font-medium">This action cannot be undone.</p>
+                </div>
+              </div>
+
+              <div className="bg-rose-50/50 border border-rose-100 rounded-2xl p-4 text-xs font-semibold text-rose-800 space-y-1.5">
+                <p>
+                  Are you sure you want to permanently delete <span className="font-black text-rose-950">"{deleteTarget.name}"</span>?
+                </p>
+                <p className="text-[11px] text-rose-700 font-normal">
+                  All activity history, contact inquiries and automated follow-ups for this lead will be removed.
+                </p>
+              </div>
+
+              <div className="flex justify-end gap-2.5 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setDeleteTarget(null)}
+                  disabled={deletingEnquiry}
+                  className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-700 font-bold text-xs hover:bg-slate-50 cursor-pointer disabled:opacity-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={deletingEnquiry}
+                  onClick={handleConfirmDelete}
+                  className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-xs cursor-pointer disabled:opacity-60 transition-colors flex items-center justify-center gap-1.5 border-none shadow-sm"
+                >
+                  {deletingEnquiry ? 'Deleting...' : 'Delete Lead'}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ── 7. EDIT ENQUIRY MODAL ── */}
+      <AnimatePresence>
+        {editingEnquiry && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white rounded-3xl p-6 max-w-lg w-full shadow-2xl border border-slate-200 space-y-4"
+            >
+              <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                  <Edit className="text-[#0b5cbe]" size={18} /> Edit Enquiry Lead
+                </h3>
+                <button onClick={() => setEditingEnquiry(null)} className="p-1 rounded-lg text-slate-400 hover:bg-slate-100 border-none cursor-pointer">
+                  <X size={18} />
+                </button>
+              </div>
+
+              <form onSubmit={handleEditSubmit} className="space-y-4 text-xs text-left">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">Full Name *</label>
+                    <input
+                      type="text"
+                      required
+                      value={editName}
+                      onChange={e => setEditName(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 outline-none focus:border-[#0b5cbe]"
+                    />
+                  </div>
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">Mobile Number *</label>
+                    <input
+                      type="tel"
+                      required
+                      value={editPhone}
+                      onChange={e => setEditPhone(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 outline-none focus:border-[#0b5cbe]"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">Email Address</label>
+                    <input
+                      type="email"
+                      value={editEmail}
+                      onChange={e => setEditEmail(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 outline-none focus:border-[#0b5cbe]"
+                    />
+                  </div>
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">Interested Plan</label>
+                    <select
+                      value={editPlan}
+                      onChange={e => setEditPlan(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 outline-none focus:border-[#0b5cbe]"
+                    >
+                      {PLANS.map(p => <option key={p} value={p}>{p}</option>)}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">Follow-up Date</label>
+                    <input
+                      type="date"
+                      value={editFollowupDate}
+                      onChange={e => setEditFollowupDate(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 outline-none focus:border-[#0b5cbe] cursor-pointer"
+                    />
+                  </div>
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">Representative</label>
+                    <select
+                      value={editRep}
+                      onChange={e => setEditRep(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 outline-none focus:border-[#0b5cbe]"
+                    >
+                      {STAFF_LIST.map(st => <option key={st} value={st}>{st}</option>)}
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">Remarks & Notes</label>
+                  <textarea
+                    rows={2}
+                    value={editRemarks}
+                    onChange={e => setEditRemarks(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-medium text-slate-800 outline-none focus:border-[#0b5cbe] resize-none"
+                  />
+                </div>
+
+                <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => setEditingEnquiry(null)}
+                    className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl border-none cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-5 py-2 text-xs font-bold text-white bg-[#0b5cbe] hover:bg-blue-700 rounded-xl shadow-md border-none cursor-pointer"
+                  >
+                    Save Changes
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ── 8. SCHEDULE FOLLOW-UP QUICK MODAL ── */}
+      <AnimatePresence>
+        {schedulingEnquiry && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl border border-slate-200 space-y-4"
+            >
+              <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                  <Calendar className="text-[#0b5cbe]" size={18} /> Schedule Follow-up
+                </h3>
+                <button onClick={() => setSchedulingEnquiry(null)} className="p-1 rounded-lg text-slate-400 hover:bg-slate-100 border-none cursor-pointer">
+                  <X size={18} />
+                </button>
+              </div>
+
+              <form onSubmit={handleScheduleSubmit} className="space-y-4 text-xs text-left">
+                <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200/70 space-y-1">
+                  <span className="font-extrabold text-slate-900 block">{schedulingEnquiry.name}</span>
+                  <span className="text-[11px] text-slate-500 font-bold">📞 {schedulingEnquiry.phone}</span>
+                </div>
+
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">New Follow-up Date *</label>
+                  <input
+                    type="date"
+                    required
+                    value={newScheduleDate}
+                    onChange={e => setNewScheduleDate(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs font-bold text-slate-800 outline-none focus:border-[#0b5cbe] cursor-pointer"
+                  />
+                </div>
+
+                <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => setSchedulingEnquiry(null)}
+                    className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl border-none cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-5 py-2 text-xs font-bold text-white bg-[#0b5cbe] hover:bg-blue-700 rounded-xl shadow-md border-none cursor-pointer"
+                  >
+                    Set Follow-up
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ── 9. EXCEL IMPORT MODAL ── */}
       <AnimatePresence>
         {showImportModal && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs">
@@ -737,10 +1274,10 @@ export default function EnquiryGodLevelHub() {
             >
               <div className="flex items-center justify-between pb-3 border-b border-slate-100">
                 <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                  <Upload className="text-blue-600" size={18} /> Import Real Enquiries Excel
+                  <Upload className="text-[#0b5cbe]" size={18} /> Import Real Enquiries Excel
                 </h3>
                 <button onClick={() => setShowImportModal(false)} className="p-1 rounded-lg text-slate-400 hover:bg-slate-100 border-none cursor-pointer">
-                  ✕
+                  <X size={18} />
                 </button>
               </div>
 
@@ -754,7 +1291,7 @@ export default function EnquiryGodLevelHub() {
                   <li>Generate automated follow-ups for all pending enquiries</li>
                 </ul>
 
-                <div className="border-2 border-dashed border-slate-200 hover:border-blue-500 rounded-2xl p-6 text-center cursor-pointer transition-colors bg-slate-50">
+                <div className="border-2 border-dashed border-slate-200 hover:border-[#0b5cbe] rounded-2xl p-6 text-center cursor-pointer transition-colors bg-slate-50">
                   <input
                     type="file"
                     accept=".xlsx, .xls"
@@ -764,7 +1301,7 @@ export default function EnquiryGodLevelHub() {
                     id="excel-file-input"
                   />
                   <label htmlFor="excel-file-input" className="cursor-pointer block space-y-2">
-                    <Upload size={32} className="mx-auto text-blue-600 opacity-80" />
+                    <Upload size={32} className="mx-auto text-[#0b5cbe] opacity-80" />
                     <span className="font-bold text-slate-800 block text-xs">
                       {isImporting ? 'Processing & Validating Rows...' : 'Click to Browse Excel File (.xlsx)'}
                     </span>
@@ -802,7 +1339,7 @@ export default function EnquiryGodLevelHub() {
         )}
       </AnimatePresence>
 
-      {/* ── 6. CREATE MANUAL ENQUIRY MODAL ──────────────────── */}
+      {/* ── 10. CREATE MANUAL ENQUIRY MODAL ── */}
       <AnimatePresence>
         {showCreateModal && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs">
@@ -814,10 +1351,10 @@ export default function EnquiryGodLevelHub() {
             >
               <div className="flex items-center justify-between pb-3 border-b border-slate-100">
                 <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                  <UserPlus className="text-blue-600" size={18} /> New Enquiry Lead
+                  <UserPlus className="text-[#0b5cbe]" size={18} /> New Enquiry Lead
                 </h3>
                 <button onClick={() => setShowCreateModal(false)} className="p-1 rounded-lg text-slate-400 hover:bg-slate-100 border-none cursor-pointer">
-                  ✕
+                  <X size={18} />
                 </button>
               </div>
 
@@ -831,7 +1368,7 @@ export default function EnquiryGodLevelHub() {
                       placeholder="e.g. Rahul"
                       value={firstName}
                       onChange={e => setFirstName(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 outline-none focus:border-blue-600"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 outline-none focus:border-[#0b5cbe]"
                     />
                   </div>
                   <div>
@@ -841,7 +1378,7 @@ export default function EnquiryGodLevelHub() {
                       placeholder="e.g. Sharma"
                       value={lastName}
                       onChange={e => setLastName(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 outline-none focus:border-blue-600"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 outline-none focus:border-[#0b5cbe]"
                     />
                   </div>
                 </div>
@@ -856,7 +1393,7 @@ export default function EnquiryGodLevelHub() {
                       placeholder="9876543210"
                       value={contact}
                       onChange={e => setContact(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 outline-none focus:border-blue-600"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 outline-none focus:border-[#0b5cbe]"
                     />
                   </div>
                   <div>
@@ -864,7 +1401,7 @@ export default function EnquiryGodLevelHub() {
                     <select
                       value={inquiryFor}
                       onChange={e => setInquiryFor(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 outline-none focus:border-blue-600"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 outline-none focus:border-[#0b5cbe]"
                     >
                       {PLANS.map(p => <option key={p} value={p}>{p}</option>)}
                     </select>
@@ -879,7 +1416,7 @@ export default function EnquiryGodLevelHub() {
                       required
                       value={followupDate}
                       onChange={e => setFollowupDate(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 outline-none focus:border-blue-600 cursor-pointer"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 outline-none focus:border-[#0b5cbe] cursor-pointer"
                     />
                   </div>
                   <div>
@@ -887,7 +1424,7 @@ export default function EnquiryGodLevelHub() {
                     <select
                       value={attendedBy}
                       onChange={e => setAttendedBy(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 outline-none focus:border-blue-600"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 outline-none focus:border-[#0b5cbe]"
                     >
                       {STAFF_LIST.map(st => <option key={st} value={st}>{st}</option>)}
                     </select>
@@ -901,7 +1438,7 @@ export default function EnquiryGodLevelHub() {
                     placeholder="Enter notes about client inquiry..."
                     value={remarks}
                     onChange={e => setRemarks(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-medium text-slate-800 outline-none focus:border-blue-600 resize-none"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-medium text-slate-800 outline-none focus:border-[#0b5cbe] resize-none"
                   />
                 </div>
 
@@ -916,7 +1453,7 @@ export default function EnquiryGodLevelHub() {
                   <button
                     type="submit"
                     disabled={isSubmitting}
-                    className="px-5 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-md shadow-blue-500/20 border-none cursor-pointer disabled:opacity-50"
+                    className="px-5 py-2 text-xs font-bold text-white bg-[#0b5cbe] hover:bg-blue-700 rounded-xl shadow-md border-none cursor-pointer disabled:opacity-50"
                   >
                     {isSubmitting ? 'Saving...' : 'Create Enquiry'}
                   </button>
@@ -927,7 +1464,7 @@ export default function EnquiryGodLevelHub() {
         )}
       </AnimatePresence>
 
-      {/* ── 7. CONVERT TO MEMBER MODAL ──────────────────────── */}
+      {/* ── 11. CONVERT TO MEMBER MODAL ── */}
       <AnimatePresence>
         {showConvertModal && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs">
@@ -942,14 +1479,17 @@ export default function EnquiryGodLevelHub() {
                   <UserCheck className="text-emerald-600" size={18} /> Convert to Active Member
                 </h3>
                 <button onClick={() => setShowConvertModal(null)} className="p-1 rounded-lg text-slate-400 hover:bg-slate-100 border-none cursor-pointer">
-                  ✕
+                  <X size={18} />
                 </button>
               </div>
 
               <form onSubmit={handleConvertSubmit} className="space-y-4 text-xs text-left">
                 <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200/70 space-y-1">
-                  <span className="font-bold text-slate-900 block">{showConvertModal.name}</span>
-                  <span className="text-[11px] text-slate-500">📞 {showConvertModal.phone}</span>
+                  <span className="font-extrabold text-slate-900 block">{showConvertModal.name}</span>
+                  <span className="text-[11px] text-slate-500 font-bold">📞 {showConvertModal.phone}</span>
+                  {showConvertModal.email && (
+                    <span className="text-[11px] text-slate-400 block">{showConvertModal.email}</span>
+                  )}
                 </div>
 
                 <div>
@@ -957,7 +1497,7 @@ export default function EnquiryGodLevelHub() {
                   <select
                     value={convertPlan}
                     onChange={e => setConvertPlan(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 outline-none focus:border-blue-600"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 outline-none focus:border-[#0b5cbe]"
                   >
                     <option value="Monthly Standard">Monthly Standard (1 Month)</option>
                     <option value="Quarterly Prime">Quarterly Prime (3 Months)</option>
@@ -973,7 +1513,7 @@ export default function EnquiryGodLevelHub() {
                     required
                     value={convertPrice}
                     onChange={e => setConvertPrice(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 outline-none focus:border-blue-600"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 outline-none focus:border-[#0b5cbe]"
                   />
                 </div>
 
@@ -987,7 +1527,7 @@ export default function EnquiryGodLevelHub() {
                   </button>
                   <button
                     type="submit"
-                    className="px-5 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-md shadow-emerald-500/20 border-none cursor-pointer"
+                    className="px-5 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-md border-none cursor-pointer"
                   >
                     Confirm Conversion
                   </button>
