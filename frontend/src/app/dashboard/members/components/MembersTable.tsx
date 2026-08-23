@@ -118,7 +118,7 @@ const MemberTableRow = memo(function MemberTableRow({
       }`}
     >
       {/* 1. Member Profile */}
-      <td className="px-4 py-3.5">
+      <td className="px-4 py-3.5 border-b border-slate-100">
         <div className="flex items-center gap-3">
           <div className="relative shrink-0">
             <MemberAvatar member={member} className="w-10 h-10 rounded-full border border-slate-200 shadow-2xs object-cover" size={40} />
@@ -145,7 +145,7 @@ const MemberTableRow = memo(function MemberTableRow({
       </td>
 
       {/* 2. Dedicated Phone Number */}
-      <td className="px-4 py-3.5 font-mono text-xs">
+      <td className="px-4 py-3.5 font-mono text-xs border-b border-slate-100">
         {phoneDisplay ? (
           <div className="flex items-center gap-1.5 font-bold text-slate-800">
             <Phone size={12} className="text-slate-400 shrink-0" />
@@ -157,7 +157,7 @@ const MemberTableRow = memo(function MemberTableRow({
       </td>
 
       {/* 3. Dedicated Gender */}
-      <td className="px-4 py-3.5 text-center">
+      <td className="px-4 py-3.5 text-center border-b border-slate-100">
         {isMale ? (
           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-blue-50 text-blue-700 border border-blue-200/70">
             <span>♂</span> Male
@@ -176,7 +176,7 @@ const MemberTableRow = memo(function MemberTableRow({
       </td>
 
       {/* 4. Membership Plan & Dates */}
-      <td className="px-4 py-3.5">
+      <td className="px-4 py-3.5 border-b border-slate-100">
         <div className="font-bold text-slate-800 text-xs">{member.packageName || member.plan || 'Standard'}</div>
         <div className="text-[11px] text-slate-500 font-mono mt-0.5 flex flex-col gap-0.5">
           {member.startDate && <span>Start: {formatDate(member.startDate)}</span>}
@@ -185,7 +185,7 @@ const MemberTableRow = memo(function MemberTableRow({
       </td>
 
       {/* 5. Assigned Trainer */}
-      <td className="px-4 py-3.5 text-xs font-bold text-slate-700">
+      <td className="px-4 py-3.5 text-xs font-bold text-slate-700 border-b border-slate-100">
         {member.trainer && member.trainer !== 'Unassigned' ? (
           <span className="inline-flex items-center gap-1 text-slate-800 bg-slate-100 px-2.5 py-1 rounded-lg border border-slate-200">
             <User size={12} className="text-indigo-600" />
@@ -197,7 +197,7 @@ const MemberTableRow = memo(function MemberTableRow({
       </td>
 
       {/* 6. Attendance Circular Progress */}
-      <td className="px-4 py-3.5 text-center">
+      <td className="px-4 py-3.5 text-center border-b border-slate-100">
         <div className="inline-flex items-center justify-center relative">
           <svg className="w-9 h-9">
             <circle cx="18" cy="18" r="14" stroke="#f1f5f9" strokeWidth="3" fill="none" />
@@ -219,7 +219,7 @@ const MemberTableRow = memo(function MemberTableRow({
       </td>
 
       {/* 7. Days Left */}
-      <td className="px-4 py-3.5 text-center font-mono text-xs font-bold">
+      <td className="px-4 py-3.5 text-center font-mono text-xs font-bold border-b border-slate-100">
         {member.daysLeft < 0 ? (
           <span className="text-rose-500 font-black">Expired {Math.abs(member.daysLeft)}d ago</span>
         ) : member.daysLeft === 0 ? (
@@ -230,7 +230,7 @@ const MemberTableRow = memo(function MemberTableRow({
       </td>
 
       {/* 8. Payment / Balance */}
-      <td className="px-4 py-3.5">
+      <td className="px-4 py-3.5 border-b border-slate-100">
         <div className="space-y-1">
           <div className="flex items-center gap-1.5">
             <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-black uppercase tracking-wider border ${payBadgeStyle}`}>
@@ -249,7 +249,7 @@ const MemberTableRow = memo(function MemberTableRow({
       </td>
 
       {/* 9. Single Actions Dropdown Button */}
-      <td className="px-4 py-3.5 text-right" onClick={e => e.stopPropagation()}>
+      <td className="px-4 py-3.5 text-right border-b border-slate-100" onClick={e => e.stopPropagation()}>
         <button 
           type="button"
           onClick={(e) => {
@@ -947,18 +947,18 @@ export default function MembersTable({
 
       {/* Table */}
       <div className="overflow-x-auto">
-        <table className="w-full text-left text-sm whitespace-nowrap">
-          <thead className="bg-[#0b5cbe] text-[#fdfdfd] font-bold border-b border-[#084a99]">
-            <tr>
-              <th className="px-4 py-3.5 text-[#fdfdfd]">Member</th>
-              <th className="px-4 py-3.5 text-[#fdfdfd]">Phone</th>
-              <th className="px-4 py-3.5 text-center text-[#fdfdfd]">Gender</th>
-              <th className="px-4 py-3.5 text-[#fdfdfd]">Membership</th>
-              <th className="px-4 py-3.5 text-[#fdfdfd]">Trainer</th>
-              <th className="px-4 py-3.5 text-center text-[#fdfdfd]">Attendance</th>
-              <th className="px-4 py-3.5 text-center text-[#fdfdfd]">Days Left</th>
-              <th className="px-4 py-3.5 text-[#fdfdfd]">Payment</th>
-              <th className="px-4 py-3.5 text-right text-[#fdfdfd]">Actions</th>
+        <table className="w-full text-left text-sm whitespace-nowrap border-separate border-spacing-0">
+          <thead className="bg-[#0b5cbe] text-[#fdfdfd] font-bold">
+            <tr className="bg-[#0b5cbe]">
+              <th className="px-4 py-3.5 text-[#fdfdfd] bg-[#0b5cbe] rounded-tl-[14px] border-b border-[#084a99]">Member</th>
+              <th className="px-4 py-3.5 text-[#fdfdfd] bg-[#0b5cbe] border-b border-[#084a99]">Phone</th>
+              <th className="px-4 py-3.5 text-center text-[#fdfdfd] bg-[#0b5cbe] border-b border-[#084a99]">Gender</th>
+              <th className="px-4 py-3.5 text-[#fdfdfd] bg-[#0b5cbe] border-b border-[#084a99]">Membership</th>
+              <th className="px-4 py-3.5 text-[#fdfdfd] bg-[#0b5cbe] border-b border-[#084a99]">Trainer</th>
+              <th className="px-4 py-3.5 text-center text-[#fdfdfd] bg-[#0b5cbe] border-b border-[#084a99]">Attendance</th>
+              <th className="px-4 py-3.5 text-center text-[#fdfdfd] bg-[#0b5cbe] border-b border-[#084a99]">Days Left</th>
+              <th className="px-4 py-3.5 text-[#fdfdfd] bg-[#0b5cbe] border-b border-[#084a99]">Payment</th>
+              <th className="px-4 py-3.5 text-right text-[#fdfdfd] bg-[#0b5cbe] rounded-tr-[14px] border-b border-[#084a99]">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
