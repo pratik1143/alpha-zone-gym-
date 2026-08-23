@@ -1,33 +1,77 @@
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
+import { motion, AnimatePresence } from 'framer-motion';
+import { 
+  MessageSquare, Mail, Phone, Calendar, Search, Trash2, 
+  CheckCircle2, Clock, User, Target, Send, CheckCheck,
+  Sparkles, RefreshCw, ChevronRight, AlertCircle, Eye, EyeOff,
+  MoreHorizontal, ArrowLeft, ExternalLink, ShieldCheck, Check,
+  SlidersHorizontal, X
+} from 'lucide-react';
 import { db } from '@/lib/firebase';
 import { collection, onSnapshot, query, orderBy, doc, updateDoc, deleteDoc, addDoc } from 'firebase/firestore';
 import toast from 'react-hot-toast';
-import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  MessageSquare, Mail, Phone, Calendar, Search, Filter, Trash2, 
-  CheckCircle2, Clock, User, Target, ArrowUpRight, Send, CheckCheck,
-  Sparkles, RefreshCw, ChevronRight, AlertCircle, Eye, EyeOff
-} from 'lucide-react';
+import { resolveAvatarUrl, MALE_DEFAULT_AVATAR, FEMALE_DEFAULT_AVATAR } from '@/lib/avatar';
+import { formatIndianDate } from '@/lib/dateUtils';
+
+interface WebMessage {
+  id: string;
+  name: string;
+  phone: string;
+  email?: string;
+  message?: string;
+  goal?: string;
+  status?: 'Unread' | 'Read' | 'Responded' | string;
+  source?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  gender?: string;
+}
 
 export default function WebMessagesPage() {
-  const [messages, setMessages] = useState<any[]>([]);
+  const [messages, setMessages] = useState<WebMessage[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Filters & Search State
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
   const [goalFilter, setGoalFilter] = useState('All');
-  const [selectedMessage, setSelectedMessage] = useState<any | null>(null);
+  const [selectedMessage, setSelectedMessage] = useState<WebMessage | null>(null);
 
-  // Selection for bulk actions
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [selectAll, setSelectAll] = useState(false);
+  // Quick Tab Filter State
+  const [activeTab, setActiveTab] = useState<'All' | 'Unread' | 'Read' | 'Responded'>('All');
 
-  // Direct Reply Modal
+  // Custom Delete Modal State (NO window.confirm)
+  const [deleteTarget, setDeleteTarget] = useState<WebMessage | null>(null);
+  const [deletingMessage, setDeletingMessage] = useState(false);
+
+  // Actions Portal Menu State
+  const [actionsMenu, setActionsMenu] = useState<{ message: WebMessage; rect: DOMRect } | null>(null);
+
+  // Direct Reply Drawer/Modal State
+  const [replyModalOpen, setReplyModalOpen] = useState(false);
   const [replyText, setReplyText] = useState('');
   const [sendingReply, setSendingReply] = useState(false);
+
+  // Close floating actions menu on outside click or scroll
+  useEffect(() => {
+    if (!actionsMenu) return;
+    const handleClose = (e: MouseEvent | Event) => {
+      const target = e.target as HTMLElement;
+      if (target?.closest('.message-actions-portal-menu')) return;
+      setActionsMenu(null);
+    };
+    window.addEventListener('scroll', handleClose, true);
+    window.addEventListener('resize', handleClose);
+    window.addEventListener('mousedown', handleClose);
+    return () => {
+      window.removeEventListener('scroll', handleClose, true);
+      window.removeEventListener('resize', handleClose);
+      window.removeEventListener('mousedown', handleClose);
+    };
+  }, [actionsMenu]);
 
   // Realtime Firestore Listener & LocalStorage Sync
   useEffect(() => {
@@ -41,12 +85,11 @@ export default function WebMessagesPage() {
     try {
       const q = query(collection(db, 'messages'), orderBy('createdAt', 'desc'));
       unsub = onSnapshot(q, (snapshot) => {
-        const data = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+        const data = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as WebMessage));
         setMessages(data);
         try { localStorage.setItem('alphazone_messages', JSON.stringify(data)); } catch (e) {}
         setLoading(false);
       }, (err) => {
-        // Silently handle Firestore Security Rules error without throwing overlay console error
         console.warn("Firestore permissions note:", err.message);
         setLoading(false);
       });
@@ -60,42 +103,40 @@ export default function WebMessagesPage() {
   // Filtered Messages logic
   const filteredMessages = useMemo(() => {
     return messages.filter(msg => {
+      // Tab filter
+      if (activeTab === 'Unread' && (msg.status !== 'Unread' && msg.status)) return false;
+      if (activeTab === 'Read' && msg.status !== 'Read') return false;
+      if (activeTab === 'Responded' && msg.status !== 'Responded') return false;
+
+      // Status dropdown filter
+      if (statusFilter !== 'All') {
+        if (statusFilter === 'Unread' && (msg.status !== 'Unread' && msg.status)) return false;
+        if (statusFilter === 'Read' && msg.status !== 'Read') return false;
+        if (statusFilter === 'Responded' && msg.status !== 'Responded') return false;
+      }
+
+      // Goal filter
+      if (goalFilter !== 'All' && msg.goal?.toLowerCase() !== goalFilter.toLowerCase()) return false;
+
       // Search filter
       const q = searchQuery.toLowerCase();
       const matchesSearch = !searchQuery || 
-        msg.name?.toLowerCase().includes(q) ||
-        msg.phone?.includes(q) ||
-        msg.email?.toLowerCase().includes(q) ||
-        msg.goal?.toLowerCase().includes(q) ||
-        msg.message?.toLowerCase().includes(q);
+        (msg.name || '').toLowerCase().includes(q) ||
+        (msg.phone || '').includes(q) ||
+        (msg.email || '').toLowerCase().includes(q) ||
+        (msg.goal || '').toLowerCase().includes(q) ||
+        (msg.message || '').toLowerCase().includes(q);
 
-      // Status filter
-      const matchesStatus = statusFilter === 'All' || 
-        (statusFilter === 'Unread' && (msg.status === 'Unread' || !msg.status)) ||
-        (statusFilter === 'Read' && msg.status === 'Read') ||
-        (statusFilter === 'Responded' && msg.status === 'Responded');
-
-      // Goal filter
-      const matchesGoal = goalFilter === 'All' || msg.goal === goalFilter;
-
-      return matchesSearch && matchesStatus && matchesGoal;
+      return matchesSearch;
     });
-  }, [messages, searchQuery, statusFilter, goalFilter]);
+  }, [messages, activeTab, statusFilter, goalFilter, searchQuery]);
 
-  // Bulk selection handler
-  useEffect(() => {
-    if (selectAll) {
-      setSelectedIds(filteredMessages.map(m => m.id));
-    } else {
-      setSelectedIds([]);
-    }
-  }, [selectAll, filteredMessages]);
-
-  const toggleSelect = (id: string) => {
-    setSelectedIds(prev => 
-      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
-    );
-  };
+  // Extract unique goals dynamically from messages
+  const dynamicGoals = useMemo(() => {
+    const goalsFromData = messages.map(m => m.goal?.trim()).filter(Boolean) as string[];
+    const defaults = ['Weight Loss', 'Muscle Gain', 'General Fitness', 'Personal Training'];
+    return Array.from(new Set([...defaults, ...goalsFromData])).filter(Boolean);
+  }, [messages]);
 
   // Status updates
   const handleUpdateStatus = async (id: string, newStatus: string) => {
@@ -106,7 +147,7 @@ export default function WebMessagesPage() {
       return updated;
     });
     if (selectedMessage && selectedMessage.id === id) {
-      setSelectedMessage((prev: any) => (prev ? { ...prev, status: newStatus } : null));
+      setSelectedMessage((prev) => (prev ? { ...prev, status: newStatus } : null));
     }
     toast.success(`Message marked as ${newStatus}`);
 
@@ -121,9 +162,11 @@ export default function WebMessagesPage() {
     }
   };
 
-  // Single Delete
-  const handleDelete = async (id: string) => {
-    if (!window.confirm('Are you sure you want to delete this message?')) return;
+  // Custom Delete Handler (NO window.confirm)
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
+    setDeletingMessage(true);
+    const id = deleteTarget.id;
     
     // Optimistic delete
     setMessages(prev => {
@@ -132,41 +175,15 @@ export default function WebMessagesPage() {
       return filtered;
     });
     if (selectedMessage?.id === id) setSelectedMessage(null);
-    toast.success('Message deleted');
+    setDeleteTarget(null);
+    toast.success('Message deleted successfully');
 
     try {
       await deleteDoc(doc(db, 'messages', id));
     } catch (err: any) {
       console.warn('Firestore delete permission note: ' + err.message);
-    }
-  };
-
-  // Bulk Delete
-  const handleBulkDelete = async () => {
-    if (selectedIds.length === 0) return;
-    if (!window.confirm(`Delete ${selectedIds.length} selected message(s)?`)) return;
-    toast.loading('Deleting selected messages...', { id: 'bulk-delete' });
-    try {
-      await Promise.all(selectedIds.map(id => deleteDoc(doc(db, 'messages', id))));
-      toast.success(`${selectedIds.length} message(s) deleted`, { id: 'bulk-delete' });
-      setSelectedIds([]);
-      setSelectAll(false);
-    } catch (err: any) {
-      toast.error('Failed to delete: ' + err.message, { id: 'bulk-delete' });
-    }
-  };
-
-  // Bulk Mark Read
-  const handleBulkMarkRead = async () => {
-    if (selectedIds.length === 0) return;
-    toast.loading('Updating messages...', { id: 'bulk-read' });
-    try {
-      await Promise.all(selectedIds.map(id => updateDoc(doc(db, 'messages', id), { status: 'Read' })));
-      toast.success(`Marked ${selectedIds.length} message(s) as Read`, { id: 'bulk-read' });
-      setSelectedIds([]);
-      setSelectAll(false);
-    } catch (err: any) {
-      toast.error('Failed: ' + err.message, { id: 'bulk-read' });
+    } finally {
+      setDeletingMessage(false);
     }
   };
 
@@ -176,6 +193,32 @@ export default function WebMessagesPage() {
     const formattedPhone = cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone;
     const text = encodeURIComponent(`Hi ${name}, thank you for reaching out to Alpha Zone Gym! How can we assist you with your fitness goals?`);
     window.open(`https://wa.me/${formattedPhone}?text=${text}`, '_blank');
+  };
+
+  // Handle Send Reply Modal Submit
+  const handleSendReplySubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedMessage || !replyText.trim()) return;
+    setSendingReply(true);
+
+    try {
+      // Mark as responded
+      await handleUpdateStatus(selectedMessage.id, 'Responded');
+      
+      // WhatsApp launch with custom text
+      const cleanPhone = selectedMessage.phone.replace(/\D/g, '');
+      const formattedPhone = cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone;
+      const text = encodeURIComponent(`Hi ${selectedMessage.name},\n\n${replyText.trim()}\n\n— Alpha Zone Gym Team`);
+      window.open(`https://wa.me/${formattedPhone}?text=${text}`, '_blank');
+      
+      toast.success('Reply dispatched via WhatsApp!');
+      setReplyModalOpen(false);
+      setReplyText('');
+    } catch (err: any) {
+      toast.error('Failed to send reply: ' + err.message);
+    } finally {
+      setSendingReply(false);
+    }
   };
 
   // Stats calculation
@@ -188,433 +231,650 @@ export default function WebMessagesPage() {
     return msgDate === new Date().toDateString();
   }).length;
 
+  // Format relative/short time
+  const formatMsgTime = (dateStr?: string) => {
+    if (!dateStr) return 'Just now';
+    try {
+      const d = new Date(dateStr);
+      const now = new Date();
+      const diffMs = now.getTime() - d.getTime();
+      const diffMins = Math.floor(diffMs / 60000);
+      const diffHours = Math.floor(diffMins / 60);
+
+      if (diffMins < 1) return 'Just now';
+      if (diffMins < 60) return `${diffMins} min ago`;
+      if (diffHours < 24) return `${diffHours} hr ago`;
+      return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+    } catch (e) {
+      return dateStr;
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-slate-50/80 font-sans p-4 lg:p-8 pb-24">
+    <div className="space-y-6 pb-12 w-full text-slate-800 text-left font-sans">
       
-      {/* ─── HEADER TITLE ─── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+      {/* ── 1. PAGE HEADER (Aligned with Members & Employees) ── */}
+      <div className="bg-white rounded-3xl p-6 lg:p-8 border border-slate-100 shadow-[0_4px_25px_rgba(0,0,0,0.03)] flex flex-col md:flex-row md:items-center justify-between gap-4 relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-80 h-80 bg-blue-500/5 rounded-full blur-3xl pointer-events-none -translate-y-1/2 translate-x-1/3" />
+        
         <div>
-          <h1 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2">
-            Website Messages
-            <span className="bg-pink-100 text-pink-700 text-xs px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider flex items-center gap-1">
-              <Sparkles size={12} /> LIVE CRM
+          <div className="flex items-center gap-2.5 mb-2">
+            <span className="px-3 py-1 bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-[10px] font-black uppercase tracking-widest rounded-full shadow-sm">
+              Inbound CRM Engine
             </span>
-          </h1>
-          <p className="text-sm font-semibold text-slate-500 mt-1">
-            Inbound inquiries and contact form submissions from the Alpha Zone website.
-          </p>
+            <span className="inline-flex items-center gap-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200/60 text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full shadow-2xs">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              LIVE
+            </span>
+            <span className="text-xs text-slate-400 font-mono font-bold">AZ-MSG-v4.0</span>
+          </div>
+          <h1 className="text-2xl lg:text-3xl font-black tracking-tight text-slate-900 font-display">Website Messages</h1>
+          <p className="text-xs text-slate-500 font-medium mt-1">Manage inbound website enquiries, contact messages and responses.</p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5 flex-wrap shrink-0">
           <button 
             onClick={() => {
               setSearchQuery('');
               setStatusFilter('All');
               setGoalFilter('All');
+              setActiveTab('All');
             }}
-            className="bg-white border border-slate-200 text-slate-600 hover:text-slate-900 text-xs font-bold px-4 py-2.5 rounded-xl shadow-sm hover:border-slate-300 transition-all flex items-center gap-2 cursor-pointer"
+            className="px-4 py-3 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs rounded-2xl transition-all flex items-center gap-1.5 border border-slate-200 cursor-pointer shadow-2xs"
           >
             <RefreshCw size={14} /> Reset Filters
           </button>
         </div>
       </div>
 
-      {/* ─── KPI METRICS ─── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <div className="bg-white p-5 rounded-[22px] border border-slate-200/80 shadow-sm flex items-center gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-pink-50 border border-pink-100 flex items-center justify-center text-pink-600 shrink-0">
-            <MessageSquare size={22} />
+      {/* ── 2. SUMMARY METRICS CARDS (Exact Members/Employees KPI Language) ── */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {[
+          { label: 'Total Inquiries', value: totalCount, sub: 'All website submissions', icon: MessageSquare, badgeBg: 'bg-[#eaf3ff] border-[#b9d6f5] text-[#0b5cbe]' },
+          { label: 'Unread Pending', value: unreadCount, sub: 'Awaiting first response', icon: AlertCircle, badgeBg: 'bg-amber-50 border-amber-200/60 text-amber-600' },
+          { label: 'Responded', value: respondedCount, sub: 'Successfully answered', icon: CheckCheck, badgeBg: 'bg-emerald-50 border-emerald-200/60 text-emerald-600' },
+          { label: 'New Today', value: todayCount, sub: 'Received today', icon: Clock, badgeBg: 'bg-blue-50 border-blue-200/60 text-blue-600' }
+        ].map((stat, i) => (
+          <div key={i} className="bg-white border border-[#d9e7f7] rounded-3xl p-5 flex flex-col justify-between shadow-[0_4px_20px_rgba(11,92,190,0.03)] relative overflow-hidden group transition-all hover:border-[#0b5cbe] hover:shadow-md">
+            <div className="flex justify-between items-start">
+              <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">{stat.label}</span>
+              <div className={`p-2.5 rounded-2xl border ${stat.badgeBg}`}>
+                <stat.icon size={16} />
+              </div>
+            </div>
+            <div className="mt-4">
+              <div className="text-3xl font-black text-[#10233f] leading-none font-mono tracking-tight">{stat.value}</div>
+              <span className="text-[10px] font-bold text-slate-400 mt-1 block">{stat.sub}</span>
+            </div>
           </div>
-          <div>
-            <div className="text-2xl font-black text-slate-900 leading-none">{totalCount}</div>
-            <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mt-1">Total Inquiries</div>
-          </div>
+        ))}
+      </div>
+
+      {/* ── 3. SEARCH & FILTERS BAR (Unified with Enquiries & Employees) ── */}
+      <div className="bg-white border border-[#d9e7f7] rounded-3xl p-4 flex flex-wrap gap-4 items-center shadow-[0_4px_20px_rgba(11,92,190,0.02)]">
+        <div className="relative flex-1 min-w-[240px]">
+          <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input 
+            type="text"
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            placeholder="Search by name, phone, email or message..."
+            className="w-full text-xs bg-[#fdfdfd] border border-[#d9e7f7] rounded-2xl pl-11 pr-4 py-3 focus:outline-none focus:border-[#0b5cbe] focus:bg-white transition-all text-[#10233f] font-semibold placeholder:text-slate-400"
+          />
         </div>
 
-        <div className="bg-white p-5 rounded-[22px] border border-slate-200/80 shadow-sm flex items-center gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-amber-50 border border-amber-100 flex items-center justify-center text-amber-600 shrink-0">
-            <AlertCircle size={22} />
-          </div>
-          <div>
-            <div className="text-2xl font-black text-amber-600 leading-none">{unreadCount}</div>
-            <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mt-1">Unread Pending</div>
-          </div>
-        </div>
+        <div className="flex flex-wrap gap-2.5 items-center">
+          {/* Status Filter Dropdown */}
+          <select 
+            value={statusFilter}
+            onChange={e => {
+              setStatusFilter(e.target.value);
+              setActiveTab(e.target.value as any);
+            }}
+            className="text-xs bg-[#fdfdfd] border border-[#d9e7f7] rounded-2xl px-4 py-3 text-[#10233f] focus:outline-none font-bold cursor-pointer hover:bg-white transition-all"
+          >
+            <option value="All">All Statuses</option>
+            <option value="Unread">Unread</option>
+            <option value="Read">Read</option>
+            <option value="Responded">Responded</option>
+          </select>
 
-        <div className="bg-white p-5 rounded-[22px] border border-slate-200/80 shadow-sm flex items-center gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600 shrink-0">
-            <CheckCheck size={22} />
-          </div>
-          <div>
-            <div className="text-2xl font-black text-emerald-600 leading-none">{respondedCount}</div>
-            <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mt-1">Responded</div>
-          </div>
-        </div>
+          {/* Goal Filter Dropdown */}
+          <select 
+            value={goalFilter}
+            onChange={e => setGoalFilter(e.target.value)}
+            className="text-xs bg-[#fdfdfd] border border-[#d9e7f7] rounded-2xl px-4 py-3 text-[#10233f] focus:outline-none font-bold cursor-pointer hover:bg-white transition-all"
+          >
+            <option value="All">All Goals</option>
+            {dynamicGoals.map(g => (
+              <option key={g} value={g}>{g}</option>
+            ))}
+          </select>
 
-        <div className="bg-white p-5 rounded-[22px] border border-slate-200/80 shadow-sm flex items-center gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shrink-0">
-            <Clock size={22} />
-          </div>
-          <div>
-            <div className="text-2xl font-black text-indigo-600 leading-none">{todayCount}</div>
-            <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mt-1">New Today</div>
+          {/* Quick Filter Tabs */}
+          <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-2xl border border-slate-200 text-xs font-bold">
+            {(['All', 'Unread', 'Read', 'Responded'] as const).map(tab => (
+              <button
+                key={tab}
+                onClick={() => {
+                  setActiveTab(tab);
+                  setStatusFilter(tab);
+                }}
+                className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer border-none ${
+                  activeTab === tab 
+                    ? 'bg-[#0b5cbe] text-white shadow-xs font-extrabold' 
+                    : 'text-slate-600 hover:text-slate-900 bg-transparent'
+                }`}
+              >
+                {tab}
+              </button>
+            ))}
           </div>
         </div>
       </div>
 
-      {/* ─── MAIN CONTENT GRID ─── */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+      {/* ── 4. MAIN WORKSPACE (2-COLUMN CRM: 40% LIST + 60% DETAILS) ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         
-        {/* LEFT / MAIN MESSAGES LIST (8 cols on lg) */}
-        <div className="lg:col-span-8 bg-white rounded-[24px] border border-slate-200/60 shadow-sm overflow-hidden flex flex-col">
-          
-          {/* BAR & FILTERS HEADER */}
-          <div className="bg-slate-900 text-white p-5 flex flex-wrap items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-pink-500/20 border border-pink-500/30 flex items-center justify-center text-[#d4ff00]">
-                <MessageSquare size={18} />
-              </div>
-              <div>
-                <h2 className="font-extrabold text-sm tracking-wide">Inbound Submissions</h2>
-                <p className="text-[11px] text-slate-400 font-medium">{filteredMessages.length} message(s) found</p>
-              </div>
-            </div>
-
-            {/* Quick Filter Buttons */}
-            <div className="flex items-center gap-1.5 bg-slate-800/80 p-1 rounded-xl border border-white/10 text-xs font-bold">
-              {['All', 'Unread', 'Read', 'Responded'].map(st => (
-                <button
-                  key={st}
-                  onClick={() => setStatusFilter(st)}
-                  className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-                    statusFilter === st 
-                      ? 'bg-[#d4ff00] text-black shadow-sm font-extrabold' 
-                      : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  {st}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* SEARCH & SECONDARY FILTERS */}
-          <div className="p-4 bg-slate-50/80 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3">
-            <div className="relative flex-1 min-w-[220px]">
-              <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input 
-                type="text"
-                value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
-                placeholder="Search by name, phone, email or message..."
-                className="w-full pl-9 pr-4 py-2 text-xs font-semibold text-slate-800 bg-white border border-slate-200 rounded-xl outline-none focus:border-pink-500 focus:ring-2 focus:ring-pink-100 transition-all placeholder-slate-400"
-              />
-            </div>
-
-            <select
-              value={goalFilter}
-              onChange={e => setGoalFilter(e.target.value)}
-              className="px-3.5 py-2 text-xs font-bold text-slate-600 bg-white border border-slate-200 rounded-xl outline-none cursor-pointer focus:border-pink-500 transition-all"
-            >
-              <option value="All">All Goals</option>
-              <option value="weight-loss">Weight Loss</option>
-              <option value="muscle-gain">Muscle Gain</option>
-              <option value="general-fitness">General Fitness</option>
-              <option value="personal-training">Personal Training</option>
-            </select>
-
-            {/* Bulk Action Controls */}
-            {selectedIds.length > 0 && (
+        {/* LEFT COLUMN: Inbound Messages List (5 of 12 cols on desktop) */}
+        <div className={`lg:col-span-5 ${selectedMessage ? 'hidden lg:block' : 'block'}`}>
+          <div className="bg-white border border-[#d9e7f7] rounded-3xl overflow-hidden shadow-[0_4px_25px_rgba(11,92,190,0.03)] flex flex-col">
+            
+            {/* List Header */}
+            <div className="p-4 bg-slate-50/60 border-b border-slate-100 flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <button
-                  onClick={handleBulkMarkRead}
-                  className="bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-bold px-3 py-1.5 rounded-lg shadow-sm transition-all"
-                >
-                  Mark Read ({selectedIds.length})
-                </button>
-                <button
-                  onClick={handleBulkDelete}
-                  className="bg-red-500 hover:bg-red-600 text-white text-[11px] font-bold px-3 py-1.5 rounded-lg shadow-sm transition-all"
-                >
-                  Delete ({selectedIds.length})
-                </button>
+                <span className="font-extrabold text-xs uppercase tracking-wider text-slate-800">Inbound Messages</span>
+                <span className="px-2 py-0.5 rounded-full bg-blue-50 text-[#0b5cbe] border border-blue-200/60 text-[10px] font-black">
+                  {filteredMessages.length}
+                </span>
               </div>
-            )}
-          </div>
+              <span className="text-[10px] text-slate-400 font-semibold">Click to inspect</span>
+            </div>
 
-          {/* MESSAGES LIST TABLE */}
-          <div className="divide-y divide-slate-100 overflow-y-auto max-h-[650px] custom-scrollbar">
-            {loading ? (
-              <div className="p-12 text-center">
-                <div className="inline-block w-8 h-8 border-3 border-pink-500 border-t-transparent rounded-full animate-spin mb-3"></div>
-                <p className="font-bold text-slate-500 text-sm">Loading web messages...</p>
-              </div>
-            ) : filteredMessages.length === 0 ? (
-              <div className="p-16 text-center">
-                <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-400">
-                  <MessageSquare size={28} />
+            {/* Message Feed */}
+            <div className="divide-y divide-slate-100 overflow-y-auto max-h-[700px] custom-scrollbar">
+              {loading ? (
+                <div className="p-16 text-center">
+                  <div className="inline-block w-8 h-8 border-3 border-[#0b5cbe] border-t-transparent rounded-full animate-spin mb-3"></div>
+                  <p className="font-bold text-slate-500 text-xs">Loading web messages...</p>
                 </div>
-                <h3 className="text-base font-bold text-slate-700">No Messages Found</h3>
-                <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
-                  When visitors submit the &quot;Send A Message&quot; enquiry form on your website, their entries will show up here instantly.
-                </p>
-              </div>
-            ) : (
-              filteredMessages.map((msg) => {
-                const isSelected = selectedMessage?.id === msg.id;
-                const isUnread = msg.status === 'Unread' || !msg.status;
-                const formattedDate = msg.createdAt ? new Date(msg.createdAt).toLocaleString('en-IN', {
-                  month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
-                }) : 'Just now';
+              ) : filteredMessages.length === 0 ? (
+                <div className="p-16 text-center">
+                  <div className="w-14 h-14 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3 text-slate-400">
+                    <MessageSquare size={24} />
+                  </div>
+                  <h3 className="text-sm font-extrabold text-slate-700">No Messages Found</h3>
+                  <p className="text-xs text-slate-400 mt-1 max-w-xs mx-auto">
+                    When visitors submit the website contact form, their entries will show up here automatically.
+                  </p>
+                </div>
+              ) : (
+                filteredMessages.map((msg) => {
+                  const isSelected = selectedMessage?.id === msg.id;
+                  const isUnread = msg.status === 'Unread' || !msg.status;
+                  const avatar = resolveAvatarUrl(msg);
 
-                return (
-                  <div
-                    key={msg.id}
-                    onClick={() => setSelectedMessage(msg)}
-                    className={`p-4 transition-all cursor-pointer flex items-start gap-4 hover:bg-slate-50/90 ${
-                      isSelected ? 'bg-pink-50/50 border-l-4 border-pink-500' : ''
-                    } ${isUnread ? 'bg-amber-50/30 font-semibold' : ''}`}
-                  >
-                    {/* Checkbox */}
-                    <div className="pt-1" onClick={e => e.stopPropagation()}>
-                      <input 
-                        type="checkbox"
-                        checked={selectedIds.includes(msg.id)}
-                        onChange={() => toggleSelect(msg.id)}
-                        className="w-4 h-4 rounded text-pink-500 border-slate-300 focus:ring-pink-500 cursor-pointer"
-                      />
-                    </div>
+                  return (
+                    <div
+                      key={msg.id}
+                      onClick={() => setSelectedMessage(msg)}
+                      className={`p-4 transition-all cursor-pointer flex items-start gap-3.5 hover:bg-slate-50/80 ${
+                        isSelected 
+                          ? 'bg-blue-50/50 border-l-4 border-[#0b5cbe]' 
+                          : isUnread 
+                          ? 'bg-blue-50/20 border-l-4 border-amber-400' 
+                          : 'bg-white'
+                      }`}
+                    >
+                      {/* Avatar */}
+                      <div className="relative shrink-0 pt-0.5">
+                        <img 
+                          src={avatar} 
+                          onError={(e) => {
+                            const target = e.currentTarget;
+                            const g = String(msg.gender || '').trim().toLowerCase();
+                            target.src = (g === 'female' || g === 'f') ? FEMALE_DEFAULT_AVATAR : MALE_DEFAULT_AVATAR;
+                          }}
+                          className="w-10 h-10 rounded-full bg-slate-100 border border-slate-200 shadow-2xs object-cover" 
+                          alt={msg.name} 
+                        />
+                        {isUnread && (
+                          <span 
+                            className="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full bg-[#0b5cbe] border-2 border-white shadow-2xs"
+                            title="Unread Message"
+                          />
+                        )}
+                      </div>
 
-                    {/* Left Icon Avatar */}
-                    <div className={`w-10 h-10 rounded-2xl flex items-center justify-center font-black text-xs shrink-0 ${
-                      isUnread 
-                        ? 'bg-pink-500 text-white shadow-md shadow-pink-500/20' 
-                        : 'bg-slate-100 text-slate-600'
-                    }`}>
-                      {msg.name ? msg.name.charAt(0).toUpperCase() : 'U'}
-                    </div>
-
-                    {/* Main Info */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-2">
-                          <h4 className={`text-sm tracking-tight truncate ${isUnread ? 'font-black text-slate-900' : 'font-bold text-slate-800'}`}>
-                            {msg.name || 'Anonymous User'}
+                      {/* Info & Snippet */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-1">
+                          <h4 className={`text-xs truncate ${isUnread ? 'font-black text-slate-900' : 'font-bold text-slate-800'}`}>
+                            {msg.name || 'Website Visitor'}
                           </h4>
-
-                          {/* Status Badge */}
-                          <span className={`text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider ${
-                            isUnread 
-                              ? 'bg-pink-100 text-pink-700 animate-pulse' 
-                              : msg.status === 'Responded'
-                              ? 'bg-emerald-100 text-emerald-700'
-                              : 'bg-slate-100 text-slate-600'
-                          }`}>
-                            {msg.status || 'Unread'}
+                          <span className="text-[10px] font-bold text-slate-400 shrink-0">
+                            {formatMsgTime(msg.createdAt)}
                           </span>
                         </div>
 
-                        <span className="text-[10px] font-bold text-slate-400 shrink-0">
-                          {formattedDate}
-                        </span>
-                      </div>
+                        <div className="text-[11px] text-slate-500 font-semibold mt-0.5 truncate">
+                          📞 {msg.phone || '—'}
+                          {msg.goal && (
+                            <span className="ml-2 font-bold text-[#0b5cbe] bg-blue-50 px-1.5 py-0.2 rounded border border-blue-200/50 text-[9.5px] uppercase">
+                              {msg.goal}
+                            </span>
+                          )}
+                        </div>
 
-                      {/* Contact & Goal Bar */}
-                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500 mt-1">
-                        <span className="flex items-center gap-1 font-semibold text-slate-700">
-                          <Phone size={11} className="text-slate-400" /> {msg.phone}
-                        </span>
-                        {msg.email && (
-                          <span className="flex items-center gap-1">
-                            <Mail size={11} className="text-slate-400" /> {msg.email}
+                        <p className="text-xs text-slate-600 mt-1.5 line-clamp-2 leading-relaxed">
+                          {msg.message || 'No additional notes provided.'}
+                        </p>
+
+                        <div className="flex items-center justify-between mt-2 pt-1.5 border-t border-slate-100">
+                          {/* Status Pill */}
+                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-black text-[9px] uppercase tracking-wider border ${
+                            isUnread 
+                              ? 'bg-amber-50 text-amber-700 border-amber-200' 
+                              : msg.status === 'Responded'
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                              : 'bg-slate-100 text-slate-600 border-slate-200'
+                          }`}>
+                            <span className={`w-1 h-1 rounded-full ${
+                              isUnread ? 'bg-amber-500' : msg.status === 'Responded' ? 'bg-emerald-500' : 'bg-slate-400'
+                            }`} />
+                            {msg.status || 'UNREAD'}
                           </span>
-                        )}
-                        {msg.goal && (
-                          <span className="bg-slate-100 text-slate-700 font-bold px-2 py-0.5 rounded text-[10px] uppercase">
-                            Goal: {msg.goal}
-                          </span>
-                        )}
+
+                          {/* Quick WhatsApp Action */}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleOpenWhatsApp(msg.phone, msg.name);
+                            }}
+                            className="p-1 rounded-lg text-emerald-600 hover:bg-emerald-50 transition-colors border-none bg-transparent cursor-pointer"
+                            title="Chat on WhatsApp"
+                          >
+                            <MessageSquare size={13} />
+                          </button>
+                        </div>
                       </div>
-
-                      {/* Message Snippet */}
-                      <p className="text-xs text-slate-600 mt-2 line-clamp-2 leading-relaxed">
-                        {msg.message || 'No additional notes provided.'}
-                      </p>
                     </div>
+                  );
+                })
+              )}
+            </div>
 
-                    {/* Right Quick Actions */}
-                    <div className="flex items-center gap-1 shrink-0 pt-1" onClick={e => e.stopPropagation()}>
-                      <button
-                        onClick={() => handleOpenWhatsApp(msg.phone, msg.name)}
-                        className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 hover:bg-emerald-500 hover:text-white transition-all flex items-center justify-center shadow-sm"
-                        title="Chat on WhatsApp"
-                      >
-                        <Send size={13} />
-                      </button>
-
-                      <button
-                        onClick={() => handleUpdateStatus(msg.id, isUnread ? 'Read' : 'Unread')}
-                        className="w-8 h-8 rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-800 hover:text-white transition-all flex items-center justify-center shadow-sm"
-                        title={isUnread ? 'Mark as Read' : 'Mark as Unread'}
-                      >
-                        {isUnread ? <Eye size={13} /> : <EyeOff size={13} />}
-                      </button>
-
-                      <button
-                        onClick={() => handleDelete(msg.id)}
-                        className="w-8 h-8 rounded-xl bg-red-50 text-red-500 hover:bg-red-500 hover:text-white transition-all flex items-center justify-center shadow-sm"
-                        title="Delete Message"
-                      >
-                        <Trash2 size={13} />
-                      </button>
-                    </div>
-                  </div>
-                );
-              })
-            )}
           </div>
         </div>
 
-        {/* RIGHT / MESSAGE DETAILS CARD (4 cols on lg) */}
-        <div className="lg:col-span-4 sticky top-8">
+        {/* RIGHT COLUMN: Message Details Panel (7 of 12 cols on desktop) */}
+        <div className={`lg:col-span-7 sticky top-6 ${selectedMessage ? 'block' : 'hidden lg:block'}`}>
           {selectedMessage ? (
             <motion.div 
-              initial={{ opacity: 0, y: 15 }}
+              initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              className="bg-white rounded-[24px] border border-slate-200/60 shadow-sm p-6 space-y-6 text-left"
+              className="bg-white border border-[#d9e7f7] rounded-3xl shadow-[0_4px_25px_rgba(11,92,190,0.03)] p-6 lg:p-7 space-y-6 text-left"
             >
-              {/* Header Details */}
-              <div className="flex items-start justify-between border-b border-slate-100 pb-5">
-                <div>
-                  <span className="text-[10px] font-black text-pink-600 uppercase tracking-wider bg-pink-50 px-2.5 py-1 rounded-md">
-                    Message Details
-                  </span>
-                  <h3 className="text-xl font-black text-slate-900 tracking-tight mt-2">
-                    {selectedMessage.name}
-                  </h3>
-                  <p className="text-xs font-semibold text-slate-400 mt-0.5 flex items-center gap-1">
-                    <Clock size={12} />
-                    {selectedMessage.createdAt ? new Date(selectedMessage.createdAt).toLocaleString('en-IN') : 'N/A'}
-                  </p>
+              {/* Back to list button on mobile */}
+              <div className="lg:hidden pb-2 border-b border-slate-100">
+                <button
+                  onClick={() => setSelectedMessage(null)}
+                  className="flex items-center gap-1.5 text-xs font-black text-[#0b5cbe] hover:underline border-none bg-transparent cursor-pointer"
+                >
+                  <ArrowLeft size={14} /> Back to Messages List
+                </button>
+              </div>
+
+              {/* Header Profile Bar */}
+              <div className="flex items-start justify-between gap-4 pb-5 border-b border-slate-100">
+                <div className="flex items-center gap-3.5">
+                  <img 
+                    src={resolveAvatarUrl(selectedMessage)} 
+                    onError={(e) => {
+                      const target = e.currentTarget;
+                      const g = String(selectedMessage.gender || '').trim().toLowerCase();
+                      target.src = (g === 'female' || g === 'f') ? FEMALE_DEFAULT_AVATAR : MALE_DEFAULT_AVATAR;
+                    }}
+                    className="w-13 h-13 rounded-full bg-slate-100 border-2 border-white shadow-xs object-cover shrink-0" 
+                    alt={selectedMessage.name} 
+                  />
+                  <div>
+                    <h3 className="text-lg font-extrabold text-slate-900 leading-tight">
+                      {selectedMessage.name}
+                    </h3>
+                    <div className="text-xs text-slate-500 font-semibold mt-0.5 flex flex-wrap items-center gap-2">
+                      <span>📞 {selectedMessage.phone}</span>
+                      {selectedMessage.email && (
+                        <>
+                          <span>•</span>
+                          <span>{selectedMessage.email}</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
                 </div>
 
-                <div className="flex gap-1">
-                  <button 
-                    onClick={() => handleUpdateStatus(selectedMessage.id, selectedMessage.status === 'Responded' ? 'Read' : 'Responded')}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                      selectedMessage.status === 'Responded' 
-                        ? 'bg-emerald-100 text-emerald-700'
-                        : 'bg-emerald-500 text-white hover:bg-emerald-600 shadow-sm'
-                    }`}
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full font-black text-[10px] uppercase tracking-wider border ${
+                    selectedMessage.status === 'Responded'
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                      : selectedMessage.status === 'Read'
+                      ? 'bg-slate-100 text-slate-600 border-slate-200'
+                      : 'bg-amber-50 text-amber-700 border-amber-200'
+                  }`}>
+                    {selectedMessage.status || 'UNREAD'}
+                  </span>
+
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      setActionsMenu({ message: selectedMessage, rect });
+                    }}
+                    className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 cursor-pointer shadow-2xs transition-colors"
+                    title="More Options"
                   >
-                    {selectedMessage.status === 'Responded' ? '✓ Responded' : 'Mark Responded'}
+                    <MoreHorizontal size={15} />
                   </button>
                 </div>
               </div>
 
-              {/* Contact Cards */}
-              <div className="space-y-3">
-                <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-100 flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-600">
-                      <Phone size={14} />
-                    </div>
-                    <div>
-                      <div className="text-[9px] font-bold text-slate-400 uppercase">Phone Number</div>
-                      <div className="text-xs font-black text-slate-800">{selectedMessage.phone}</div>
-                    </div>
-                  </div>
-
-                  <a 
-                    href={`tel:${selectedMessage.phone}`}
-                    className="bg-slate-900 text-white font-bold text-[10px] px-3 py-1.5 rounded-lg hover:bg-pink-600 transition-all uppercase"
-                  >
-                    Call
-                  </a>
+              {/* Message Content Bubble */}
+              <div className="space-y-2">
+                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 block">
+                  Inquiry Message
+                </span>
+                <div className="bg-slate-50/80 border border-slate-200/80 rounded-2xl p-5 text-slate-800 text-xs font-semibold leading-relaxed whitespace-pre-wrap">
+                  &ldquo;{selectedMessage.message || 'No written message provided.'}&rdquo;
                 </div>
-
-                {selectedMessage.email && (
-                  <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-100 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-600">
-                        <Mail size={14} />
-                      </div>
-                      <div className="min-w-0">
-                        <div className="text-[9px] font-bold text-slate-400 uppercase">Email Address</div>
-                        <div className="text-xs font-black text-slate-800 truncate max-w-[170px]">{selectedMessage.email}</div>
-                      </div>
-                    </div>
-
-                    <a 
-                      href={`mailto:${selectedMessage.email}`}
-                      className="bg-slate-900 text-white font-bold text-[10px] px-3 py-1.5 rounded-lg hover:bg-pink-600 transition-all uppercase"
-                    >
-                      Email
-                    </a>
-                  </div>
-                )}
-
-                {selectedMessage.goal && (
-                  <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-100 flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-600">
-                      <Target size={14} />
-                    </div>
-                    <div>
-                      <div className="text-[9px] font-bold text-slate-400 uppercase">Transformation Goal</div>
-                      <div className="text-xs font-black text-pink-600 uppercase">{selectedMessage.goal}</div>
-                    </div>
-                  </div>
-                )}
               </div>
 
-              {/* Full Message Text */}
-              <div className="bg-slate-900 text-white p-5 rounded-2xl space-y-2">
-                <div className="text-[10px] font-black text-[#d4ff00] uppercase tracking-wider">User Message</div>
-                <p className="text-xs font-medium text-slate-200 leading-relaxed whitespace-pre-wrap">
-                  {selectedMessage.message || 'No additional message was written.'}
-                </p>
+              {/* Message Metadata Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 text-xs">
+                <div className="p-3.5 bg-slate-50/50 rounded-2xl border border-slate-100">
+                  <span className="text-slate-400 block text-[9.5px] font-bold uppercase">Received</span>
+                  <span className="text-slate-900 font-bold mt-0.5 block">
+                    {selectedMessage.createdAt ? new Date(selectedMessage.createdAt).toLocaleString('en-IN', {
+                      day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
+                    }) : 'N/A'}
+                  </span>
+                </div>
+
+                <div className="p-3.5 bg-slate-50/50 rounded-2xl border border-slate-100">
+                  <span className="text-slate-400 block text-[9.5px] font-bold uppercase">Source</span>
+                  <span className="text-slate-900 font-bold mt-0.5 block">
+                    {selectedMessage.source || 'Website Contact Form'}
+                  </span>
+                </div>
+
+                <div className="p-3.5 bg-slate-50/50 rounded-2xl border border-slate-100">
+                  <span className="text-slate-400 block text-[9.5px] font-bold uppercase">Fitness Goal</span>
+                  <span className="text-[#0b5cbe] font-extrabold mt-0.5 block uppercase">
+                    {selectedMessage.goal || 'General Inquiry'}
+                  </span>
+                </div>
               </div>
 
               {/* Action Toolbar */}
-              <div className="pt-2 space-y-3">
+              <div className="pt-2 flex flex-wrap gap-2.5 items-center">
                 <button
                   onClick={() => handleOpenWhatsApp(selectedMessage.phone, selectedMessage.name)}
-                  className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-black text-xs py-3.5 rounded-xl uppercase tracking-wider shadow-md shadow-emerald-500/20 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                  className="flex-1 min-w-[140px] px-5 py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer shadow-sm border-none"
                 >
-                  <Send size={15} /> Reply via WhatsApp
+                  <MessageSquare size={15} /> WhatsApp
                 </button>
 
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => handleUpdateStatus(selectedMessage.id, selectedMessage.status === 'Read' ? 'Unread' : 'Read')}
-                    className="w-1/2 border border-slate-200 text-slate-700 font-bold text-xs py-2.5 rounded-xl hover:bg-slate-50 transition-all"
-                  >
-                    {selectedMessage.status === 'Read' ? 'Mark Unread' : 'Mark Read'}
-                  </button>
-                  
-                  <button
-                    onClick={() => handleDelete(selectedMessage.id)}
-                    className="w-1/2 bg-red-50 text-red-600 font-bold text-xs py-2.5 rounded-xl hover:bg-red-500 hover:text-white transition-all"
-                  >
-                    Delete Message
-                  </button>
-                </div>
+                <a
+                  href={`tel:${selectedMessage.phone}`}
+                  className="px-5 py-3 rounded-2xl bg-white hover:bg-slate-50 text-slate-800 font-extrabold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 border border-slate-200 no-underline shadow-2xs"
+                >
+                  <Phone size={15} className="text-slate-500" /> Call
+                </a>
+
+                <button
+                  onClick={() => {
+                    const nextStatus = selectedMessage.status === 'Responded' ? 'Read' : 'Responded';
+                    handleUpdateStatus(selectedMessage.id, nextStatus);
+                  }}
+                  className={`px-4 py-3 rounded-2xl font-extrabold text-xs uppercase tracking-wider transition-all border cursor-pointer ${
+                    selectedMessage.status === 'Responded'
+                      ? 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200'
+                      : 'bg-blue-50 text-[#0b5cbe] border-blue-200 hover:bg-blue-100'
+                  }`}
+                >
+                  {selectedMessage.status === 'Responded' ? 'Mark Read' : 'Mark Responded'}
+                </button>
+
+                <button
+                  onClick={() => {
+                    setReplyText(`Hi ${selectedMessage.name}, thank you for your interest in Alpha Zone Gym! We'd love to help you achieve your goals.`);
+                    setReplyModalOpen(true);
+                  }}
+                  className="px-5 py-3 rounded-2xl bg-[#0b5cbe] hover:bg-blue-700 text-white font-extrabold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 border-none cursor-pointer shadow-sm"
+                >
+                  <Send size={14} /> Reply
+                </button>
               </div>
+
             </motion.div>
           ) : (
-            <div className="bg-white rounded-[24px] border border-slate-200/60 p-12 text-center text-slate-400 shadow-sm">
-              <div className="w-16 h-16 rounded-full bg-slate-50 flex items-center justify-center mx-auto mb-3">
-                <Eye size={24} />
+            /* Centered Empty State */
+            <div className="bg-white border border-[#d9e7f7] rounded-3xl p-16 text-center text-slate-400 shadow-[0_4px_25px_rgba(11,92,190,0.03)]">
+              <div className="w-16 h-16 rounded-full bg-blue-50 text-[#0b5cbe] flex items-center justify-center mx-auto mb-4 border border-blue-100">
+                <MessageSquare size={26} />
               </div>
-              <h4 className="font-bold text-slate-700 text-sm">No Message Selected</h4>
-              <p className="text-xs text-slate-400 mt-1 max-w-xs mx-auto">
-                Click on any message from the left list to read full details and quick-reply via WhatsApp or Phone.
+              <h4 className="font-extrabold text-slate-800 text-base">No Message Selected</h4>
+              <p className="text-xs text-slate-400 mt-1.5 max-w-xs mx-auto">
+                Select a message from the list to view the complete enquiry details and respond.
               </p>
             </div>
           )}
         </div>
 
       </div>
+
+      {/* ── 5. FLOATING PORTAL ACTIONS DROPDOWN (Strict Priority Sequence) ── */}
+      {actionsMenu && typeof document !== 'undefined' && createPortal(
+        <div
+          className="message-actions-portal-menu fixed z-[99999] bg-white border border-slate-200 rounded-2xl shadow-[0_15px_40px_rgba(0,0,0,0.18)] py-1.5 w-52 text-left text-xs font-semibold text-slate-800 animate-in fade-in select-none"
+          style={{
+            top: (window.innerHeight - actionsMenu.rect.bottom < 260)
+              ? Math.max(10, actionsMenu.rect.top - 250)
+              : actionsMenu.rect.bottom + 4,
+            left: Math.max(10, Math.min(window.innerWidth - 220, actionsMenu.rect.right - 195)),
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* 1. View */}
+          <button
+            type="button"
+            onClick={() => {
+              const msg = actionsMenu.message;
+              setActionsMenu(null);
+              setSelectedMessage(msg);
+            }}
+            className="w-full px-3.5 py-2 hover:bg-slate-50 flex items-center gap-2.5 text-left border-none bg-transparent cursor-pointer text-slate-700 transition-colors font-bold"
+          >
+            <Eye size={14} className="text-slate-500" />
+            <span>View Details</span>
+          </button>
+
+          {/* 2. Mark as Read / Unread */}
+          <button
+            type="button"
+            onClick={() => {
+              const msg = actionsMenu.message;
+              setActionsMenu(null);
+              const nextStatus = msg.status === 'Read' ? 'Unread' : 'Read';
+              handleUpdateStatus(msg.id, nextStatus);
+            }}
+            className="w-full px-3.5 py-2 hover:bg-blue-50 hover:text-blue-700 flex items-center gap-2.5 text-left border-none bg-transparent cursor-pointer text-slate-700 transition-colors font-bold"
+          >
+            <CheckCheck size={14} className="text-blue-600" />
+            <span>{actionsMenu.message.status === 'Read' ? 'Mark as Unread' : 'Mark as Read'}</span>
+          </button>
+
+          {/* 3. WhatsApp */}
+          <button
+            type="button"
+            onClick={() => {
+              const msg = actionsMenu.message;
+              setActionsMenu(null);
+              handleOpenWhatsApp(msg.phone, msg.name);
+            }}
+            className="w-full px-3.5 py-2 hover:bg-emerald-50 hover:text-emerald-700 flex items-center gap-2.5 text-left border-none bg-transparent cursor-pointer text-slate-700 transition-colors font-bold"
+          >
+            <MessageSquare size={14} className="text-emerald-600" />
+            <span>WhatsApp</span>
+          </button>
+
+          {/* 4. Call */}
+          <button
+            type="button"
+            onClick={() => {
+              const msg = actionsMenu.message;
+              setActionsMenu(null);
+              if (msg.phone) window.open(`tel:${msg.phone}`);
+              else toast.error('No phone number recorded');
+            }}
+            className="w-full px-3.5 py-2 hover:bg-slate-50 flex items-center gap-2.5 text-left border-none bg-transparent cursor-pointer text-slate-700 transition-colors font-bold"
+          >
+            <Phone size={14} className="text-slate-500" />
+            <span>Call</span>
+          </button>
+
+          <div className="h-px bg-slate-100 my-1" />
+
+          {/* 5. Delete (Destructive) */}
+          <button
+            type="button"
+            onClick={() => {
+              const msg = actionsMenu.message;
+              setActionsMenu(null);
+              setDeleteTarget(msg);
+            }}
+            className="w-full px-3.5 py-2 hover:bg-rose-50 flex items-center gap-2.5 text-left border-none bg-transparent cursor-pointer text-rose-600 transition-colors font-bold"
+          >
+            <Trash2 size={14} className="text-rose-600" />
+            <span>Delete Message</span>
+          </button>
+        </div>,
+        document.body
+      )}
+
+      {/* ── 6. CUSTOM DELETE CONFIRMATION MODAL (NO window.confirm) ── */}
+      <AnimatePresence>
+        {deleteTarget && (
+          <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              className="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-md w-full p-6 text-slate-900 relative space-y-4"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-2xl bg-rose-50 border border-rose-100 flex items-center justify-center text-rose-600 shrink-0">
+                  <Trash2 size={22} />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-slate-900 text-lg">Delete Message?</h3>
+                  <p className="text-xs text-slate-400 font-medium">This action cannot be undone.</p>
+                </div>
+              </div>
+
+              <div className="bg-rose-50/50 border border-rose-100 rounded-2xl p-4 text-xs font-semibold text-rose-800 space-y-1.5">
+                <p>
+                  Are you sure you want to delete the message from <span className="font-black text-rose-950">"{deleteTarget.name}"</span>?
+                </p>
+                <p className="text-[11px] text-rose-700 font-normal">
+                  This enquiry submission will be permanently removed from your CRM records.
+                </p>
+              </div>
+
+              <div className="flex justify-end gap-2.5 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setDeleteTarget(null)}
+                  disabled={deletingMessage}
+                  className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-700 font-bold text-xs hover:bg-slate-50 cursor-pointer disabled:opacity-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={deletingMessage}
+                  onClick={handleConfirmDelete}
+                  className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-xs cursor-pointer disabled:opacity-60 transition-colors flex items-center justify-center gap-1.5 border-none shadow-sm"
+                >
+                  {deletingMessage ? 'Deleting...' : 'Delete Message'}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ── 7. QUICK REPLY MODAL ── */}
+      <AnimatePresence>
+        {replyModalOpen && selectedMessage && (
+          <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white rounded-3xl p-6 max-w-lg w-full shadow-2xl border border-slate-200 space-y-4"
+            >
+              <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                  <Send className="text-[#0b5cbe]" size={18} /> Reply to {selectedMessage.name}
+                </h3>
+                <button onClick={() => setReplyModalOpen(false)} className="p-1 rounded-lg text-slate-400 hover:bg-slate-100 border-none cursor-pointer">
+                  <X size={18} />
+                </button>
+              </div>
+
+              <form onSubmit={handleSendReplySubmit} className="space-y-4 text-xs text-left">
+                <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200/70 space-y-1">
+                  <span className="font-extrabold text-slate-900 block">{selectedMessage.name}</span>
+                  <span className="text-[11px] text-slate-500 font-bold">📞 {selectedMessage.phone}</span>
+                  <p className="text-[11px] text-slate-600 italic mt-1">&ldquo;{selectedMessage.message}&rdquo;</p>
+                </div>
+
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">Reply Message</label>
+                  <textarea
+                    rows={4}
+                    required
+                    value={replyText}
+                    onChange={e => setReplyText(e.target.value)}
+                    placeholder="Type your response to the customer..."
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs font-medium text-slate-800 outline-none focus:border-[#0b5cbe] resize-none"
+                  />
+                </div>
+
+                <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => setReplyModalOpen(false)}
+                    className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl border-none cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={sendingReply}
+                    className="px-5 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-md border-none cursor-pointer flex items-center gap-1.5"
+                  >
+                    <Send size={13} /> {sendingReply ? 'Sending...' : 'Send via WhatsApp'}
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
     </div>
   );
