@@ -788,30 +788,9 @@ export default function EnquiryGodLevelHub() {
               <form onSubmit={handleCreateEnquiry} className="space-y-4 mt-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="text-[11px] font-bold text-slate-700 mb-1 block">First Name *</label>
-                    <input
-                      type="text"
-                      required
-                      value={firstName}
-                      onChange={e => setFirstName(e.target.value)}
-                      placeholder="e.g. Rahul"
-                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:border-blue-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-[11px] font-bold text-slate-700 mb-1 block">Last Name</label>
-                    <input
-                      type="text"
-                      value={lastName}
-                      onChange={e => setLastName(e.target.value)}
-                      placeholder="e.g. Verma"
-                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:border-blue-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-[11px] font-bold text-slate-700 mb-1 block">First Name *</label>
+                    <label className="text-[11px] font-bold text-slate-700 mb-1 flex items-center">
+                      First Name <span className="text-red-500 font-bold ml-1">*</span>
+                    </label>
                     <input
                       type="text"
                       value={firstName}
@@ -838,7 +817,9 @@ export default function EnquiryGodLevelHub() {
                   </div>
 
                   <div>
-                    <label className="text-[11px] font-bold text-slate-700 mb-1 block">Contact Number *</label>
+                    <label className="text-[11px] font-bold text-slate-700 mb-1 flex items-center">
+                      Contact Number <span className="text-red-500 font-bold ml-1">*</span>
+                    </label>
                     <input
                       type="tel"
                       value={contact}
@@ -883,7 +864,9 @@ export default function EnquiryGodLevelHub() {
                   </div>
 
                   <div>
-                    <label className="text-[11px] font-bold text-slate-700 mb-1 block">Lead Source *</label>
+                    <label className="text-[11px] font-bold text-slate-700 mb-1 flex items-center">
+                      Lead Source <span className="text-red-500 font-bold ml-1">*</span>
+                    </label>
                     <select
                       value={source}
                       onChange={e => { setSource(e.target.value); if (formErrors.source) setFormErrors(prev => ({ ...prev, source: '' })); }}
@@ -899,7 +882,9 @@ export default function EnquiryGodLevelHub() {
                   </div>
 
                   <div>
-                    <label className="text-[11px] font-bold text-slate-700 mb-1 block">Interested Membership *</label>
+                    <label className="text-[11px] font-bold text-slate-700 mb-1 flex items-center">
+                      Interested Membership <span className="text-red-500 font-bold ml-1">*</span>
+                    </label>
                     <select
                       value={inquiryFor}
                       onChange={e => { setInquiryFor(e.target.value); if (formErrors.inquiryFor) setFormErrors(prev => ({ ...prev, inquiryFor: '' })); }}
