@@ -151,7 +151,9 @@ export default function EmployeesPage() {
       e.email?.toLowerCase().includes(search.toLowerCase()) ||
       e.phone?.includes(search);
     
-    const matchesRole = roleFilter === 'all' || e.role === roleFilter;
+    const matchesRole = roleFilter === 'all' || 
+      (e.role && e.role.toLowerCase() === roleFilter.toLowerCase()) ||
+      (e.role && roleFilter.toLowerCase() === 'trainer' && e.role.toLowerCase().includes('trainer'));
     
     const accStatus = normalizeStatus(e.status);
     
