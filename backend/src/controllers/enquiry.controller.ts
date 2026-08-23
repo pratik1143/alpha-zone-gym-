@@ -2,6 +2,11 @@ import { Request, Response } from 'express';
 import { getFirestoreDb, mockEnquiries, mockMembers, saveMockDb, db } from '../firebase';
 import { importEnquiriesFromExcel } from '../services/enquiryImport.service';
 import { resolveStaleRenewalFollowups } from '../services/followupAutomation.service';
+import {
+  createEnquiryBackendSchema,
+  updateEnquiryBackendSchema,
+  convertEnquiryBackendSchema
+} from '../validations/enquirySchemas';
 
 export const getEnquiries = async (req: Request, res: Response) => {
   try {
@@ -42,6 +47,14 @@ export const getEnquiryHistory = async (req: Request, res: Response) => {
 
 export const createEnquiry = async (req: Request, res: Response) => {
   try {
+    const validationResult = createEnquiryBackendSchema.safeParse(req.body);
+    if (!validationResult.success) {
+      return res.status(400).json({
+        error: 'Validation failed',
+        details: validationResult.error.flatten().fieldErrors
+      });
+    }
+
     const firestore = getFirestoreDb();
     const data = req.body;
 
@@ -142,6 +155,14 @@ export const createEnquiry = async (req: Request, res: Response) => {
 export const updateEnquiry = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
+    const validationResult = updateEnquiryBackendSchema.safeParse(req.body);
+    if (!validationResult.success) {
+      return res.status(400).json({
+        error: 'Validation failed',
+        details: validationResult.error.flatten().fieldErrors
+      });
+    }
+
     const updates = req.body;
     updates.updatedAt = new Date().toISOString();
 
@@ -276,7 +297,15 @@ export const deleteEnquiry = async (req: Request, res: Response) => {
 export const convertEnquiryToMember = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { plan, price } = req.body;
+    const validationResult = convertEnquiryBackendSchema.safeParse(req.body);
+    if (!validationResult.success) {
+      return res.status(400).json({
+        error: 'Validation failed',
+        details: validationResult.error.flatten().fieldErrors
+      });
+    }
+
+    const { plan, price } = validationResult.data;
 
     const firestore = getFirestoreDb();
     let enquiry: any = null;

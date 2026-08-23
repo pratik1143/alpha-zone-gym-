@@ -18,21 +18,22 @@ import { enquiryService, EnquiryItem, EnquiryHistoryItem } from '@/services/enqu
 import { followupService } from '@/services/followup.service';
 import { getTodayInIndia, isTodayInIndia, isOverdueInIndia, isUpcomingInIndia, formatIndianDate } from '@/lib/dateUtils';
 import { resolveAvatarUrl, MALE_DEFAULT_AVATAR, FEMALE_DEFAULT_AVATAR } from '@/lib/avatar';
+import {
+  createEnquirySchema,
+  editEnquirySchema,
+  scheduleFollowUpSchema,
+  convertEnquirySchema,
+  updateEnquiryStatusSchema,
+  ENQUIRY_PLANS,
+  ENQUIRY_SOURCES,
+  cleanPhoneDigits
+} from '@/lib/validations/enquirySchemas';
 
 type Enquiry = EnquiryItem;
 
-const SOURCES = ['Walk-in', 'Instagram', 'Facebook', 'Google Ad', 'Referral', 'Phone Inquiry', 'Excel Import', 'Other'];
-const PLANS = ['1 month', '2 months', '3 months', '6 months', '12 months', 'Day Pass', 'Monthly Standard', 'Quarterly Prime', 'Annual VIP'];
+const SOURCES = ENQUIRY_SOURCES;
+const PLANS = ENQUIRY_PLANS;
 const DEFAULT_STAFF_LIST = ['Veer Chand (manager)', 'Tanya Mehra', 'Ujjval Peet Kaur', 'Karan Verma', 'Dev Rana', 'Sneha Kapoor', 'Reception Desk'];
-
-const enquiryFormSchema = z.object({
-  firstName: z.string().trim().min(2, 'First Name must be at least 2 characters'),
-  contact: z.string().trim().regex(/^[6-9]\d{9}$/, 'Enter a valid 10-digit mobile number'),
-  email: z.string().trim().optional().refine(val => !val || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val), 'Enter a valid email address'),
-  source: z.string().min(1, 'Please select a source'),
-  inquiryFor: z.string().min(1, 'Please select a membership plan'),
-  remarks: z.string().max(500, 'Remarks must be under 500 characters').optional()
-});
 
 export default function EnquiryGodLevelHub() {
   const [enquiries, setEnquiries] = useState<Enquiry[]>([]);
@@ -57,8 +58,17 @@ export default function EnquiryGodLevelHub() {
   const [deleteTarget, setDeleteTarget] = useState<Enquiry | null>(null);
   const [deletingEnquiry, setDeletingEnquiry] = useState(false);
   const [editingEnquiry, setEditingEnquiry] = useState<Enquiry | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editErrors, setEditErrors] = useState<Record<string, string>>({});
+  const [editTouched, setEditTouched] = useState<Record<string, boolean>>({});
+
   const [schedulingEnquiry, setSchedulingEnquiry] = useState<Enquiry | null>(null);
+  const [isScheduling, setIsScheduling] = useState(false);
+  const [scheduleErrors, setScheduleErrors] = useState<Record<string, string>>({});
   const [newScheduleDate, setNewScheduleDate] = useState('');
+
+  const [isConverting, setIsConverting] = useState(false);
+  const [convertErrors, setConvertErrors] = useState<Record<string, string>>({});
 
   // Default Today
   const todayStr = useMemo(() => getTodayInIndia(), []);
@@ -234,90 +244,81 @@ export default function EnquiryGodLevelHub() {
     });
   }, [enquiries, activeFilterTab, searchQuery, statusFilter, staffFilter, priorityFilter, planFilter]);
 
-  // Validate individual field
+  // Validate individual field using Zod
   const validateField = (field: string, value: string): string => {
-    if (field === 'firstName') {
-      const val = value.trim();
-      if (!val) return 'Please enter a valid first name.';
-      if (val.length < 2 || val.length > 50) return 'First name must be between 2 and 50 characters.';
-      if (!/^[A-Za-z\s]+$/.test(val)) return 'First name can only contain letters and spaces.';
-    }
+    const rawPayload: any = {
+      firstName: field === 'firstName' ? value : (firstName || 'Demo'),
+      lastName: field === 'lastName' ? value : lastName,
+      contact: field === 'contact' ? value : (contact || '9876543210'),
+      altContact: field === 'altContact' ? value : altContact,
+      email: field === 'email' ? value : email,
+      gender,
+      address,
+      inquiryFor: field === 'inquiryFor' ? value : (inquiryFor || '1 month'),
+      followupDate: field === 'followupDate' ? value : (followupDate || todayStr),
+      followupTime,
+      attendedBy: field === 'attendedBy' ? value : (attendedBy || 'Reception Desk'),
+      priority,
+      source,
+      remarks: field === 'remarks' ? value : remarks
+    };
 
-    if (field === 'lastName') {
-      const val = value.trim();
-      if (val) {
-        if (val.length < 2 || val.length > 50) return 'Last name must be between 2 and 50 characters.';
-        if (!/^[A-Za-z\s]+$/.test(val)) return 'Last name can only contain letters and spaces.';
-      }
+    const parsed = createEnquirySchema.safeParse(rawPayload);
+    if (!parsed.success) {
+      const issue = parsed.error.issues.find(i => String(i.path[0]) === field);
+      if (issue) return issue.message;
     }
 
     if (field === 'contact') {
-      const val = value.replace(/\D/g, '');
-      if (!val || val.length !== 10) return 'Enter a valid 10-digit mobile number.';
-      if (!/^[6-9]\d{9}$/.test(val)) return 'Enter a valid 10-digit mobile number starting with 6, 7, 8, or 9.';
-
-      // Duplicate phone validation
-      const isDuplicate = enquiries.some(e => {
-        const p = (e.phone || '').replace(/\D/g, '');
-        return p === val;
-      });
+      const clean = cleanPhoneDigits(value);
+      const isDuplicate = enquiries.some(e => cleanPhoneDigits(e.phone) === clean);
       if (isDuplicate) return 'An enquiry with this mobile number already exists.';
-    }
-
-    if (field === 'inquiryFor') {
-      if (!value || value === 'Select Plan...' || value.trim() === '') {
-        return 'Please select an interested plan.';
-      }
-    }
-
-    if (field === 'followupDate') {
-      if (!value || !value.trim()) {
-        return 'Please select a valid follow-up date.';
-      }
-    }
-
-    if (field === 'attendedBy') {
-      if (!value || value === 'Select Representative...' || value.trim() === '') {
-        return 'Please select a representative.';
-      }
-    }
-
-    if (field === 'remarks') {
-      if (value && value.length > 500) {
-        return 'Remarks cannot exceed 500 characters.';
-      }
     }
 
     return '';
   };
 
-  // Validate entire form
-  const validateAll = (): { isValid: boolean; errors: Record<string, string> } => {
+  // Validate entire form with Zod
+  const validateAll = (): { isValid: boolean; errors: Record<string, string>; data?: any } => {
+    const rawPayload = {
+      firstName,
+      lastName,
+      contact,
+      altContact,
+      email,
+      gender,
+      address,
+      inquiryFor,
+      followupDate,
+      followupTime,
+      attendedBy,
+      priority,
+      source,
+      remarks
+    };
+
+    const parsed = createEnquirySchema.safeParse(rawPayload);
     const errors: Record<string, string> = {};
-    const fnErr = validateField('firstName', firstName);
-    if (fnErr) errors.firstName = fnErr;
 
-    const lnErr = validateField('lastName', lastName);
-    if (lnErr) errors.lastName = lnErr;
+    if (!parsed.success) {
+      parsed.error.issues.forEach(issue => {
+        const fieldName = String(issue.path[0]);
+        if (!errors[fieldName]) {
+          errors[fieldName] = issue.message;
+        }
+      });
+    }
 
-    const contactErr = validateField('contact', contact);
-    if (contactErr) errors.contact = contactErr;
-
-    const planErr = validateField('inquiryFor', inquiryFor);
-    if (planErr) errors.inquiryFor = planErr;
-
-    const dateErr = validateField('followupDate', followupDate);
-    if (dateErr) errors.followupDate = dateErr;
-
-    const repErr = validateField('attendedBy', attendedBy);
-    if (repErr) errors.attendedBy = repErr;
-
-    const remErr = validateField('remarks', remarks);
-    if (remErr) errors.remarks = remErr;
+    const clean = cleanPhoneDigits(contact);
+    const isDuplicate = enquiries.some(e => cleanPhoneDigits(e.phone) === clean);
+    if (isDuplicate) {
+      errors.contact = 'An enquiry with this mobile number already exists.';
+    }
 
     return {
       isValid: Object.keys(errors).length === 0,
-      errors
+      errors,
+      data: parsed.success ? parsed.data : undefined
     };
   };
 
@@ -342,7 +343,7 @@ export default function EnquiryGodLevelHub() {
     setFormErrors({});
   };
 
-  // Create New Lead
+  // Create New Lead with Zod Validation
   const handleCreateEnquiry = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isSubmitting) return;
@@ -358,8 +359,8 @@ export default function EnquiryGodLevelHub() {
       remarks: true
     });
 
-    const { isValid, errors } = validateAll();
-    if (!isValid) {
+    const { isValid, errors, data } = validateAll();
+    if (!isValid || !data) {
       setFormErrors(errors);
       toast.error('Please resolve the highlighted validation errors');
       return;
@@ -369,36 +370,36 @@ export default function EnquiryGodLevelHub() {
     setIsSubmitting(true);
 
     try {
-      const formattedFirstName = firstName.trim().charAt(0).toUpperCase() + firstName.trim().slice(1);
-      const formattedLastName = lastName.trim() ? (lastName.trim().charAt(0).toUpperCase() + lastName.trim().slice(1)) : '';
+      const formattedFirstName = data.firstName.charAt(0).toUpperCase() + data.firstName.slice(1);
+      const formattedLastName = data.lastName ? (data.lastName.charAt(0).toUpperCase() + data.lastName.slice(1)) : '';
       const fullName = `${formattedFirstName} ${formattedLastName}`.trim();
-      const cleanPhone = contact.replace(/\D/g, '');
+      const cleanPhone = data.contact;
 
       const payload: Partial<EnquiryItem> = {
         name: fullName,
         firstName: formattedFirstName,
         lastName: formattedLastName,
         phone: cleanPhone,
-        altPhone: altContact,
-        email,
-        gender,
-        address,
-        nextFollowUpDate: followupDate,
-        nextFollowUp: followupDate,
-        followUpTime: followupTime || '11:00',
+        altPhone: data.altContact || '',
+        email: data.email || '',
+        gender: data.gender,
+        address: data.address || '',
+        nextFollowUpDate: data.followupDate,
+        nextFollowUp: data.followupDate,
+        followUpTime: data.followupTime || '11:00',
         status: 'Pending',
-        assignedTo: attendedBy,
-        priority,
-        source: source || 'Walk-in',
-        interestedPlan: inquiryFor,
-        duration: inquiryFor,
-        remarks: remarks.trim(),
+        assignedTo: data.attendedBy,
+        priority: data.priority,
+        source: data.source || 'Walk-in',
+        interestedPlan: data.inquiryFor,
+        duration: data.inquiryFor,
+        remarks: (data.remarks || '').trim(),
         createdAt: new Date().toISOString()
       };
 
       const created = await enquiryService.create(payload);
-      if (followupDate) {
-        const normDate = followupDate.trim().split('T')[0];
+      if (data.followupDate) {
+        const normDate = data.followupDate.trim().split('T')[0];
         const enqId = created?.id || payload.id;
         const followUpKey = `ENQUIRY_FOLLOWUP_${enqId}_${normDate}`;
         await followupService.create({
@@ -411,16 +412,16 @@ export default function EnquiryGodLevelHub() {
           type: 'Enquiry',
           title: `Enquiry Follow-Up: ${fullName}`,
           reason: 'New enquiry follow-up',
-          description: `Initial enquiry callback for ${fullName}${inquiryFor ? ` (${inquiryFor})` : ''}`,
-          notes: remarks.trim() || `New enquiry follow-up for ${fullName}`,
-          priority: priority === 'Hot' ? 'High' : 'Medium',
+          description: `Initial enquiry callback for ${fullName}${data.inquiryFor ? ` (${data.inquiryFor})` : ''}`,
+          notes: (data.remarks || '').trim() || `New enquiry follow-up for ${fullName}`,
+          priority: data.priority === 'Hot' ? 'High' : 'Medium',
           dueDate: normDate,
           scheduledDate: normDate,
-          scheduledTime: followupTime || '11:00',
-          assignedTo: attendedBy || 'Reception Desk',
+          scheduledTime: data.followupTime || '11:00',
+          assignedTo: data.attendedBy || 'Reception Desk',
           status: 'Pending',
           source: 'enquiry',
-          plan: inquiryFor
+          plan: data.inquiryFor
         });
       }
 
@@ -428,7 +429,7 @@ export default function EnquiryGodLevelHub() {
       setShowCreateModal(false);
       resetForm();
     } catch (err: any) {
-      toast.error('Unable to create enquiry. Please try again.');
+      toast.error('Unable to create enquiry: ' + (err.message || 'Please try again.'));
     } finally {
       setIsSubmitting(false);
     }
@@ -445,33 +446,77 @@ export default function EnquiryGodLevelHub() {
     setEditFollowupDate((enq.nextFollowUpDate || enq.nextFollowUp || todayStr).split('T')[0]);
     setEditRemarks(enq.remarks || '');
     setEditStatus(enq.status || 'Pending');
+    setEditErrors({});
+    setEditTouched({});
   };
 
-  // Submit Edit Lead
+  // Submit Edit Lead with Zod Validation
   const handleEditSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editingEnquiry) return;
+    if (!editingEnquiry || isEditing) return;
+
+    setEditTouched({
+      name: true,
+      phone: true,
+      email: true,
+      duration: true,
+      assignedTo: true,
+      nextFollowUpDate: true,
+      status: true,
+      remarks: true
+    });
+
+    const rawPayload = {
+      name: editName.trim(),
+      phone: editPhone.trim(),
+      email: editEmail.trim(),
+      duration: editPlan,
+      assignedTo: editRep,
+      nextFollowUpDate: editFollowupDate,
+      status: (editStatus as any) || 'Pending',
+      remarks: editRemarks.trim()
+    };
+
+    const parsed = editEnquirySchema.safeParse(rawPayload);
+    if (!parsed.success) {
+      const errors: Record<string, string> = {};
+      parsed.error.issues.forEach(issue => {
+        const fieldName = String(issue.path[0]);
+        if (!errors[fieldName]) errors[fieldName] = issue.message;
+      });
+      setEditErrors(errors);
+      toast.error('Please resolve the highlighted validation errors');
+      return;
+    }
+
+    setEditErrors({});
+    setIsEditing(true);
+
     try {
+      const validData = parsed.data;
       await enquiryService.update(editingEnquiry.id, {
-        name: editName,
-        phone: editPhone,
-        email: editEmail,
-        duration: editPlan,
-        interestedPlan: editPlan,
-        assignedTo: editRep,
-        nextFollowUpDate: editFollowupDate,
-        nextFollowUp: editFollowupDate,
-        remarks: editRemarks,
-        status: editStatus as any,
+        name: validData.name,
+        phone: validData.phone,
+        email: validData.email,
+        duration: validData.duration,
+        interestedPlan: validData.duration,
+        assignedTo: validData.assignedTo,
+        nextFollowUpDate: validData.nextFollowUpDate,
+        nextFollowUp: validData.nextFollowUpDate,
+        remarks: validData.remarks,
+        status: validData.status as any,
         updatedAt: new Date().toISOString()
       });
-      toast.success('Enquiry updated successfully!');
+
+      toast.success('✓ Enquiry updated successfully!');
       setEditingEnquiry(null);
       if (selectedEnquiry?.id === editingEnquiry.id) {
-        setSelectedEnquiry(prev => prev ? ({ ...prev, name: editName, phone: editPhone, email: editEmail, duration: editPlan, assignedTo: editRep, nextFollowUpDate: editFollowupDate, status: editStatus as any }) : null);
+        setSelectedEnquiry(prev => prev ? ({ ...prev, ...validData, status: validData.status as any }) : null);
       }
     } catch (err: any) {
       toast.error('Failed to update enquiry: ' + err.message);
+    } finally {
+      setIsEditing(false);
     }
   };
 
@@ -479,14 +524,36 @@ export default function EnquiryGodLevelHub() {
   const handleOpenScheduleFollowup = (enq: Enquiry) => {
     setSchedulingEnquiry(enq);
     setNewScheduleDate((enq.nextFollowUpDate || enq.nextFollowUp || todayStr).split('T')[0]);
+    setScheduleErrors({});
   };
 
-  // Submit Schedule Follow-up
+  // Submit Schedule Follow-up with Zod Validation
   const handleScheduleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!schedulingEnquiry || !newScheduleDate) return;
+    if (!schedulingEnquiry || isScheduling) return;
+
+    const parsed = scheduleFollowUpSchema.safeParse({
+      followUpDate: newScheduleDate.trim(),
+      followUpTime: schedulingEnquiry.followUpTime || '11:00',
+      assignedTo: schedulingEnquiry.assignedTo || 'Reception Desk',
+      notes: schedulingEnquiry.remarks || ''
+    });
+
+    if (!parsed.success) {
+      const errors: Record<string, string> = {};
+      parsed.error.issues.forEach(issue => {
+        errors[String(issue.path[0])] = issue.message;
+      });
+      setScheduleErrors(errors);
+      toast.error(errors.followUpDate || 'Please select a valid follow-up date.');
+      return;
+    }
+
+    setScheduleErrors({});
+    setIsScheduling(true);
+
     try {
-      const normalizedDate = newScheduleDate.trim().split('T')[0];
+      const normalizedDate = parsed.data.followUpDate;
 
       // 1. Update enquiry document
       await enquiryService.update(schedulingEnquiry.id, {
@@ -513,7 +580,7 @@ export default function EnquiryGodLevelHub() {
         priority: schedulingEnquiry.priority === 'Hot' ? 'High' : 'Medium',
         dueDate: normalizedDate,
         scheduledDate: normalizedDate,
-        scheduledTime: schedulingEnquiry.followUpTime || '11:00',
+        scheduledTime: parsed.data.followUpTime,
         assignedTo: schedulingEnquiry.assignedTo || 'Reception Desk',
         status: 'Pending',
         source: 'enquiry',
@@ -528,19 +595,27 @@ export default function EnquiryGodLevelHub() {
     } catch (err: any) {
       console.error('Failed to schedule follow-up:', err);
       toast.error('Unable to schedule follow-up. Please try again.');
+    } finally {
+      setIsScheduling(false);
     }
   };
 
-  // Update Status
+  // Update Status with Zod Validation
   const handleUpdateStatus = async (id: string, newStatus: string) => {
+    const parsed = updateEnquiryStatusSchema.safeParse({ status: newStatus });
+    if (!parsed.success) {
+      toast.error('Invalid enquiry status');
+      return;
+    }
+
     try {
-      await enquiryService.update(id, { status: newStatus as any });
-      toast.success(`Enquiry marked as ${newStatus}`);
+      await enquiryService.update(id, { status: parsed.data.status as any });
+      toast.success(`✓ Enquiry marked as ${parsed.data.status}`);
       if (selectedEnquiry && selectedEnquiry.id === id) {
-        setSelectedEnquiry({ ...selectedEnquiry, status: newStatus as any });
+        setSelectedEnquiry({ ...selectedEnquiry, status: parsed.data.status as any });
       }
     } catch (err: any) {
-      toast.error('Failed to update status');
+      toast.error('Failed to update status: ' + err.message);
     }
   };
 
@@ -560,18 +635,39 @@ export default function EnquiryGodLevelHub() {
     }
   };
 
-  // Convert to Member
+  // Convert to Member with Zod Validation
   const handleConvertSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!showConvertModal) return;
+    if (!showConvertModal || isConverting) return;
+
+    const parsed = convertEnquirySchema.safeParse({
+      plan: convertPlan,
+      price: Number(convertPrice),
+      startDate: todayStr
+    });
+
+    if (!parsed.success) {
+      const errors: Record<string, string> = {};
+      parsed.error.issues.forEach(issue => {
+        errors[String(issue.path[0])] = issue.message;
+      });
+      setConvertErrors(errors);
+      toast.error('Please enter valid conversion details');
+      return;
+    }
+
+    setConvertErrors({});
+    setIsConverting(true);
 
     try {
-      await enquiryService.convertToMember(showConvertModal.id, convertPlan, convertPrice);
+      await enquiryService.convertToMember(showConvertModal.id, parsed.data.plan, String(parsed.data.price));
       toast.success('✓ Lead converted to Member successfully!', { icon: '🎉' });
       setShowConvertModal(null);
       confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
     } catch (err: any) {
       toast.error('Failed to convert: ' + err.message);
+    } finally {
+      setIsConverting(false);
     }
   };
 
@@ -1346,7 +1442,7 @@ export default function EnquiryGodLevelHub() {
         )}
       </AnimatePresence>
 
-      {/* ── 7. EDIT ENQUIRY MODAL ── */}
+      {/* ── 7. EDIT ENQUIRY MODAL (Full Zod Validation) ── */}
       <AnimatePresence>
         {editingEnquiry && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs">
@@ -1371,21 +1467,43 @@ export default function EnquiryGodLevelHub() {
                     <label className="font-bold text-slate-700 block mb-1">Full Name *</label>
                     <input
                       type="text"
-                      required
                       value={editName}
-                      onChange={e => setEditName(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 outline-none focus:border-[#0b5cbe]"
+                      onChange={e => {
+                        setEditName(e.target.value);
+                        if (editTouched.name) setEditErrors(prev => ({ ...prev, name: '' }));
+                      }}
+                      onBlur={() => setEditTouched(prev => ({ ...prev, name: true }))}
+                      className={`w-full bg-slate-50 border ${
+                        editTouched.name && editErrors.name ? 'border-rose-400 bg-rose-50/20' : 'border-slate-200 focus:border-[#0b5cbe]'
+                      } rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 outline-none`}
                     />
+                    {editTouched.name && editErrors.name && (
+                      <p className="text-[10.5px] text-rose-600 font-bold mt-1 flex items-center gap-1">
+                        <AlertCircle size={11} className="shrink-0" />
+                        <span>{editErrors.name}</span>
+                      </p>
+                    )}
                   </div>
                   <div>
                     <label className="font-bold text-slate-700 block mb-1">Mobile Number *</label>
                     <input
                       type="tel"
-                      required
                       value={editPhone}
-                      onChange={e => setEditPhone(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 outline-none focus:border-[#0b5cbe]"
+                      onChange={e => {
+                        setEditPhone(e.target.value);
+                        if (editTouched.phone) setEditErrors(prev => ({ ...prev, phone: '' }));
+                      }}
+                      onBlur={() => setEditTouched(prev => ({ ...prev, phone: true }))}
+                      className={`w-full bg-slate-50 border ${
+                        editTouched.phone && editErrors.phone ? 'border-rose-400 bg-rose-50/20' : 'border-slate-200 focus:border-[#0b5cbe]'
+                      } rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 outline-none`}
                     />
+                    {editTouched.phone && editErrors.phone && (
+                      <p className="text-[10.5px] text-rose-600 font-bold mt-1 flex items-center gap-1">
+                        <AlertCircle size={11} className="shrink-0" />
+                        <span>{editErrors.phone}</span>
+                      </p>
+                    )}
                   </div>
                 </div>
 
@@ -1395,15 +1513,30 @@ export default function EnquiryGodLevelHub() {
                     <input
                       type="email"
                       value={editEmail}
-                      onChange={e => setEditEmail(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 outline-none focus:border-[#0b5cbe]"
+                      onChange={e => {
+                        setEditEmail(e.target.value);
+                        if (editTouched.email) setEditErrors(prev => ({ ...prev, email: '' }));
+                      }}
+                      onBlur={() => setEditTouched(prev => ({ ...prev, email: true }))}
+                      className={`w-full bg-slate-50 border ${
+                        editTouched.email && editErrors.email ? 'border-rose-400 bg-rose-50/20' : 'border-slate-200 focus:border-[#0b5cbe]'
+                      } rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 outline-none`}
                     />
+                    {editTouched.email && editErrors.email && (
+                      <p className="text-[10.5px] text-rose-600 font-bold mt-1 flex items-center gap-1">
+                        <AlertCircle size={11} className="shrink-0" />
+                        <span>{editErrors.email}</span>
+                      </p>
+                    )}
                   </div>
                   <div>
-                    <label className="font-bold text-slate-700 block mb-1">Interested Plan</label>
+                    <label className="font-bold text-slate-700 block mb-1">Interested Plan *</label>
                     <select
                       value={editPlan}
-                      onChange={e => setEditPlan(e.target.value)}
+                      onChange={e => {
+                        setEditPlan(e.target.value);
+                        if (editTouched.duration) setEditErrors(prev => ({ ...prev, duration: '' }));
+                      }}
                       className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 outline-none focus:border-[#0b5cbe]"
                     >
                       {PLANS.map(p => <option key={p} value={p}>{p}</option>)}
@@ -1413,13 +1546,24 @@ export default function EnquiryGodLevelHub() {
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="font-bold text-slate-700 block mb-1">Follow-up Date</label>
+                    <label className="font-bold text-slate-700 block mb-1">Follow-up Date *</label>
                     <input
                       type="date"
                       value={editFollowupDate}
-                      onChange={e => setEditFollowupDate(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 outline-none focus:border-[#0b5cbe] cursor-pointer"
+                      onChange={e => {
+                        setEditFollowupDate(e.target.value);
+                        if (editTouched.nextFollowUpDate) setEditErrors(prev => ({ ...prev, nextFollowUpDate: '' }));
+                      }}
+                      className={`w-full bg-slate-50 border ${
+                        editTouched.nextFollowUpDate && editErrors.nextFollowUpDate ? 'border-rose-400 bg-rose-50/20' : 'border-slate-200 focus:border-[#0b5cbe]'
+                      } rounded-xl px-3 py-2 text-xs font-bold text-slate-800 outline-none cursor-pointer`}
                     />
+                    {editTouched.nextFollowUpDate && editErrors.nextFollowUpDate && (
+                      <p className="text-[10.5px] text-rose-600 font-bold mt-1 flex items-center gap-1">
+                        <AlertCircle size={11} className="shrink-0" />
+                        <span>{editErrors.nextFollowUpDate}</span>
+                      </p>
+                    )}
                   </div>
                   <div>
                     <label className="font-bold text-slate-700 block mb-1">Representative</label>
@@ -1441,21 +1585,36 @@ export default function EnquiryGodLevelHub() {
                     onChange={e => setEditRemarks(e.target.value)}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-medium text-slate-800 outline-none focus:border-[#0b5cbe] resize-none"
                   />
+                  {editTouched.remarks && editErrors.remarks && (
+                    <p className="text-[10.5px] text-rose-600 font-bold mt-1 flex items-center gap-1">
+                      <AlertCircle size={11} className="shrink-0" />
+                      <span>{editErrors.remarks}</span>
+                    </p>
+                  )}
                 </div>
 
                 <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
                   <button
                     type="button"
                     onClick={() => setEditingEnquiry(null)}
-                    className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl border-none cursor-pointer"
+                    disabled={isEditing}
+                    className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl border-none cursor-pointer disabled:opacity-50"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
-                    className="px-5 py-2 text-xs font-bold text-white bg-[#0b5cbe] hover:bg-blue-700 rounded-xl shadow-md border-none cursor-pointer"
+                    disabled={isEditing}
+                    className="px-5 py-2 text-xs font-bold text-white bg-[#0b5cbe] hover:bg-blue-700 rounded-xl shadow-md border-none cursor-pointer disabled:opacity-60 flex items-center gap-1.5"
                   >
-                    Save Changes
+                    {isEditing ? (
+                      <>
+                        <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        <span>Saving...</span>
+                      </>
+                    ) : (
+                      'Save Changes'
+                    )}
                   </button>
                 </div>
               </form>
@@ -1464,7 +1623,7 @@ export default function EnquiryGodLevelHub() {
         )}
       </AnimatePresence>
 
-      {/* ── 8. SCHEDULE FOLLOW-UP QUICK MODAL ── */}
+      {/* ── 8. SCHEDULE FOLLOW-UP QUICK MODAL (Zod Validated) ── */}
       <AnimatePresence>
         {schedulingEnquiry && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs">
@@ -1493,26 +1652,45 @@ export default function EnquiryGodLevelHub() {
                   <label className="font-bold text-slate-700 block mb-1">New Follow-up Date *</label>
                   <input
                     type="date"
-                    required
                     value={newScheduleDate}
-                    onChange={e => setNewScheduleDate(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs font-bold text-slate-800 outline-none focus:border-[#0b5cbe] cursor-pointer"
+                    onChange={e => {
+                      setNewScheduleDate(e.target.value);
+                      if (scheduleErrors.followUpDate) setScheduleErrors({});
+                    }}
+                    className={`w-full bg-slate-50 border ${
+                      scheduleErrors.followUpDate ? 'border-rose-400 bg-rose-50/20' : 'border-slate-200 focus:border-[#0b5cbe]'
+                    } rounded-xl px-3 py-2.5 text-xs font-bold text-slate-800 outline-none cursor-pointer`}
                   />
+                  {scheduleErrors.followUpDate && (
+                    <p className="text-[10.5px] text-rose-600 font-bold mt-1 flex items-center gap-1">
+                      <AlertCircle size={11} className="shrink-0" />
+                      <span>{scheduleErrors.followUpDate}</span>
+                    </p>
+                  )}
                 </div>
 
                 <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
                   <button
                     type="button"
                     onClick={() => setSchedulingEnquiry(null)}
-                    className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl border-none cursor-pointer"
+                    disabled={isScheduling}
+                    className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl border-none cursor-pointer disabled:opacity-50"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
-                    className="px-5 py-2 text-xs font-bold text-white bg-[#0b5cbe] hover:bg-blue-700 rounded-xl shadow-md border-none cursor-pointer"
+                    disabled={isScheduling}
+                    className="px-5 py-2 text-xs font-bold text-white bg-[#0b5cbe] hover:bg-blue-700 rounded-xl shadow-md border-none cursor-pointer disabled:opacity-60 flex items-center gap-1.5"
                   >
-                    Set Follow-up
+                    {isScheduling ? (
+                      <>
+                        <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        <span>Scheduling...</span>
+                      </>
+                    ) : (
+                      'Set Follow-up'
+                    )}
                   </button>
                 </div>
               </form>
@@ -1965,29 +2143,48 @@ export default function EnquiryGodLevelHub() {
                 </div>
 
                 <div>
-                  <label className="font-bold text-slate-700 block mb-1">Amount Paid (₹)</label>
+                  <label className="font-bold text-slate-700 block mb-1">Amount Paid (₹) *</label>
                   <input
                     type="number"
-                    required
                     value={convertPrice}
-                    onChange={e => setConvertPrice(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 outline-none focus:border-[#0b5cbe]"
+                    onChange={e => {
+                      setConvertPrice(e.target.value);
+                      if (convertErrors.price) setConvertErrors({});
+                    }}
+                    className={`w-full bg-slate-50 border ${
+                      convertErrors.price ? 'border-rose-400 bg-rose-50/20' : 'border-slate-200 focus:border-[#0b5cbe]'
+                    } rounded-xl px-3 py-2 text-xs font-bold text-slate-800 outline-none`}
                   />
+                  {convertErrors.price && (
+                    <p className="text-[10.5px] text-rose-600 font-bold mt-1 flex items-center gap-1">
+                      <AlertCircle size={11} className="shrink-0" />
+                      <span>{convertErrors.price}</span>
+                    </p>
+                  )}
                 </div>
 
                 <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
                   <button
                     type="button"
                     onClick={() => setShowConvertModal(null)}
-                    className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl border-none cursor-pointer"
+                    disabled={isConverting}
+                    className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl border-none cursor-pointer disabled:opacity-50"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
-                    className="px-5 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-md border-none cursor-pointer"
+                    disabled={isConverting}
+                    className="px-5 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-md border-none cursor-pointer disabled:opacity-60 flex items-center gap-1.5"
                   >
-                    Confirm Conversion
+                    {isConverting ? (
+                      <>
+                        <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        <span>Converting...</span>
+                      </>
+                    ) : (
+                      'Confirm Conversion'
+                    )}
                   </button>
                 </div>
               </form>
