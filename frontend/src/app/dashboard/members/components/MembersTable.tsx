@@ -1017,7 +1017,7 @@ export default function MembersTable({
             onClick={() => {
               const m = actionsMenu.member;
               setActionsMenu(null);
-              onSelectMember(m);
+              router.push(`/dashboard/members/${encodeURIComponent(m.id)}`);
             }}
             className="w-full px-3.5 py-2 hover:bg-slate-50 flex items-center gap-2.5 text-left border-none bg-transparent cursor-pointer text-slate-700 transition-colors font-bold"
           >
