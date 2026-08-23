@@ -266,15 +266,9 @@ export default function DashboardLayout({
                 alt="Alpha Zone Logo" 
                 className="h-10 w-10 object-contain shrink-0 rounded-full shadow-xs group-hover:scale-105 transition-transform" 
               />
-              <div className="flex flex-col min-w-0">
-                <span className="font-rowdies font-extrabold text-[15px] tracking-tight uppercase text-slate-900 leading-none">
-                  Alpha Zone <span className="text-[#0b5cbe]">Gym</span>
-                </span>
-                <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 mt-1 flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                  Fitness OS
-                </span>
-              </div>
+              <span className="font-rowdies font-extrabold text-[15px] tracking-tight uppercase text-slate-900 leading-none">
+                Alpha Zone <span className="text-[#0b5cbe]">Gym</span>
+              </span>
             </Link>
           </div>
 
