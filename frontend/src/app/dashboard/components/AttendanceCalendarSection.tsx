@@ -279,14 +279,13 @@ export default function AttendanceCalendarSection({
 
   // Staff Attendance & Absence Tracking
   const staffListWithStatus = useMemo(() => {
-    // Fallback default employees roster if list from backend is still loading
     const defaultStaff = [
-      { id: 'emp_501', name: 'Ramesh Kumar', phone: '9876543210', email: 'ramesh@alphagym.com', role: 'Manager', branch: 'Mohali, Punjab', biometricId: 501 },
-      { id: 'emp_502', name: 'Karan Verma', phone: '9988776655', email: 'karan@alphagym.com', role: 'Trainer', branch: 'Mohali, Punjab', biometricId: 502 },
-      { id: 'emp_503', name: 'Sneha Kapoor', phone: '9988776656', email: 'sneha@alphagym.com', role: 'Trainer', branch: 'Mohali, Punjab', biometricId: 503 },
-      { id: 'emp_504', name: 'Priya Singh', phone: '9877407661', email: 'priya.reception@alphagym.com', role: 'Reception', branch: 'Mohali, Punjab', biometricId: 504 },
-      { id: 'emp_505', name: 'Dev Rana', phone: '9988776657', email: 'dev@alphagym.com', role: 'Trainer', branch: 'Mohali, Punjab', biometricId: 505 },
-      { id: 'emp_506', name: 'Gurpreet Singh', phone: '9811223344', email: 'gurpreet@alphagym.com', role: 'Cleaner', branch: 'Mohali, Punjab', biometricId: 506 }
+      { id: 'emp_10021', name: 'Sourav Arora', phone: '7973649709', role: 'Trainer', biometricId: 10021 },
+      { id: 'emp_10012', name: 'Deepak', phone: '8196852386', role: 'Trainer', biometricId: 10012 },
+      { id: 'emp_10009', name: 'Kuldeep', phone: '8629841471', role: 'Trainer', biometricId: 10009 },
+      { id: 'emp_10008', name: 'Arshdeep Singh', phone: '9915866576', role: 'Trainer', biometricId: 10008 },
+      { id: 'emp_10005', name: 'Achhar Pal', phone: '9592691190', role: 'Trainer', biometricId: 10005 },
+      { id: 'emp_10003', name: 'Abc', phone: '7884977777', role: 'Trainer', biometricId: 10003 }
     ];
 
     const sourceList = (employeesList && employeesList.length > 0) ? employeesList : defaultStaff;

@@ -16,7 +16,7 @@
 
 import API from './api';
 import { db } from '@/lib/firebase';
-import { collection, doc, getDocs, setDoc, updateDoc, query, addDoc } from 'firebase/firestore';
+import { collection, doc, getDocs, setDoc, updateDoc, deleteDoc, query, addDoc } from 'firebase/firestore';
 
 export interface UnifiedStaff {
   id: string;
@@ -181,41 +181,6 @@ export const BASELINE_REAL_TRAINERS: UnifiedStaff[] = [
   }
 ];
 
-export const BASELINE_MANAGEMENT_STAFF: UnifiedStaff[] = [
-  {
-    id: 'emp_501',
-    employeeId: 'EMP-501',
-    biometricId: 501,
-    name: 'Ramesh Kumar',
-    phone: '9876543210',
-    email: 'ramesh@alphagym.com',
-    branch: 'Alpha Zone Gym',
-    role: 'Manager',
-    status: 'Active',
-    todayStatus: 'Present',
-    currentStatus: 'Inside',
-    lastPunch: new Date().toISOString(),
-    address: 'Phase 3B2, Mohali',
-    isDeleted: false
-  },
-  {
-    id: 'emp_504',
-    employeeId: 'EMP-504',
-    biometricId: 504,
-    name: 'Priya Singh',
-    phone: '9877407661',
-    email: 'priya.reception@alphagym.com',
-    branch: 'Alpha Zone Gym',
-    role: 'Reception',
-    status: 'Active',
-    todayStatus: 'Present',
-    currentStatus: 'Inside',
-    lastPunch: new Date().toISOString(),
-    address: 'Sector 71, Mohali',
-    isDeleted: false
-  }
-];
-
 class StaffDirectoryService {
   private hasReconciled = false;
 
@@ -225,6 +190,22 @@ class StaffDirectoryService {
   private cleanPhone(phone?: string): string {
     if (!phone) return '';
     return phone.replace(/\D/g, '').slice(-10);
+  }
+
+  /**
+   * Helper: Checks if record is a fake demo record that must be pruned
+   */
+  private isFakeStaff(item: any): boolean {
+    const name = String(item.name || '').trim().toLowerCase();
+    const phone = this.cleanPhone(item.phone);
+    const bioId = String(item.biometricId || '').trim();
+    const id = String(item.id || '').trim();
+
+    if (name.includes('ramesh kumar') || name.includes('priya singh')) return true;
+    if (bioId === '501' || bioId === '504') return true;
+    if (id === 'emp_501' || id === 'emp_504') return true;
+    if (phone === '9876543210' || phone === '9877407661') return true;
+    return false;
   }
 
   /**
@@ -245,8 +226,8 @@ class StaffDirectoryService {
   }
 
   /**
-   * Master Reconciliation: Idempotently ensures all master staff records
-   * are synced to the Firestore 'employees' collection.
+   * Master Reconciliation: Idempotently ensures real master staff records
+   * are synced to Firestore 'employees' collection, and prunes any fake accounts.
    */
   async reconcileStaffAndTrainers(): Promise<void> {
     if (this.hasReconciled) return;
@@ -256,14 +237,20 @@ class StaffDirectoryService {
       const snap = await getDocs(collection(db, 'employees'));
       const existingDocKeys = new Set<string>();
 
-      snap.forEach(docSnap => {
+      for (const docSnap of snap.docs) {
         const d = docSnap.data();
+        if (this.isFakeStaff({ id: docSnap.id, ...d })) {
+          // Permanently delete fake accounts from Firestore
+          await deleteDoc(doc(db, 'employees', docSnap.id)).catch(() => {});
+          continue;
+        }
+
         const key = this.getStaffKey({ id: docSnap.id, ...d });
         existingDocKeys.add(key);
-      });
+      }
 
-      // Check baseline staff and write any missing records to Firestore
-      for (const staff of [...BASELINE_MANAGEMENT_STAFF, ...BASELINE_REAL_TRAINERS]) {
+      // Check baseline real trainers and write any missing records to Firestore
+      for (const staff of BASELINE_REAL_TRAINERS) {
         const key = this.getStaffKey(staff);
         if (!existingDocKeys.has(key)) {
           const docRef = doc(db, 'employees', staff.id);
@@ -281,7 +268,7 @@ class StaffDirectoryService {
 
   /**
    * Master function: Get all staff members from employees & trainers collections
-   * Unifies and deduplicates records into a single staff array.
+   * Unifies and deduplicates records into a single staff array (excluding fake demo accounts).
    */
   async getStaffDirectory(): Promise<UnifiedStaff[]> {
     // Run reconciliation in the background
@@ -289,8 +276,8 @@ class StaffDirectoryService {
 
     const directoryMap = new Map<string, UnifiedStaff>();
 
-    // 1. Seed baseline real trainers & managers first
-    for (const item of [...BASELINE_MANAGEMENT_STAFF, ...BASELINE_REAL_TRAINERS]) {
+    // 1. Seed baseline real trainers first
+    for (const item of BASELINE_REAL_TRAINERS) {
       const key = this.getStaffKey(item);
       directoryMap.set(key, { ...item });
     }
@@ -301,6 +288,7 @@ class StaffDirectoryService {
       snap.forEach(docSnap => {
         const d = docSnap.data();
         if (d.isDeleted === true || d.deletedAt) return;
+        if (this.isFakeStaff({ id: docSnap.id, ...d })) return; // Exclude fake demo accounts
 
         const staffItem: UnifiedStaff = {
           id: docSnap.id,
@@ -343,6 +331,8 @@ class StaffDirectoryService {
         if (Array.isArray(res.data)) {
           res.data.forEach((d: any) => {
             if (d.isDeleted === true || d.deletedAt) return;
+            if (this.isFakeStaff(d)) return;
+
             const staffItem: UnifiedStaff = {
               id: d.id,
               employeeId: d.employeeId || (d.biometricId ? `EMP-${d.biometricId}` : `EMP-${d.id}`),
@@ -378,6 +368,7 @@ class StaffDirectoryService {
       snapTrainers.forEach(docSnap => {
         const d = docSnap.data();
         if (d.isDeleted === true || d.deletedAt) return;
+        if (this.isFakeStaff({ id: docSnap.id, ...d })) return;
 
         const key = this.getStaffKey({ id: docSnap.id, ...d });
         const existing = directoryMap.get(key);
@@ -428,7 +419,7 @@ class StaffDirectoryService {
       console.warn('[StaffService] Firestore trainers fetch warning:', err);
     }
 
-    return Array.from(directoryMap.values()).filter(item => !item.isDeleted);
+    return Array.from(directoryMap.values()).filter(item => !item.isDeleted && !this.isFakeStaff(item));
   }
 
   /**

@@ -85,34 +85,6 @@ const defaultEmployeesList = [
     currentStatus: 'Outside',
     lastPunch: null,
     createdAt: new Date().toISOString()
-  },
-  {
-    name: 'Ramesh Kumar',
-    phone: '9876543210',
-    email: 'ramesh@alphagym.com',
-    role: 'Manager',
-    branch: 'Alpha zone gym',
-    emergencyContact: '',
-    address: 'Phase 3B2, Mohali',
-    biometricId: 501,
-    todayStatus: 'Present',
-    currentStatus: 'Inside',
-    lastPunch: new Date().toISOString(),
-    createdAt: new Date().toISOString()
-  },
-  {
-    name: 'Priya Singh',
-    phone: '9877407661',
-    email: 'priya.reception@alphagym.com',
-    role: 'Reception',
-    branch: 'Alpha zone gym',
-    emergencyContact: '',
-    address: 'Sector 71, Mohali',
-    biometricId: 504,
-    todayStatus: 'Present',
-    currentStatus: 'Inside',
-    lastPunch: new Date().toISOString(),
-    createdAt: new Date().toISOString()
   }
 ];
 
