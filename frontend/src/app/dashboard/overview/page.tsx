@@ -711,7 +711,7 @@ export default function OverviewCommandCenter() {
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setShowNewEnquiryModal(false)} />
             <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="relative bg-white rounded-3xl shadow-2xl border border-slate-200 w-full max-w-lg overflow-hidden text-left z-10">
-              <div className="bg-gradient-to-r from-pink-500 to-rose-600 px-6 py-4 flex items-center justify-between text-white">
+              <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-4 flex items-center justify-between text-white">
                 <h3 className="font-extrabold text-sm uppercase tracking-wide flex items-center gap-2">
                   <MessageSquare size={18} /> Add New Client Enquiry
                 </h3>
@@ -720,19 +720,19 @@ export default function OverviewCommandCenter() {
 
               <form onSubmit={handleCreateEnquiry} className="p-6 space-y-4">
                 <div>
-                  <label className="text-xs font-bold text-slate-600 block mb-1">Client Full Name <span className="text-pink-500">*</span></label>
-                  <input type="text" required placeholder="e.g. Rahul Sharma" value={enqName} onChange={e => setEnqName(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-bold text-slate-800 outline-none focus:border-pink-500" />
+                  <label className="text-xs font-bold text-slate-600 block mb-1">Client Full Name <span className="text-blue-600">*</span></label>
+                  <input type="text" required placeholder="e.g. Rahul Sharma" value={enqName} onChange={e => setEnqName(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-bold text-slate-800 outline-none focus:border-blue-600" />
                 </div>
 
                 <div>
-                  <label className="text-xs font-bold text-slate-600 block mb-1">Phone Number <span className="text-pink-500">*</span></label>
-                  <input type="tel" required placeholder="e.g. 9876543210" value={enqPhone} onChange={e => setEnqPhone(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-bold text-slate-800 outline-none focus:border-pink-500" />
+                  <label className="text-xs font-bold text-slate-600 block mb-1">Phone Number <span className="text-blue-600">*</span></label>
+                  <input type="tel" required placeholder="e.g. 9876543210" value={enqPhone} onChange={e => setEnqPhone(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-bold text-slate-800 outline-none focus:border-blue-600" />
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="text-xs font-bold text-slate-600 block mb-1">Source</label>
-                    <select value={enqSource} onChange={e => setEnqSource(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs font-bold text-slate-800 outline-none focus:border-pink-500 cursor-pointer">
+                    <select value={enqSource} onChange={e => setEnqSource(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs font-bold text-slate-800 outline-none focus:border-blue-600 cursor-pointer">
                       <option>Walk-in</option>
                       <option>Instagram</option>
                       <option>Facebook</option>
@@ -742,7 +742,7 @@ export default function OverviewCommandCenter() {
                   </div>
                   <div>
                     <label className="text-xs font-bold text-slate-600 block mb-1">Interested Plan</label>
-                    <select value={enqPlan} onChange={e => setEnqPlan(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs font-bold text-slate-800 outline-none focus:border-pink-500 cursor-pointer">
+                    <select value={enqPlan} onChange={e => setEnqPlan(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs font-bold text-slate-800 outline-none focus:border-blue-600 cursor-pointer">
                       <option>Monthly Standard</option>
                       <option>Quarterly Prime</option>
                       <option>Semi-Annual Pro</option>
@@ -754,17 +754,17 @@ export default function OverviewCommandCenter() {
 
                 <div>
                   <label className="text-xs font-bold text-slate-600 block mb-1">Next Follow-up Date</label>
-                  <input type="date" value={enqDate} onChange={e => setEnqDate(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-bold text-slate-800 outline-none focus:border-pink-500 cursor-pointer" />
+                  <input type="date" value={enqDate} onChange={e => setEnqDate(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-bold text-slate-800 outline-none focus:border-blue-600 cursor-pointer" />
                 </div>
 
                 <div>
                   <label className="text-xs font-bold text-slate-600 block mb-1">Remarks / Notes</label>
-                  <textarea rows={3} placeholder="Initial conversation notes..." value={enqRemarks} onChange={e => setEnqRemarks(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs font-semibold text-slate-700 outline-none focus:border-pink-500 resize-none" />
+                  <textarea rows={3} placeholder="Initial conversation notes..." value={enqRemarks} onChange={e => setEnqRemarks(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs font-semibold text-slate-700 outline-none focus:border-blue-600 resize-none" />
                 </div>
 
                 <div className="pt-2 flex justify-end gap-3">
-                  <button type="button" onClick={() => setShowNewEnquiryModal(false)} className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-bold text-xs cursor-pointer">Cancel</button>
-                  <button type="submit" disabled={enqSaving} className="px-6 py-2.5 bg-pink-600 hover:bg-pink-500 text-white font-bold text-xs rounded-xl shadow-md shadow-pink-600/30 transition-all border-none cursor-pointer disabled:opacity-50">
+                  <button type="button" onClick={() => setShowNewEnquiryModal(false)} className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-bold text-xs cursor-pointer hover:bg-slate-50">Cancel</button>
+                  <button type="submit" disabled={enqSaving} className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-md shadow-blue-500/20 transition-all border-none cursor-pointer disabled:opacity-50">
                     {enqSaving ? 'Saving...' : 'Save Enquiry'}
                   </button>
                 </div>
@@ -780,7 +780,7 @@ export default function OverviewCommandCenter() {
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setShowNewFollowupModal(false)} />
             <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="relative bg-white rounded-3xl shadow-2xl border border-slate-200 w-full max-w-lg overflow-hidden text-left z-10">
-              <div className="bg-gradient-to-r from-amber-500 to-orange-500 px-6 py-4 flex items-center justify-between text-white">
+              <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-4 flex items-center justify-between text-white">
                 <h3 className="font-extrabold text-sm uppercase tracking-wide flex items-center gap-2">
                   <PhoneCall size={18} /> Schedule New Follow-Up
                 </h3>
@@ -789,17 +789,17 @@ export default function OverviewCommandCenter() {
 
               <form onSubmit={handleCreateFollowup} className="p-6 space-y-4">
                 <div className="grid grid-cols-2 gap-2">
-                  <button type="button" onClick={() => { setFolSourceType('member'); setFolSelectedId(''); }} className={`py-2 text-center text-xs font-bold rounded-xl border transition-all cursor-pointer ${folSourceType === 'member' ? 'bg-amber-500 text-white border-amber-500' : 'bg-slate-50 text-slate-600 border-slate-200'}`}>
+                  <button type="button" onClick={() => { setFolSourceType('member'); setFolSelectedId(''); }} className={`py-2 text-center text-xs font-bold rounded-xl border transition-all cursor-pointer ${folSourceType === 'member' ? 'bg-blue-600 text-white border-blue-600' : 'bg-slate-50 text-slate-600 border-slate-200'}`}>
                     Member
                   </button>
-                  <button type="button" onClick={() => { setFolSourceType('enquiry'); setFolSelectedId(''); }} className={`py-2 text-center text-xs font-bold rounded-xl border transition-all cursor-pointer ${folSourceType === 'enquiry' ? 'bg-amber-500 text-white border-amber-500' : 'bg-slate-50 text-slate-600 border-slate-200'}`}>
+                  <button type="button" onClick={() => { setFolSourceType('enquiry'); setFolSelectedId(''); }} className={`py-2 text-center text-xs font-bold rounded-xl border transition-all cursor-pointer ${folSourceType === 'enquiry' ? 'bg-blue-600 text-white border-blue-600' : 'bg-slate-50 text-slate-600 border-slate-200'}`}>
                     Enquiry
                   </button>
                 </div>
 
                 <div>
-                  <label className="text-xs font-bold text-slate-600 block mb-1">Select Client <span className="text-amber-500">*</span></label>
-                  <select required value={folSelectedId} onChange={e => setFolSelectedId(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-bold text-slate-800 outline-none focus:border-amber-500 cursor-pointer">
+                  <label className="text-xs font-bold text-slate-600 block mb-1">Select Client <span className="text-blue-600">*</span></label>
+                  <select required value={folSelectedId} onChange={e => setFolSelectedId(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-bold text-slate-800 outline-none focus:border-blue-600 cursor-pointer">
                     <option value="">-- Select {folSourceType} --</option>
                     {folSourceType === 'member' && members.map(m => <option key={m.id || m.memberId} value={m.id || m.memberId}>{m.name} ({m.phone})</option>)}
                     {folSourceType === 'enquiry' && enquiries.map(eq => <option key={eq.id} value={eq.id}>{eq.name} ({eq.phone})</option>)}
@@ -807,24 +807,24 @@ export default function OverviewCommandCenter() {
                 </div>
 
                 <div>
-                  <label className="text-xs font-bold text-slate-600 block mb-1">Title / Reason <span className="text-amber-500">*</span></label>
-                  <input type="text" required placeholder="e.g. Renewal Reminder" value={folTitle} onChange={e => setFolTitle(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-bold text-slate-800 outline-none focus:border-amber-500" />
+                  <label className="text-xs font-bold text-slate-600 block mb-1">Title / Reason <span className="text-blue-600">*</span></label>
+                  <input type="text" required placeholder="e.g. Renewal Reminder" value={folTitle} onChange={e => setFolTitle(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-bold text-slate-800 outline-none focus:border-blue-600" />
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="text-xs font-bold text-slate-600 block mb-1">Date</label>
-                    <input type="date" required value={folDate} onChange={e => setFolDate(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs font-bold text-slate-800 outline-none focus:border-amber-500 cursor-pointer" />
+                    <input type="date" required value={folDate} onChange={e => setFolDate(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs font-bold text-slate-800 outline-none focus:border-blue-600 cursor-pointer" />
                   </div>
                   <div>
                     <label className="text-xs font-bold text-slate-600 block mb-1">Time</label>
-                    <input type="time" required value={folTime} onChange={e => setFolTime(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs font-bold text-slate-800 outline-none focus:border-amber-500 cursor-pointer" />
+                    <input type="time" required value={folTime} onChange={e => setFolTime(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs font-bold text-slate-800 outline-none focus:border-blue-600 cursor-pointer" />
                   </div>
                 </div>
 
                 <div>
                   <label className="text-xs font-bold text-slate-600 block mb-1">Priority</label>
-                  <select value={folPriority} onChange={e => setFolPriority(e.target.value as any)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-bold text-slate-800 outline-none focus:border-amber-500 cursor-pointer">
+                  <select value={folPriority} onChange={e => setFolPriority(e.target.value as any)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-bold text-slate-800 outline-none focus:border-blue-600 cursor-pointer">
                     <option value="High">High</option>
                     <option value="Medium">Medium</option>
                     <option value="Low">Low</option>
@@ -832,8 +832,8 @@ export default function OverviewCommandCenter() {
                 </div>
 
                 <div className="pt-2 flex justify-end gap-3">
-                  <button type="button" onClick={() => setShowNewFollowupModal(false)} className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-bold text-xs cursor-pointer">Cancel</button>
-                  <button type="submit" disabled={folSaving} className="px-6 py-2.5 bg-amber-500 hover:bg-amber-400 text-white font-bold text-xs rounded-xl shadow-md shadow-amber-500/30 transition-all border-none cursor-pointer disabled:opacity-50">
+                  <button type="button" onClick={() => setShowNewFollowupModal(false)} className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-bold text-xs cursor-pointer hover:bg-slate-50">Cancel</button>
+                  <button type="submit" disabled={folSaving} className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-md shadow-blue-500/20 transition-all border-none cursor-pointer disabled:opacity-50">
                     {folSaving ? 'Scheduling...' : 'Schedule Follow-up'}
                   </button>
                 </div>
@@ -849,7 +849,7 @@ export default function OverviewCommandCenter() {
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setShowNewMemberModal(false)} />
             <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="relative bg-white rounded-3xl shadow-2xl border border-slate-200 w-full max-w-lg overflow-hidden text-left z-10">
-              <div className="bg-gradient-to-r from-indigo-600 to-violet-600 px-6 py-4 flex items-center justify-between text-white">
+              <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-4 flex items-center justify-between text-white">
                 <h3 className="font-extrabold text-sm uppercase tracking-wide flex items-center gap-2">
                   <UserPlus size={18} /> Register New Gym Member
                 </h3>
@@ -858,13 +858,13 @@ export default function OverviewCommandCenter() {
 
               <form onSubmit={handleCreateMember} className="p-6 space-y-4">
                 <div>
-                  <label className="text-xs font-bold text-slate-600 block mb-1">Member Full Name <span className="text-indigo-500">*</span></label>
-                  <input type="text" required placeholder="e.g. Vikram Singh" value={memName} onChange={e => setMemName(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-bold text-slate-800 outline-none focus:border-indigo-500" />
+                  <label className="text-xs font-bold text-slate-600 block mb-1">Member Full Name <span className="text-blue-600">*</span></label>
+                  <input type="text" required placeholder="e.g. Vikram Singh" value={memName} onChange={e => setMemName(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-bold text-slate-800 outline-none focus:border-blue-600" />
                 </div>
 
                 <div>
-                  <label className="text-xs font-bold text-slate-600 block mb-1">Phone Number <span className="text-indigo-500">*</span></label>
-                  <input type="tel" required placeholder="e.g. 9812345678" value={memPhone} onChange={e => setMemPhone(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-bold text-slate-800 outline-none focus:border-indigo-500" />
+                  <label className="text-xs font-bold text-slate-600 block mb-1">Phone Number <span className="text-blue-600">*</span></label>
+                  <input type="tel" required placeholder="e.g. 9812345678" value={memPhone} onChange={e => setMemPhone(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-bold text-slate-800 outline-none focus:border-blue-600" />
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
@@ -876,7 +876,7 @@ export default function OverviewCommandCenter() {
                       if (e.target.value === '3 Months') setMemPaid('6500');
                       if (e.target.value === '6 Months') setMemPaid('11500');
                       if (e.target.value === '12 Months') setMemPaid('18000');
-                    }} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs font-bold text-slate-800 outline-none focus:border-indigo-500 cursor-pointer">
+                    }} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs font-bold text-slate-800 outline-none focus:border-blue-600 cursor-pointer">
                       <option value="1 Month">1 Month (₹2,500)</option>
                       <option value="3 Months">3 Months (₹6,500)</option>
                       <option value="6 Months">6 Months (₹11,500)</option>
@@ -885,14 +885,14 @@ export default function OverviewCommandCenter() {
                   </div>
                   <div>
                     <label className="text-xs font-bold text-slate-600 block mb-1">Amount Paid (₹)</label>
-                    <input type="number" value={memPaid} onChange={e => setMemPaid(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs font-bold text-slate-800 outline-none focus:border-indigo-500" />
+                    <input type="number" value={memPaid} onChange={e => setMemPaid(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs font-bold text-slate-800 outline-none focus:border-blue-600" />
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="text-xs font-bold text-slate-600 block mb-1">Payment Method</label>
-                    <select value={memMethod} onChange={e => setMemMethod(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs font-bold text-slate-800 outline-none focus:border-indigo-500 cursor-pointer">
+                    <select value={memMethod} onChange={e => setMemMethod(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs font-bold text-slate-800 outline-none focus:border-blue-600 cursor-pointer">
                       <option value="UPI">UPI / QR Code</option>
                       <option value="Cash">Cash</option>
                       <option value="Card">Credit / Debit Card</option>
@@ -908,8 +908,8 @@ export default function OverviewCommandCenter() {
                 </div>
 
                 <div className="pt-2 flex justify-end gap-3">
-                  <button type="button" onClick={() => setShowNewMemberModal(false)} className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-bold text-xs cursor-pointer">Cancel</button>
-                  <button type="submit" disabled={memSaving} className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-xl shadow-md shadow-indigo-600/30 transition-all border-none cursor-pointer disabled:opacity-50">
+                  <button type="button" onClick={() => setShowNewMemberModal(false)} className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-bold text-xs cursor-pointer hover:bg-slate-50">Cancel</button>
+                  <button type="submit" disabled={memSaving} className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-md shadow-blue-500/20 transition-all border-none cursor-pointer disabled:opacity-50">
                     {memSaving ? 'Registering...' : 'Register Member'}
                   </button>
                 </div>

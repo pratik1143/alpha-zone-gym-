@@ -303,7 +303,7 @@ export default function FollowUpManager() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs">
         <div>
           <div className="flex items-center gap-2">
-            <div className="w-10 h-10 rounded-2xl bg-amber-500/10 text-amber-600 flex items-center justify-center font-bold">
+            <div className="w-10 h-10 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
               <Phone size={20} />
             </div>
             <div>
@@ -332,7 +332,7 @@ export default function FollowUpManager() {
 
           <button
             onClick={() => setShowAddModal(true)}
-            className="px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs rounded-2xl shadow-md shadow-amber-500/20 transition-all flex items-center gap-1.5 border-none cursor-pointer"
+            className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-2xl shadow-md shadow-blue-500/20 transition-all flex items-center gap-1.5 border-none cursor-pointer"
           >
             <Plus size={16} /> New Follow-up
           </button>
@@ -346,7 +346,7 @@ export default function FollowUpManager() {
             <span className="text-[11px] font-bold uppercase text-slate-400 block tracking-wider">Due Today</span>
             <span className="text-2xl font-black text-slate-900 mt-1 block">{todaysCount}</span>
           </div>
-          <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold">
+          <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
             <Clock size={22} />
           </div>
         </div>
@@ -374,9 +374,9 @@ export default function FollowUpManager() {
         <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center justify-between">
           <div>
             <span className="text-[11px] font-bold uppercase text-slate-400 block tracking-wider">Total Active</span>
-            <span className="text-2xl font-black text-indigo-600 mt-1 block">{followups.filter(f => f.status === 'Pending').length}</span>
+            <span className="text-2xl font-black text-blue-600 mt-1 block">{followups.filter(f => f.status === 'Pending').length}</span>
           </div>
-          <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold">
+          <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
             <MessageSquare size={22} />
           </div>
         </div>
@@ -393,7 +393,7 @@ export default function FollowUpManager() {
               placeholder="Search member name, phone or title..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 text-xs font-semibold text-slate-800 rounded-xl border border-slate-200 outline-none focus:border-amber-500 transition-all placeholder-slate-400"
+              className="w-full pl-9 pr-4 py-2 text-xs font-semibold text-slate-800 rounded-xl border border-slate-200 outline-none focus:border-blue-600 transition-all placeholder-slate-400"
             />
           </div>
 
@@ -416,7 +416,7 @@ export default function FollowUpManager() {
 
           {/* Type Filter */}
           <select 
-            className="px-3 py-2 text-xs font-bold text-slate-700 bg-slate-50 rounded-xl border border-slate-200 outline-none cursor-pointer"
+            className="px-3 py-2 text-xs font-bold text-slate-700 bg-slate-50 rounded-xl border border-slate-200 outline-none cursor-pointer focus:border-blue-600"
             value={filterType} onChange={e => setFilterType(e.target.value)}
           >
             <option value="All">All Types</option>
@@ -429,7 +429,7 @@ export default function FollowUpManager() {
 
           {/* Staff Filter */}
           <select 
-            className="px-3 py-2 text-xs font-bold text-slate-700 bg-slate-50 rounded-xl border border-slate-200 outline-none cursor-pointer"
+            className="px-3 py-2 text-xs font-bold text-slate-700 bg-slate-50 rounded-xl border border-slate-200 outline-none cursor-pointer focus:border-blue-600"
             value={filterStaff} onChange={e => setFilterStaff(e.target.value)}
           >
             <option value="All">All Staff</option>
@@ -438,7 +438,7 @@ export default function FollowUpManager() {
 
           {/* Priority Filter */}
           <select 
-            className="px-3 py-2 text-xs font-bold text-slate-700 bg-slate-50 rounded-xl border border-slate-200 outline-none cursor-pointer"
+            className="px-3 py-2 text-xs font-bold text-slate-700 bg-slate-50 rounded-xl border border-slate-200 outline-none cursor-pointer focus:border-blue-600"
             value={filterPriority} onChange={e => setFilterPriority(e.target.value)}
           >
             <option value="All">All Priority</option>
@@ -468,7 +468,7 @@ export default function FollowUpManager() {
                 type="checkbox" 
                 checked={selectAll} 
                 onChange={(e) => setSelectAll(e.target.checked)} 
-                className="w-4 h-4 rounded border-slate-300 text-amber-500 focus:ring-amber-400 cursor-pointer"
+                className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
               />
               <span className="font-bold text-slate-700">Select All ({filteredTasks.length} tasks)</span>
             </label>
@@ -500,7 +500,7 @@ export default function FollowUpManager() {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -8 }}
                 className={`bg-white rounded-2xl p-5 border transition-all shadow-xs hover:shadow-md ${
-                  isSelected ? 'border-amber-500 bg-amber-50/20' : 'border-slate-200/80 hover:border-slate-300'
+                  isSelected ? 'border-blue-600 bg-blue-50/20' : 'border-slate-200/80 hover:border-slate-300'
                 }`}
               >
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -511,7 +511,7 @@ export default function FollowUpManager() {
                       type="checkbox" 
                       checked={isSelected}
                       onChange={() => toggleSelect(task.id)}
-                      className="w-4 h-4 mt-1 md:mt-0 rounded border-slate-300 text-amber-500 focus:ring-amber-400 cursor-pointer shrink-0"
+                      className="w-4 h-4 mt-1 md:mt-0 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer shrink-0"
                     />
 
                     <div className="w-10 h-10 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center font-bold text-slate-700 text-xs shrink-0">
@@ -523,8 +523,8 @@ export default function FollowUpManager() {
                         <h3 className="text-sm font-bold text-slate-900 truncate">{client.name}</h3>
                         
                         <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md uppercase tracking-wider ${
-                          task.type === 'Renewal' ? 'bg-amber-100 text-amber-800' :
-                          task.type === 'Enquiry' ? 'bg-blue-100 text-blue-800' :
+                          task.type === 'Renewal' ? 'bg-blue-100 text-blue-800' :
+                          task.type === 'Enquiry' ? 'bg-indigo-100 text-indigo-800' :
                           task.type === 'Payment' ? 'bg-emerald-100 text-emerald-800' :
                           'bg-slate-100 text-slate-700'
                         }`}>
@@ -533,7 +533,7 @@ export default function FollowUpManager() {
 
                         <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
                           task.priority === 'High' ? 'bg-red-100 text-red-700' :
-                          task.priority === 'Medium' ? 'bg-orange-100 text-orange-700' :
+                          task.priority === 'Medium' ? 'bg-amber-100 text-amber-800' :
                           'bg-slate-100 text-slate-600'
                         }`}>
                           {task.priority || 'Medium'}
@@ -541,7 +541,7 @@ export default function FollowUpManager() {
                       </div>
 
                       <div className="flex items-center gap-3 text-xs text-slate-500 font-semibold mt-1 flex-wrap">
-                        <a href={`tel:${client.phone}`} className="hover:text-amber-600 transition-colors flex items-center gap-1">
+                        <a href={`tel:${client.phone}`} className="hover:text-blue-600 transition-colors flex items-center gap-1">
                           📞 {client.phone}
                         </a>
                         <span>•</span>
@@ -555,7 +555,7 @@ export default function FollowUpManager() {
                       {/* Last Conversation Remarks */}
                       {prevNotes && (
                         <div className="mt-2 bg-slate-50 p-2.5 rounded-xl border border-slate-200/60 text-xs text-slate-700 font-medium">
-                          <span className="font-bold text-amber-700">Last Note:</span> "{prevNotes}"
+                          <span className="font-bold text-slate-700">Last Note:</span> "{prevNotes}"
                         </div>
                       )}
                     </div>
@@ -565,7 +565,7 @@ export default function FollowUpManager() {
                   <div className="flex items-center gap-2 shrink-0 self-end md:self-center">
                     <a
                       href={`tel:${client.phone}`}
-                      className="px-3 py-1.5 bg-slate-900 hover:bg-black text-amber-400 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 no-underline shadow-xs"
+                      className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 no-underline shadow-xs"
                     >
                       <Phone size={13} /> Call
                     </a>
@@ -626,7 +626,7 @@ export default function FollowUpManager() {
             exit={{ opacity: 0, y: 40 }}
             className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[90] bg-slate-900 text-white rounded-2xl px-6 py-3.5 flex items-center gap-4 shadow-2xl"
           >
-            <span className="text-xs font-bold text-amber-400">
+            <span className="text-xs font-bold text-blue-400">
               ⚡ {selectedTasks.length} Tasks Selected
             </span>
             <div className="h-4 w-px bg-slate-700" />
@@ -654,7 +654,7 @@ export default function FollowUpManager() {
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setShowAddModal(false)} />
             <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="relative bg-white border border-slate-200 rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden">
-              <div className="bg-amber-500 px-6 py-4 flex items-center justify-between text-white">
+              <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-4 flex items-center justify-between text-white">
                 <h2 className="text-sm font-bold uppercase tracking-wide">Schedule New Follow-up</h2>
                 <button onClick={() => setShowAddModal(false)} className="text-white/80 hover:text-white border-none cursor-pointer bg-transparent"><X size={18} /></button>
               </div>
@@ -677,7 +677,7 @@ export default function FollowUpManager() {
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setShowCompleteModal(null)} />
             <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="bg-white rounded-3xl shadow-2xl border border-slate-100 w-full max-w-lg overflow-hidden relative text-left">
-              <div className="bg-emerald-500 px-6 py-4 flex items-center justify-between text-white">
+              <div className="bg-emerald-600 px-6 py-4 flex items-center justify-between text-white">
                 <div>
                   <h3 className="font-bold uppercase tracking-wide text-xs flex items-center gap-2">
                     <MessageCircle size={16}/> Add Follow-up Log & Reschedule
@@ -699,13 +699,15 @@ export default function FollowUpManager() {
                         <h4 className="text-sm font-bold text-slate-800">{client.name}</h4>
                         <p className="text-xs text-slate-500 font-medium">📞 {client.phone} • {showCompleteModal.type || 'Follow-up'}</p>
                       </div>
-                      <span className="text-xs font-bold px-2.5 py-1 bg-amber-100 text-amber-800 rounded-full">
+                      <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${
+                        showCompleteModal.priority === 'High' ? 'bg-red-100 text-red-800' : 'bg-slate-100 text-slate-700'
+                      }`}>
                         {showCompleteModal.priority || 'Medium'} Priority
                       </span>
                     </div>
                     
                     <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-xs">
-                      <span className="text-xs font-bold text-amber-800 block">💬 Last Time Kya Baat Hui (Previous Notes):</span>
+                      <span className="text-xs font-bold text-slate-800 block">💬 Last Time Kya Baat Hui (Previous Notes):</span>
                       <p className="text-xs font-medium text-slate-700 mt-0.5 italic">"{prevNotes}"</p>
                     </div>
                   </div>
@@ -726,29 +728,29 @@ export default function FollowUpManager() {
 
                 {/* Conditional Reschedule Date/Time inputs */}
                 {completeOutcome === 'Follow-up Scheduled' && (
-                  <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 space-y-3">
-                    <div className="flex items-center gap-1.5 text-amber-900 text-xs font-bold">
+                  <div className="bg-blue-50/60 border border-blue-100 rounded-2xl p-4 space-y-3">
+                    <div className="flex items-center gap-1.5 text-blue-900 text-xs font-bold">
                       <Calendar size={14}/> Next Follow-up Date & Time
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="text-[10px] font-bold text-amber-900 uppercase block mb-1">Next Call Date</label>
+                        <label className="text-[10px] font-bold text-slate-700 uppercase block mb-1">Next Call Date</label>
                         <input 
                           type="date" 
                           required 
                           value={nextFollowupDate} 
                           onChange={e => setNextFollowupDate(e.target.value)} 
-                          className="w-full bg-white border border-amber-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 outline-none focus:border-amber-500" 
+                          className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 outline-none focus:border-blue-600" 
                         />
                       </div>
                       <div>
-                        <label className="text-[10px] font-bold text-amber-900 uppercase block mb-1">Next Call Time</label>
+                        <label className="text-[10px] font-bold text-slate-700 uppercase block mb-1">Next Call Time</label>
                         <input 
                           type="time" 
                           required 
                           value={nextFollowupTime} 
                           onChange={e => setNextFollowupTime(e.target.value)} 
-                          className="w-full bg-white border border-amber-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 outline-none focus:border-amber-500" 
+                          className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 outline-none focus:border-blue-600" 
                         />
                       </div>
                     </div>
@@ -761,8 +763,8 @@ export default function FollowUpManager() {
                 </div>
 
                 <div className="pt-2 flex justify-end gap-3">
-                  <button type="button" onClick={() => setShowCompleteModal(null)} className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-bold text-xs cursor-pointer">Cancel</button>
-                  <button type="submit" className="px-6 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs shadow-md shadow-emerald-500/20 uppercase tracking-wider transition-all border-none cursor-pointer">
+                  <button type="button" onClick={() => setShowCompleteModal(null)} className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-bold text-xs cursor-pointer hover:bg-slate-50">Cancel</button>
+                  <button type="submit" className="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-md shadow-emerald-500/20 uppercase tracking-wider transition-all border-none cursor-pointer">
                     {completeOutcome === 'Follow-up Scheduled' ? 'Schedule Next Follow-up' : 'Submit Follow-up'}
                   </button>
                 </div>
@@ -836,15 +838,15 @@ function AddFollowUpWizard({ members, enquiries, employees, createFollowup, onSu
     <form onSubmit={handleSubmit} className="p-6 space-y-4 text-left">
       <div className="grid grid-cols-3 gap-2">
         {['member', 'enquiry', 'employee'].map((type) => (
-          <button key={type} type="button" onClick={() => { setSourceType(type as any); setSelectedId(''); }} className={`py-2 text-center text-xs font-bold rounded-xl border transition-all uppercase cursor-pointer ${sourceType === type ? 'bg-amber-500 text-white border-amber-500' : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'}`}>
+          <button key={type} type="button" onClick={() => { setSourceType(type as any); setSelectedId(''); }} className={`py-2 text-center text-xs font-bold rounded-xl border transition-all uppercase cursor-pointer ${sourceType === type ? 'bg-blue-600 text-white border-blue-600' : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'}`}>
             {type}
           </button>
         ))}
       </div>
 
       <div>
-        <label className="text-xs font-bold text-slate-600 mb-1.5 block">Select Entity <span className="text-amber-500">*</span></label>
-        <select required value={selectedId} onChange={e => setSelectedId(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-bold text-slate-800 outline-none focus:border-amber-500 cursor-pointer">
+        <label className="text-xs font-bold text-slate-600 mb-1.5 block">Select Entity <span className="text-blue-600">*</span></label>
+        <select required value={selectedId} onChange={e => setSelectedId(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-bold text-slate-800 outline-none focus:border-blue-600 cursor-pointer">
           <option value="">-- Choose {sourceType} --</option>
           {sourceType === 'member' && members.map(m => <option key={m.id || m.memberId} value={m.id || m.memberId}>{m.name} ({m.phone})</option>)}
           {sourceType === 'enquiry' && enquiries.map(e => <option key={e.id} value={e.id}>{e.name} ({e.phone})</option>)}
@@ -853,31 +855,31 @@ function AddFollowUpWizard({ members, enquiries, employees, createFollowup, onSu
       </div>
 
       <div>
-        <label className="text-xs font-bold text-slate-600 mb-1.5 block">Reason / Title <span className="text-amber-500">*</span></label>
-        <input type="text" required placeholder="e.g. Renewal Discussion" value={title} onChange={e => setTitle(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-bold text-slate-800 outline-none focus:border-amber-500" />
+        <label className="text-xs font-bold text-slate-600 mb-1.5 block">Reason / Title <span className="text-blue-600">*</span></label>
+        <input type="text" required placeholder="e.g. Renewal Discussion" value={title} onChange={e => setTitle(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-bold text-slate-800 outline-none focus:border-blue-600" />
       </div>
 
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="text-xs font-bold text-slate-600 mb-1.5 block">Date <span className="text-amber-500">*</span></label>
-          <input type="date" required value={date} onChange={e => setDate(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-bold text-slate-800 outline-none focus:border-amber-500 cursor-pointer" />
+          <label className="text-xs font-bold text-slate-600 mb-1.5 block">Date <span className="text-blue-600">*</span></label>
+          <input type="date" required value={date} onChange={e => setDate(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-bold text-slate-800 outline-none focus:border-blue-600 cursor-pointer" />
         </div>
         <div>
-          <label className="text-xs font-bold text-slate-600 mb-1.5 block">Time <span className="text-amber-500">*</span></label>
-          <input type="time" required value={time} onChange={e => setTime(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-bold text-slate-800 outline-none focus:border-amber-500 cursor-pointer" />
+          <label className="text-xs font-bold text-slate-600 mb-1.5 block">Time <span className="text-blue-600">*</span></label>
+          <input type="time" required value={time} onChange={e => setTime(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-bold text-slate-800 outline-none focus:border-blue-600 cursor-pointer" />
         </div>
       </div>
 
       <div>
         <label className="text-xs font-bold text-slate-600 mb-1.5 block">Assign To</label>
-        <select value={assignedTo} onChange={e => setAssignedTo(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-bold text-slate-800 outline-none focus:border-amber-500 cursor-pointer">
+        <select value={assignedTo} onChange={e => setAssignedTo(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-bold text-slate-800 outline-none focus:border-blue-600 cursor-pointer">
           <option>Receptionist</option><option>Sales Executive</option><option>Trainer</option><option>Owner</option><option>Manager</option>
         </select>
       </div>
 
       <div className="flex justify-end gap-3 pt-3">
         <button type="button" onClick={onClose} className="px-5 py-2 border border-slate-200 hover:bg-slate-50 text-slate-600 rounded-xl font-bold text-xs cursor-pointer">Cancel</button>
-        <button type="submit" disabled={saving} className="px-6 py-2 bg-amber-500 text-white rounded-xl font-bold text-xs shadow-md shadow-amber-500/20 hover:bg-amber-600 uppercase transition-all disabled:opacity-50 border-none cursor-pointer">{saving ? 'Saving...' : 'Schedule'}</button>
+        <button type="submit" disabled={saving} className="px-6 py-2 bg-blue-600 text-white rounded-xl font-bold text-xs shadow-md shadow-blue-500/20 hover:bg-blue-700 uppercase transition-all disabled:opacity-50 border-none cursor-pointer">{saving ? 'Saving...' : 'Schedule'}</button>
       </div>
     </form>
   );
