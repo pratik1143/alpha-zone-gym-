@@ -521,10 +521,6 @@ export default function MembersTable({
   const activeFilterCount = useMemo(() => {
     let count = 0;
     if (filters.gender !== 'all') count++;
-    if (filters.memberType !== 'all') count++;
-    if (filters.packagePlan !== 'all') count++;
-    if (filters.trainer !== 'all') count++;
-    if (filters.branch !== 'all') count++;
     if (filters.membershipStatus !== 'all') count++;
     if (filters.paymentStatus !== 'all') count++;
     if (filters.joinedFrom || filters.joinedTo) count++;
@@ -563,43 +559,6 @@ export default function MembersTable({
         </div>
 
         <div className="flex items-center gap-2 relative" ref={filterPopoverRef}>
-          {/* Quick Dropdown: Branch */}
-          <select
-            value={filters.branch}
-            onChange={e => setFilters(f => ({ ...f, branch: e.target.value }))}
-            className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:border-indigo-500 cursor-pointer"
-          >
-            <option value="all">All Branches</option>
-            {availableBranches.map(b => (
-              <option key={b} value={b}>{b}</option>
-            ))}
-          </select>
-
-          {/* Quick Dropdown: Trainer */}
-          <select
-            value={filters.trainer}
-            onChange={e => setFilters(f => ({ ...f, trainer: e.target.value }))}
-            className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:border-indigo-500 cursor-pointer"
-          >
-            <option value="all">All Trainers</option>
-            <option value="unassigned">Unassigned</option>
-            {availableTrainers.map(t => (
-              <option key={t} value={t}>{t}</option>
-            ))}
-          </select>
-
-          {/* Quick Dropdown: Membership Package */}
-          <select
-            value={filters.packagePlan}
-            onChange={e => setFilters(f => ({ ...f, packagePlan: e.target.value }))}
-            className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:border-indigo-500 cursor-pointer max-w-[160px] truncate"
-          >
-            <option value="all">All Memberships</option>
-            {availablePackages.map(p => (
-              <option key={p} value={p}>{p}</option>
-            ))}
-          </select>
-
           {/* More Filters Toggle Button */}
           <button
             type="button"
@@ -654,22 +613,7 @@ export default function MembersTable({
                   </select>
                 </div>
 
-                {/* 2. Member Type */}
-                <div>
-                  <label className="block mb-1 text-[10px] uppercase font-black text-slate-400 tracking-wider">Member Type</label>
-                  <select
-                    value={filters.memberType}
-                    onChange={e => setFilters(f => ({ ...f, memberType: e.target.value }))}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800"
-                  >
-                    <option value="all">All Member Types</option>
-                    <option value="gym">Gym Members</option>
-                    <option value="pt">PT Members</option>
-                    <option value="gym_pt">Gym + PT Members</option>
-                  </select>
-                </div>
-
-                {/* 3. Membership Status */}
+                {/* 2. Membership Status */}
                 <div>
                   <label className="block mb-1 text-[10px] uppercase font-black text-slate-400 tracking-wider">Membership Status</label>
                   <select
@@ -685,7 +629,7 @@ export default function MembersTable({
                   </select>
                 </div>
 
-                {/* 4. Payment Status */}
+                {/* 3. Payment Status */}
                 <div>
                   <label className="block mb-1 text-[10px] uppercase font-black text-slate-400 tracking-wider">Payment Status</label>
                   <select
@@ -700,53 +644,7 @@ export default function MembersTable({
                   </select>
                 </div>
 
-                {/* 5. Package */}
-                <div>
-                  <label className="block mb-1 text-[10px] uppercase font-black text-slate-400 tracking-wider">Membership Package</label>
-                  <select
-                    value={filters.packagePlan}
-                    onChange={e => setFilters(f => ({ ...f, packagePlan: e.target.value }))}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800"
-                  >
-                    <option value="all">All Packages</option>
-                    {availablePackages.map(p => (
-                      <option key={p} value={p}>{p}</option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* 6. Trainer */}
-                <div>
-                  <label className="block mb-1 text-[10px] uppercase font-black text-slate-400 tracking-wider">Assigned Trainer</label>
-                  <select
-                    value={filters.trainer}
-                    onChange={e => setFilters(f => ({ ...f, trainer: e.target.value }))}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800"
-                  >
-                    <option value="all">All Trainers</option>
-                    <option value="unassigned">Unassigned</option>
-                    {availableTrainers.map(t => (
-                      <option key={t} value={t}>{t}</option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* 7. Branch */}
-                <div>
-                  <label className="block mb-1 text-[10px] uppercase font-black text-slate-400 tracking-wider">Branch Location</label>
-                  <select
-                    value={filters.branch}
-                    onChange={e => setFilters(f => ({ ...f, branch: e.target.value }))}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800"
-                  >
-                    <option value="all">All Branches</option>
-                    {availableBranches.map(b => (
-                      <option key={b} value={b}>{b}</option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* 8. Expiry Filter */}
+                {/* 4. Expiry Filter */}
                 <div>
                   <label className="block mb-1 text-[10px] uppercase font-black text-slate-400 tracking-wider">Expiry Horizon</label>
                   <select
@@ -764,7 +662,7 @@ export default function MembersTable({
                   </select>
                 </div>
 
-                {/* 9. Date Joined Range */}
+                {/* 5. Date Joined Range */}
                 <div className="col-span-1 sm:col-span-2 bg-slate-50 p-3 rounded-2xl border border-slate-200/80 space-y-2">
                   <label className="block text-[10px] uppercase font-black text-slate-500 tracking-wider">
                     Date Joined Range
