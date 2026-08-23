@@ -20,7 +20,6 @@ import { db as fDb, isFirebaseReady } from '@/lib/firebase';
 import { useCallback } from 'react';
 import AttendancePopupManager from './components/AttendancePopupManager';
 import EmployeePopupManager from './components/EmployeePopupManager';
-import NotificationCenter from './components/NotificationCenter';
 import UniversalSearchBar from './components/UniversalSearchBar';
 import LiveTimeCard from './components/LiveTimeCard';
 import SoftwareFooter from './components/SoftwareFooter';
@@ -712,9 +711,6 @@ export default function DashboardLayout({
           </>
         )}
       </AnimatePresence>
-
-    {pathname !== '/dashboard' && <NotificationCenter hideIcon={true} />}
-
     <AttendancePopupManager />
     <EmployeePopupManager />
     </div>
