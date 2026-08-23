@@ -25,7 +25,6 @@ export default function DashboardPage() {
   const [isMounted, setIsMounted] = useState(false);
   const [liveCount, setLiveCount] = useState(0);
   const [gateUnlocked, setGateUnlocked] = useState(false);
-  const [viewMode, setViewMode] = useState<'owner' | 'reception'>('owner');
   const [employees, setEmployees] = useState<any[]>([]);
   const [empAttendance, setEmpAttendance] = useState<any[]>([]);
   const [memberAttendance, setMemberAttendance] = useState<any[]>([]);
@@ -311,26 +310,6 @@ export default function DashboardPage() {
           <div className="flex items-center gap-2 px-3 py-1.5 bg-[#f4f8fd] border border-[#b9d7f7] rounded-xl text-[10px] font-black uppercase tracking-wider text-[#0b5cbe]">
             <span className={`w-2 h-2 rounded-full ${deviceStatus === 'connected' ? 'bg-emerald-500' : deviceStatus === 'syncing' ? 'bg-blue-400 animate-pulse' : 'bg-rose-500'}`} />
             {deviceStatus === 'connected' ? 'Device Online' : deviceStatus === 'syncing' ? 'Syncing...' : 'Device Offline'}
-          </div>
-
-          {/* View Mode Switcher */}
-          <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200">
-            <button
-              onClick={() => setViewMode('owner')}
-              className={`px-3 py-1 rounded-lg text-[10px] font-extrabold uppercase tracking-wider transition-all border-none cursor-pointer ${
-                viewMode === 'owner' ? 'bg-[#0b5cbe] text-white shadow-xs' : 'text-slate-600 hover:text-[#0b5cbe]'
-              }`}
-            >
-              Owner View
-            </button>
-            <button
-              onClick={() => setViewMode('reception')}
-              className={`px-3 py-1 rounded-lg text-[10px] font-extrabold uppercase tracking-wider transition-all border-none cursor-pointer ${
-                viewMode === 'reception' ? 'bg-[#0b5cbe] text-white shadow-xs' : 'text-slate-600 hover:text-[#0b5cbe]'
-              }`}
-            >
-              Receptionist View
-            </button>
           </div>
         </div>
       </div>
