@@ -83,11 +83,12 @@ export default function EnquiryGodLevelHub() {
   const [followupDate, setFollowupDate] = useState(todayStr);
   const [followupTime, setFollowupTime] = useState('11:00');
   const [status, setStatus] = useState<'Pending' | 'Closed'>('Pending');
-  const [attendedBy, setAttendedBy] = useState('Veer Chand (manager)');
+  const [attendedBy, setAttendedBy] = useState('');
   const [priority, setPriority] = useState<'Hot' | 'Warm' | 'Cold'>('Warm');
   const [source, setSource] = useState('Walk-in');
-  const [inquiryFor, setInquiryFor] = useState('1 month');
+  const [inquiryFor, setInquiryFor] = useState('');
   const [remarks, setRemarks] = useState('');
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
 
   // Edit Lead Form State
   const [editName, setEditName] = useState('');
@@ -232,13 +233,112 @@ export default function EnquiryGodLevelHub() {
     });
   }, [enquiries, activeFilterTab, searchQuery, statusFilter, staffFilter, priorityFilter, planFilter]);
 
+  // Validate individual field
+  const validateField = (field: string, value: string): string => {
+    if (field === 'firstName') {
+      const val = value.trim();
+      if (!val) return 'Please enter a valid first name.';
+      if (val.length < 2 || val.length > 50) return 'First name must be between 2 and 50 characters.';
+      if (!/^[A-Za-z\s]+$/.test(val)) return 'First name can only contain letters and spaces.';
+    }
+
+    if (field === 'lastName') {
+      const val = value.trim();
+      if (val) {
+        if (val.length < 2 || val.length > 50) return 'Last name must be between 2 and 50 characters.';
+        if (!/^[A-Za-z\s]+$/.test(val)) return 'Last name can only contain letters and spaces.';
+      }
+    }
+
+    if (field === 'contact') {
+      const val = value.replace(/\D/g, '');
+      if (!val || val.length !== 10) return 'Enter a valid 10-digit mobile number.';
+      if (!/^[6-9]\d{9}$/.test(val)) return 'Enter a valid 10-digit mobile number starting with 6, 7, 8, or 9.';
+
+      // Duplicate phone validation
+      const isDuplicate = enquiries.some(e => {
+        const p = (e.phone || '').replace(/\D/g, '');
+        return p === val;
+      });
+      if (isDuplicate) return 'An enquiry with this mobile number already exists.';
+    }
+
+    if (field === 'inquiryFor') {
+      if (!value || value === 'Select Plan...' || value.trim() === '') {
+        return 'Please select an interested plan.';
+      }
+    }
+
+    if (field === 'followupDate') {
+      if (!value || !value.trim()) {
+        return 'Please select a valid follow-up date.';
+      }
+    }
+
+    if (field === 'attendedBy') {
+      if (!value || value === 'Select Representative...' || value.trim() === '') {
+        return 'Please select a representative.';
+      }
+    }
+
+    if (field === 'remarks') {
+      if (value && value.length > 500) {
+        return 'Remarks cannot exceed 500 characters.';
+      }
+    }
+
+    return '';
+  };
+
+  // Validate entire form
+  const validateAll = (): { isValid: boolean; errors: Record<string, string> } => {
+    const errors: Record<string, string> = {};
+    const fnErr = validateField('firstName', firstName);
+    if (fnErr) errors.firstName = fnErr;
+
+    const lnErr = validateField('lastName', lastName);
+    if (lnErr) errors.lastName = lnErr;
+
+    const contactErr = validateField('contact', contact);
+    if (contactErr) errors.contact = contactErr;
+
+    const planErr = validateField('inquiryFor', inquiryFor);
+    if (planErr) errors.inquiryFor = planErr;
+
+    const dateErr = validateField('followupDate', followupDate);
+    if (dateErr) errors.followupDate = dateErr;
+
+    const repErr = validateField('attendedBy', attendedBy);
+    if (repErr) errors.attendedBy = repErr;
+
+    const remErr = validateField('remarks', remarks);
+    if (remErr) errors.remarks = remErr;
+
+    return {
+      isValid: Object.keys(errors).length === 0,
+      errors
+    };
+  };
+
   // Reset Create Form
   const resetForm = () => {
-    setFirstName(''); setLastName(''); setContact(''); setAltContact('');
-    setEmail(''); setGender('Male'); setAddress(''); setFollowupDate(todayStr);
-    setFollowupTime('11:00'); setStatus('Pending');
-    setAttendedBy('Veer Chand (manager)'); setPriority('Warm'); setSource('Walk-in');
-    setInquiryFor('1 month'); setRemarks(''); setFormErrors({});
+    setFirstName('');
+    setLastName('');
+    setContact('');
+    setAltContact('');
+    setEmail('');
+    setGender('Male');
+    setAddress('');
+    setFollowupDate(todayStr);
+    setFollowupTime('11:00');
+    setStatus('Pending');
+    setAttendedBy('');
+    setPriority('Warm');
+    setSource('Walk-in');
+    setInquiryFor('');
+    setRemarks('');
+    setTouched({});
+    setFormErrors({});
   };
 
   // Create New Lead
@@ -246,24 +346,21 @@ export default function EnquiryGodLevelHub() {
     e.preventDefault();
     if (isSubmitting) return;
 
-    const validationResult = enquiryFormSchema.safeParse({
-      firstName,
-      contact,
-      email,
-      source,
-      inquiryFor,
-      remarks
+    // Mark all fields as touched for visual inline feedback
+    setTouched({
+      firstName: true,
+      lastName: true,
+      contact: true,
+      inquiryFor: true,
+      followupDate: true,
+      attendedBy: true,
+      remarks: true
     });
 
-    if (!validationResult.success) {
-      const errors: Record<string, string> = {};
-      validationResult.error.issues.forEach(issue => {
-        if (issue.path[0]) {
-          errors[issue.path[0].toString()] = issue.message;
-        }
-      });
+    const { isValid, errors } = validateAll();
+    if (!isValid) {
       setFormErrors(errors);
-      toast.error('Please fix validation errors');
+      toast.error('Please resolve the highlighted validation errors');
       return;
     }
 
@@ -271,35 +368,39 @@ export default function EnquiryGodLevelHub() {
     setIsSubmitting(true);
 
     try {
-      const fullName = `${firstName.trim()} ${lastName.trim()}`.trim();
+      const formattedFirstName = firstName.trim().charAt(0).toUpperCase() + firstName.trim().slice(1);
+      const formattedLastName = lastName.trim() ? (lastName.trim().charAt(0).toUpperCase() + lastName.trim().slice(1)) : '';
+      const fullName = `${formattedFirstName} ${formattedLastName}`.trim();
+      const cleanPhone = contact.replace(/\D/g, '');
+
       const payload: Partial<EnquiryItem> = {
         name: fullName,
-        firstName,
-        lastName,
-        phone: contact,
+        firstName: formattedFirstName,
+        lastName: formattedLastName,
+        phone: cleanPhone,
         altPhone: altContact,
         email,
         gender,
         address,
         nextFollowUpDate: followupDate,
         nextFollowUp: followupDate,
-        followUpTime: followupTime,
-        status,
+        followUpTime: followupTime || '11:00',
+        status: 'Pending',
         assignedTo: attendedBy,
         priority,
-        source,
+        source: source || 'Walk-in',
         interestedPlan: inquiryFor,
         duration: inquiryFor,
-        remarks,
+        remarks: remarks.trim(),
         createdAt: new Date().toISOString()
       };
 
       await enquiryService.create(payload);
-      toast.success('✓ Enquiry lead created successfully!');
+      toast.success('✓ Enquiry created successfully');
       setShowCreateModal(false);
       resetForm();
     } catch (err: any) {
-      toast.error('Failed to create enquiry: ' + (err.message || 'Error occurred'));
+      toast.error('Unable to create enquiry. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
@@ -1440,7 +1541,7 @@ export default function EnquiryGodLevelHub() {
         )}
       </AnimatePresence>
 
-      {/* ── 10. CREATE MANUAL ENQUIRY MODAL ── */}
+      {/* ── 10. CREATE MANUAL ENQUIRY MODAL (Full Production Validation) ── */}
       <AnimatePresence>
         {showCreateModal && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs">
@@ -1448,115 +1549,314 @@ export default function EnquiryGodLevelHub() {
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-white rounded-3xl p-6 max-w-lg w-full shadow-2xl border border-slate-200 space-y-4"
+              className="bg-white rounded-3xl p-6 lg:p-7 max-w-lg w-full shadow-2xl border border-slate-200 space-y-5"
             >
-              <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-                <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                  <UserPlus className="text-[#0b5cbe]" size={18} /> New Enquiry Lead
-                </h3>
-                <button onClick={() => setShowCreateModal(false)} className="p-1 rounded-lg text-slate-400 hover:bg-slate-100 border-none cursor-pointer">
+              {/* Modal Header */}
+              <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-blue-50 border border-blue-100 flex items-center justify-center text-[#0b5cbe] shrink-0">
+                    <UserPlus size={20} />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-extrabold text-slate-900 leading-tight">
+                      New Enquiry Lead
+                    </h3>
+                    <p className="text-xs text-slate-400 font-medium mt-0.5">
+                      Create and schedule a new enquiry follow-up.
+                    </p>
+                  </div>
+                </div>
+                <button 
+                  type="button"
+                  onClick={() => setShowCreateModal(false)} 
+                  className="p-1.5 rounded-xl text-slate-400 hover:bg-slate-100 transition-colors border-none cursor-pointer"
+                >
                   <X size={18} />
                 </button>
               </div>
 
               <form onSubmit={handleCreateEnquiry} className="space-y-4 text-xs text-left">
-                <div className="grid grid-cols-2 gap-3">
+                {/* 1. Name Row (First Name * & Last Name) */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                   <div>
-                    <label className="font-bold text-slate-700 block mb-1">First Name *</label>
+                    <label className="font-bold text-slate-700 block mb-1">
+                      First Name <span className="text-rose-500 font-black">*</span>
+                    </label>
                     <input
                       type="text"
-                      required
                       placeholder="e.g. Rahul"
                       value={firstName}
-                      onChange={e => setFirstName(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 outline-none focus:border-[#0b5cbe]"
+                      onChange={e => {
+                        const val = e.target.value;
+                        setFirstName(val);
+                        if (touched.firstName) {
+                          setFormErrors(prev => ({ ...prev, firstName: validateField('firstName', val) }));
+                        }
+                      }}
+                      onBlur={() => {
+                        setTouched(prev => ({ ...prev, firstName: true }));
+                        setFormErrors(prev => ({ ...prev, firstName: validateField('firstName', firstName) }));
+                      }}
+                      className={`w-full bg-[#fdfdfd] border ${
+                        touched.firstName && formErrors.firstName 
+                          ? 'border-rose-400 focus:border-rose-500 bg-rose-50/20' 
+                          : touched.firstName && !formErrors.firstName && firstName.trim()
+                          ? 'border-emerald-400 focus:border-emerald-500'
+                          : 'border-slate-200 focus:border-[#0b5cbe]'
+                      } rounded-xl px-3.5 py-2.5 text-xs font-semibold text-slate-800 outline-none transition-colors`}
                     />
+                    {touched.firstName && formErrors.firstName && (
+                      <p className="text-[10.5px] text-rose-600 font-bold mt-1 flex items-center gap-1">
+                        <AlertCircle size={11} className="shrink-0" />
+                        <span>{formErrors.firstName}</span>
+                      </p>
+                    )}
                   </div>
+
                   <div>
-                    <label className="font-bold text-slate-700 block mb-1">Last Name</label>
+                    <label className="font-bold text-slate-700 block mb-1">
+                      Last Name
+                    </label>
                     <input
                       type="text"
                       placeholder="e.g. Sharma"
                       value={lastName}
-                      onChange={e => setLastName(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 outline-none focus:border-[#0b5cbe]"
+                      onChange={e => {
+                        const val = e.target.value;
+                        setLastName(val);
+                        if (touched.lastName) {
+                          setFormErrors(prev => ({ ...prev, lastName: validateField('lastName', val) }));
+                        }
+                      }}
+                      onBlur={() => {
+                        setTouched(prev => ({ ...prev, lastName: true }));
+                        setFormErrors(prev => ({ ...prev, lastName: validateField('lastName', lastName) }));
+                      }}
+                      className={`w-full bg-[#fdfdfd] border ${
+                        touched.lastName && formErrors.lastName 
+                          ? 'border-rose-400 focus:border-rose-500 bg-rose-50/20' 
+                          : 'border-slate-200 focus:border-[#0b5cbe]'
+                      } rounded-xl px-3.5 py-2.5 text-xs font-semibold text-slate-800 outline-none transition-colors`}
                     />
+                    {touched.lastName && formErrors.lastName && (
+                      <p className="text-[10.5px] text-rose-600 font-bold mt-1 flex items-center gap-1">
+                        <AlertCircle size={11} className="shrink-0" />
+                        <span>{formErrors.lastName}</span>
+                      </p>
+                    )}
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
+                {/* 2. Contact & Plan Row */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                   <div>
-                    <label className="font-bold text-slate-700 block mb-1">Mobile Number *</label>
+                    <label className="font-bold text-slate-700 block mb-1">
+                      Mobile Number <span className="text-rose-500 font-black">*</span>
+                    </label>
                     <input
                       type="tel"
-                      required
+                      inputMode="numeric"
                       maxLength={10}
                       placeholder="9876543210"
                       value={contact}
-                      onChange={e => setContact(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 outline-none focus:border-[#0b5cbe]"
+                      onChange={e => {
+                        const val = e.target.value.replace(/\D/g, '').slice(0, 10);
+                        setContact(val);
+                        if (touched.contact) {
+                          setFormErrors(prev => ({ ...prev, contact: validateField('contact', val) }));
+                        }
+                      }}
+                      onBlur={() => {
+                        setTouched(prev => ({ ...prev, contact: true }));
+                        setFormErrors(prev => ({ ...prev, contact: validateField('contact', contact) }));
+                      }}
+                      className={`w-full bg-[#fdfdfd] border ${
+                        touched.contact && formErrors.contact 
+                          ? 'border-rose-400 focus:border-rose-500 bg-rose-50/20' 
+                          : touched.contact && !formErrors.contact && contact.length === 10
+                          ? 'border-emerald-400 focus:border-emerald-500'
+                          : 'border-slate-200 focus:border-[#0b5cbe]'
+                      } rounded-xl px-3.5 py-2.5 text-xs font-semibold text-slate-800 outline-none transition-colors`}
                     />
+                    {touched.contact && formErrors.contact && (
+                      <p className="text-[10.5px] text-rose-600 font-bold mt-1 flex items-center gap-1">
+                        <AlertCircle size={11} className="shrink-0" />
+                        <span>{formErrors.contact}</span>
+                      </p>
+                    )}
                   </div>
+
                   <div>
-                    <label className="font-bold text-slate-700 block mb-1">Interested Plan *</label>
+                    <label className="font-bold text-slate-700 block mb-1">
+                      Interested Plan <span className="text-rose-500 font-black">*</span>
+                    </label>
                     <select
                       value={inquiryFor}
-                      onChange={e => setInquiryFor(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 outline-none focus:border-[#0b5cbe]"
+                      onChange={e => {
+                        const val = e.target.value;
+                        setInquiryFor(val);
+                        if (touched.inquiryFor) {
+                          setFormErrors(prev => ({ ...prev, inquiryFor: validateField('inquiryFor', val) }));
+                        }
+                      }}
+                      onBlur={() => {
+                        setTouched(prev => ({ ...prev, inquiryFor: true }));
+                        setFormErrors(prev => ({ ...prev, inquiryFor: validateField('inquiryFor', inquiryFor) }));
+                      }}
+                      className={`w-full bg-[#fdfdfd] border ${
+                        touched.inquiryFor && formErrors.inquiryFor 
+                          ? 'border-rose-400 focus:border-rose-500 bg-rose-50/20' 
+                          : touched.inquiryFor && !formErrors.inquiryFor && inquiryFor
+                          ? 'border-emerald-400 focus:border-emerald-500'
+                          : 'border-slate-200 focus:border-[#0b5cbe]'
+                      } rounded-xl px-3.5 py-2.5 text-xs font-semibold text-slate-800 outline-none transition-colors cursor-pointer`}
                     >
+                      <option value="">Select Plan...</option>
                       {PLANS.map(p => <option key={p} value={p}>{p}</option>)}
                     </select>
+                    {touched.inquiryFor && formErrors.inquiryFor && (
+                      <p className="text-[10.5px] text-rose-600 font-bold mt-1 flex items-center gap-1">
+                        <AlertCircle size={11} className="shrink-0" />
+                        <span>{formErrors.inquiryFor}</span>
+                      </p>
+                    )}
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
+                {/* 3. Follow-up Date & Representative */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                   <div>
-                    <label className="font-bold text-slate-700 block mb-1">Follow-up Date *</label>
+                    <label className="font-bold text-slate-700 block mb-1">
+                      Follow-up Date <span className="text-rose-500 font-black">*</span>
+                    </label>
                     <input
                       type="date"
-                      required
                       value={followupDate}
-                      onChange={e => setFollowupDate(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 outline-none focus:border-[#0b5cbe] cursor-pointer"
+                      onChange={e => {
+                        const val = e.target.value;
+                        setFollowupDate(val);
+                        if (touched.followupDate) {
+                          setFormErrors(prev => ({ ...prev, followupDate: validateField('followupDate', val) }));
+                        }
+                      }}
+                      onBlur={() => {
+                        setTouched(prev => ({ ...prev, followupDate: true }));
+                        setFormErrors(prev => ({ ...prev, followupDate: validateField('followupDate', followupDate) }));
+                      }}
+                      className={`w-full bg-[#fdfdfd] border ${
+                        touched.followupDate && formErrors.followupDate 
+                          ? 'border-rose-400 focus:border-rose-500 bg-rose-50/20' 
+                          : 'border-slate-200 focus:border-[#0b5cbe]'
+                      } rounded-xl px-3.5 py-2.5 text-xs font-bold text-slate-800 outline-none transition-colors cursor-pointer`}
                     />
+                    {touched.followupDate && formErrors.followupDate && (
+                      <p className="text-[10.5px] text-rose-600 font-bold mt-1 flex items-center gap-1">
+                        <AlertCircle size={11} className="shrink-0" />
+                        <span>{formErrors.followupDate}</span>
+                      </p>
+                    )}
                   </div>
+
                   <div>
-                    <label className="font-bold text-slate-700 block mb-1">Representative</label>
+                    <label className="font-bold text-slate-700 block mb-1">
+                      Representative <span className="text-rose-500 font-black">*</span>
+                    </label>
                     <select
                       value={attendedBy}
-                      onChange={e => setAttendedBy(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 outline-none focus:border-[#0b5cbe]"
+                      onChange={e => {
+                        const val = e.target.value;
+                        setAttendedBy(val);
+                        if (touched.attendedBy) {
+                          setFormErrors(prev => ({ ...prev, attendedBy: validateField('attendedBy', val) }));
+                        }
+                      }}
+                      onBlur={() => {
+                        setTouched(prev => ({ ...prev, attendedBy: true }));
+                        setFormErrors(prev => ({ ...prev, attendedBy: validateField('attendedBy', attendedBy) }));
+                      }}
+                      className={`w-full bg-[#fdfdfd] border ${
+                        touched.attendedBy && formErrors.attendedBy 
+                          ? 'border-rose-400 focus:border-rose-500 bg-rose-50/20' 
+                          : touched.attendedBy && !formErrors.attendedBy && attendedBy
+                          ? 'border-emerald-400 focus:border-emerald-500'
+                          : 'border-slate-200 focus:border-[#0b5cbe]'
+                      } rounded-xl px-3.5 py-2.5 text-xs font-semibold text-slate-800 outline-none transition-colors cursor-pointer`}
                     >
+                      <option value="">Select Representative...</option>
                       {dynamicStaffList.map(st => <option key={st} value={st}>{st}</option>)}
                     </select>
+                    {touched.attendedBy && formErrors.attendedBy && (
+                      <p className="text-[10.5px] text-rose-600 font-bold mt-1 flex items-center gap-1">
+                        <AlertCircle size={11} className="shrink-0" />
+                        <span>{formErrors.attendedBy}</span>
+                      </p>
+                    )}
                   </div>
                 </div>
 
-                <div>
-                  <label className="font-bold text-slate-700 block mb-1">Remarks</label>
+                {/* 4. Remarks (Optional, Max 500 chars with counter) */}
+                <div className="space-y-1">
+                  <div className="flex justify-between items-center">
+                    <label className="font-bold text-slate-700 block text-xs">Remarks</label>
+                    <span className={`text-[10px] font-mono font-bold ${
+                      remarks.length > 500 ? 'text-rose-600' : 'text-slate-400'
+                    }`}>
+                      {remarks.length} / 500
+                    </span>
+                  </div>
                   <textarea
-                    rows={2}
+                    rows={3}
+                    maxLength={500}
                     placeholder="Enter notes about client inquiry..."
                     value={remarks}
-                    onChange={e => setRemarks(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-medium text-slate-800 outline-none focus:border-[#0b5cbe] resize-none"
+                    onChange={e => {
+                      const val = e.target.value;
+                      setRemarks(val);
+                      if (touched.remarks) {
+                        setFormErrors(prev => ({ ...prev, remarks: validateField('remarks', val) }));
+                      }
+                    }}
+                    onBlur={() => {
+                      setTouched(prev => ({ ...prev, remarks: true }));
+                      setFormErrors(prev => ({ ...prev, remarks: validateField('remarks', remarks) }));
+                    }}
+                    className={`w-full bg-[#fdfdfd] border ${
+                      touched.remarks && formErrors.remarks 
+                        ? 'border-rose-400 focus:border-rose-500 bg-rose-50/20' 
+                        : 'border-slate-200 focus:border-[#0b5cbe]'
+                    } rounded-xl p-3 text-xs font-medium text-slate-800 outline-none transition-colors resize-none`}
                   />
+                  {touched.remarks && formErrors.remarks && (
+                    <p className="text-[10.5px] text-rose-600 font-bold mt-1 flex items-center gap-1">
+                      <AlertCircle size={11} className="shrink-0" />
+                      <span>{formErrors.remarks}</span>
+                    </p>
+                  )}
                 </div>
 
-                <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                {/* Modal Footer */}
+                <div className="flex justify-end gap-2.5 pt-3 border-t border-slate-100">
                   <button
                     type="button"
                     onClick={() => setShowCreateModal(false)}
-                    className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl border-none cursor-pointer"
+                    disabled={isSubmitting}
+                    className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-700 font-bold text-xs hover:bg-slate-50 cursor-pointer disabled:opacity-50 transition-colors"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
                     disabled={isSubmitting}
-                    className="px-5 py-2 text-xs font-bold text-white bg-[#0b5cbe] hover:bg-blue-700 rounded-xl shadow-md border-none cursor-pointer disabled:opacity-50"
+                    className="px-6 py-2.5 rounded-xl bg-[#0b5cbe] hover:bg-blue-700 text-white font-extrabold text-xs shadow-sm transition-all border-none cursor-pointer disabled:opacity-60 flex items-center justify-center gap-2"
                   >
-                    {isSubmitting ? 'Saving...' : 'Create Enquiry'}
+                    {isSubmitting ? (
+                      <>
+                        <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        <span>Creating...</span>
+                      </>
+                    ) : (
+                      'Create Enquiry'
+                    )}
                   </button>
                 </div>
               </form>
