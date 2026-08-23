@@ -371,18 +371,18 @@ export default function AttendanceCalendarSection({
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 w-full items-stretch text-left">
       
-      {/* ─── 1. STAFF ATTENDANCE (PRIMARY PANEL - LEFT ~65% / 7-8 COLS) ─── */}
-      <div className="lg:col-span-7 xl:col-span-8 bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs flex flex-col justify-between h-full min-h-[460px]">
+      {/* ─── 1. STAFF MANAGEMENT (PRIMARY PANEL - LEFT ~65% / 7-8 COLS) ─── */}
+      <div className="lg:col-span-7 xl:col-span-8 bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs flex flex-col justify-between h-full min-w-0">
         
         {/* Panel Header & Controls */}
-        <div>
+        <div className="w-full">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3.5">
             <div>
               <span className="text-[10px] font-black uppercase tracking-wider text-[#0b5cbe] block flex items-center gap-1.5 font-display">
-                <UserCheck size={13} /> STAFF ATTENDANCE
+                <Briefcase size={13} /> STAFF MANAGEMENT
               </span>
               <h3 className="text-sm font-black text-slate-900 mt-0.5">
-                Staff attendance &amp; absence tracking
+                Staff roster &amp; real-time attendance tracking
               </h3>
             </div>
 
@@ -429,8 +429,8 @@ export default function AttendanceCalendarSection({
           </div>
         </div>
 
-        {/* Staff Table / Detailed Cards using horizontal width */}
-        <div className="flex-1 overflow-y-auto max-h-[300px] space-y-2 pr-1 divide-y divide-slate-100">
+        {/* Staff Table / Rich Card Roster */}
+        <div className="flex-1 overflow-y-auto space-y-2.5 pr-1 min-h-[160px]">
           {filteredStaff.length > 0 ? (
             filteredStaff.map((emp: any) => {
               const isPresent = emp.punchedToday;
@@ -438,18 +438,18 @@ export default function AttendanceCalendarSection({
               return (
                 <div 
                   key={emp.id || emp.biometricId || emp.name} 
-                  className="pt-2.5 first:pt-0 flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-2 rounded-xl hover:bg-slate-50/80 transition-colors"
+                  className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl border border-slate-200/80 bg-slate-50/60 hover:bg-[#f4f8fd] hover:border-[#b9d7f7] transition-all"
                 >
                   {/* Left: Staff Identity */}
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-10 h-10 rounded-xl bg-[#eaf3ff] text-[#0b5cbe] font-black text-sm flex items-center justify-center shrink-0 border border-[#b9d6f5] shadow-xs">
+                  <div className="flex items-center gap-3.5 min-w-0">
+                    <div className="w-11 h-11 rounded-xl bg-[#eaf3ff] text-[#0b5cbe] font-black text-sm flex items-center justify-center shrink-0 border border-[#b9d6f5] shadow-xs">
                       {getInitials(emp.name || 'Staff')}
                     </div>
                     <div className="min-w-0">
                       <div className="text-xs font-black text-slate-900 truncate flex items-center gap-1.5">
                         <span>{emp.name || 'Staff Member'}</span>
                         {emp.biometricId && (
-                          <span className="text-[9px] font-mono text-slate-400 font-bold bg-slate-100 px-1.5 py-0.5 rounded">
+                          <span className="text-[9px] font-mono text-[#0b5cbe] font-bold bg-[#eaf3ff] px-1.5 py-0.5 rounded border border-[#b9d6f5]">
                             #{emp.biometricId}
                           </span>
                         )}
@@ -464,7 +464,7 @@ export default function AttendanceCalendarSection({
 
                   {/* Center: Role Tag */}
                   <div className="flex items-center gap-2 shrink-0">
-                    <span className="text-[10px] font-black px-2.5 py-1 rounded-lg uppercase tracking-wider bg-slate-100 text-slate-700 border border-slate-200">
+                    <span className="text-[10px] font-black px-3 py-1 rounded-lg uppercase tracking-wider bg-white text-slate-800 border border-slate-200 shadow-2xs">
                       {emp.role || 'Staff'}
                     </span>
                   </div>
@@ -491,12 +491,51 @@ export default function AttendanceCalendarSection({
               );
             })
           ) : (
-            <div className="text-center py-12 text-slate-400">
+            <div className="text-center py-8 text-slate-400">
               <Users size={28} className="mx-auto mb-2 opacity-50" />
               <p className="text-xs font-bold text-slate-600">No staff members found matching filter</p>
               <p className="text-[10px] text-slate-400 mt-0.5">Adjust your search query or reset filter dropdown</p>
             </div>
           )}
+        </div>
+
+        {/* Quick Staff Roster Summary Tiles (Productively filling empty space) */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-3 mt-2 border-t border-slate-100">
+          <div className="bg-slate-50/80 p-2.5 rounded-xl border border-slate-200/70 flex items-center justify-between">
+            <div>
+              <span className="text-[9px] font-extrabold uppercase tracking-wider text-slate-400 block">Trainers</span>
+              <span className="text-xs font-black text-slate-800 font-mono">
+                {staffListWithStatus.filter(e => String(e.role).toLowerCase().includes('trainer')).length} Active
+              </span>
+            </div>
+            <span className="text-[10px] font-bold text-[#0b5cbe] bg-[#eaf3ff] px-2 py-0.5 rounded-md">
+              Fitness Desk
+            </span>
+          </div>
+
+          <div className="bg-slate-50/80 p-2.5 rounded-xl border border-slate-200/70 flex items-center justify-between">
+            <div>
+              <span className="text-[9px] font-extrabold uppercase tracking-wider text-slate-400 block">Front Desk / Mgr</span>
+              <span className="text-xs font-black text-slate-800 font-mono">
+                {staffListWithStatus.filter(e => !String(e.role).toLowerCase().includes('trainer')).length} Active
+              </span>
+            </div>
+            <span className="text-[10px] font-bold text-slate-600 bg-white px-2 py-0.5 rounded-md border border-slate-200">
+              Operations
+            </span>
+          </div>
+
+          <div className="bg-slate-50/80 p-2.5 rounded-xl border border-slate-200/70 flex items-center justify-between">
+            <div>
+              <span className="text-[9px] font-extrabold uppercase tracking-wider text-slate-400 block">Biometric Sync</span>
+              <span className="text-xs font-black text-emerald-600 flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /> Live Bridge
+              </span>
+            </div>
+            <span className="text-[10px] font-bold text-slate-500">
+              eSSL K90
+            </span>
+          </div>
         </div>
 
       </div>
