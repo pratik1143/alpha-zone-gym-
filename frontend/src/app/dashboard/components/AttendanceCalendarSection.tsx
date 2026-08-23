@@ -499,16 +499,10 @@ export default function AttendanceCalendarSection({
           )}
         </div>
 
-        {/* Panel Footer Summary */}
-        <div className="border-t border-slate-100 pt-3 mt-2 flex flex-wrap justify-between items-center text-[10.5px] text-slate-500 font-semibold">
-          <span>Active Staff Roster: <strong className="text-slate-900">{staffListWithStatus.length} Employees</strong></span>
-          <span className="text-[10px] text-slate-400">Tracking started: <strong className="text-slate-600">{SYSTEM_START_DATE}</strong></span>
-        </div>
-
       </div>
 
       {/* ─── 2. ATTENDANCE CALENDAR (COMPACT PANEL - RIGHT ~35% / 4-5 COLS) ─── */}
-      <div className="lg:col-span-5 xl:col-span-4 bg-white border border-slate-200/80 rounded-2xl p-4 sm:p-5 shadow-xs flex flex-col justify-between h-full min-h-[460px] min-w-0 overflow-hidden">
+      <div className="lg:col-span-5 xl:col-span-4 bg-white border border-slate-200/80 rounded-2xl p-4 sm:p-5 shadow-xs flex flex-col justify-between h-full min-w-0 overflow-hidden">
         
         {/* Header with 2 Responsive Rows */}
         <div className="w-full min-w-0">
@@ -643,7 +637,7 @@ export default function AttendanceCalendarSection({
 
         {/* Selected Day Inspector Popover / Banner */}
         {activeDayObj && (
-          <div className="bg-[#f4f8fd] border border-[#b9d7f7] rounded-xl p-2.5 my-1.5 text-xs w-full min-w-0 overflow-hidden">
+          <div className="bg-[#f4f8fd] border border-[#b9d7f7] rounded-xl p-2.5 mt-1.5 text-xs w-full min-w-0 overflow-hidden">
             <div className="flex items-center justify-between border-b border-[#b9d7f7]/60 pb-1.5 min-w-0">
               <div className="font-extrabold text-slate-900 flex items-center gap-1.5 text-[11px] truncate min-w-0">
                 <span className="truncate">{new Date(activeDayObj.ymd || todayStr).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })}</span>
@@ -674,22 +668,6 @@ export default function AttendanceCalendarSection({
             </div>
           </div>
         )}
-
-        {/* Calendar Legend Bar */}
-        <div className="border-t border-slate-100 pt-2 flex flex-wrap items-center justify-between gap-1 text-[9px] font-bold text-slate-500 w-full min-w-0">
-          <div className="flex items-center gap-1.5 flex-wrap min-w-0">
-            <span className="text-slate-400 font-extrabold uppercase text-[8px]">Heat:</span>
-            <span className="flex items-center gap-0.5"><span className="w-2 h-2 rounded bg-slate-100 border border-slate-200" /> 0</span>
-            <span className="flex items-center gap-0.5"><span className="w-2 h-2 rounded bg-[#eaf3ff] border border-[#b9d7f7]" /> 1-5</span>
-            <span className="flex items-center gap-0.5"><span className="w-2 h-2 rounded bg-[#c6e0ff] border border-[#8cbcf5]" /> 6-15</span>
-            <span className="flex items-center gap-0.5"><span className="w-2 h-2 rounded bg-[#0b5cbe]" /> 16+</span>
-          </div>
-
-          <div className="flex items-center gap-2 shrink-0">
-            <span className="flex items-center gap-1 text-rose-600"><span className="w-1.5 h-1.5 rounded-full bg-rose-500" /> Sun</span>
-            <span className="flex items-center gap-1 text-[#0b5cbe]"><span className="w-1.5 h-1.5 rounded-full bg-[#0b5cbe]" /> Today</span>
-          </div>
-        </div>
 
       </div>
 
