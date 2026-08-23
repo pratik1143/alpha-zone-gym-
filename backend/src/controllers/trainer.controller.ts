@@ -631,3 +631,92 @@ export const assignMembersToTrainer = async (req: any, res: Response) => {
   }
 };
 
+// ── SEED REAL TRAINERS ────────────────────────────────────────────────────────
+// POST /trainers/seed-real-trainers
+// Idempotent: uses biometricId as the uniqueness key.
+// Safe to call multiple times — never creates duplicates.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const REAL_TRAINER_DATA = [
+  { biometricId: '10021', name: 'Sourav Arora',   phone: '7973649709', email: '',                       address: '',              branch: 'Alpha Zone Gym', status: 'active' },
+  { biometricId: '10012', name: 'Deepak',          phone: '8196852386', email: '',                       address: '',              branch: 'Alpha Zone Gym', status: 'active' },
+  { biometricId: '10009', name: 'Kuldeep',         phone: '8629841471', email: 'kuldeep86298@gmail.com', address: '',              branch: 'Alpha Zone Gym', status: 'active' },
+  { biometricId: '10008', name: 'Arshdeep Singh',  phone: '9915866576', email: '',                       address: '',              branch: 'Alpha Zone Gym', status: 'active' },
+  { biometricId: '10005', name: 'Achhar Pal',      phone: '9592691190', email: '',                       address: 'kaimbwala chd', branch: 'Alpha Zone Gym', status: 'active' },
+  { biometricId: '10003', name: 'Abc',             phone: '7884977777', email: '',                       address: '',              branch: 'Alpha Zone Gym', status: 'active' },
+];
+
+export const seedRealTrainers = async (req: Request, res: Response) => {
+  try {
+    const existing = await db.getTrainers();
+    const results: Array<{ biometricId: string; name: string; action: string; docId?: string }> = [];
+
+    for (const t of REAL_TRAINER_DATA) {
+      // Check by biometricId (primary) or phone (secondary)
+      const match = existing.find(
+        (e: any) =>
+          String(e.biometricId) === String(t.biometricId) ||
+          (e.phone && e.phone.replace(/\D/g, '') === t.phone.replace(/\D/g, ''))
+      );
+
+      if (match) {
+        // Merge only blank fields — never overwrite existing real data
+        const updates: Record<string, any> = {};
+        if (!match.biometricId)                     updates.biometricId = t.biometricId;
+        if (!match.branch && t.branch)               updates.branch = t.branch;
+        if (!match.email && t.email)                 updates.email = t.email;
+        if (!match.address && t.address)             updates.address = t.address;
+        if (!match.status)                           updates.status = t.status;
+
+        if (Object.keys(updates).length > 0) {
+          await db.updateTrainer(match.id, { ...updates, updatedAt: new Date().toISOString() });
+          results.push({ biometricId: t.biometricId, name: t.name, action: 'merged', docId: match.id });
+        } else {
+          results.push({ biometricId: t.biometricId, name: t.name, action: 'skipped_no_change', docId: match.id });
+        }
+        continue;
+      }
+
+      // Create new trainer
+      const newDoc = await db.addTrainer({
+        biometricId: t.biometricId,
+        name: t.name,
+        phone: t.phone,
+        email: t.email,
+        address: t.address,
+        branch: t.branch,
+        status: t.status,
+        photo: '',
+        document: '',
+        specialization: '',
+        experience: 0,
+        rating: 0,
+        members: 0,
+        sessions: 0,
+        salary: 0,
+        certifications: [],
+        bio: '',
+        instagram: '',
+        achievements: '',
+        joiningDate: new Date().toISOString().split('T')[0],
+        importedFrom: 'seedRealTrainers',
+        createdAt: new Date().toISOString(),
+      });
+
+      results.push({ biometricId: t.biometricId, name: t.name, action: 'created', docId: newDoc?.id });
+    }
+
+    const created = results.filter(r => r.action === 'created').length;
+    const merged  = results.filter(r => r.action === 'merged').length;
+    const skipped = results.filter(r => r.action.startsWith('skipped')).length;
+
+    res.json({
+      success: true,
+      summary: { created, merged, skipped, total: REAL_TRAINER_DATA.length },
+      results,
+    });
+  } catch (error: any) {
+    console.error('[seedRealTrainers] Error:', error);
+    res.status(500).json({ error: error.message });
+  }
+};

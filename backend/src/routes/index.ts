@@ -14,7 +14,8 @@ import {
   generateAIDiet, approveDietPlan, duplicateDietPlan, archiveDietPlan,
   getCheatMeals, createCheatMealRequest, handleCheatMealRequest,
   getDailyLog, saveDailyLog,
-  getTrainersList, createTrainerProfile, updateTrainerProfile, deleteTrainerProfile, assignMembersToTrainer
+  getTrainersList, createTrainerProfile, updateTrainerProfile, deleteTrainerProfile, assignMembersToTrainer,
+  seedRealTrainers
 } from '../controllers/trainer.controller';
 import { getChatHistory, sendChatMessage } from '../controllers/chat.controller';
 import { getProgressTimeline, addProgressRecord, getReferralsByMember, createReferralInvitation } from '../controllers/progress.controller';
@@ -112,6 +113,7 @@ router.post('/trainers/diets', saveDietPlan);
 
 // Trainer CRUD & Assignment routes
 router.get('/trainers', getTrainersList);
+router.post('/trainers/seed-real-trainers', seedRealTrainers); // idempotent real-trainer import
 router.post('/trainers', createTrainerProfile);
 router.put('/trainers/:id', updateTrainerProfile);
 router.delete('/trainers/:id', deleteTrainerProfile);

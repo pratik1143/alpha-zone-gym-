@@ -1,11 +1,13 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Users, Search, Plus, Filter, UserCheck, Briefcase, 
   Trash2, Edit, X, Check, ArrowRight, UserPlus, Phone, 
-  Mail, MapPin, Shield, Cpu, RefreshCw, Eye, Sparkles, Clock, AlertCircle
+  Mail, MapPin, Shield, Cpu, RefreshCw, Eye, Sparkles, Clock, AlertCircle,
+  MoreHorizontal, Fingerprint, MessageSquare
 } from 'lucide-react';
 import { db } from '@/lib/firebase';
 import { collection, onSnapshot, query, orderBy, doc, addDoc, updateDoc, deleteDoc, where, getDocs } from 'firebase/firestore';
@@ -15,7 +17,6 @@ import API from '@/services/api';
 import toast from 'react-hot-toast';
 import SmartPhotoCapture from '../components/SmartPhotoCapture';
 import SendWhatsAppModal from '../components/SendWhatsAppModal';
-import { MessageSquare } from 'lucide-react';
 import { z } from 'zod';
 
 function deduplicateAllEmployees(rawList: any[]) {
@@ -48,10 +49,9 @@ export default function EmployeesPage() {
   const [attendance, setAttendance] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Filters & Search
+  // Filters & Search (Branch filter removed from UI per specification)
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
-  const [branchFilter, setBranchFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
 
   // Modals & Drawers
@@ -59,6 +59,29 @@ export default function EmployeesPage() {
   const [activeProfile, setActiveProfile] = useState<any | null>(null);
   const [editingEmployee, setEditingEmployee] = useState<any | null>(null);
   const [whatsAppModalEmployee, setWhatsAppModalEmployee] = useState<any | null>(null);
+
+  // Actions Dropdown & Delete Confirmation Modal State
+  const [actionsMenu, setActionsMenu] = useState<{ employee: any; rect: DOMRect } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<any | null>(null);
+  const [deletingEmployee, setDeletingEmployee] = useState(false);
+
+  // Close floating actions menu on outside click or scroll
+  useEffect(() => {
+    if (!actionsMenu) return;
+    const handleClose = (e: MouseEvent | Event) => {
+      const target = e.target as HTMLElement;
+      if (target?.closest('.employee-actions-portal-menu')) return;
+      setActionsMenu(null);
+    };
+    window.addEventListener('scroll', handleClose, true);
+    window.addEventListener('resize', handleClose);
+    window.addEventListener('mousedown', handleClose);
+    return () => {
+      window.removeEventListener('scroll', handleClose, true);
+      window.removeEventListener('resize', handleClose);
+      window.removeEventListener('mousedown', handleClose);
+    };
+  }, [actionsMenu]);
 
   // Fetch & Realtime Firestore listeners
   const fetchEmployeesList = async () => {
@@ -125,7 +148,6 @@ export default function EmployeesPage() {
       e.phone?.includes(search);
     
     const matchesRole = roleFilter === 'all' || e.role === roleFilter;
-    const matchesBranch = branchFilter === 'all' || e.branch === branchFilter;
     
     const accStatus = normalizeStatus(e.status);
     const isInside = e.currentStatus === 'Inside';
@@ -136,29 +158,35 @@ export default function EmployeesPage() {
     else if (statusFilter === 'Inside') matchesStatus = isInside;
     else if (statusFilter === 'Outside') matchesStatus = !isInside;
 
-    return matchesSearch && matchesRole && matchesBranch && matchesStatus;
+    return matchesSearch && matchesRole && matchesStatus;
   });
 
-  // Robust Delete Handler (API + Firestore + Local State)
-  const handleDeleteEmployee = async (id: string) => {
-    if (window.confirm('Are you sure you want to delete this employee record? This action cannot be undone.')) {
+  // Custom Delete Handler (API + Firestore + Local State)
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
+    setDeletingEmployee(true);
+    const id = deleteTarget.id;
+    try {
       try {
-        try {
-          await API.delete(`/employees/${id}`);
-        } catch (apiErr) {
-          console.warn('API delete employee failed, continuing direct Firestore delete:', apiErr);
-        }
-        try {
-          await deleteDoc(doc(db, 'employees', id));
-        } catch (fsErr) {
-          console.warn('Firestore direct delete employee failed:', fsErr);
-        }
-
-        setEmployees(prev => (prev.length > 0 ? prev : defaultFallbackEmployees).filter(e => e.id !== id && e.biometricId !== id));
-        toast.success('Employee deleted successfully!');
-      } catch (err: any) {
-        toast.error('Failed to delete employee: ' + (err.message || 'Unknown error'));
+        await API.delete(`/employees/${id}`);
+      } catch (apiErr) {
+        console.warn('API delete employee failed, continuing direct Firestore delete:', apiErr);
       }
+      try {
+        await deleteDoc(doc(db, 'employees', id));
+      } catch (fsErr) {
+        console.warn('Firestore direct delete employee failed:', fsErr);
+      }
+
+      setEmployees(prev => (prev.length > 0 ? prev : defaultFallbackEmployees).filter(e => e.id !== id && e.biometricId !== id));
+      toast.success('Employee deleted successfully.');
+      setDeleteTarget(null);
+      fetchEmployeesList();
+    } catch (err: any) {
+      console.error('Failed to delete employee:', err);
+      toast.error('Failed to delete employee: ' + (err.message || 'Unknown error'));
+    } finally {
+      setDeletingEmployee(false);
     }
   };
 
@@ -243,7 +271,7 @@ export default function EmployeesPage() {
         ))}
       </div>
 
-      {/* Filter and Search Bar */}
+      {/* Filter and Search Bar (Cleaned: All Roles & All Statuses, No All Branches) */}
       <div className="bg-white border border-[#d9e7f7] rounded-3xl p-4 flex flex-wrap gap-4 items-center shadow-[0_4px_20px_rgba(11,92,190,0.02)]">
         <div className="relative flex-1 min-w-[240px]">
           <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -269,17 +297,6 @@ export default function EmployeesPage() {
           </select>
 
           <select 
-            value={branchFilter}
-            onChange={e => setBranchFilter(e.target.value)}
-            className="text-xs bg-[#fdfdfd] border border-[#d9e7f7] rounded-2xl px-4 py-3 text-[#10233f] focus:outline-none font-bold cursor-pointer hover:bg-white transition-all"
-          >
-            <option value="all">All Branches</option>
-            <option value="Mohali, Punjab">Mohali, Punjab</option>
-            <option value="Chandigarh">Chandigarh</option>
-            <option value="Panchkula">Panchkula</option>
-          </select>
-
-          <select 
             value={statusFilter}
             onChange={e => setStatusFilter(e.target.value)}
             className="text-xs bg-[#fdfdfd] border border-[#d9e7f7] rounded-2xl px-4 py-3 text-[#10233f] focus:outline-none font-bold cursor-pointer hover:bg-white transition-all"
@@ -293,23 +310,20 @@ export default function EmployeesPage() {
         </div>
       </div>
 
-      {/* Custom Table Grid */}
+      {/* Redesigned Employee Table Grid (Members Table Visual Language) */}
       <div className="bg-white border border-[#d9e7f7] rounded-3xl overflow-hidden shadow-[0_4px_25px_rgba(11,92,190,0.03)]">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs whitespace-nowrap">
-            <thead className="bg-[#0b5cbe] text-[#fdfdfd] font-extrabold uppercase tracking-wider text-[9px] border-b border-[#084a99]">
+            <thead className="bg-[#0b5cbe] text-[#fdfdfd] font-extrabold uppercase tracking-wider text-[9.5px] border-b border-[#084a99]">
               <tr>
-                <th className="px-5 py-4 w-12 text-center text-[#fdfdfd]">Photo</th>
-                <th className="px-5 py-4 text-[#fdfdfd]">Employee</th>
-                <th className="px-5 py-4 text-[#fdfdfd]">Contact</th>
-                <th className="px-5 py-4 text-[#fdfdfd]">Role</th>
-                <th className="px-5 py-4 text-[#fdfdfd]">Branch</th>
-                <th className="px-5 py-4 text-center text-[#fdfdfd]">Biometric ID</th>
-                <th className="px-5 py-4 text-center text-[#fdfdfd]">Account Status</th>
-                <th className="px-5 py-4 text-center text-[#fdfdfd]">Today's Status</th>
-                <th className="px-5 py-4 text-[#fdfdfd]">Last Punch</th>
-                <th className="px-5 py-4 text-[#fdfdfd]">Presence</th>
-                <th className="px-5 py-4 text-right text-[#fdfdfd]">Actions</th>
+                <th className="px-5 py-4 w-[24%] text-[#fdfdfd]">Employee</th>
+                <th className="px-5 py-4 w-[18%] text-[#fdfdfd]">Contact</th>
+                <th className="px-5 py-4 w-[12%] text-[#fdfdfd]">Role</th>
+                <th className="px-5 py-4 w-[12%] text-center text-[#fdfdfd]">Biometric ID</th>
+                <th className="px-5 py-4 w-[12%] text-center text-[#fdfdfd]">Account Status</th>
+                <th className="px-5 py-4 w-[12%] text-center text-[#fdfdfd]">Today's Status</th>
+                <th className="px-5 py-4 w-[10%] text-[#fdfdfd]">Last Punch</th>
+                <th className="px-5 py-4 w-[10%] text-right text-[#fdfdfd]">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 font-medium">
@@ -320,35 +334,65 @@ export default function EmployeesPage() {
                 
                 return (
                   <tr key={emp.id} className="hover:bg-slate-50/60 transition-colors">
-                    <td className="px-5 py-3.5 text-center">
-                      <img 
-                        src={avatar} 
-                        onError={(e) => {
-                          const target = e.currentTarget;
-                          const g = String(emp.gender || '').trim().toLowerCase();
-                          target.src = (g === 'female' || g === 'f') ? FEMALE_DEFAULT_AVATAR : MALE_DEFAULT_AVATAR;
-                        }}
-                        className="w-10 h-10 rounded-full bg-slate-100 border-2 border-white shadow-xs mx-auto object-cover" 
-                        alt={emp.name} 
-                      />
-                    </td>
+                    {/* 1. Merged Photo + Employee Column */}
                     <td className="px-5 py-3.5">
-                      <div className="font-black text-slate-900 text-sm">{emp.name}</div>
-                      <div className="text-[9px] text-slate-400 font-mono mt-0.5 font-bold">EMP-{String(emp.biometricId || emp.id).slice(-6).toUpperCase()}</div>
+                      <div className="flex items-center gap-3">
+                        <div className="relative shrink-0">
+                          <img 
+                            src={avatar} 
+                            onError={(e) => {
+                              const target = e.currentTarget;
+                              const g = String(emp.gender || '').trim().toLowerCase();
+                              target.src = (g === 'female' || g === 'f') ? FEMALE_DEFAULT_AVATAR : MALE_DEFAULT_AVATAR;
+                            }}
+                            className="w-11 h-11 rounded-full bg-slate-100 border-2 border-white shadow-xs object-cover" 
+                            alt={emp.name} 
+                          />
+                          <span 
+                            className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-white ${
+                              isInside ? 'bg-emerald-500' : 'bg-slate-300'
+                            }`}
+                            title={isInside ? 'Currently Inside Gym' : 'Currently Outside'}
+                          />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="font-extrabold text-slate-900 text-sm leading-tight truncate">{emp.name}</div>
+                          <div className="text-[11px] text-slate-400 font-mono font-bold mt-0.5">
+                            EMP-{String(emp.biometricId || emp.employeeId || emp.id).slice(-6).toUpperCase()}
+                          </div>
+                        </div>
+                      </div>
                     </td>
+
+                    {/* 2. Contact Column (Phone + Email) */}
                     <td className="px-5 py-3.5">
-                      <div className="font-bold text-slate-800">{emp.phone}</div>
-                      <div className="text-[10px] text-slate-400 font-medium">{emp.email}</div>
+                      <div className="font-bold text-slate-800 text-xs flex items-center gap-1">
+                        <span>📞</span> {emp.phone || '—'}
+                      </div>
+                      {emp.email && (
+                        <div className="text-[11px] text-slate-400 font-medium truncate max-w-[200px] mt-0.5">
+                          {emp.email}
+                        </div>
+                      )}
                     </td>
+
+                    {/* 3. Role */}
                     <td className="px-5 py-3.5">
                       <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border ${getRoleBadgeStyle(emp.role)}`}>
                         {emp.role}
                       </span>
                     </td>
-                    <td className="px-5 py-3.5 text-slate-700 font-bold">{emp.branch}</td>
-                    <td className="px-5 py-3.5 text-center font-mono font-black text-slate-900 bg-slate-50/50 rounded-xl">{emp.biometricId || '—'}</td>
+
+                    {/* 4. Biometric ID */}
                     <td className="px-5 py-3.5 text-center">
-                      <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full font-black text-[9.5px] uppercase tracking-wider border ${
+                      <span className="font-mono font-black text-slate-900 bg-slate-50 border border-slate-200/60 px-2.5 py-1 rounded-xl text-xs">
+                        {emp.biometricId ? `#${emp.biometricId}` : '—'}
+                      </span>
+                    </td>
+
+                    {/* 5. Account Status */}
+                    <td className="px-5 py-3.5 text-center">
+                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full font-black text-[9.5px] uppercase tracking-wider border ${
                         accStatus === 'Active'
                           ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                           : 'bg-slate-100 text-slate-600 border-slate-200'
@@ -357,8 +401,10 @@ export default function EmployeesPage() {
                         {accStatus}
                       </span>
                     </td>
+
+                    {/* 6. Today's Status */}
                     <td className="px-5 py-3.5 text-center">
-                      <span className={`px-2.5 py-1 rounded-full font-black text-[9px] uppercase tracking-wider border ${
+                      <span className={`px-2.5 py-1 rounded-full font-black text-[9.5px] uppercase tracking-wider border ${
                         emp.todayStatus === 'Present' 
                           ? 'bg-emerald-50 text-emerald-600 border-emerald-200/60' 
                           : 'bg-rose-50 text-rose-600 border-rose-200/60'
@@ -366,81 +412,34 @@ export default function EmployeesPage() {
                         {emp.todayStatus || 'Absent'}
                       </span>
                     </td>
+
+                    {/* 7. Last Punch */}
                     <td className="px-5 py-3.5 text-slate-500 font-semibold font-mono text-[11px]">
                       {emp.lastPunch ? new Date(emp.lastPunch).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : 'Never'}
                     </td>
-                    <td className="px-5 py-3.5">
-                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border ${
-                        isInside 
-                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
-                          : 'bg-slate-50 text-slate-500 border-slate-200'
-                      }`}>
-                        <span className={`w-2 h-2 rounded-full ${isInside ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`} />
-                        {isInside ? 'Inside Gym' : 'Outside'}
-                      </span>
-                    </td>
+
+                    {/* 8. Single Actions Button (Members Page Style) */}
                     <td className="px-5 py-3.5 text-right">
-                      <div className="flex justify-end items-center gap-1.5">
-                        {/* View Profile */}
-                        <button 
-                          onClick={() => setActiveProfile(emp)}
-                          className="w-8 h-8 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 rounded-xl flex items-center justify-center cursor-pointer transition-all active:scale-95 shadow-2xs"
-                          title="View Profile"
-                        >
-                          <Eye size={13} />
-                        </button>
-                        {/* Edit Details */}
-                        <button 
-                          onClick={() => setEditingEmployee(emp)}
-                          className="w-8 h-8 bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-100 rounded-xl flex items-center justify-center cursor-pointer transition-all active:scale-95 shadow-2xs"
-                          title="Edit Employee Profile"
-                        >
-                          <Edit size={13} />
-                        </button>
-                        {/* Toggle Active / Inactive */}
-                        <button 
-                          onClick={() => handleToggleStatus(emp)}
-                          className={`w-8 h-8 rounded-xl flex items-center justify-center cursor-pointer transition-all active:scale-95 shadow-2xs border ${
-                            accStatus === 'Active'
-                              ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-600 border-emerald-200'
-                              : 'bg-amber-50 hover:bg-amber-100 text-amber-600 border-amber-200'
-                          }`}
-                          title={accStatus === 'Active' ? 'Deactivate Employee (Make Inactive)' : 'Activate Employee (Make Active)'}
-                        >
-                          <Shield size={13} />
-                        </button>
-                        {/* WhatsApp */}
-                        <button 
-                          onClick={() => setWhatsAppModalEmployee(emp)}
-                          className="w-8 h-8 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 border border-emerald-100 rounded-xl flex items-center justify-center cursor-pointer transition-all active:scale-95 shadow-2xs"
-                          title="Send WhatsApp Message"
-                        >
-                          <MessageSquare size={13} />
-                        </button>
-                        {/* Call */}
-                        <button 
-                          onClick={() => window.open(`tel:${emp.phone}`)}
-                          className="w-8 h-8 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 border border-indigo-100 rounded-xl flex items-center justify-center cursor-pointer transition-all active:scale-95 shadow-2xs"
-                          title="Call Staff"
-                        >
-                          <Phone size={13} />
-                        </button>
-                        {/* Delete */}
-                        <button 
-                          onClick={() => handleDeleteEmployee(emp.id)}
-                          className="w-8 h-8 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-100 rounded-xl flex items-center justify-center cursor-pointer transition-all active:scale-95 shadow-2xs"
-                          title="Delete Employee Record"
-                        >
-                          <Trash2 size={13} />
-                        </button>
-                      </div>
+                      <button 
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const rect = e.currentTarget.getBoundingClientRect();
+                          setActionsMenu({ employee: emp, rect });
+                        }}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-[#eaf3ff] hover:text-[#0b5cbe] hover:border-[#b9d6f5] text-slate-700 text-xs font-black uppercase tracking-wider transition-all border border-slate-200 cursor-pointer shadow-2xs active:scale-95"
+                        title="Employee Actions"
+                      >
+                        <MoreHorizontal size={14} />
+                        <span>Actions</span>
+                      </button>
                     </td>
                   </tr>
                 );
               })}
               {filteredEmployees.length === 0 && (
                 <tr>
-                  <td colSpan={11} className="text-center py-16 text-slate-400 italic">
+                  <td colSpan={8} className="text-center py-16 text-slate-400 italic">
                     <div className="max-w-xs mx-auto text-center space-y-2">
                       <Users size={32} className="mx-auto text-slate-300" />
                       <p className="font-bold text-slate-600 text-sm">No employees match your filter</p>
@@ -453,6 +452,192 @@ export default function EmployeesPage() {
           </table>
         </div>
       </div>
+
+      {/* Floating Actions Portal Dropdown (Never Clipped by Table Container) */}
+      {actionsMenu && typeof document !== 'undefined' && createPortal(
+        <div
+          className="employee-actions-portal-menu fixed z-[99999] bg-white border border-slate-200 rounded-2xl shadow-[0_15px_40px_rgba(0,0,0,0.18)] py-1.5 w-52 text-left text-xs font-semibold text-slate-800 animate-in fade-in select-none"
+          style={{
+            top: (window.innerHeight - actionsMenu.rect.bottom < 260)
+              ? Math.max(10, actionsMenu.rect.top - 250)
+              : actionsMenu.rect.bottom + 4,
+            left: Math.max(10, Math.min(window.innerWidth - 220, actionsMenu.rect.right - 195)),
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* View Profile */}
+          <button
+            type="button"
+            onClick={() => {
+              const emp = actionsMenu.employee;
+              setActionsMenu(null);
+              setActiveProfile(emp);
+            }}
+            className="w-full px-3.5 py-2 hover:bg-slate-50 flex items-center gap-2.5 text-left border-none bg-transparent cursor-pointer text-slate-700 transition-colors font-bold"
+          >
+            <Eye size={14} className="text-slate-500" />
+            <span>View Profile</span>
+          </button>
+
+          {/* Edit Employee */}
+          <button
+            type="button"
+            onClick={() => {
+              const emp = actionsMenu.employee;
+              setActionsMenu(null);
+              setEditingEmployee(emp);
+            }}
+            className="w-full px-3.5 py-2 hover:bg-blue-50 hover:text-blue-700 flex items-center gap-2.5 text-left border-none bg-transparent cursor-pointer text-slate-700 transition-colors font-bold"
+          >
+            <Edit size={14} className="text-blue-600" />
+            <span>Edit Employee</span>
+          </button>
+
+          {/* Attendance Log */}
+          <button
+            type="button"
+            onClick={() => {
+              const emp = actionsMenu.employee;
+              setActionsMenu(null);
+              setActiveProfile(emp);
+            }}
+            className="w-full px-3.5 py-2 hover:bg-indigo-50 hover:text-indigo-700 flex items-center gap-2.5 text-left border-none bg-transparent cursor-pointer text-slate-700 transition-colors font-bold"
+          >
+            <Clock size={14} className="text-indigo-600" />
+            <span>Attendance History</span>
+          </button>
+
+          {/* Call Staff */}
+          <button
+            type="button"
+            onClick={() => {
+              const emp = actionsMenu.employee;
+              setActionsMenu(null);
+              if (emp.phone) window.open(`tel:${emp.phone}`);
+              else toast.error('No phone number recorded');
+            }}
+            className="w-full px-3.5 py-2 hover:bg-slate-50 flex items-center gap-2.5 text-left border-none bg-transparent cursor-pointer text-slate-700 transition-colors font-bold"
+          >
+            <Phone size={14} className="text-slate-500" />
+            <span>Call Staff</span>
+          </button>
+
+          {/* WhatsApp */}
+          <button
+            type="button"
+            onClick={() => {
+              const emp = actionsMenu.employee;
+              setActionsMenu(null);
+              setWhatsAppModalEmployee(emp);
+            }}
+            className="w-full px-3.5 py-2 hover:bg-emerald-50 hover:text-emerald-700 flex items-center gap-2.5 text-left border-none bg-transparent cursor-pointer text-slate-700 transition-colors font-bold"
+          >
+            <MessageSquare size={14} className="text-emerald-600" />
+            <span>WhatsApp Message</span>
+          </button>
+
+          {/* Change / Toggle Status */}
+          <button
+            type="button"
+            onClick={() => {
+              const emp = actionsMenu.employee;
+              setActionsMenu(null);
+              handleToggleStatus(emp);
+            }}
+            className="w-full px-3.5 py-2 hover:bg-amber-50 hover:text-amber-700 flex items-center gap-2.5 text-left border-none bg-transparent cursor-pointer text-slate-700 transition-colors font-bold"
+          >
+            <Shield size={14} className="text-amber-600" />
+            <span>{normalizeStatus(actionsMenu.employee.status) === 'Active' ? 'Deactivate Employee' : 'Activate Employee'}</span>
+          </button>
+
+          {/* Manage Biometric */}
+          <button
+            type="button"
+            onClick={() => {
+              const emp = actionsMenu.employee;
+              setActionsMenu(null);
+              setEditingEmployee(emp);
+            }}
+            className="w-full px-3.5 py-2 hover:bg-slate-50 flex items-center gap-2.5 text-left border-none bg-transparent cursor-pointer text-slate-700 transition-colors font-bold"
+          >
+            <Fingerprint size={14} className="text-slate-500" />
+            <span>Biometric Setup</span>
+          </button>
+
+          <div className="h-px bg-slate-100 my-1" />
+
+          {/* Delete Employee (Destructive) */}
+          <button
+            type="button"
+            onClick={() => {
+              const emp = actionsMenu.employee;
+              setActionsMenu(null);
+              setDeleteTarget(emp);
+            }}
+            className="w-full px-3.5 py-2 hover:bg-rose-50 flex items-center gap-2.5 text-left border-none bg-transparent cursor-pointer text-rose-600 transition-colors font-bold"
+          >
+            <Trash2 size={14} className="text-rose-600" />
+            <span>Delete Employee</span>
+          </button>
+        </div>,
+        document.body
+      )}
+
+      {/* Custom Delete Confirmation Modal (NO window.confirm) */}
+      <AnimatePresence>
+        {deleteTarget && (
+          <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              className="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-md w-full p-6 text-slate-900 relative space-y-4"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-2xl bg-rose-50 border border-rose-100 flex items-center justify-center text-rose-600 shrink-0">
+                  <Trash2 size={22} />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-slate-900 text-lg">Delete Employee?</h3>
+                  <p className="text-xs text-slate-400 font-medium">This action cannot be undone.</p>
+                </div>
+              </div>
+
+              <div className="bg-rose-50/50 border border-rose-100 rounded-2xl p-4 text-xs font-semibold text-rose-800 space-y-1.5">
+                <p>
+                  Are you sure you want to delete <span className="font-black text-rose-950 font-sans">"{deleteTarget.name}"</span>?
+                </p>
+                <p className="text-[11px] text-rose-700 font-normal">
+                  This action will remove the employee from the active staff roster.
+                </p>
+              </div>
+
+              <div className="flex justify-end gap-2.5 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setDeleteTarget(null)}
+                  disabled={deletingEmployee}
+                  className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-700 font-bold text-xs hover:bg-slate-50 cursor-pointer disabled:opacity-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={deletingEmployee}
+                  onClick={handleConfirmDelete}
+                  className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-xs cursor-pointer disabled:opacity-60 transition-colors flex items-center justify-center gap-1.5 border-none shadow-sm"
+                >
+                  {deletingEmployee ? (
+                    <><RefreshCw size={13} className="animate-spin" /> Deleting...</>
+                  ) : (
+                    <><Trash2 size={13} /> Delete Employee</>
+                  )}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Add Employee wizard popup */}
       {showAddWizard && <AddEmployeeWizard onClose={() => setShowAddWizard(false)} onSuccess={fetchEmployeesList} />}
