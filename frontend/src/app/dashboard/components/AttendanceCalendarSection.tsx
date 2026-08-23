@@ -6,6 +6,7 @@ import {
   Search, Calendar, UserCheck, Shield, Briefcase
 } from 'lucide-react';
 import { getInitials } from '@/lib/utils';
+import { resolveAvatarUrl, MALE_DEFAULT_AVATAR, FEMALE_DEFAULT_AVATAR } from '@/lib/avatar';
 import { SYSTEM_START_DATE, SYSTEM_CONFIG } from '@/config/system';
 
 interface AttendanceCalendarSectionProps {
@@ -442,8 +443,17 @@ export default function AttendanceCalendarSection({
                 >
                   {/* Left: Staff Identity */}
                   <div className="flex items-center gap-3.5 min-w-0">
-                    <div className="w-11 h-11 rounded-xl bg-[#eaf3ff] text-[#0b5cbe] font-black text-sm flex items-center justify-center shrink-0 border border-[#b9d6f5] shadow-xs">
-                      {getInitials(emp.name || 'Staff')}
+                    <div className="w-11 h-11 rounded-xl overflow-hidden shrink-0 border border-[#b9d6f5] shadow-xs bg-[#eaf3ff] flex items-center justify-center">
+                      <img 
+                        src={resolveAvatarUrl(emp)} 
+                        onError={(e) => {
+                          const target = e.currentTarget;
+                          const g = String(emp?.gender || '').trim().toLowerCase();
+                          target.src = (g === 'female' || g === 'f') ? FEMALE_DEFAULT_AVATAR : MALE_DEFAULT_AVATAR;
+                        }}
+                        className="w-full h-full object-cover" 
+                        alt={emp.name || 'Staff'} 
+                      />
                     </div>
                     <div className="min-w-0">
                       <div className="text-xs font-black text-slate-900 truncate flex items-center gap-1.5">

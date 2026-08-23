@@ -165,3 +165,5 @@ export const calculateAge = (dobString?: string | Date | null): number | null =>
   return age >= 0 && age < 120 ? age : null;
 };
 
+export { resolveAvatarUrl, normalizeStatus, MALE_DEFAULT_AVATAR, FEMALE_DEFAULT_AVATAR } from './avatar';
+

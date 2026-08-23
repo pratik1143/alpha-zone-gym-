@@ -3,72 +3,59 @@
 import React, { useState, useEffect } from 'react';
 import { User } from 'lucide-react';
 import { getInitials, getRandomColor } from '@/lib/utils';
+import { resolveAvatarUrl, MALE_DEFAULT_AVATAR, FEMALE_DEFAULT_AVATAR, GENERIC_DEFAULT_AVATAR } from '@/lib/avatar';
 
 export interface MemberAvatarProps {
   member?: any;
   src?: string;
   name?: string;
+  gender?: string;
   className?: string;
   size?: number;
   showFallbackBadge?: boolean;
 }
 
-/**
- * Priority order for image rendering:
- * 1. profilePhotoUrl
- * 2. firebasePhotoUrl
- * 3. legacyPhotoUrl (or originalPhotoUrl)
- * 4. avatar (if not dicebear SVG)
- * 5. Initials badge / clean SVG fallback (on load error or missing image)
- */
-export function getMemberPhotoUrl(member: any): string | null {
-  if (!member) return null;
-
-  const profile = member.profilePhotoUrl;
-  if (profile && typeof profile === 'string' && profile.trim() !== '' && !profile.includes('dicebear.com')) {
-    return profile;
-  }
-
-  const firebase = member.firebasePhotoUrl;
-  if (firebase && typeof firebase === 'string' && firebase.trim() !== '' && !firebase.includes('dicebear.com')) {
-    return firebase;
-  }
-
-  const legacy = member.legacyPhotoUrl || member.originalPhotoUrl || member.photoUrl;
-  if (legacy && typeof legacy === 'string' && legacy.trim() !== '' && !legacy.includes('dicebear.com')) {
-    return legacy;
-  }
-
-  const avatar = member.avatar || member.avatarUrl;
-  if (avatar && typeof avatar === 'string' && avatar.trim() !== '' && !avatar.includes('dicebear.com')) {
-    return avatar;
-  }
-
-  return null;
+export function getMemberPhotoUrl(member: any): string {
+  if (!member) return GENERIC_DEFAULT_AVATAR;
+  return resolveAvatarUrl(member);
 }
 
 export default function MemberAvatar({
   member,
   src,
   name,
+  gender,
   className = 'w-10 h-10 rounded-full object-cover',
   size = 40,
   showFallbackBadge = true,
 }: MemberAvatarProps) {
   const resolvedName = name || member?.name || 'Member';
-  const initialPhotoUrl = src || getMemberPhotoUrl(member);
+  const resolvedGender = gender || member?.gender || member?.sex;
+  
+  // 1. Determine best image source: explicit src > entity photo > gender default avatar
+  const initialPhotoUrl = src || (member ? resolveAvatarUrl({ ...member, gender: resolvedGender }) : resolveAvatarUrl({ gender: resolvedGender }));
 
-  const [currentSrc, setCurrentSrc] = useState<string | null>(initialPhotoUrl);
-  const [hasError, setHasError] = useState<boolean>(!initialPhotoUrl);
+  const [currentSrc, setCurrentSrc] = useState<string>(initialPhotoUrl);
+  const [hasError, setHasError] = useState<boolean>(false);
 
   useEffect(() => {
-    const newSrc = src || getMemberPhotoUrl(member);
+    const newSrc = src || (member ? resolveAvatarUrl({ ...member, gender: resolvedGender }) : resolveAvatarUrl({ gender: resolvedGender }));
     setCurrentSrc(newSrc);
-    setHasError(!newSrc);
-  }, [member, src]);
+    setHasError(false);
+  }, [member, src, resolvedGender]);
 
   const handleError = () => {
-    setHasError(true);
+    // If the image failed and it wasn't already the default avatar, fallback to gender avatar
+    if (currentSrc !== MALE_DEFAULT_AVATAR && currentSrc !== FEMALE_DEFAULT_AVATAR) {
+      const g = String(resolvedGender || '').trim().toLowerCase();
+      if (g === 'female' || g === 'f') {
+        setCurrentSrc(FEMALE_DEFAULT_AVATAR);
+      } else {
+        setCurrentSrc(MALE_DEFAULT_AVATAR);
+      }
+    } else {
+      setHasError(true);
+    }
   };
 
   if (!hasError && currentSrc) {
@@ -76,14 +63,14 @@ export default function MemberAvatar({
       <img
         src={currentSrc}
         alt={resolvedName}
-        className={className}
+        className={`${className} bg-slate-100 object-cover`}
         onError={handleError}
         loading="lazy"
       />
     );
   }
 
-  // Fallback: Custom styled initials avatar box
+  // Fallback: Initials box
   const initials = getInitials(resolvedName);
   const color = getRandomColor(resolvedName);
 

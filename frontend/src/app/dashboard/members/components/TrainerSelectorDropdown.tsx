@@ -8,6 +8,7 @@ import { collection, query, onSnapshot, doc, updateDoc } from 'firebase/firestor
 import toast from 'react-hot-toast';
 import API from '@/services/api';
 import PtBillingModal from './PtBillingModal';
+import { resolveAvatarUrl, MALE_DEFAULT_AVATAR, FEMALE_DEFAULT_AVATAR } from '@/lib/avatar';
 
 // Deduplicate real trainers from employees collection (NO FAKE DATA)
 function deduplicateTrainers(rawList: any[]) {
@@ -331,7 +332,7 @@ export default function TrainerSelectorDropdown({
                   empIdBadge = `EMP-${t.id ? t.id.slice(0, 5).toUpperCase() : '101'}`;
                 }
                 const spec = t.specialization || 'Personal Trainer & Strength';
-                const avatar = t.avatarUrl || `https://i.pravatar.cc/150?u=${encodeURIComponent(t.name)}`;
+                const avatar = resolveAvatarUrl(t);
 
                 return (
                   <button
@@ -344,7 +345,16 @@ export default function TrainerSelectorDropdown({
                   >
                     <div className="flex items-center gap-2.5 min-w-0">
                       <div className="w-8 h-8 rounded-full bg-slate-100 border border-slate-200 overflow-hidden shrink-0">
-                        <img src={avatar} alt={t.name} className="w-full h-full object-cover" />
+                        <img 
+                          src={avatar} 
+                          onError={(e) => {
+                            const target = e.currentTarget;
+                            const g = String(t?.gender || '').trim().toLowerCase();
+                            target.src = (g === 'female' || g === 'f') ? FEMALE_DEFAULT_AVATAR : MALE_DEFAULT_AVATAR;
+                          }}
+                          alt={t.name} 
+                          className="w-full h-full object-cover" 
+                        />
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-1.5">

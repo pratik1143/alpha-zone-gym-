@@ -9,6 +9,7 @@ import { db } from '@/lib/firebase';
 import { doc, updateDoc, addDoc, collection } from 'firebase/firestore';
 import { useGymStore } from '@/store';
 import { membershipEngine } from '@/lib/engines/membershipEngine';
+import { resolveAvatarUrl, MALE_DEFAULT_AVATAR } from '@/lib/avatar';
 import toast from 'react-hot-toast';
 import { z } from 'zod';
 
@@ -359,7 +360,11 @@ export default function ProfileTab({ member }: { member: any }) {
               
               <div className="w-20 h-20 rounded-full bg-slate-100 border-[3px] border-white shadow-lg overflow-hidden mb-3 relative shrink-0">
                 <img
-                  src={member.trainerAvatar || member.pt?.trainerAvatar || (`https://i.pravatar.cc/150?u=` + encodeURIComponent(member.trainerName || member.trainer))}
+                  src={member.trainerAvatar || member.pt?.trainerAvatar || resolveAvatarUrl({ name: member.trainerName || member.trainer, role: 'Trainer' })}
+                  onError={(e) => {
+                    const target = e.currentTarget;
+                    target.src = MALE_DEFAULT_AVATAR;
+                  }}
                   alt="trainer"
                   className="w-full h-full object-cover"
                 />

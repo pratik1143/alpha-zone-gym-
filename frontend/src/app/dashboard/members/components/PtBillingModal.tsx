@@ -13,6 +13,7 @@ import { db } from '@/lib/firebase';
 import { doc, updateDoc, addDoc, collection } from 'firebase/firestore';
 import { useGymStore } from '@/store';
 import API from '@/services/api';
+import { resolveAvatarUrl } from '@/lib/avatar';
 
 interface PTBillingModalProps {
   isOpen: boolean;
@@ -153,7 +154,7 @@ export default function PtBillingModal({
       const trainerName = selectedTrainer?.name || member?.trainerName || member?.trainer || 'Personal Trainer';
       const trainerId = selectedTrainer?.id || selectedTrainer?.employeeId || member?.trainerId || 'emp_001';
       const trainerRole = selectedTrainer?.specialization || selectedTrainer?.role || 'Personal Trainer & Strength';
-      const trainerAvatar = selectedTrainer?.avatarUrl || `https://i.pravatar.cc/150?u=${encodeURIComponent(trainerName)}`;
+      const trainerAvatar = resolveAvatarUrl(selectedTrainer || { name: trainerName });
 
       // 1. Create SINGLE PT Payment / Billing Record in `payments` collection
       const ptPaymentPayload = {

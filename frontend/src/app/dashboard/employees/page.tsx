@@ -10,6 +10,7 @@ import {
 import { db } from '@/lib/firebase';
 import { collection, onSnapshot, query, orderBy, doc, addDoc, updateDoc, deleteDoc, where, getDocs } from 'firebase/firestore';
 import { formatDate } from '@/lib/utils';
+import { resolveAvatarUrl, normalizeStatus, MALE_DEFAULT_AVATAR, FEMALE_DEFAULT_AVATAR, AccountStatus } from '@/lib/avatar';
 import API from '@/services/api';
 import toast from 'react-hot-toast';
 import SmartPhotoCapture from '../components/SmartPhotoCapture';
@@ -126,9 +127,14 @@ export default function EmployeesPage() {
     const matchesRole = roleFilter === 'all' || e.role === roleFilter;
     const matchesBranch = branchFilter === 'all' || e.branch === branchFilter;
     
-    let status = 'Outside';
-    if (e.currentStatus === 'Inside') status = 'Inside';
-    const matchesStatus = statusFilter === 'all' || status === statusFilter;
+    const accStatus = normalizeStatus(e.status);
+    const isInside = e.currentStatus === 'Inside';
+    
+    let matchesStatus = true;
+    if (statusFilter === 'Active') matchesStatus = accStatus === 'Active';
+    else if (statusFilter === 'Inactive') matchesStatus = accStatus === 'Inactive';
+    else if (statusFilter === 'Inside') matchesStatus = isInside;
+    else if (statusFilter === 'Outside') matchesStatus = !isInside;
 
     return matchesSearch && matchesRole && matchesBranch && matchesStatus;
   });
@@ -153,6 +159,29 @@ export default function EmployeesPage() {
       } catch (err: any) {
         toast.error('Failed to delete employee: ' + (err.message || 'Unknown error'));
       }
+    }
+  };
+
+  // Toggle Active / Inactive Status
+  const handleToggleStatus = async (emp: any) => {
+    const current = normalizeStatus(emp.status);
+    const nextStatus = current === 'Active' ? 'Inactive' : 'Active';
+    try {
+      if (emp.id) {
+        await updateDoc(doc(db, 'employees', emp.id), {
+          status: nextStatus,
+          updatedAt: new Date().toISOString()
+        });
+      }
+      try {
+        await API.put(`/employees/${emp.id}`, { status: nextStatus });
+      } catch (e) {}
+
+      setEmployees(prev => prev.map(e => e.id === emp.id ? { ...e, status: nextStatus } : e));
+      toast.success(`${emp.name} marked as ${nextStatus}`);
+      fetchEmployeesList();
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to update status');
     }
   };
 
@@ -256,8 +285,10 @@ export default function EmployeesPage() {
             className="text-xs bg-[#fdfdfd] border border-[#d9e7f7] rounded-2xl px-4 py-3 text-[#10233f] focus:outline-none font-bold cursor-pointer hover:bg-white transition-all"
           >
             <option value="all">All Statuses</option>
-            <option value="Inside">Inside Gym</option>
-            <option value="Outside">Outside</option>
+            <option value="Active">Status: Active</option>
+            <option value="Inactive">Status: Inactive</option>
+            <option value="Inside">Presence: Inside Gym</option>
+            <option value="Outside">Presence: Outside</option>
           </select>
         </div>
       </div>
@@ -274,21 +305,32 @@ export default function EmployeesPage() {
                 <th className="px-5 py-4 text-[#fdfdfd]">Role</th>
                 <th className="px-5 py-4 text-[#fdfdfd]">Branch</th>
                 <th className="px-5 py-4 text-center text-[#fdfdfd]">Biometric ID</th>
+                <th className="px-5 py-4 text-center text-[#fdfdfd]">Account Status</th>
                 <th className="px-5 py-4 text-center text-[#fdfdfd]">Today's Status</th>
                 <th className="px-5 py-4 text-[#fdfdfd]">Last Punch</th>
-                <th className="px-5 py-4 text-[#fdfdfd]">Current Status</th>
+                <th className="px-5 py-4 text-[#fdfdfd]">Presence</th>
                 <th className="px-5 py-4 text-right text-[#fdfdfd]">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 font-medium">
               {filteredEmployees.map(emp => {
-                const avatar = emp.avatarUrl || `https://api.dicebear.com/7.x/adventurer/svg?seed=${emp.name?.replace(/ /g, '')}`;
+                const avatar = resolveAvatarUrl(emp);
                 const isInside = emp.currentStatus === 'Inside';
+                const accStatus = normalizeStatus(emp.status);
                 
                 return (
                   <tr key={emp.id} className="hover:bg-slate-50/60 transition-colors">
                     <td className="px-5 py-3.5 text-center">
-                      <img src={avatar} className="w-9 h-9 rounded-full bg-slate-100 border-2 border-white shadow-sm mx-auto object-cover" alt={emp.name} />
+                      <img 
+                        src={avatar} 
+                        onError={(e) => {
+                          const target = e.currentTarget;
+                          const g = String(emp.gender || '').trim().toLowerCase();
+                          target.src = (g === 'female' || g === 'f') ? FEMALE_DEFAULT_AVATAR : MALE_DEFAULT_AVATAR;
+                        }}
+                        className="w-10 h-10 rounded-full bg-slate-100 border-2 border-white shadow-xs mx-auto object-cover" 
+                        alt={emp.name} 
+                      />
                     </td>
                     <td className="px-5 py-3.5">
                       <div className="font-black text-slate-900 text-sm">{emp.name}</div>
@@ -305,6 +347,16 @@ export default function EmployeesPage() {
                     </td>
                     <td className="px-5 py-3.5 text-slate-700 font-bold">{emp.branch}</td>
                     <td className="px-5 py-3.5 text-center font-mono font-black text-slate-900 bg-slate-50/50 rounded-xl">{emp.biometricId || '—'}</td>
+                    <td className="px-5 py-3.5 text-center">
+                      <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full font-black text-[9.5px] uppercase tracking-wider border ${
+                        accStatus === 'Active'
+                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                          : 'bg-slate-100 text-slate-600 border-slate-200'
+                      }`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${accStatus === 'Active' ? 'bg-emerald-500' : 'bg-slate-400'}`} />
+                        {accStatus}
+                      </span>
+                    </td>
                     <td className="px-5 py-3.5 text-center">
                       <span className={`px-2.5 py-1 rounded-full font-black text-[9px] uppercase tracking-wider border ${
                         emp.todayStatus === 'Present' 
@@ -328,43 +380,55 @@ export default function EmployeesPage() {
                       </span>
                     </td>
                     <td className="px-5 py-3.5 text-right">
-                      <div className="flex justify-end gap-1.5">
-                        {/* Call */}
+                      <div className="flex justify-end items-center gap-1.5">
+                        {/* View Profile */}
                         <button 
-                          onClick={() => window.open(`tel:${emp.phone}`)}
-                          className="w-8 h-8 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 border border-indigo-100 rounded-xl flex items-center justify-center cursor-pointer transition-all active:scale-95"
-                          title="Call Staff"
+                          onClick={() => setActiveProfile(emp)}
+                          className="w-8 h-8 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 rounded-xl flex items-center justify-center cursor-pointer transition-all active:scale-95 shadow-2xs"
+                          title="View Profile"
                         >
-                          <Phone size={13} />
+                          <Eye size={13} />
+                        </button>
+                        {/* Edit Details */}
+                        <button 
+                          onClick={() => setEditingEmployee(emp)}
+                          className="w-8 h-8 bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-100 rounded-xl flex items-center justify-center cursor-pointer transition-all active:scale-95 shadow-2xs"
+                          title="Edit Employee Profile"
+                        >
+                          <Edit size={13} />
+                        </button>
+                        {/* Toggle Active / Inactive */}
+                        <button 
+                          onClick={() => handleToggleStatus(emp)}
+                          className={`w-8 h-8 rounded-xl flex items-center justify-center cursor-pointer transition-all active:scale-95 shadow-2xs border ${
+                            accStatus === 'Active'
+                              ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-600 border-emerald-200'
+                              : 'bg-amber-50 hover:bg-amber-100 text-amber-600 border-amber-200'
+                          }`}
+                          title={accStatus === 'Active' ? 'Deactivate Employee (Make Inactive)' : 'Activate Employee (Make Active)'}
+                        >
+                          <Shield size={13} />
                         </button>
                         {/* WhatsApp */}
                         <button 
                           onClick={() => setWhatsAppModalEmployee(emp)}
-                          className="w-8 h-8 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 border border-emerald-100 rounded-xl flex items-center justify-center cursor-pointer transition-all active:scale-95"
+                          className="w-8 h-8 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 border border-emerald-100 rounded-xl flex items-center justify-center cursor-pointer transition-all active:scale-95 shadow-2xs"
                           title="Send WhatsApp Message"
                         >
                           <MessageSquare size={13} />
                         </button>
-                        {/* View */}
+                        {/* Call */}
                         <button 
-                          onClick={() => setActiveProfile(emp)}
-                          className="w-8 h-8 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 rounded-xl flex items-center justify-center cursor-pointer transition-all active:scale-95"
-                          title="View Profile Drawer"
+                          onClick={() => window.open(`tel:${emp.phone}`)}
+                          className="w-8 h-8 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 border border-indigo-100 rounded-xl flex items-center justify-center cursor-pointer transition-all active:scale-95 shadow-2xs"
+                          title="Call Staff"
                         >
-                          <Eye size={13} />
-                        </button>
-                        {/* Edit */}
-                        <button 
-                          onClick={() => setEditingEmployee(emp)}
-                          className="w-8 h-8 bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-100 rounded-xl flex items-center justify-center cursor-pointer transition-all active:scale-95"
-                          title="Edit Employee Details"
-                        >
-                          <Edit size={13} />
+                          <Phone size={13} />
                         </button>
                         {/* Delete */}
                         <button 
                           onClick={() => handleDeleteEmployee(emp.id)}
-                          className="w-8 h-8 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-100 rounded-xl flex items-center justify-center cursor-pointer transition-all active:scale-95"
+                          className="w-8 h-8 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-100 rounded-xl flex items-center justify-center cursor-pointer transition-all active:scale-95 shadow-2xs"
                           title="Delete Employee Record"
                         >
                           <Trash2 size={13} />
@@ -376,7 +440,7 @@ export default function EmployeesPage() {
               })}
               {filteredEmployees.length === 0 && (
                 <tr>
-                  <td colSpan={10} className="text-center py-16 text-slate-400 italic">
+                  <td colSpan={11} className="text-center py-16 text-slate-400 italic">
                     <div className="max-w-xs mx-auto text-center space-y-2">
                       <Users size={32} className="mx-auto text-slate-300" />
                       <p className="font-bold text-slate-600 text-sm">No employees match your filter</p>
@@ -902,21 +966,41 @@ function EditEmployeeModal({ employee, onClose, onSuccess }: { employee: any, on
 
   // Form Fields
   const [name, setName] = useState(employee.name || '');
+  const [gender, setGender] = useState(employee.gender || 'Male');
   const [phone, setPhone] = useState(employee.phone || '');
   const [email, setEmail] = useState(employee.email || '');
   const [role, setRole] = useState(employee.role || 'Trainer');
+  const [department, setDepartment] = useState(employee.department || (String(employee.role).toLowerCase().includes('trainer') ? 'Fitness & Training' : 'Operations'));
   const [branch, setBranch] = useState(employee.branch || 'Mohali, Punjab');
+  const [joiningDate, setJoiningDate] = useState(employee.joiningDate || employee.joinDate || '');
+  const [salary, setSalary] = useState(employee.salary || employee.monthlySalary || '');
+  const [status, setStatus] = useState<AccountStatus>(normalizeStatus(employee.status));
   const [emergencyContact, setEmergencyContact] = useState(employee.emergencyContact || '');
   const [address, setAddress] = useState(employee.address || '');
   const [biometricId, setBiometricId] = useState(employee.biometricId || '');
-  const [avatarUrl, setAvatarUrl] = useState(employee.avatarUrl || '');
+  const [avatarUrl, setAvatarUrl] = useState(employee.avatarUrl || employee.profilePhotoUrl || '');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
     try {
       const updates = {
-        name, phone, email, role, branch, emergencyContact, address, biometricId, avatarUrl
+        name,
+        gender,
+        phone,
+        email,
+        role,
+        department,
+        branch,
+        joiningDate,
+        salary: salary ? Number(salary) : 0,
+        status: normalizeStatus(status),
+        emergencyContact,
+        address,
+        biometricId: biometricId ? Number(biometricId) : 0,
+        avatarUrl,
+        profilePhotoUrl: avatarUrl || undefined,
+        updatedAt: new Date().toISOString()
       };
       try {
         await API.put(`/employees/${employee.id}`, updates);
@@ -927,7 +1011,7 @@ function EditEmployeeModal({ employee, onClose, onSuccess }: { employee: any, on
         await updateDoc(doc(db, 'employees', employee.id), updates);
       } catch (fsErr) {}
 
-      toast.success('Employee profile updated!');
+      toast.success('Employee profile updated successfully!');
       if (onSuccess) onSuccess();
       onClose();
     } catch (err: any) {
@@ -938,87 +1022,215 @@ function EditEmployeeModal({ employee, onClose, onSuccess }: { employee: any, on
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4">
       <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={onClose} />
       
-      <form onSubmit={handleSubmit} className="relative w-full max-w-md bg-white rounded-3xl z-10 shadow-[0_30px_70px_rgba(0,0,0,0.12)] overflow-hidden border border-slate-100 flex flex-col justify-between text-slate-800 text-left font-display">
-        <div className="h-1.5 w-full bg-gradient-to-r from-blue-600 to-[#d4ff00]" />
+      <form 
+        onSubmit={handleSubmit} 
+        className="relative w-full max-w-lg bg-white rounded-3xl z-10 shadow-[0_30px_70px_rgba(0,0,0,0.15)] overflow-hidden border border-slate-100 flex flex-col max-h-[90vh] sm:max-h-[85vh] text-slate-800 text-left font-display"
+      >
+        <div className="h-1.5 w-full bg-gradient-to-r from-blue-600 to-[#d4ff00] shrink-0" />
         
-        <button type="button" onClick={onClose} className="absolute top-4 right-4 w-7 h-7 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 border border-slate-250 flex items-center justify-center cursor-pointer">
-          <X size={12} />
-        </button>
+        {/* Sticky Header */}
+        <div className="sticky top-0 bg-white z-20 px-5 sm:px-6 py-4 border-b border-slate-100 shrink-0 flex items-center justify-between">
+          <div>
+            <h3 className="font-black text-sm text-slate-900 leading-tight">Edit Staff Profile</h3>
+            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">
+              Update personal, role &amp; biometric records
+            </p>
+          </div>
+          <button 
+            type="button" 
+            onClick={onClose} 
+            className="w-7 h-7 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 border border-slate-250 flex items-center justify-center cursor-pointer"
+          >
+            <X size={12} />
+          </button>
+        </div>
 
-        <div className="p-6 space-y-4">
-          <h3 className="font-black text-sm text-slate-900 mb-4">Edit Staff Profile</h3>
+        {/* Scrollable Form Body */}
+        <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-4 text-xs font-semibold custom-scrollbar">
+          <div className="w-full">
+            <label className="block text-[8px] font-black uppercase tracking-wider text-slate-400 mb-1.5">Staff Photo</label>
+            <SmartPhotoCapture 
+              value={avatarUrl || undefined}
+              onCaptureComplete={(urls) => {
+                setAvatarUrl(urls.photoURL);
+              }}
+              label="Employee"
+            />
+          </div>
 
-          <div className="space-y-3.5 text-xs font-semibold">
-            <div className="w-full">
-              <label className="block text-[8px] font-black uppercase tracking-wider text-slate-400 mb-2">Staff Photo</label>
-              <SmartPhotoCapture 
-                value={avatarUrl || undefined}
-                onCaptureComplete={(urls) => {
-                  setAvatarUrl(urls.photoURL);
-                }}
-                label="Employee"
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-[8px] font-black uppercase tracking-wider text-slate-400 mb-1">Full Name *</label>
+              <input 
+                type="text" 
+                value={name} 
+                onChange={e => setName(e.target.value)} 
+                required 
+                className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:border-indigo-500 focus:bg-white text-slate-700" 
               />
             </div>
 
             <div>
-              <label className="block text-[8px] font-black uppercase tracking-wider text-slate-400 mb-1">Full Name</label>
-              <input type="text" value={name} onChange={e => setName(e.target.value)} required className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 focus:outline-none focus:border-indigo-500 focus:bg-white text-slate-700" />
+              <label className="block text-[8px] font-black uppercase tracking-wider text-slate-400 mb-1">Gender *</label>
+              <select 
+                value={gender} 
+                onChange={e => setGender(e.target.value)} 
+                className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none text-slate-700 font-semibold cursor-pointer"
+              >
+                <option value="Male">Male</option>
+                <option value="Female">Female</option>
+                <option value="Other">Other</option>
+              </select>
             </div>
+          </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-[8px] font-black uppercase tracking-wider text-slate-400 mb-1">Phone</label>
-                <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} required className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 focus:outline-none focus:border-indigo-500 focus:bg-white text-slate-700" />
-              </div>
-              <div>
-                <label className="block text-[8px] font-black uppercase tracking-wider text-slate-400 mb-1">Email</label>
-                <input type="email" value={email} onChange={e => setEmail(e.target.value)} required className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 focus:outline-none focus:border-indigo-500 focus:bg-white text-slate-700" />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-[8px] font-black uppercase tracking-wider text-slate-400 mb-1">Role</label>
-                <select value={role} onChange={e => setRole(e.target.value)} className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 focus:outline-none text-slate-700 font-semibold cursor-pointer">
-                  {['Trainer', 'Reception', 'Manager', 'Owner', 'Cleaner', 'Security', 'Nutritionist', 'Sales', 'Custom'].map(r => (
-                    <option key={r} value={r}>{r}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-[8px] font-black uppercase tracking-wider text-slate-400 mb-1">Biometric ID</label>
-                <input type="number" value={biometricId} onChange={e => setBiometricId(Number(e.target.value))} required className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 focus:outline-none focus:border-indigo-500 focus:bg-white text-slate-700" />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-[8px] font-black uppercase tracking-wider text-slate-400 mb-1">Branch</label>
-                <select value={branch} onChange={e => setBranch(e.target.value)} className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 focus:outline-none text-slate-700 font-semibold cursor-pointer">
-                  <option value="Mohali, Punjab">Mohali, Punjab</option>
-                  <option value="Chandigarh">Chandigarh</option>
-                  <option value="Panchkula">Panchkula</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-[8px] font-black uppercase tracking-wider text-slate-400 mb-1">Emergency Contact</label>
-                <input type="tel" value={emergencyContact} onChange={e => setEmergencyContact(e.target.value)} className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 focus:outline-none text-slate-700" />
-              </div>
-            </div>
-
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-[8px] font-black uppercase tracking-wider text-slate-400 mb-1">Address</label>
-              <input type="text" value={address} onChange={e => setAddress(e.target.value)} className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 focus:outline-none text-slate-700" />
+              <label className="block text-[8px] font-black uppercase tracking-wider text-slate-400 mb-1">Phone Number *</label>
+              <input 
+                type="tel" 
+                value={phone} 
+                onChange={e => setPhone(e.target.value)} 
+                required 
+                className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:border-indigo-500 focus:bg-white text-slate-700" 
+              />
             </div>
+            <div>
+              <label className="block text-[8px] font-black uppercase tracking-wider text-slate-400 mb-1">Email Address *</label>
+              <input 
+                type="email" 
+                value={email} 
+                onChange={e => setEmail(e.target.value)} 
+                required 
+                className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:border-indigo-500 focus:bg-white text-slate-700" 
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-[8px] font-black uppercase tracking-wider text-slate-400 mb-1">Role *</label>
+              <select 
+                value={role} 
+                onChange={e => setRole(e.target.value)} 
+                className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none text-slate-700 font-semibold cursor-pointer"
+              >
+                {['Trainer', 'Reception', 'Manager', 'Accountant', 'Cleaner', 'Security', 'Nutritionist', 'Sales', 'Staff', 'Other'].map(r => (
+                  <option key={r} value={r}>{r}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-[8px] font-black uppercase tracking-wider text-slate-400 mb-1">Department</label>
+              <input 
+                type="text" 
+                value={department} 
+                onChange={e => setDepartment(e.target.value)} 
+                placeholder="e.g. Fitness & Training"
+                className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:border-indigo-500 focus:bg-white text-slate-700" 
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-[8px] font-black uppercase tracking-wider text-slate-400 mb-1">Joining Date</label>
+              <input 
+                type="date" 
+                value={joiningDate} 
+                onChange={e => setJoiningDate(e.target.value)} 
+                className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:border-indigo-500 focus:bg-white text-slate-700" 
+              />
+            </div>
+            <div>
+              <label className="block text-[8px] font-black uppercase tracking-wider text-slate-400 mb-1">Monthly Salary (₹)</label>
+              <input 
+                type="number" 
+                value={salary} 
+                onChange={e => setSalary(e.target.value)} 
+                placeholder="₹ Amount"
+                className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:border-indigo-500 focus:bg-white text-slate-700" 
+              />
+            </div>
+            <div>
+              <label className="block text-[8px] font-black uppercase tracking-wider text-slate-400 mb-1">Account Status</label>
+              <select 
+                value={status} 
+                onChange={e => setStatus(normalizeStatus(e.target.value))} 
+                className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none text-slate-700 font-semibold cursor-pointer"
+              >
+                <option value="Active">Active</option>
+                <option value="Inactive">Inactive</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-[8px] font-black uppercase tracking-wider text-slate-400 mb-1">Biometric ID *</label>
+              <input 
+                type="number" 
+                value={biometricId} 
+                onChange={e => setBiometricId(Number(e.target.value))} 
+                required 
+                className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:border-indigo-500 focus:bg-white text-slate-700" 
+              />
+            </div>
+            <div>
+              <label className="block text-[8px] font-black uppercase tracking-wider text-slate-400 mb-1">Branch Location</label>
+              <select 
+                value={branch} 
+                onChange={e => setBranch(e.target.value)} 
+                className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none text-slate-700 font-semibold cursor-pointer"
+              >
+                <option value="Mohali, Punjab">Mohali, Punjab</option>
+                <option value="Chandigarh">Chandigarh</option>
+                <option value="Panchkula">Panchkula</option>
+                <option value="Main Branch">Main Branch</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-[8px] font-black uppercase tracking-wider text-slate-400 mb-1">Emergency Contact</label>
+            <input 
+              type="tel" 
+              value={emergencyContact} 
+              onChange={e => setEmergencyContact(e.target.value)} 
+              placeholder="e.g. +91 99999 88888"
+              className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none text-slate-700" 
+            />
+          </div>
+
+          <div>
+            <label className="block text-[8px] font-black uppercase tracking-wider text-slate-400 mb-1">Residential Address</label>
+            <input 
+              type="text" 
+              value={address} 
+              onChange={e => setAddress(e.target.value)} 
+              placeholder="Complete residential address"
+              className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none text-slate-700" 
+            />
           </div>
         </div>
 
-        <div className="p-6 bg-slate-50 border-t border-slate-150 flex justify-end gap-2.5">
-          <button type="button" onClick={onClose} className="px-4 py-2 text-slate-500 hover:text-slate-700 text-xs font-black uppercase tracking-wider bg-transparent border-none cursor-pointer">Cancel</button>
-          <button type="submit" disabled={submitting} className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black uppercase tracking-wider border-none cursor-pointer flex items-center gap-1 shadow-md shadow-blue-600/10">
+        {/* Sticky Footer */}
+        <div className="sticky bottom-0 bg-slate-50 border-t border-slate-100 z-20 px-5 sm:px-6 py-4 flex justify-end items-center gap-3 shrink-0">
+          <button 
+            type="button" 
+            onClick={onClose} 
+            className="px-4 py-2.5 text-slate-500 hover:text-slate-700 text-xs font-black uppercase tracking-wider bg-transparent border-none cursor-pointer"
+          >
+            Cancel
+          </button>
+          <button 
+            type="submit" 
+            disabled={submitting} 
+            className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black uppercase tracking-wider border-none cursor-pointer flex items-center gap-1 shadow-md shadow-blue-600/10 active:scale-95 transition-all disabled:opacity-50"
+          >
             {submitting ? 'Saving...' : 'Save Profile Changes'}
           </button>
         </div>
@@ -1158,7 +1370,7 @@ function TrainerProfileCard({ employee }: { employee: any }) {
 
 // ─── EMPLOYEE PROFILE DRAWER COMPONENT ───
 function EmployeeProfileDrawer({ employee, attendance, onClose, onWhatsApp }: { employee: any, attendance: any[], onClose: () => void, onWhatsApp?: (emp: any) => void }) {
-  const avatar = employee.avatarUrl || `https://api.dicebear.com/7.x/adventurer/svg?seed=${employee.name?.replace(/ /g, '')}`;
+  const avatar = resolveAvatarUrl(employee);
 
   return (
     <>
@@ -1188,11 +1400,28 @@ function EmployeeProfileDrawer({ employee, attendance, onClose, onWhatsApp }: { 
 
           {/* Profile Header Card */}
           <div className="flex gap-4 items-center bg-slate-50 border border-slate-100 rounded-3xl p-5">
-            <img src={avatar} className="w-14 h-14 rounded-full bg-white border border-slate-200 shadow-sm" alt="" />
+            <img 
+              src={avatar} 
+              onError={(e) => {
+                const target = e.currentTarget;
+                const g = String(employee?.gender || '').trim().toLowerCase();
+                target.src = (g === 'female' || g === 'f') ? FEMALE_DEFAULT_AVATAR : MALE_DEFAULT_AVATAR;
+              }}
+              className="w-14 h-14 rounded-full bg-white border border-slate-200 shadow-sm object-cover" 
+              alt={employee.name} 
+            />
             <div>
               <h4 className="text-base font-black text-slate-800 leading-tight">{employee.name}</h4>
-              <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-1">{employee.role}</div>
-              <div className="text-[9px] text-slate-500 mt-0.5 font-semibold">Biometric ID: <b className="text-slate-850 font-mono">{employee.biometricId}</b></div>
+              <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-1 flex items-center gap-1.5">
+                <span>{employee.role}</span>
+                <span>·</span>
+                <span className={`px-2 py-0.2 rounded-full font-black text-[9px] uppercase ${
+                  normalizeStatus(employee.status) === 'Active' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'
+                }`}>
+                  {normalizeStatus(employee.status)}
+                </span>
+              </div>
+              <div className="text-[9px] text-slate-500 mt-0.5 font-semibold">Biometric ID: <b className="text-slate-850 font-mono">{employee.biometricId || '—'}</b></div>
             </div>
           </div>
 

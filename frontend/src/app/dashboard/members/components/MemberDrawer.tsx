@@ -8,6 +8,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useGymStore } from '@/store';
 import toast from 'react-hot-toast';
 import MemberAvatar from '../../components/MemberAvatar';
+import { resolveAvatarUrl, MALE_DEFAULT_AVATAR } from '@/lib/avatar';
 
 interface MemberDrawerProps {
   member: any;
@@ -206,7 +207,15 @@ export default function MemberDrawer({ member, onClose, onCall, onMessage, onChe
                   <div className="flex items-center justify-between p-3 border border-slate-200 rounded-xl shadow-sm">
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 rounded-full bg-slate-200 overflow-hidden">
-                        <img src={'https://i.pravatar.cc/150?u=' + member.trainer} alt="trainer" className="w-full h-full object-cover" />
+                        <img 
+                          src={member.trainerAvatar || resolveAvatarUrl({ name: member.trainer, role: 'Trainer' })} 
+                          onError={(e) => {
+                            const target = e.currentTarget;
+                            target.src = MALE_DEFAULT_AVATAR;
+                          }}
+                          alt="trainer" 
+                          className="w-full h-full object-cover" 
+                        />
                       </div>
                       <div>
                         <div className="text-xs font-bold text-slate-900">{member.trainer}</div>

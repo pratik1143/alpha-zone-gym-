@@ -267,9 +267,16 @@ const MemberTableRow = memo(function MemberTableRow({
       <td className="px-4 py-4 text-right" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-end gap-1.5">
           <button 
+            title="View Member Profile"
+            onClick={() => onSelectMember(member)}
+            className="p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer border-0"
+          >
+            <Eye size={14} />
+          </button>
+          <button 
             title="Edit Member"
             onClick={() => onEdit ? onEdit(member) : onSelectMember(member)}
-            className="p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer border-0"
+            className="p-1.5 text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors cursor-pointer border-0"
           >
             <Edit size={14} />
           </button>
