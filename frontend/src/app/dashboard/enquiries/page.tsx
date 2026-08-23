@@ -6,9 +6,10 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Search, Plus, Phone, MessageSquare, Mail, Calendar, Clock,
   User, Shield, Sparkles, AlertCircle, Trash2, Edit, Edit3,
-  UserCheck, LayoutGrid, List,
+  UserCheck, LayoutGrid, List, SlidersHorizontal,
   X, Upload, UserPlus, FileText,
-  History, CheckCircle2, MoreHorizontal, Eye, PhoneCall, ChevronRight
+  History, CheckCircle2, MoreHorizontal, Eye, PhoneCall, ChevronRight,
+  Filter, ArrowRight
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import confetti from 'canvas-confetti';
@@ -21,7 +22,7 @@ type Enquiry = EnquiryItem;
 
 const SOURCES = ['Walk-in', 'Instagram', 'Facebook', 'Google Ad', 'Referral', 'Phone Inquiry', 'Excel Import', 'Other'];
 const PLANS = ['1 month', '2 months', '3 months', '6 months', '12 months', 'Day Pass', 'Monthly Standard', 'Quarterly Prime', 'Annual VIP'];
-const STAFF_LIST = ['Veer Chand (manager)', 'Tanya Mehra', 'Ujjval Peet Kaur', 'Karan Verma', 'Dev Rana', 'Sneha Kapoor', 'Reception Desk'];
+const DEFAULT_STAFF_LIST = ['Veer Chand (manager)', 'Tanya Mehra', 'Ujjval Peet Kaur', 'Karan Verma', 'Dev Rana', 'Sneha Kapoor', 'Reception Desk'];
 
 const enquiryFormSchema = z.object({
   firstName: z.string().trim().min(2, 'First Name must be at least 2 characters'),
@@ -48,6 +49,7 @@ export default function EnquiryGodLevelHub() {
   const [showImportModal, setShowImportModal] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [importReport, setImportReport] = useState<any | null>(null);
+  const [showMoreFilters, setShowMoreFilters] = useState(false);
 
   // Actions Dropdown & Custom Modals State
   const [actionsMenu, setActionsMenu] = useState<{ enquiry: Enquiry; rect: DOMRect } | null>(null);
@@ -67,6 +69,8 @@ export default function EnquiryGodLevelHub() {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('All');
   const [staffFilter, setStaffFilter] = useState<string>('All');
+  const [priorityFilter, setPriorityFilter] = useState<string>('All');
+  const [planFilter, setPlanFilter] = useState<string>('All');
 
   // Form State for New Lead
   const [firstName, setFirstName] = useState('');
@@ -134,6 +138,15 @@ export default function EnquiryGodLevelHub() {
     return () => unsubscribe();
   }, []);
 
+  // Dynamic Representatives List from Database
+  const dynamicStaffList = useMemo(() => {
+    const fromData = enquiries
+      .map(e => e.assignedTo?.trim())
+      .filter(Boolean) as string[];
+    const combined = Array.from(new Set([...DEFAULT_STAFF_LIST, ...fromData]));
+    return combined.filter(Boolean).sort();
+  }, [enquiries]);
+
   // Fetch History whenever an enquiry is selected
   useEffect(() => {
     if (selectedEnquiry?.id) {
@@ -190,14 +203,23 @@ export default function EnquiryGodLevelHub() {
       if (activeFilterTab === 'overdue' && (item.status !== 'Pending' || !isOverdueInIndia(fDate))) return false;
       if (activeFilterTab === 'upcoming' && (item.status !== 'Pending' || !isUpcomingInIndia(fDate))) return false;
 
-      // Dropdown Status Filter
+      // Status Dropdown Filter
       if (statusFilter !== 'All') {
         if (statusFilter === 'Pending' && item.status !== 'Pending') return false;
-        if (statusFilter === 'Closed' && item.status !== 'Closed') return false;
-        if (statusFilter === 'Converted' && item.status !== 'Converted') return false;
+        if (statusFilter === 'Closed' && (item.status !== 'Closed' && item.status !== 'Converted')) return false;
+        if (statusFilter === 'Overdue' && (item.status !== 'Pending' || !isOverdueInIndia(fDate))) return false;
       }
 
-      // Search & Dropdown Filters
+      // Priority Filter
+      if (priorityFilter !== 'All' && item.priority !== priorityFilter) return false;
+
+      // Plan Filter
+      if (planFilter !== 'All') {
+        const p = (item.duration || item.interestedPlan || '').toLowerCase();
+        if (!p.includes(planFilter.toLowerCase())) return false;
+      }
+
+      // Search Filter
       const q = searchQuery.toLowerCase();
       const nameMatch = (item.name || '').toLowerCase().includes(q) ||
                         (item.phone || '').includes(q) ||
@@ -208,7 +230,7 @@ export default function EnquiryGodLevelHub() {
 
       return nameMatch && staffMatch;
     });
-  }, [enquiries, activeFilterTab, searchQuery, statusFilter, staffFilter]);
+  }, [enquiries, activeFilterTab, searchQuery, statusFilter, staffFilter, priorityFilter, planFilter]);
 
   // Reset Create Form
   const resetForm = () => {
@@ -434,6 +456,8 @@ export default function EnquiryGodLevelHub() {
     return { name: assignedTo, role: 'Staff' };
   };
 
+  const hasActiveMoreFilters = priorityFilter !== 'All' || planFilter !== 'All';
+
   return (
     <div className="space-y-6 pb-12 w-full text-slate-800 text-left font-sans">
       
@@ -498,8 +522,9 @@ export default function EnquiryGodLevelHub() {
         ))}
       </div>
 
-      {/* ── 3. FILTER & SEARCH BAR ── */}
+      {/* ── 3. FILTER & SEARCH BAR (Unified with Members & Employees) ── */}
       <div className="bg-white border border-[#d9e7f7] rounded-3xl p-4 flex flex-wrap gap-4 items-center shadow-[0_4px_20px_rgba(11,92,190,0.02)]">
+        {/* Search by name, phone or enquiry ID */}
         <div className="relative flex-1 min-w-[240px]">
           <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
           <input 
@@ -512,19 +537,19 @@ export default function EnquiryGodLevelHub() {
         </div>
 
         <div className="flex flex-wrap gap-2.5 items-center">
-          {/* Representative Filter */}
+          {/* Dynamic Representatives Dropdown */}
           <select 
             value={staffFilter}
             onChange={e => setStaffFilter(e.target.value)}
             className="text-xs bg-[#fdfdfd] border border-[#d9e7f7] rounded-2xl px-4 py-3 text-[#10233f] focus:outline-none font-bold cursor-pointer hover:bg-white transition-all"
           >
             <option value="All">All Representatives</option>
-            {STAFF_LIST.map(st => (
+            {dynamicStaffList.map(st => (
               <option key={st} value={st}>{st}</option>
             ))}
           </select>
 
-          {/* Status Filter */}
+          {/* Simple Statuses Dropdown */}
           <select 
             value={statusFilter}
             onChange={e => setStatusFilter(e.target.value)}
@@ -533,8 +558,25 @@ export default function EnquiryGodLevelHub() {
             <option value="All">All Statuses</option>
             <option value="Pending">Pending</option>
             <option value="Closed">Closed</option>
-            <option value="Converted">Converted</option>
+            <option value="Overdue">Overdue</option>
           </select>
+
+          {/* More Filters Toggle */}
+          <button
+            type="button"
+            onClick={() => setShowMoreFilters(prev => !prev)}
+            className={`px-4 py-3 text-xs font-bold rounded-2xl border transition-all flex items-center gap-1.5 cursor-pointer ${
+              showMoreFilters || hasActiveMoreFilters
+                ? 'bg-blue-50 text-[#0b5cbe] border-[#0b5cbe]'
+                : 'bg-[#fdfdfd] border-[#d9e7f7] text-slate-700 hover:bg-slate-50'
+            }`}
+          >
+            <SlidersHorizontal size={14} />
+            <span>More Filters</span>
+            {hasActiveMoreFilters && (
+              <span className="w-2 h-2 rounded-full bg-[#0b5cbe]" />
+            )}
+          </button>
 
           {/* View Mode Toggle */}
           <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-2xl border border-slate-200">
@@ -559,6 +601,69 @@ export default function EnquiryGodLevelHub() {
           </div>
         </div>
       </div>
+
+      {/* ── 3.1 EXPANDABLE MORE FILTERS PANEL ── */}
+      <AnimatePresence>
+        {showMoreFilters && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            className="overflow-hidden"
+          >
+            <div className="bg-white border border-[#d9e7f7] rounded-3xl p-4 shadow-[0_4px_20px_rgba(11,92,190,0.02)] grid grid-cols-1 sm:grid-cols-3 gap-4 items-center">
+              <div>
+                <label className="block text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1">Priority</label>
+                <select
+                  value={priorityFilter}
+                  onChange={e => setPriorityFilter(e.target.value)}
+                  className="w-full text-xs bg-[#fdfdfd] border border-[#d9e7f7] rounded-2xl px-3.5 py-2.5 text-[#10233f] font-bold outline-none cursor-pointer"
+                >
+                  <option value="All">All Priorities</option>
+                  <option value="Hot">Hot 🔥</option>
+                  <option value="Warm">Warm ⚡</option>
+                  <option value="Cold">Cold ❄️</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1">Plan / Duration</label>
+                <select
+                  value={planFilter}
+                  onChange={e => setPlanFilter(e.target.value)}
+                  className="w-full text-xs bg-[#fdfdfd] border border-[#d9e7f7] rounded-2xl px-3.5 py-2.5 text-[#10233f] font-bold outline-none cursor-pointer"
+                >
+                  <option value="All">All Plans</option>
+                  {PLANS.map(p => <option key={p} value={p}>{p}</option>)}
+                </select>
+              </div>
+
+              <div className="flex items-end justify-between pt-4">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPriorityFilter('All');
+                    setPlanFilter('All');
+                    setStatusFilter('All');
+                    setStaffFilter('All');
+                    setSearchQuery('');
+                  }}
+                  className="text-xs text-rose-600 hover:text-rose-700 font-bold border-none bg-transparent cursor-pointer"
+                >
+                  Reset All Filters
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowMoreFilters(false)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl border border-slate-200 cursor-pointer"
+                >
+                  Apply
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* ── 4. MAIN CONTENT AREA (REDESIGNED TABLE OR KANBAN + INSPECTOR) ── */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 items-start">
@@ -700,7 +805,7 @@ export default function EnquiryGodLevelHub() {
                               </span>
                             </td>
 
-                            {/* 7. ACTIONS (Members & Employees Portal Pattern) */}
+                            {/* 7. ACTIONS (Compact [ ⋯ ] button matching design system) */}
                             <td className="px-5 py-3.5 text-right">
                               <button 
                                 type="button"
@@ -709,11 +814,10 @@ export default function EnquiryGodLevelHub() {
                                   const rect = e.currentTarget.getBoundingClientRect();
                                   setActionsMenu({ enquiry: enq, rect });
                                 }}
-                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-[#eaf3ff] hover:text-[#0b5cbe] hover:border-[#b9d6f5] text-slate-700 text-xs font-black uppercase tracking-wider transition-all border border-slate-200 cursor-pointer shadow-2xs active:scale-95"
-                                title="Enquiry Actions"
+                                className="inline-flex items-center justify-center w-8 h-8 rounded-xl bg-slate-100 hover:bg-[#eaf3ff] hover:text-[#0b5cbe] hover:border-[#b9d6f5] text-slate-700 transition-all border border-slate-200 cursor-pointer shadow-2xs active:scale-95 ml-auto"
+                                title="Actions"
                               >
-                                <MoreHorizontal size={14} />
-                                <span>Actions</span>
+                                <MoreHorizontal size={15} />
                               </button>
                             </td>
                           </tr>
@@ -904,19 +1008,19 @@ export default function EnquiryGodLevelHub() {
 
       </div>
 
-      {/* ── 5. FLOATING ACTIONS PORTAL DROPDOWN (Members/Employees Pattern) ── */}
+      {/* ── 5. COMPACT ACTION PORTAL DROPDOWN (Strict Priority Ordering) ── */}
       {actionsMenu && typeof document !== 'undefined' && createPortal(
         <div
-          className="enquiry-actions-portal-menu fixed z-[99999] bg-white border border-slate-200 rounded-2xl shadow-[0_15px_40px_rgba(0,0,0,0.18)] py-1.5 w-56 text-left text-xs font-semibold text-slate-800 animate-in fade-in select-none"
+          className="enquiry-actions-portal-menu fixed z-[99999] bg-white border border-slate-200 rounded-2xl shadow-[0_15px_40px_rgba(0,0,0,0.18)] py-1.5 w-52 text-left text-xs font-semibold text-slate-800 animate-in fade-in select-none"
           style={{
-            top: (window.innerHeight - actionsMenu.rect.bottom < 320)
-              ? Math.max(10, actionsMenu.rect.top - 310)
+            top: (window.innerHeight - actionsMenu.rect.bottom < 300)
+              ? Math.max(10, actionsMenu.rect.top - 290)
               : actionsMenu.rect.bottom + 4,
-            left: Math.max(10, Math.min(window.innerWidth - 240, actionsMenu.rect.right - 215)),
+            left: Math.max(10, Math.min(window.innerWidth - 220, actionsMenu.rect.right - 195)),
           }}
           onClick={(e) => e.stopPropagation()}
         >
-          {/* View Enquiry */}
+          {/* 1. View */}
           <button
             type="button"
             onClick={() => {
@@ -927,10 +1031,10 @@ export default function EnquiryGodLevelHub() {
             className="w-full px-3.5 py-2 hover:bg-slate-50 flex items-center gap-2.5 text-left border-none bg-transparent cursor-pointer text-slate-700 transition-colors font-bold"
           >
             <Eye size={14} className="text-slate-500" />
-            <span>View Enquiry</span>
+            <span>View</span>
           </button>
 
-          {/* Edit Enquiry */}
+          {/* 2. Edit */}
           <button
             type="button"
             onClick={() => {
@@ -941,10 +1045,10 @@ export default function EnquiryGodLevelHub() {
             className="w-full px-3.5 py-2 hover:bg-blue-50 hover:text-blue-700 flex items-center gap-2.5 text-left border-none bg-transparent cursor-pointer text-slate-700 transition-colors font-bold"
           >
             <Edit size={14} className="text-blue-600" />
-            <span>Edit Enquiry</span>
+            <span>Edit</span>
           </button>
 
-          {/* Call Lead */}
+          {/* 3. Call */}
           <button
             type="button"
             onClick={() => {
@@ -956,10 +1060,10 @@ export default function EnquiryGodLevelHub() {
             className="w-full px-3.5 py-2 hover:bg-slate-50 flex items-center gap-2.5 text-left border-none bg-transparent cursor-pointer text-slate-700 transition-colors font-bold"
           >
             <Phone size={14} className="text-slate-500" />
-            <span>Call Lead</span>
+            <span>Call</span>
           </button>
 
-          {/* WhatsApp */}
+          {/* 4. WhatsApp */}
           <button
             type="button"
             onClick={() => {
@@ -973,7 +1077,7 @@ export default function EnquiryGodLevelHub() {
             <span>WhatsApp</span>
           </button>
 
-          {/* Schedule Follow-up */}
+          {/* 5. Follow-up */}
           <button
             type="button"
             onClick={() => {
@@ -984,25 +1088,10 @@ export default function EnquiryGodLevelHub() {
             className="w-full px-3.5 py-2 hover:bg-indigo-50 hover:text-indigo-700 flex items-center gap-2.5 text-left border-none bg-transparent cursor-pointer text-slate-700 transition-colors font-bold"
           >
             <Calendar size={14} className="text-indigo-600" />
-            <span>Schedule Follow-up</span>
+            <span>Follow-up</span>
           </button>
 
-          {/* Change Status */}
-          <button
-            type="button"
-            onClick={() => {
-              const enq = actionsMenu.enquiry;
-              setActionsMenu(null);
-              const nextStatus = enq.status === 'Pending' ? 'Closed' : 'Pending';
-              handleUpdateStatus(enq.id, nextStatus);
-            }}
-            className="w-full px-3.5 py-2 hover:bg-amber-50 hover:text-amber-700 flex items-center gap-2.5 text-left border-none bg-transparent cursor-pointer text-slate-700 transition-colors font-bold"
-          >
-            <Shield size={14} className="text-amber-600" />
-            <span>{actionsMenu.enquiry.status === 'Pending' ? 'Mark as Closed' : 'Reopen as Pending'}</span>
-          </button>
-
-          {/* Convert to Member */}
+          {/* 6. Convert to Member */}
           <button
             type="button"
             onClick={() => {
@@ -1018,7 +1107,7 @@ export default function EnquiryGodLevelHub() {
 
           <div className="h-px bg-slate-100 my-1" />
 
-          {/* Delete Enquiry */}
+          {/* 7. Delete (Destructive) */}
           <button
             type="button"
             onClick={() => {
@@ -1029,7 +1118,7 @@ export default function EnquiryGodLevelHub() {
             className="w-full px-3.5 py-2 hover:bg-rose-50 flex items-center gap-2.5 text-left border-none bg-transparent cursor-pointer text-rose-600 transition-colors font-bold"
           >
             <Trash2 size={14} className="text-rose-600" />
-            <span>Delete Enquiry</span>
+            <span>Delete</span>
           </button>
         </div>,
         document.body
@@ -1169,7 +1258,7 @@ export default function EnquiryGodLevelHub() {
                       onChange={e => setEditRep(e.target.value)}
                       className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 outline-none focus:border-[#0b5cbe]"
                     >
-                      {STAFF_LIST.map(st => <option key={st} value={st}>{st}</option>)}
+                      {dynamicStaffList.map(st => <option key={st} value={st}>{st}</option>)}
                     </select>
                   </div>
                 </div>
@@ -1426,7 +1515,7 @@ export default function EnquiryGodLevelHub() {
                       onChange={e => setAttendedBy(e.target.value)}
                       className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 outline-none focus:border-[#0b5cbe]"
                     >
-                      {STAFF_LIST.map(st => <option key={st} value={st}>{st}</option>)}
+                      {dynamicStaffList.map(st => <option key={st} value={st}>{st}</option>)}
                     </select>
                   </div>
                 </div>
