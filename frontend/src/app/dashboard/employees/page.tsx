@@ -18,6 +18,7 @@ import toast from 'react-hot-toast';
 import SmartPhotoCapture from '../components/SmartPhotoCapture';
 import SendWhatsAppModal from '../components/SendWhatsAppModal';
 import { z } from 'zod';
+import staffDirectoryService, { BASELINE_REAL_TRAINERS } from '@/services/staff.service';
 
 function deduplicateAllEmployees(rawList: any[]) {
   const map = new Map<string, any>();
@@ -86,23 +87,26 @@ export default function EmployeesPage() {
   // Fetch & Realtime Firestore listeners
   const fetchEmployeesList = async () => {
     try {
-      const res = await API.get('/employees');
-      if (res.data && Array.isArray(res.data) && res.data.length > 0) {
-        setEmployees(res.data);
+      const staffList = await staffDirectoryService.getStaffDirectory();
+      if (staffList && staffList.length > 0) {
+        setEmployees(staffList);
       }
     } catch (err) {
-      console.error('Failed to fetch employees from API:', err);
+      console.error('Failed to fetch staff directory:', err);
     }
   };
 
   useEffect(() => {
     setLoading(true);
-    fetchEmployeesList();
+    fetchEmployeesList().finally(() => setLoading(false));
 
     const qEmp = query(collection(db, 'employees'));
-    const unsubEmp = onSnapshot(qEmp, (snap) => {
-      if (!snap.empty) {
-        setEmployees(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    const unsubEmp = onSnapshot(qEmp, async () => {
+      try {
+        const staffList = await staffDirectoryService.getStaffDirectory();
+        setEmployees(staffList);
+      } catch (err) {
+        console.warn('Staff directory refresh notice:', err);
       }
       setLoading(false);
     }, (err) => {
@@ -123,18 +127,7 @@ export default function EmployeesPage() {
     };
   }, []);
 
-  const defaultFallbackEmployees = [
-    { id: 'emp_10021', name: 'Sourav Arora', phone: '7973649709', email: '', role: 'Trainer', branch: 'Alpha zone gym', emergencyContact: '', address: '', biometricId: 10021, todayStatus: 'Absent', currentStatus: 'Outside', lastPunch: null },
-    { id: 'emp_10012', name: 'Deepak', phone: '8196852386', email: '', role: 'Trainer', branch: 'Alpha zone gym', emergencyContact: '', address: '', biometricId: 10012, todayStatus: 'Absent', currentStatus: 'Outside', lastPunch: null },
-    { id: 'emp_10009', name: 'Kuldeep', phone: '8629841471', email: 'kuldeep86298@gmail.com', role: 'Trainer', branch: 'Alpha zone gym', emergencyContact: '', address: '', biometricId: 10009, todayStatus: 'Absent', currentStatus: 'Outside', lastPunch: null },
-    { id: 'emp_10008', name: 'Arshdeep Singh', phone: '9915866576', email: '', role: 'Trainer', branch: 'Alpha zone gym', emergencyContact: '', address: '', biometricId: 10008, todayStatus: 'Absent', currentStatus: 'Outside', lastPunch: null },
-    { id: 'emp_10005', name: 'Achhar Pal', phone: '9592691190', email: '', role: 'Trainer', branch: 'Alpha zone gym', emergencyContact: '', address: 'kaimbwala chd', biometricId: 10005, todayStatus: 'Absent', currentStatus: 'Outside', lastPunch: null },
-    { id: 'emp_10003', name: 'Abc', phone: '7884977777', email: '', role: 'Trainer', branch: 'Alpha zone gym', emergencyContact: '', address: '', biometricId: 10003, todayStatus: 'Absent', currentStatus: 'Outside', lastPunch: null },
-    { id: 'emp_501', name: 'Ramesh Kumar', phone: '9876543210', email: 'ramesh@alphagym.com', role: 'Manager', branch: 'Alpha zone gym', emergencyContact: '', address: 'Phase 3B2, Mohali', biometricId: 501, todayStatus: 'Present', currentStatus: 'Inside', lastPunch: new Date().toISOString() },
-    { id: 'emp_504', name: 'Priya Singh', phone: '9877407661', email: 'priya.reception@alphagym.com', role: 'Reception', branch: 'Alpha zone gym', emergencyContact: '', address: 'Sector 71, Mohali', biometricId: 504, todayStatus: 'Present', currentStatus: 'Inside', lastPunch: new Date().toISOString() }
-  ];
-
-  const rawEmployeesList = employees && employees.length > 0 ? employees : defaultFallbackEmployees;
+  const rawEmployeesList = employees && employees.length > 0 ? employees : BASELINE_REAL_TRAINERS;
   const activeEmployeesList = deduplicateAllEmployees(rawEmployeesList);
 
   // Stats
@@ -181,10 +174,10 @@ export default function EmployeesPage() {
         console.warn('Firestore direct delete employee failed:', fsErr);
       }
 
-      setEmployees(prev => (prev.length > 0 ? prev : defaultFallbackEmployees).filter(e => e.id !== id && e.biometricId !== id));
+      setEmployees(prev => prev.filter((e: any) => e.id !== id && e.biometricId !== id));
       toast.success('Employee deleted successfully.');
       setDeleteTarget(null);
-      fetchEmployeesList();
+      await fetchEmployeesList();
     } catch (err: any) {
       console.error('Failed to delete employee:', err);
       toast.error('Failed to delete employee: ' + (err.message || 'Unknown error'));

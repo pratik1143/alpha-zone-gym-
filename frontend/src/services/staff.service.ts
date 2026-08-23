@@ -5,7 +5,7 @@
  *
  * Core Principles:
  *  1. Employee is the MASTER staff/person record.
- *  2. Trainer is a ROLE / CAPABILITY of an Employee.
+ *  2. Trainer is a ROLE / CAPABILITY of an Employee (role = "TRAINER").
  *  3. Stable identity: employeeId / biometricId / docId.
  *  4. Single source of truth with bidirectional sync between
  *     `employees` and `trainers` collections.
@@ -16,7 +16,7 @@
 
 import API from './api';
 import { db } from '@/lib/firebase';
-import { collection, doc, getDocs, setDoc, updateDoc, query, where, addDoc } from 'firebase/firestore';
+import { collection, doc, getDocs, setDoc, updateDoc, query, addDoc } from 'firebase/firestore';
 
 export interface UnifiedStaff {
   id: string;
@@ -33,6 +33,9 @@ export interface UnifiedStaff {
   rating?: number;
   salary?: number;
   status: 'Active' | 'Inactive' | string;
+  todayStatus?: 'Present' | 'Absent' | string;
+  currentStatus?: 'Inside' | 'Outside' | string;
+  lastPunch?: string | null;
   photo?: string;
   profilePhotoUrl?: string;
   avatarUrl?: string;
@@ -62,6 +65,9 @@ export const BASELINE_REAL_TRAINERS: UnifiedStaff[] = [
     role: 'Trainer',
     specialization: 'Fitness Trainer',
     status: 'Active',
+    todayStatus: 'Absent',
+    currentStatus: 'Outside',
+    lastPunch: null,
     experience: 3,
     rating: 4.8,
     salary: 0,
@@ -80,6 +86,9 @@ export const BASELINE_REAL_TRAINERS: UnifiedStaff[] = [
     role: 'Trainer',
     specialization: 'Personal Trainer',
     status: 'Active',
+    todayStatus: 'Absent',
+    currentStatus: 'Outside',
+    lastPunch: null,
     experience: 2,
     rating: 4.7,
     salary: 0,
@@ -98,6 +107,9 @@ export const BASELINE_REAL_TRAINERS: UnifiedStaff[] = [
     role: 'Trainer',
     specialization: 'Strength & Conditioning',
     status: 'Active',
+    todayStatus: 'Absent',
+    currentStatus: 'Outside',
+    lastPunch: null,
     experience: 4,
     rating: 4.9,
     salary: 0,
@@ -116,6 +128,9 @@ export const BASELINE_REAL_TRAINERS: UnifiedStaff[] = [
     role: 'Trainer',
     specialization: 'CrossFit Coach',
     status: 'Active',
+    todayStatus: 'Absent',
+    currentStatus: 'Outside',
+    lastPunch: null,
     experience: 3,
     rating: 4.6,
     salary: 0,
@@ -134,6 +149,9 @@ export const BASELINE_REAL_TRAINERS: UnifiedStaff[] = [
     role: 'Trainer',
     specialization: 'Bodybuilding & Hypertrophy',
     status: 'Active',
+    todayStatus: 'Absent',
+    currentStatus: 'Outside',
+    lastPunch: null,
     experience: 5,
     rating: 4.9,
     salary: 0,
@@ -152,6 +170,9 @@ export const BASELINE_REAL_TRAINERS: UnifiedStaff[] = [
     role: 'Trainer',
     specialization: 'Fitness Trainer',
     status: 'Active',
+    todayStatus: 'Absent',
+    currentStatus: 'Outside',
+    lastPunch: null,
     experience: 1,
     rating: 4.5,
     salary: 0,
@@ -171,6 +192,9 @@ export const BASELINE_MANAGEMENT_STAFF: UnifiedStaff[] = [
     branch: 'Alpha Zone Gym',
     role: 'Manager',
     status: 'Active',
+    todayStatus: 'Present',
+    currentStatus: 'Inside',
+    lastPunch: new Date().toISOString(),
     address: 'Phase 3B2, Mohali',
     isDeleted: false
   },
@@ -184,12 +208,17 @@ export const BASELINE_MANAGEMENT_STAFF: UnifiedStaff[] = [
     branch: 'Alpha Zone Gym',
     role: 'Reception',
     status: 'Active',
+    todayStatus: 'Present',
+    currentStatus: 'Inside',
+    lastPunch: new Date().toISOString(),
     address: 'Sector 71, Mohali',
     isDeleted: false
   }
 ];
 
 class StaffDirectoryService {
+  private hasReconciled = false;
+
   /**
    * Helper: Normalize clean phone number (last 10 digits)
    */
@@ -201,7 +230,7 @@ class StaffDirectoryService {
   /**
    * Helper: Generate stable key for deduplication
    */
-  private getStaffKey(item: any): string {
+  public getStaffKey(item: any): string {
     if (item.biometricId && String(item.biometricId).trim() !== '') {
       return `bio_${String(item.biometricId).trim()}`;
     }
@@ -216,10 +245,48 @@ class StaffDirectoryService {
   }
 
   /**
+   * Master Reconciliation: Idempotently ensures all master staff records
+   * are synced to the Firestore 'employees' collection.
+   */
+  async reconcileStaffAndTrainers(): Promise<void> {
+    if (this.hasReconciled) return;
+    this.hasReconciled = true;
+
+    try {
+      const snap = await getDocs(collection(db, 'employees'));
+      const existingDocKeys = new Set<string>();
+
+      snap.forEach(docSnap => {
+        const d = docSnap.data();
+        const key = this.getStaffKey({ id: docSnap.id, ...d });
+        existingDocKeys.add(key);
+      });
+
+      // Check baseline staff and write any missing records to Firestore
+      for (const staff of [...BASELINE_MANAGEMENT_STAFF, ...BASELINE_REAL_TRAINERS]) {
+        const key = this.getStaffKey(staff);
+        if (!existingDocKeys.has(key)) {
+          const docRef = doc(db, 'employees', staff.id);
+          await setDoc(docRef, {
+            ...staff,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          }, { merge: true });
+        }
+      }
+    } catch (err) {
+      console.warn('[StaffService] Reconciliation sync notice:', err);
+    }
+  }
+
+  /**
    * Master function: Get all staff members from employees & trainers collections
    * Unifies and deduplicates records into a single staff array.
    */
   async getStaffDirectory(): Promise<UnifiedStaff[]> {
+    // Run reconciliation in the background
+    this.reconcileStaffAndTrainers().catch(() => {});
+
     const directoryMap = new Map<string, UnifiedStaff>();
 
     // 1. Seed baseline real trainers & managers first
@@ -250,6 +317,9 @@ class StaffDirectoryService {
           rating: Number(d.rating) || 0,
           salary: Number(d.salary) || 0,
           status: (d.status === 'inactive' || d.status === 'Inactive') ? 'Inactive' : 'Active',
+          todayStatus: d.todayStatus || 'Absent',
+          currentStatus: d.currentStatus || 'Outside',
+          lastPunch: d.lastPunch || null,
           photo: d.profilePhotoUrl || d.photo || d.photoURL || d.avatarUrl || '',
           profilePhotoUrl: d.profilePhotoUrl || d.photo || d.photoURL || d.avatarUrl || '',
           avatarUrl: d.avatarUrl || d.profilePhotoUrl || d.photo || '',
@@ -287,6 +357,9 @@ class StaffDirectoryService {
               experience: Number(d.experience) || 0,
               salary: Number(d.salary) || 0,
               status: d.status || 'Active',
+              todayStatus: d.todayStatus || 'Absent',
+              currentStatus: d.currentStatus || 'Outside',
+              lastPunch: d.lastPunch || null,
               photo: d.photo || d.profilePhotoUrl || '',
               isDeleted: false
             };
@@ -310,7 +383,6 @@ class StaffDirectoryService {
         const existing = directoryMap.get(key);
 
         if (existing) {
-          // Merge trainer specific fields into existing master employee
           existing.role = 'Trainer';
           if (d.specialization) existing.specialization = d.specialization;
           if (d.experience) existing.experience = Number(d.experience);
@@ -325,7 +397,6 @@ class StaffDirectoryService {
           }
           directoryMap.set(key, existing);
         } else {
-          // Create unified staff entry for trainer
           const newStaff: UnifiedStaff = {
             id: docSnap.id,
             employeeId: d.employeeId || (d.biometricId ? `EMP-${d.biometricId}` : `EMP-${docSnap.id.slice(-4).toUpperCase()}`),
@@ -341,6 +412,9 @@ class StaffDirectoryService {
             rating: Number(d.rating) || 0,
             salary: Number(d.salary) || 0,
             status: (d.status === 'inactive' || d.status === 'Inactive') ? 'Inactive' : 'Active',
+            todayStatus: 'Absent',
+            currentStatus: 'Outside',
+            lastPunch: null,
             photo: d.profilePhotoUrl || d.photo || '',
             profilePhotoUrl: d.profilePhotoUrl || d.photo || '',
             bio: d.bio || '',
@@ -358,13 +432,25 @@ class StaffDirectoryService {
   }
 
   /**
-   * Master function: Get all trainers from unified staff directory
+   * Master function: Get all trainers from unified staff directory (Active & Inactive)
    */
-  async getTrainers(): Promise<UnifiedStaff[]> {
+  async getAllTrainers(): Promise<UnifiedStaff[]> {
     const allStaff = await this.getStaffDirectory();
     return allStaff.filter(staff => {
       const r = String(staff.role || '').trim().toLowerCase();
       return r.includes('trainer') || !!staff.specialization;
+    });
+  }
+
+  /**
+   * Master function: Get only ACTIVE trainers from unified staff directory
+   * Used in Personal Trainer dropdowns across Member Onboarding & Member Edit.
+   */
+  async getActiveTrainers(): Promise<UnifiedStaff[]> {
+    const allTrainers = await this.getAllTrainers();
+    return allTrainers.filter(t => {
+      const s = String(t.status || 'Active').toLowerCase();
+      return s === 'active' || s === 'employed';
     });
   }
 
@@ -469,4 +555,10 @@ class StaffDirectoryService {
 }
 
 export const staffDirectoryService = new StaffDirectoryService();
+
+// Standalone Helper functions for direct UI consumption:
+export const getActiveTrainers = () => staffDirectoryService.getActiveTrainers();
+export const getAllTrainers = () => staffDirectoryService.getAllTrainers();
+export const getStaffDirectory = () => staffDirectoryService.getStaffDirectory();
+
 export default staffDirectoryService;

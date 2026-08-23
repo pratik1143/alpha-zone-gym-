@@ -16,6 +16,7 @@ import { membershipEngine } from '@/lib/engines/membershipEngine';
 import { db } from '@/lib/firebase';
 import { collection, query, onSnapshot } from 'firebase/firestore';
 import { z } from 'zod';
+import { getActiveTrainers } from '@/services/staff.service';
 
 interface AddMemberModalProps {
   isOpen: boolean;
@@ -164,39 +165,31 @@ export default function AddMemberModal({ isOpen, onClose }: AddMemberModalProps)
   const activePlans = deduplicatePackages(rawPlans);
   const [selectedPlan, setSelectedPlan] = useState<any>(activePlans[0]);
 
-  // Real Employees Query for Trainer Selection
+  // Canonical Active Trainers Query for Personal Trainer Selection
   const [trainersList, setTrainersList] = useState<any[]>([]);
   const [selectedTrainerId, setSelectedTrainerId] = useState('');
 
   useEffect(() => {
     if (!isOpen) return;
+
+    const fetchActiveTrainers = async () => {
+      try {
+        const activeTrns = await getActiveTrainers();
+        setTrainersList(activeTrns);
+      } catch (err) {
+        console.warn("Failed to fetch active trainers via service:", err);
+      }
+    };
+
+    fetchActiveTrainers();
+
     const qEmp = query(collection(db, 'employees'));
-    const unsub = onSnapshot(qEmp, (snap) => {
-      if (!snap.empty) {
-        const rawEmps = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-        const trns = rawEmps.filter((e: any) => {
-          const r = String(e.role || e.type || '').toLowerCase();
-          const isTrn = r.includes('trainer') || r.includes('coach') || e.isTrainer;
-          const status = String(e.status || 'ACTIVE').toUpperCase();
-          const isActive = status === 'ACTIVE' || status === 'EMPLOYED';
-          return isTrn && isActive;
-        });
-
-        const map = new Map<string, any>();
-        trns.forEach((t: any) => {
-          const key = (t.id && String(t.id).trim())
-            ? String(t.id).trim()
-            : (t.employeeId && String(t.employeeId).trim())
-            ? String(t.employeeId).trim()
-            : (t.phone && String(t.phone).replace(/\D/g, '').length >= 8)
-            ? String(t.phone).replace(/\D/g, '').slice(-10)
-            : String(t.email || '').trim().toLowerCase();
-
-          if (key && !map.has(key)) map.set(key, t);
-        });
-        setTrainersList(Array.from(map.values()));
-      } else {
-        setTrainersList([]);
+    const unsub = onSnapshot(qEmp, async () => {
+      try {
+        const activeTrns = await getActiveTrainers();
+        setTrainersList(activeTrns);
+      } catch (err) {
+        console.warn("Realtime active trainers sync notice:", err);
       }
     }, (err) => {
       console.warn("Employees query listener notice in AddMemberModal:", err);
@@ -1136,15 +1129,11 @@ export default function AddMemberModal({ isOpen, onClose }: AddMemberModalProps)
                           className="w-full h-11 bg-slate-50 border border-slate-300 rounded-xl px-4 text-xs font-bold text-slate-900 focus:outline-none focus:border-blue-600 focus:bg-white transition-all cursor-pointer"
                         >
                           <option value="">No PT Assigned</option>
-                          {trainersList.length === 0 ? (
-                            <option value="" disabled>No trainers available</option>
-                          ) : (
-                            trainersList.map((t: any) => (
-                              <option key={t.id || t.employeeId} value={t.id || t.employeeId}>
-                                {t.name} ({t.employeeId || 'EMP-TRN'}) — {t.role || 'Trainer'}
-                              </option>
-                            ))
-                          )}
+                          {trainersList.map((t: any) => (
+                            <option key={t.employeeId || t.id} value={t.employeeId || t.id}>
+                              {t.name} ({t.employeeId || (t.biometricId ? `#${t.biometricId}` : 'EMP-TRN')}) — {t.specialization || t.role || 'Trainer'}
+                            </option>
+                          ))}
                         </select>
                       </div>
                     </div>
