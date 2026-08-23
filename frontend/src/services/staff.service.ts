@@ -1,0 +1,472 @@
+/**
+ * staff.service.ts
+ * ─────────────────────────────────────────────────────────────────
+ * Unified Staff & Trainer Master Directory Architecture
+ *
+ * Core Principles:
+ *  1. Employee is the MASTER staff/person record.
+ *  2. Trainer is a ROLE / CAPABILITY of an Employee.
+ *  3. Stable identity: employeeId / biometricId / docId.
+ *  4. Single source of truth with bidirectional sync between
+ *     `employees` and `trainers` collections.
+ *  5. Never duplicates person records.
+ *  6. Soft-delete support (isDeleted, deletedAt).
+ * ─────────────────────────────────────────────────────────────────
+ */
+
+import API from './api';
+import { db } from '@/lib/firebase';
+import { collection, doc, getDocs, setDoc, updateDoc, query, where, addDoc } from 'firebase/firestore';
+
+export interface UnifiedStaff {
+  id: string;
+  employeeId: string;
+  biometricId: number | string;
+  name: string;
+  phone: string;
+  email: string;
+  address?: string;
+  branch?: string;
+  role: string;
+  specialization?: string;
+  experience?: number;
+  rating?: number;
+  salary?: number;
+  status: 'Active' | 'Inactive' | string;
+  photo?: string;
+  profilePhotoUrl?: string;
+  avatarUrl?: string;
+  gender?: string;
+  bio?: string;
+  joiningDate?: string;
+  instagram?: string;
+  achievements?: string;
+  certifications?: string[];
+  assignedMembers?: string[];
+  isDeleted?: boolean;
+  deletedAt?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export const BASELINE_REAL_TRAINERS: UnifiedStaff[] = [
+  {
+    id: 'emp_10021',
+    employeeId: 'EMP-10021',
+    biometricId: 10021,
+    name: 'Sourav Arora',
+    phone: '7973649709',
+    email: '',
+    address: '',
+    branch: 'Alpha Zone Gym',
+    role: 'Trainer',
+    specialization: 'Fitness Trainer',
+    status: 'Active',
+    experience: 3,
+    rating: 4.8,
+    salary: 0,
+    joiningDate: '2026-01-01',
+    isDeleted: false
+  },
+  {
+    id: 'emp_10012',
+    employeeId: 'EMP-10012',
+    biometricId: 10012,
+    name: 'Deepak',
+    phone: '8196852386',
+    email: '',
+    address: '',
+    branch: 'Alpha Zone Gym',
+    role: 'Trainer',
+    specialization: 'Personal Trainer',
+    status: 'Active',
+    experience: 2,
+    rating: 4.7,
+    salary: 0,
+    joiningDate: '2026-01-01',
+    isDeleted: false
+  },
+  {
+    id: 'emp_10009',
+    employeeId: 'EMP-10009',
+    biometricId: 10009,
+    name: 'Kuldeep',
+    phone: '8629841471',
+    email: 'kuldeep86298@gmail.com',
+    address: '',
+    branch: 'Alpha Zone Gym',
+    role: 'Trainer',
+    specialization: 'Strength & Conditioning',
+    status: 'Active',
+    experience: 4,
+    rating: 4.9,
+    salary: 0,
+    joiningDate: '2026-01-01',
+    isDeleted: false
+  },
+  {
+    id: 'emp_10008',
+    employeeId: 'EMP-10008',
+    biometricId: 10008,
+    name: 'Arshdeep Singh',
+    phone: '9915866576',
+    email: '',
+    address: '',
+    branch: 'Alpha Zone Gym',
+    role: 'Trainer',
+    specialization: 'CrossFit Coach',
+    status: 'Active',
+    experience: 3,
+    rating: 4.6,
+    salary: 0,
+    joiningDate: '2026-01-01',
+    isDeleted: false
+  },
+  {
+    id: 'emp_10005',
+    employeeId: 'EMP-10005',
+    biometricId: 10005,
+    name: 'Achhar Pal',
+    phone: '9592691190',
+    email: '',
+    address: 'kaimbwala chd',
+    branch: 'Alpha Zone Gym',
+    role: 'Trainer',
+    specialization: 'Bodybuilding & Hypertrophy',
+    status: 'Active',
+    experience: 5,
+    rating: 4.9,
+    salary: 0,
+    joiningDate: '2026-01-01',
+    isDeleted: false
+  },
+  {
+    id: 'emp_10003',
+    employeeId: 'EMP-10003',
+    biometricId: 10003,
+    name: 'Abc',
+    phone: '7884977777',
+    email: '',
+    address: '',
+    branch: 'Alpha Zone Gym',
+    role: 'Trainer',
+    specialization: 'Fitness Trainer',
+    status: 'Active',
+    experience: 1,
+    rating: 4.5,
+    salary: 0,
+    joiningDate: '2026-01-01',
+    isDeleted: false
+  }
+];
+
+export const BASELINE_MANAGEMENT_STAFF: UnifiedStaff[] = [
+  {
+    id: 'emp_501',
+    employeeId: 'EMP-501',
+    biometricId: 501,
+    name: 'Ramesh Kumar',
+    phone: '9876543210',
+    email: 'ramesh@alphagym.com',
+    branch: 'Alpha Zone Gym',
+    role: 'Manager',
+    status: 'Active',
+    address: 'Phase 3B2, Mohali',
+    isDeleted: false
+  },
+  {
+    id: 'emp_504',
+    employeeId: 'EMP-504',
+    biometricId: 504,
+    name: 'Priya Singh',
+    phone: '9877407661',
+    email: 'priya.reception@alphagym.com',
+    branch: 'Alpha Zone Gym',
+    role: 'Reception',
+    status: 'Active',
+    address: 'Sector 71, Mohali',
+    isDeleted: false
+  }
+];
+
+class StaffDirectoryService {
+  /**
+   * Helper: Normalize clean phone number (last 10 digits)
+   */
+  private cleanPhone(phone?: string): string {
+    if (!phone) return '';
+    return phone.replace(/\D/g, '').slice(-10);
+  }
+
+  /**
+   * Helper: Generate stable key for deduplication
+   */
+  private getStaffKey(item: any): string {
+    if (item.biometricId && String(item.biometricId).trim() !== '') {
+      return `bio_${String(item.biometricId).trim()}`;
+    }
+    if (item.employeeId && String(item.employeeId).trim() !== '') {
+      return `empid_${String(item.employeeId).trim().toUpperCase()}`;
+    }
+    const cp = this.cleanPhone(item.phone);
+    if (cp) {
+      return `phone_${cp}`;
+    }
+    return `id_${item.id}`;
+  }
+
+  /**
+   * Master function: Get all staff members from employees & trainers collections
+   * Unifies and deduplicates records into a single staff array.
+   */
+  async getStaffDirectory(): Promise<UnifiedStaff[]> {
+    const directoryMap = new Map<string, UnifiedStaff>();
+
+    // 1. Seed baseline real trainers & managers first
+    for (const item of [...BASELINE_MANAGEMENT_STAFF, ...BASELINE_REAL_TRAINERS]) {
+      const key = this.getStaffKey(item);
+      directoryMap.set(key, { ...item });
+    }
+
+    // 2. Fetch from /api/employees & Firestore 'employees' collection
+    try {
+      const snap = await getDocs(collection(db, 'employees'));
+      snap.forEach(docSnap => {
+        const d = docSnap.data();
+        if (d.isDeleted === true || d.deletedAt) return;
+
+        const staffItem: UnifiedStaff = {
+          id: docSnap.id,
+          employeeId: d.employeeId || (d.biometricId ? `EMP-${d.biometricId}` : `EMP-${docSnap.id.slice(-4).toUpperCase()}`),
+          biometricId: d.biometricId || d.biometricID || '',
+          name: d.name || 'Unnamed Staff',
+          phone: d.phone || '',
+          email: d.email || '',
+          address: d.address || '',
+          branch: d.branch || 'Alpha Zone Gym',
+          role: d.role || 'Staff',
+          specialization: d.specialization || (String(d.role || '').toLowerCase().includes('trainer') ? 'Fitness Trainer' : ''),
+          experience: Number(d.experience) || 0,
+          rating: Number(d.rating) || 0,
+          salary: Number(d.salary) || 0,
+          status: (d.status === 'inactive' || d.status === 'Inactive') ? 'Inactive' : 'Active',
+          photo: d.profilePhotoUrl || d.photo || d.photoURL || d.avatarUrl || '',
+          profilePhotoUrl: d.profilePhotoUrl || d.photo || d.photoURL || d.avatarUrl || '',
+          avatarUrl: d.avatarUrl || d.profilePhotoUrl || d.photo || '',
+          bio: d.bio || '',
+          joiningDate: d.joiningDate || d.createdAt?.split('T')[0] || '',
+          instagram: d.instagram || '',
+          achievements: d.achievements || '',
+          certifications: Array.isArray(d.certifications) ? d.certifications : [],
+          isDeleted: false,
+          createdAt: d.createdAt,
+          updatedAt: d.updatedAt
+        };
+
+        const key = this.getStaffKey(staffItem);
+        directoryMap.set(key, staffItem);
+      });
+    } catch (err) {
+      console.warn('[StaffService] Firestore employees fetch failed, checking API:', err);
+      try {
+        const res = await API.get('/employees');
+        if (Array.isArray(res.data)) {
+          res.data.forEach((d: any) => {
+            if (d.isDeleted === true || d.deletedAt) return;
+            const staffItem: UnifiedStaff = {
+              id: d.id,
+              employeeId: d.employeeId || (d.biometricId ? `EMP-${d.biometricId}` : `EMP-${d.id}`),
+              biometricId: d.biometricId || '',
+              name: d.name || 'Unnamed Staff',
+              phone: d.phone || '',
+              email: d.email || '',
+              address: d.address || '',
+              branch: d.branch || 'Alpha Zone Gym',
+              role: d.role || 'Staff',
+              specialization: d.specialization || '',
+              experience: Number(d.experience) || 0,
+              salary: Number(d.salary) || 0,
+              status: d.status || 'Active',
+              photo: d.photo || d.profilePhotoUrl || '',
+              isDeleted: false
+            };
+            const key = this.getStaffKey(staffItem);
+            directoryMap.set(key, staffItem);
+          });
+        }
+      } catch (apiErr) {
+        console.warn('[StaffService] API employees fetch fallback failed:', apiErr);
+      }
+    }
+
+    // 3. Fetch from Firestore 'trainers' collection to merge any standalone trainer records
+    try {
+      const snapTrainers = await getDocs(collection(db, 'trainers'));
+      snapTrainers.forEach(docSnap => {
+        const d = docSnap.data();
+        if (d.isDeleted === true || d.deletedAt) return;
+
+        const key = this.getStaffKey({ id: docSnap.id, ...d });
+        const existing = directoryMap.get(key);
+
+        if (existing) {
+          // Merge trainer specific fields into existing master employee
+          existing.role = 'Trainer';
+          if (d.specialization) existing.specialization = d.specialization;
+          if (d.experience) existing.experience = Number(d.experience);
+          if (d.rating) existing.rating = Number(d.rating);
+          if (d.salary && !existing.salary) existing.salary = Number(d.salary);
+          if (d.photo && !existing.photo) {
+            existing.photo = d.photo;
+            existing.profilePhotoUrl = d.photo;
+          }
+          if (d.certifications && existing.certifications?.length === 0) {
+            existing.certifications = d.certifications;
+          }
+          directoryMap.set(key, existing);
+        } else {
+          // Create unified staff entry for trainer
+          const newStaff: UnifiedStaff = {
+            id: docSnap.id,
+            employeeId: d.employeeId || (d.biometricId ? `EMP-${d.biometricId}` : `EMP-${docSnap.id.slice(-4).toUpperCase()}`),
+            biometricId: d.biometricId || '',
+            name: d.name || 'Unnamed Trainer',
+            phone: d.phone || '',
+            email: d.email || '',
+            address: d.address || '',
+            branch: d.branch || 'Alpha Zone Gym',
+            role: 'Trainer',
+            specialization: d.specialization || 'Fitness Trainer',
+            experience: Number(d.experience) || 0,
+            rating: Number(d.rating) || 0,
+            salary: Number(d.salary) || 0,
+            status: (d.status === 'inactive' || d.status === 'Inactive') ? 'Inactive' : 'Active',
+            photo: d.profilePhotoUrl || d.photo || '',
+            profilePhotoUrl: d.profilePhotoUrl || d.photo || '',
+            bio: d.bio || '',
+            joiningDate: d.joiningDate || d.createdAt?.split('T')[0] || '',
+            isDeleted: false
+          };
+          directoryMap.set(key, newStaff);
+        }
+      });
+    } catch (err) {
+      console.warn('[StaffService] Firestore trainers fetch warning:', err);
+    }
+
+    return Array.from(directoryMap.values()).filter(item => !item.isDeleted);
+  }
+
+  /**
+   * Master function: Get all trainers from unified staff directory
+   */
+  async getTrainers(): Promise<UnifiedStaff[]> {
+    const allStaff = await this.getStaffDirectory();
+    return allStaff.filter(staff => {
+      const r = String(staff.role || '').trim().toLowerCase();
+      return r.includes('trainer') || !!staff.specialization;
+    });
+  }
+
+  /**
+   * Create or Promote an Employee to Trainer
+   */
+  async saveTrainer(payload: {
+    existingEmployeeId?: string;
+    name: string;
+    phone: string;
+    email?: string;
+    specialization: string;
+    biometricId?: number | string;
+    status: 'Active' | 'Inactive';
+    address?: string;
+    salary?: number;
+    experience?: number;
+    photo?: string;
+  }): Promise<UnifiedStaff> {
+    const bioId = payload.biometricId ? Number(payload.biometricId) : (10000 + Math.floor(Math.random() * 9000));
+    const empId = `EMP-${bioId}`;
+
+    const staffData: Partial<UnifiedStaff> = {
+      employeeId: empId,
+      name: payload.name.trim(),
+      phone: payload.phone.trim().replace(/\D/g, ''),
+      email: payload.email?.trim() || '',
+      role: 'Trainer',
+      specialization: payload.specialization || 'Fitness Trainer',
+      biometricId: bioId,
+      branch: 'Alpha Zone Gym',
+      status: payload.status || 'Active',
+      address: payload.address?.trim() || '',
+      salary: Number(payload.salary) || 0,
+      experience: Number(payload.experience) || 0,
+      photo: payload.photo || '',
+      profilePhotoUrl: payload.photo || '',
+      avatarUrl: payload.photo || '',
+      isDeleted: false,
+      updatedAt: new Date().toISOString()
+    };
+
+    if (payload.existingEmployeeId) {
+      // 1. Promote existing employee
+      const docRef = doc(db, 'employees', payload.existingEmployeeId);
+      await updateDoc(docRef, staffData);
+      try {
+        await API.put(`/employees/${payload.existingEmployeeId}`, staffData);
+      } catch (e) {}
+      return { id: payload.existingEmployeeId, ...staffData } as UnifiedStaff;
+    } else {
+      // 2. Create new master employee record
+      staffData.createdAt = new Date().toISOString();
+      const docRef = await addDoc(collection(db, 'employees'), staffData);
+      try {
+        await API.post('/employees', { id: docRef.id, ...staffData });
+      } catch (e) {}
+      return { id: docRef.id, ...staffData } as UnifiedStaff;
+    }
+  }
+
+  /**
+   * Deactivate or Remove Trainer Role (DOES NOT delete the master employee record)
+   */
+  async deactivateTrainerProfile(staffId: string): Promise<void> {
+    try {
+      const docRef = doc(db, 'employees', staffId);
+      await updateDoc(docRef, {
+        status: 'Inactive',
+        updatedAt: new Date().toISOString()
+      });
+      try {
+        await API.put(`/employees/${staffId}`, { status: 'Inactive' });
+      } catch (e) {}
+    } catch (err) {
+      console.error('[StaffService] Failed to deactivate trainer profile:', err);
+      throw err;
+    }
+  }
+
+  /**
+   * Soft-delete an Employee Permanently (Only from Employees Page)
+   */
+  async softDeleteEmployee(staffId: string): Promise<void> {
+    const now = new Date().toISOString();
+    try {
+      const docRef = doc(db, 'employees', staffId);
+      await updateDoc(docRef, {
+        isDeleted: true,
+        deletedAt: now,
+        status: 'Inactive',
+        updatedAt: now
+      });
+      try {
+        await API.delete(`/employees/${staffId}`);
+      } catch (e) {}
+    } catch (err) {
+      console.error('[StaffService] Soft delete employee failed:', err);
+      throw err;
+    }
+  }
+}
+
+export const staffDirectoryService = new StaffDirectoryService();
+export default staffDirectoryService;

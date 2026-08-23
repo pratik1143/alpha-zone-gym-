@@ -1,62 +1,21 @@
 'use client';
 
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  Search, Plus, Edit, Trash2, Mail, Phone, Dumbbell, ShieldAlert, Award, 
-  Calendar, ExternalLink, X, Check, Sparkles, Activity, TrendingUp, 
-  Target, UserCheck, Star, DollarSign, Briefcase, Fingerprint, CheckCheck, 
-  XCircle, AlertTriangle, Scan, Wifi, Shield, AlertCircle, UserPlus, 
-  ArrowRight, User, MoreHorizontal, Eye, RefreshCw, Users, UserX
+  Search, Plus, Edit, Trash2, Mail, Phone, Dumbbell, 
+  Calendar, X, Check, Activity, Target, UserCheck, Star, 
+  Fingerprint, CheckCheck, AlertTriangle, Users, UserX,
+  MoreHorizontal, Eye, RefreshCw, UserPlus, User
 } from 'lucide-react';
-import { z } from 'zod';
-import API from '@/services/api';
-import { getInitials, formatCurrency } from '@/lib/utils';
-import { resolveAvatarUrl, MALE_DEFAULT_AVATAR, FEMALE_DEFAULT_AVATAR, normalizeStatus } from '@/lib/avatar';
 import toast from 'react-hot-toast';
-import { collection, doc, onSnapshot, query, addDoc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { collection, onSnapshot, query } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useGymStore } from '@/store';
+import { resolveAvatarUrl, MALE_DEFAULT_AVATAR, FEMALE_DEFAULT_AVATAR, normalizeStatus } from '@/lib/avatar';
+import staffDirectoryService, { UnifiedStaff, BASELINE_REAL_TRAINERS } from '@/services/staff.service';
 import SmartPhotoCapture from '../components/SmartPhotoCapture';
-
-interface TrainerEmployee {
-  id: string;
-  employeeId?: string;
-  name: string;
-  email?: string;
-  phone: string;
-  address?: string;
-  role?: string;
-  specialization?: string;
-  experience?: number;
-  rating?: number;
-  branch?: string;
-  sessions?: number;
-  salary?: number;
-  status?: string;
-  certifications?: string[];
-  photo?: string;
-  profilePhotoUrl?: string;
-  avatarUrl?: string;
-  bio?: string;
-  joiningDate?: string;
-  instagram?: string;
-  achievements?: string;
-  biometricId?: number | string;
-  gender?: string;
-  createdAt?: string;
-  updatedAt?: string;
-}
-
-const DEFAULT_REAL_TRAINERS: TrainerEmployee[] = [
-  { id: 'emp_10021', employeeId: 'EMP-10021', biometricId: 10021, name: 'Sourav Arora', phone: '7973649709', email: '', address: '', branch: 'Alpha zone gym', role: 'Trainer', status: 'Active', specialization: 'Fitness Trainer', experience: 0, rating: 0, sessions: 0, salary: 0, certifications: [], photo: '', bio: '', joiningDate: '2026-01-01', instagram: '', achievements: '' },
-  { id: 'emp_10012', employeeId: 'EMP-10012', biometricId: 10012, name: 'Deepak', phone: '8196852386', email: '', address: '', branch: 'Alpha zone gym', role: 'Trainer', status: 'Active', specialization: 'Fitness Trainer', experience: 0, rating: 0, sessions: 0, salary: 0, certifications: [], photo: '', bio: '', joiningDate: '2026-01-01', instagram: '', achievements: '' },
-  { id: 'emp_10009', employeeId: 'EMP-10009', biometricId: 10009, name: 'Kuldeep', phone: '8629841471', email: 'kuldeep86298@gmail.com', address: '', branch: 'Alpha zone gym', role: 'Trainer', status: 'Active', specialization: 'Fitness Trainer', experience: 0, rating: 0, sessions: 0, salary: 0, certifications: [], photo: '', bio: '', joiningDate: '2026-01-01', instagram: '', achievements: '' },
-  { id: 'emp_10008', employeeId: 'EMP-10008', biometricId: 10008, name: 'Arshdeep Singh', phone: '9915866576', email: '', address: '', branch: 'Alpha zone gym', role: 'Trainer', status: 'Active', specialization: 'Fitness Trainer', experience: 0, rating: 0, sessions: 0, salary: 0, certifications: [], photo: '', bio: '', joiningDate: '2026-01-01', instagram: '', achievements: '' },
-  { id: 'emp_10005', employeeId: 'EMP-10005', biometricId: 10005, name: 'Achhar Pal', phone: '9592691190', email: '', address: 'kaimbwala chd', branch: 'Alpha zone gym', role: 'Trainer', status: 'Active', specialization: 'Fitness Trainer', experience: 0, rating: 0, sessions: 0, salary: 0, certifications: [], photo: '', bio: '', joiningDate: '2026-01-01', instagram: '', achievements: '' },
-  { id: 'emp_10003', employeeId: 'EMP-10003', biometricId: 10003, name: 'Abc', phone: '7884977777', email: '', address: '', branch: 'Alpha zone gym', role: 'Trainer', status: 'Active', specialization: 'Fitness Trainer', experience: 0, rating: 0, sessions: 0, salary: 0, certifications: [], photo: '', bio: '', joiningDate: '2026-01-01', instagram: '', achievements: '' },
-];
 
 const SPECIALIZATIONS = [
   'Fitness Trainer',
@@ -71,7 +30,8 @@ const SPECIALIZATIONS = [
 
 export default function TrainersPage() {
   const { members, fetchMembers, updateMember } = useGymStore() as any;
-  const [employees, setEmployees] = useState<TrainerEmployee[]>(DEFAULT_REAL_TRAINERS);
+  const [trainers, setTrainers] = useState<UnifiedStaff[]>(BASELINE_REAL_TRAINERS);
+  const [allStaff, setAllStaff] = useState<UnifiedStaff[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Filters & Search
@@ -81,28 +41,19 @@ export default function TrainersPage() {
 
   // Modals state
   const [showAddModal, setShowAddModal] = useState(false);
+  const [addMode, setAddMode] = useState<'existing' | 'new'>('existing');
+  const [selectedExistingEmployeeId, setSelectedExistingEmployeeId] = useState('');
   const [showEditModal, setShowEditModal] = useState(false);
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [showViewDrawer, setShowViewDrawer] = useState(false);
-  const [activeTrainer, setActiveTrainer] = useState<TrainerEmployee | null>(null);
+  const [activeTrainer, setActiveTrainer] = useState<UnifiedStaff | null>(null);
 
-  // Custom Delete Modal State (NO window.confirm)
-  const [deleteTrainerTarget, setDeleteTrainerTarget] = useState<TrainerEmployee | null>(null);
-  const [deletingTrainer, setDeletingTrainer] = useState(false);
+  // Custom Deactivate / Remove Trainer Modal
+  const [deactivateTarget, setDeactivateTarget] = useState<UnifiedStaff | null>(null);
+  const [deactivatingTrainer, setDeactivatingTrainer] = useState(false);
 
   // Actions Dropdown Portal State
-  const [actionsMenu, setActionsMenu] = useState<{ trainer: TrainerEmployee; rect: DOMRect } | null>(null);
-
-  // Biometric Enrollment State
-  const [enrollModalOpen, setEnrollModalOpen] = useState(false);
-  const [enrollDocId, setEnrollDocId] = useState<string | null>(null);
-  const [enrollStatus, setEnrollStatus] = useState<{
-    status: 'idle' | 'connecting' | 'scanning' | 'processing' | 'ready' | 'success' | 'failed' | 'info';
-    message: string;
-    scan: number;
-    totalScans: number;
-    biometricId?: number;
-  }>({ status: 'idle', message: 'Waiting to start...', scan: 0, totalScans: 3 });
+  const [actionsMenu, setActionsMenu] = useState<{ trainer: UnifiedStaff; rect: DOMRect } | null>(null);
 
   // Add / Edit Form State
   const [formName, setFormName] = useState('');
@@ -139,50 +90,51 @@ export default function TrainersPage() {
     };
   }, [actionsMenu]);
 
-  // Fetch employees list (Single Source of Truth)
-  const fetchEmployees = async () => {
+  // Master load data function
+  const loadDirectoryData = async () => {
     try {
-      const res = await API.get('/employees');
-      if (res.data && Array.isArray(res.data) && res.data.length > 0) {
-        setEmployees(res.data);
-      }
+      const staffList = await staffDirectoryService.getStaffDirectory();
+      setAllStaff(staffList);
+      const trainersList = staffList.filter(s => {
+        const r = String(s.role || '').trim().toLowerCase();
+        return r.includes('trainer') || !!s.specialization;
+      });
+      // Always fallback to baseline real trainers if list is empty
+      setTrainers(trainersList.length > 0 ? trainersList : BASELINE_REAL_TRAINERS);
     } catch (err) {
-      console.warn('API fetch employees failed, fallback to Firestore listener:', err);
+      console.warn('[TrainersPage] Failed to fetch staff directory, using baseline:', err);
+      setTrainers(BASELINE_REAL_TRAINERS);
+    } finally {
+      setLoading(false);
     }
   };
 
   useEffect(() => {
     setLoading(true);
-    fetchEmployees();
+    loadDirectoryData();
     fetchMembers();
 
-    // Realtime Firestore listener for employees collection
+    // Listen to changes in Firestore employees collection
     const q = query(collection(db, 'employees'));
-    const unsub = onSnapshot(q, (snap) => {
-      if (!snap.empty) {
-        const data = snap.docs.map(d => ({ id: d.id, ...d.data() } as TrainerEmployee));
-        setEmployees(data);
-      }
-      setLoading(false);
+    const unsub = onSnapshot(q, () => {
+      loadDirectoryData();
     }, (err) => {
-      console.warn('Firestore employees listener warning:', err.message);
-      setLoading(false);
+      console.warn('Employees listener warning:', err.message);
     });
 
     return () => unsub();
   }, [fetchMembers]);
 
-  // 1. DERIVE TRAINERS FROM EMPLOYEES (Canonical Role: TRAINER)
-  const trainersList = useMemo(() => {
-    return employees.filter(e => {
-      if (!e) return false;
-      const role = String(e.role || '').trim().toLowerCase();
-      return role.includes('trainer');
+  // Non-trainer employees available for promotion
+  const availableEmployeesForTrainerRole = useMemo(() => {
+    return allStaff.filter(s => {
+      const r = String(s.role || '').trim().toLowerCase();
+      return !r.includes('trainer') && !s.isDeleted;
     });
-  }, [employees]);
+  }, [allStaff]);
 
   // Get assigned members for a trainer
-  const getAssignedMembersForTrainer = (trainer: TrainerEmployee) => {
+  const getAssignedMembersForTrainer = (trainer: UnifiedStaff) => {
     if (!trainer || !members) return [];
     const tId = String(trainer.employeeId || trainer.id || '').toLowerCase();
     const tBio = String(trainer.biometricId || '').toLowerCase();
@@ -201,7 +153,7 @@ export default function TrainersPage() {
 
   // Filtered Trainers
   const filteredTrainers = useMemo(() => {
-    return trainersList.filter(t => {
+    return trainers.filter(t => {
       const accStatus = normalizeStatus(t.status);
 
       // Status filter
@@ -224,11 +176,11 @@ export default function TrainersPage() {
 
       return matchName || matchPhone || matchEmail || matchBio || matchEmpId;
     });
-  }, [trainersList, searchQuery, statusFilter, specFilter]);
+  }, [trainers, searchQuery, statusFilter, specFilter]);
 
-  // Summary Metrics (Single Source of Truth)
-  const totalTrainers = trainersList.length;
-  const activeTrainers = trainersList.filter(t => normalizeStatus(t.status) === 'Active').length;
+  // Summary Metrics
+  const totalTrainers = trainers.length;
+  const activeTrainers = trainers.filter(t => normalizeStatus(t.status) === 'Active').length;
   const totalAssignedPTMembers = useMemo(() => {
     if (!members) return 0;
     return members.filter((m: any) => m && m.status !== 'deleted' && (m.trainerId || m.trainer)).length;
@@ -240,6 +192,7 @@ export default function TrainersPage() {
 
   // Reset Form
   const resetForm = () => {
+    setSelectedExistingEmployeeId('');
     setFormName('');
     setFormPhone('');
     setFormEmail('');
@@ -250,67 +203,76 @@ export default function TrainersPage() {
     setFormSalary('');
     setFormExperience('0');
     setFormPhoto('');
+    setAddMode(availableEmployeesForTrainerRole.length > 0 ? 'existing' : 'new');
   };
 
-  // Handle Add Trainer (Creates Employee record with role: 'Trainer')
+  // Open Add Modal
+  const handleOpenAddModal = () => {
+    resetForm();
+    setShowAddModal(true);
+  };
+
+  // When an existing employee is chosen in Add Modal
+  const handleSelectExistingEmployee = (empId: string) => {
+    setSelectedExistingEmployeeId(empId);
+    const emp = allStaff.find(s => s.id === empId || s.employeeId === empId);
+    if (emp) {
+      setFormName(emp.name);
+      setFormPhone(emp.phone);
+      setFormEmail(emp.email || '');
+      setFormBiometricId(String(emp.biometricId || ''));
+      setFormAddress(emp.address || '');
+      setFormSalary(String(emp.salary || ''));
+      setFormSpecialization('Fitness Trainer');
+      setFormPhoto(emp.profilePhotoUrl || emp.photo || '');
+    }
+  };
+
+  // Handle Add Trainer Submit
   const handleAddTrainerSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formName.trim() || !formPhone.trim()) {
+    if (addMode === 'new' && (!formName.trim() || !formPhone.trim())) {
       toast.error('Please enter trainer name and phone number');
+      return;
+    }
+    if (addMode === 'existing' && !selectedExistingEmployeeId) {
+      toast.error('Please select an existing employee to assign as Trainer');
       return;
     }
 
     setFormSubmitting(true);
     try {
-      const bioId = formBiometricId ? Number(formBiometricId) : (10000 + Math.floor(Math.random() * 9000));
-      const empId = `EMP-${bioId}`;
-
-      const payload: Partial<TrainerEmployee> = {
-        employeeId: empId,
+      await staffDirectoryService.saveTrainer({
+        existingEmployeeId: addMode === 'existing' ? selectedExistingEmployeeId : undefined,
         name: formName.trim(),
-        phone: formPhone.trim().replace(/\D/g, ''),
+        phone: formPhone.trim(),
         email: formEmail.trim(),
-        role: 'Trainer',
-        specialization: formSpecialization || 'Fitness Trainer',
-        biometricId: bioId,
-        branch: 'Alpha zone gym',
+        specialization: formSpecialization,
+        biometricId: formBiometricId,
         status: formStatus,
-        address: formAddress.trim(),
+        address: formAddress,
         salary: Number(formSalary) || 0,
         experience: Number(formExperience) || 0,
-        photo: formPhoto,
-        profilePhotoUrl: formPhoto,
-        avatarUrl: formPhoto,
-        createdAt: new Date().toISOString()
-      };
+        photo: formPhoto
+      });
 
-      // 1. Direct API creation
-      try {
-        await API.post('/employees', payload);
-      } catch (apiErr) {
-        console.warn('API post failed, writing to Firestore directly:', apiErr);
-      }
-
-      // 2. Direct Firestore fallback
-      try {
-        await addDoc(collection(db, 'employees'), payload);
-      } catch (fsErr) {
-        console.warn('Firestore direct write:', fsErr);
-      }
-
-      toast.success('✓ Trainer registered successfully as Employee!');
+      toast.success(
+        addMode === 'existing' 
+          ? `✓ ${formName} promoted to Trainer in staff directory!`
+          : '✓ New Trainer added to Staff directory!'
+      );
       setShowAddModal(false);
       resetForm();
-      fetchEmployees();
+      await loadDirectoryData();
     } catch (err: any) {
-      toast.error('Failed to create trainer: ' + err.message);
+      toast.error('Failed to save trainer: ' + err.message);
     } finally {
       setFormSubmitting(false);
     }
   };
 
   // Open Edit Modal
-  const handleOpenEdit = (trainer: TrainerEmployee) => {
+  const handleOpenEdit = (trainer: UnifiedStaff) => {
     setActiveTrainer(trainer);
     setFormName(trainer.name || '');
     setFormPhone(trainer.phone || '');
@@ -332,42 +294,23 @@ export default function TrainersPage() {
 
     setFormSubmitting(true);
     try {
-      const bioId = formBiometricId ? Number(formBiometricId) : activeTrainer.biometricId;
-      const updates: Partial<TrainerEmployee> = {
+      await staffDirectoryService.saveTrainer({
+        existingEmployeeId: activeTrainer.id,
         name: formName.trim(),
-        phone: formPhone.trim().replace(/\D/g, ''),
+        phone: formPhone.trim(),
         email: formEmail.trim(),
         specialization: formSpecialization,
-        biometricId: bioId,
+        biometricId: formBiometricId || activeTrainer.biometricId,
         status: formStatus,
-        address: formAddress.trim(),
+        address: formAddress,
         salary: Number(formSalary) || 0,
         experience: Number(formExperience) || 0,
-        photo: formPhoto,
-        profilePhotoUrl: formPhoto,
-        avatarUrl: formPhoto,
-        updatedAt: new Date().toISOString()
-      };
+        photo: formPhoto
+      });
 
-      // 1. API Update
-      try {
-        await API.put(`/employees/${activeTrainer.id}`, updates);
-      } catch (apiErr) {
-        console.warn('API update failed:', apiErr);
-      }
-
-      // 2. Firestore Update
-      if (activeTrainer.id) {
-        try {
-          await updateDoc(doc(db, 'employees', activeTrainer.id), updates);
-        } catch (fsErr) {
-          console.warn('Firestore update error:', fsErr);
-        }
-      }
-
-      toast.success('✓ Trainer updated successfully!');
+      toast.success('✓ Trainer updated in Master Staff Directory!');
       setShowEditModal(false);
-      fetchEmployees();
+      await loadDirectoryData();
     } catch (err: any) {
       toast.error('Failed to update trainer: ' + err.message);
     } finally {
@@ -376,7 +319,7 @@ export default function TrainersPage() {
   };
 
   // Open Member Assignment Modal
-  const handleOpenAssignMembers = (trainer: TrainerEmployee) => {
+  const handleOpenAssignMembers = (trainer: UnifiedStaff) => {
     setActiveTrainer(trainer);
     const assigned = getAssignedMembersForTrainer(trainer);
     setSelectedMemberIds(assigned.map((m: any) => m.id));
@@ -399,10 +342,8 @@ export default function TrainersPage() {
           const currentTId = m.trainerId;
 
           if (isSelected && currentTId !== tId) {
-            // Assign to this trainer
             await updateMember(m.id, { trainerId: tId, trainer: tName });
           } else if (!isSelected && (currentTId === tId || m.trainer === tName)) {
-            // Unassign from this trainer
             await updateMember(m.id, { trainerId: null, trainer: null });
           }
         })
@@ -418,70 +359,36 @@ export default function TrainersPage() {
     }
   };
 
-  // Handle Delete / Deactivate Trainer
-  const handleConfirmDeleteTrainer = async (mode: 'deactivate' | 'delete') => {
-    if (!deleteTrainerTarget) return;
-    setDeletingTrainer(true);
+  // Deactivate Trainer Profile (DOES NOT DELETE MASTER EMPLOYEE RECORD)
+  const handleConfirmDeactivateTrainer = async () => {
+    if (!deactivateTarget) return;
+    setDeactivatingTrainer(true);
 
     try {
-      const id = deleteTrainerTarget.id;
-      const tId = deleteTrainerTarget.employeeId || deleteTrainerTarget.id;
-
-      if (mode === 'deactivate') {
-        // Just mark Inactive
-        if (id) {
-          await updateDoc(doc(db, 'employees', id), {
-            status: 'Inactive',
-            updatedAt: new Date().toISOString()
-          });
-        }
-        try {
-          await API.put(`/employees/${id}`, { status: 'Inactive' });
-        } catch (e) {}
-        toast.success(`${deleteTrainerTarget.name} has been deactivated.`);
-      } else {
-        // Remove assignments first
-        const assigned = getAssignedMembersForTrainer(deleteTrainerTarget);
-        if (assigned.length > 0) {
-          await Promise.all(
-            assigned.map((m: any) => updateMember(m.id, { trainerId: null, trainer: null }))
-          );
-        }
-
-        // Delete employee record
-        try {
-          await API.delete(`/employees/${id}`);
-        } catch (e) {}
-        try {
-          await deleteDoc(doc(db, 'employees', id));
-        } catch (e) {}
-
-        toast.success(`${deleteTrainerTarget.name} deleted permanently.`);
-      }
-
-      setDeleteTrainerTarget(null);
-      fetchEmployees();
-      fetchMembers();
+      await staffDirectoryService.deactivateTrainerProfile(deactivateTarget.id);
+      toast.success(`✓ ${deactivateTarget.name}'s trainer profile is now Inactive (Employee record preserved).`);
+      setDeactivateTarget(null);
+      await loadDirectoryData();
     } catch (err: any) {
-      toast.error('Action failed: ' + err.message);
+      toast.error('Failed to update trainer status: ' + err.message);
     } finally {
-      setDeletingTrainer(false);
+      setDeactivatingTrainer(false);
     }
   };
 
   return (
     <div className="space-y-6 pb-12 w-full text-slate-800 text-left font-sans">
       
-      {/* ── 1. PAGE HEADER (Unified with Employees & Members) ── */}
+      {/* ── 1. PAGE HEADER (Unified with Employees, Members, Enquiries) ── */}
       <div className="bg-white rounded-3xl p-6 lg:p-8 border border-slate-100 shadow-[0_4px_25px_rgba(0,0,0,0.03)] flex flex-col md:flex-row md:items-center justify-between gap-4 relative overflow-hidden">
         <div className="absolute top-0 right-0 w-80 h-80 bg-blue-500/5 rounded-full blur-3xl pointer-events-none -translate-y-1/2 translate-x-1/3" />
         
         <div>
           <div className="flex items-center gap-2.5 mb-2">
             <span className="px-3 py-1 bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-[10px] font-black uppercase tracking-widest rounded-full shadow-sm">
-              Staff & Trainer Roster
+              Staff & Trainer Engine
             </span>
-            <span className="text-xs text-slate-400 font-mono font-bold">AZ-TRN-v4.0</span>
+            <span className="text-xs text-slate-400 font-mono font-bold">AZ-TRN-v4.1</span>
           </div>
           <h1 className="text-2xl lg:text-3xl font-black tracking-tight text-slate-900 font-display">Trainers & Fitness Coaches</h1>
           <p className="text-xs text-slate-500 font-medium mt-1">Manage gym trainers, assigned members, personal training and trainer performance.</p>
@@ -489,7 +396,7 @@ export default function TrainersPage() {
 
         <div className="flex items-center gap-2.5 flex-wrap shrink-0">
           <button 
-            onClick={() => fetchEmployees()}
+            onClick={() => loadDirectoryData()}
             className="p-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-2xl border border-slate-200 cursor-pointer shadow-2xs transition-all"
             title="Refresh List"
           >
@@ -497,7 +404,7 @@ export default function TrainersPage() {
           </button>
 
           <button
-            onClick={() => { resetForm(); setShowAddModal(true); }}
+            onClick={handleOpenAddModal}
             className="px-6 py-3.5 bg-gradient-to-r from-[#0b5cbe] to-[#2876d0] hover:from-[#084a99] hover:to-[#0b5cbe] text-white rounded-2xl text-xs font-black uppercase tracking-wider border-none cursor-pointer flex items-center justify-center gap-2 shadow-[0_10px_25px_rgba(11,92,190,0.25)] transition-all hover:scale-[1.02] active:scale-95 shrink-0"
           >
             <Plus size={16} /> Add Trainer
@@ -622,7 +529,7 @@ export default function TrainersPage() {
                     <div className="max-w-xs mx-auto text-center space-y-2">
                       <Dumbbell size={32} className="mx-auto text-slate-300" />
                       <h3 className="font-extrabold text-slate-800 text-sm">No Trainers Found</h3>
-                      <p className="text-xs text-slate-400">Click &quot;+ Add Trainer&quot; to register a new gym coach.</p>
+                      <p className="text-xs text-slate-400">Click &quot;+ Add Trainer&quot; to assign or register a gym coach.</p>
                     </div>
                   </td>
                 </tr>
@@ -752,12 +659,12 @@ export default function TrainersPage() {
       {/* ── 5. FLOATING PORTAL ACTIONS DROPDOWN ── */}
       {actionsMenu && typeof document !== 'undefined' && createPortal(
         <div
-          className="trainer-actions-portal-menu fixed z-[99999] bg-white border border-slate-200 rounded-2xl shadow-[0_15px_40px_rgba(0,0,0,0.18)] py-1.5 w-52 text-left text-xs font-semibold text-slate-800 animate-in fade-in select-none"
+          className="trainer-actions-portal-menu fixed z-[99999] bg-white border border-slate-200 rounded-2xl shadow-[0_15px_40px_rgba(0,0,0,0.18)] py-1.5 w-56 text-left text-xs font-semibold text-slate-800 animate-in fade-in select-none"
           style={{
             top: (window.innerHeight - actionsMenu.rect.bottom < 290)
               ? Math.max(10, actionsMenu.rect.top - 280)
               : actionsMenu.rect.bottom + 4,
-            left: Math.max(10, Math.min(window.innerWidth - 220, actionsMenu.rect.right - 195)),
+            left: Math.max(10, Math.min(window.innerWidth - 235, actionsMenu.rect.right - 210)),
           }}
           onClick={(e) => e.stopPropagation()}
         >
@@ -836,24 +743,24 @@ export default function TrainersPage() {
 
           <div className="h-px bg-slate-100 my-1" />
 
-          {/* 6. Delete Trainer (Destructive) */}
+          {/* 6. Deactivate / Remove Trainer Role (DOES NOT DELETE EMPLOYEE) */}
           <button
             type="button"
             onClick={() => {
               const t = actionsMenu.trainer;
               setActionsMenu(null);
-              setDeleteTrainerTarget(t);
+              setDeactivateTarget(t);
             }}
             className="w-full px-3.5 py-2 hover:bg-rose-50 flex items-center gap-2.5 text-left border-none bg-transparent cursor-pointer text-rose-600 transition-colors font-bold"
           >
             <Trash2 size={14} className="text-rose-600" />
-            <span>Delete Trainer</span>
+            <span>Deactivate Trainer Profile</span>
           </button>
         </div>,
         document.body
       )}
 
-      {/* ── 6. ADD TRAINER MODAL (Creates Employee with role: 'Trainer') ── */}
+      {/* ── 6. ADD TRAINER MODAL (Two Options: Existing Employee OR New Trainer) ── */}
       <AnimatePresence>
         {showAddModal && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs">
@@ -870,10 +777,10 @@ export default function TrainersPage() {
                   </div>
                   <div>
                     <h3 className="text-base font-extrabold text-slate-900 leading-tight">
-                      Add New Gym Trainer
+                      Add / Assign Gym Trainer
                     </h3>
                     <p className="text-xs text-slate-400 font-medium mt-0.5">
-                      Registers coach into unified Staff & Trainer roster.
+                      Assign trainer capability to an existing staff member or register a new coach.
                     </p>
                   </div>
                 </div>
@@ -886,36 +793,89 @@ export default function TrainersPage() {
                 </button>
               </div>
 
-              <form onSubmit={handleAddTrainerSubmit} className="space-y-4 text-xs text-left">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                  <div>
-                    <label className="font-bold text-slate-700 block mb-1">
-                      Trainer Name <span className="text-rose-500 font-black">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="e.g. Sourav Arora"
-                      value={formName}
-                      onChange={e => setFormName(e.target.value)}
-                      className="w-full bg-[#fdfdfd] border border-slate-200 focus:border-[#0b5cbe] rounded-xl px-3.5 py-2.5 text-xs font-semibold text-slate-800 outline-none transition-colors"
-                    />
-                  </div>
+              {/* Mode Selection Tabs */}
+              <div className="flex rounded-2xl bg-slate-100 p-1 border border-slate-200/60">
+                <button
+                  type="button"
+                  onClick={() => setAddMode('existing')}
+                  className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all border-none cursor-pointer ${
+                    addMode === 'existing' 
+                      ? 'bg-white text-[#0b5cbe] shadow-xs' 
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  Option 1: Select Existing Staff ({availableEmployeesForTrainerRole.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAddMode('new')}
+                  className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all border-none cursor-pointer ${
+                    addMode === 'new' 
+                      ? 'bg-white text-[#0b5cbe] shadow-xs' 
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  Option 2: Register New Trainer
+                </button>
+              </div>
 
+              <form onSubmit={handleAddTrainerSubmit} className="space-y-4 text-xs text-left">
+                {addMode === 'existing' ? (
                   <div>
                     <label className="font-bold text-slate-700 block mb-1">
-                      Mobile Number <span className="text-rose-500 font-black">*</span>
+                      Select Staff Member <span className="text-rose-500 font-black">*</span>
                     </label>
-                    <input
-                      type="tel"
-                      required
-                      placeholder="7973649709"
-                      value={formPhone}
-                      onChange={e => setFormPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                      className="w-full bg-[#fdfdfd] border border-slate-200 focus:border-[#0b5cbe] rounded-xl px-3.5 py-2.5 text-xs font-semibold text-slate-800 outline-none transition-colors"
-                    />
+                    {availableEmployeesForTrainerRole.length === 0 ? (
+                      <div className="p-3.5 bg-amber-50 rounded-2xl border border-amber-200 text-amber-800 text-xs">
+                        All currently registered employees are already assigned as trainers. Use &quot;Option 2: Register New Trainer&quot; to add a new person.
+                      </div>
+                    ) : (
+                      <select
+                        required
+                        value={selectedExistingEmployeeId}
+                        onChange={e => handleSelectExistingEmployee(e.target.value)}
+                        className="w-full bg-[#fdfdfd] border border-slate-200 focus:border-[#0b5cbe] rounded-xl px-3.5 py-2.5 text-xs font-semibold text-slate-800 outline-none transition-colors cursor-pointer"
+                      >
+                        <option value="">-- Choose Employee --</option>
+                        {availableEmployeesForTrainerRole.map(emp => (
+                          <option key={emp.id} value={emp.id}>
+                            {emp.name} ({emp.role} • 📞 {emp.phone})
+                          </option>
+                        ))}
+                      </select>
+                    )}
                   </div>
-                </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                    <div>
+                      <label className="font-bold text-slate-700 block mb-1">
+                        Trainer Name <span className="text-rose-500 font-black">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. Sourav Arora"
+                        value={formName}
+                        onChange={e => setFormName(e.target.value)}
+                        className="w-full bg-[#fdfdfd] border border-slate-200 focus:border-[#0b5cbe] rounded-xl px-3.5 py-2.5 text-xs font-semibold text-slate-800 outline-none transition-colors"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="font-bold text-slate-700 block mb-1">
+                        Mobile Number <span className="text-rose-500 font-black">*</span>
+                      </label>
+                      <input
+                        type="tel"
+                        required
+                        placeholder="7973649709"
+                        value={formPhone}
+                        onChange={e => setFormPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                        className="w-full bg-[#fdfdfd] border border-slate-200 focus:border-[#0b5cbe] rounded-xl px-3.5 py-2.5 text-xs font-semibold text-slate-800 outline-none transition-colors"
+                      />
+                    </div>
+                  </div>
+                )}
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                   <div>
@@ -966,26 +926,30 @@ export default function TrainersPage() {
                   </div>
                 </div>
 
-                <div>
-                  <label className="font-bold text-slate-700 block mb-1">Address / Location</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Phase 3B2, Mohali"
-                    value={formAddress}
-                    onChange={e => setFormAddress(e.target.value)}
-                    className="w-full bg-[#fdfdfd] border border-slate-200 focus:border-[#0b5cbe] rounded-xl px-3.5 py-2.5 text-xs font-semibold text-slate-800 outline-none transition-colors"
-                  />
-                </div>
+                {addMode === 'new' && (
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">Address / Location</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Phase 3B2, Mohali"
+                      value={formAddress}
+                      onChange={e => setFormAddress(e.target.value)}
+                      className="w-full bg-[#fdfdfd] border border-slate-200 focus:border-[#0b5cbe] rounded-xl px-3.5 py-2.5 text-xs font-semibold text-slate-800 outline-none transition-colors"
+                    />
+                  </div>
+                )}
 
                 {/* Photo Capture */}
-                <div>
-                  <label className="font-bold text-slate-700 block mb-1">Profile Photo (Optional)</label>
-                  <SmartPhotoCapture
-                    value={formPhoto}
-                    onCaptureComplete={({ photoURL }) => setFormPhoto(photoURL || '')}
-                    label="Trainer"
-                  />
-                </div>
+                {addMode === 'new' && (
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">Profile Photo (Optional)</label>
+                    <SmartPhotoCapture
+                      value={formPhoto}
+                      onCaptureComplete={({ photoURL }) => setFormPhoto(photoURL || '')}
+                      label="Trainer"
+                    />
+                  </div>
+                )}
 
                 <div className="flex justify-end gap-2.5 pt-3 border-t border-slate-100">
                   <button
@@ -998,10 +962,10 @@ export default function TrainersPage() {
                   </button>
                   <button
                     type="submit"
-                    disabled={formSubmitting}
+                    disabled={formSubmitting || (addMode === 'existing' && availableEmployeesForTrainerRole.length === 0)}
                     className="px-6 py-2.5 rounded-xl bg-[#0b5cbe] hover:bg-blue-700 text-white font-extrabold text-xs shadow-sm transition-all border-none cursor-pointer disabled:opacity-60 flex items-center justify-center gap-2"
                   >
-                    {formSubmitting ? 'Registering...' : 'Register Trainer'}
+                    {formSubmitting ? 'Saving...' : addMode === 'existing' ? 'Assign Trainer Profile' : 'Register Trainer'}
                   </button>
                 </div>
               </form>
@@ -1030,7 +994,7 @@ export default function TrainersPage() {
                       Edit Trainer Details
                     </h3>
                     <p className="text-xs text-slate-400 font-medium mt-0.5">
-                      Syncs automatically across Trainers and Employees.
+                      Syncs automatically with Employee master record.
                     </p>
                   </div>
                 </div>
@@ -1152,7 +1116,7 @@ export default function TrainersPage() {
         )}
       </AnimatePresence>
 
-      {/* ── 8. ASSIGN MEMBERS MODAL (Stable ID-Based Member Assignment) ── */}
+      {/* ── 8. ASSIGN MEMBERS MODAL ── */}
       <AnimatePresence>
         {showAssignModal && activeTrainer && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs">
@@ -1385,9 +1349,9 @@ export default function TrainersPage() {
         )}
       </AnimatePresence>
 
-      {/* ── 10. CUSTOM DELETE / DEACTIVATE MODAL (Assigned Member Safety) ── */}
+      {/* ── 10. CUSTOM DEACTIVATE MODAL (Does NOT delete master employee record) ── */}
       <AnimatePresence>
-        {deleteTrainerTarget && (
+        {deactivateTarget && (
           <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 10 }}
@@ -1396,77 +1360,43 @@ export default function TrainersPage() {
               className="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-md w-full p-6 text-slate-900 relative space-y-4"
             >
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-2xl bg-rose-50 border border-rose-100 flex items-center justify-center text-rose-600 shrink-0">
-                  <Trash2 size={22} />
+                <div className="w-12 h-12 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-600 shrink-0">
+                  <AlertTriangle size={22} />
                 </div>
                 <div>
-                  <h3 className="font-extrabold text-slate-900 text-lg">Delete Trainer?</h3>
-                  <p className="text-xs text-slate-400 font-medium">Unified Staff & Trainer roster safety check.</p>
+                  <h3 className="font-extrabold text-slate-900 text-lg">Deactivate Trainer Profile?</h3>
+                  <p className="text-xs text-slate-400 font-medium">Master Staff record remains safe in Employees.</p>
                 </div>
               </div>
 
-              {getAssignedMembersForTrainer(deleteTrainerTarget).length > 0 ? (
-                <div className="bg-amber-50/70 border border-amber-200 rounded-2xl p-4 text-xs font-semibold text-amber-900 space-y-2">
-                  <p>
-                    <span className="font-black text-amber-950">{deleteTrainerTarget.name}</span> is currently assigned to{' '}
-                    <span className="font-black text-amber-950 underline">
-                      {getAssignedMembersForTrainer(deleteTrainerTarget).length} gym members
-                    </span>.
-                  </p>
-                  <p className="text-[11px] text-amber-800 font-normal">
-                    We recommend deactivating the coach so assigned members and past training logs remain intact.
-                  </p>
-                </div>
-              ) : (
-                <div className="bg-rose-50/50 border border-rose-100 rounded-2xl p-4 text-xs font-semibold text-rose-800 space-y-1.5">
-                  <p>
-                    Are you sure you want to permanently delete <span className="font-black text-rose-950">"{deleteTrainerTarget.name}"</span>?
-                  </p>
-                  <p className="text-[11px] text-rose-700 font-normal">
-                    This will remove the employee record across both Trainers and Employees modules.
-                  </p>
-                </div>
-              )}
+              <div className="bg-amber-50/70 border border-amber-200 rounded-2xl p-4 text-xs font-semibold text-amber-900 space-y-2">
+                <p>
+                  You are deactivating the trainer capability for <span className="font-black text-amber-950">{deactivateTarget.name}</span>.
+                </p>
+                <p className="text-[11px] text-amber-800 font-normal">
+                  • The employee master record will <strong>NOT</strong> be deleted.<br/>
+                  • They will remain visible in the Employees directory.<br/>
+                  • Member assignments and attendance history remain intact.
+                </p>
+              </div>
 
-              <div className="flex flex-col sm:flex-row justify-end gap-2.5 pt-2">
+              <div className="flex justify-end gap-2.5 pt-2">
                 <button
                   type="button"
-                  onClick={() => setDeleteTrainerTarget(null)}
-                  disabled={deletingTrainer}
-                  className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-700 font-bold text-xs hover:bg-slate-50 cursor-pointer disabled:opacity-50"
+                  onClick={() => setDeactivateTarget(null)}
+                  disabled={deactivatingTrainer}
+                  className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-700 font-bold text-xs hover:bg-slate-50 cursor-pointer disabled:opacity-50"
                 >
                   Cancel
                 </button>
-
-                {getAssignedMembersForTrainer(deleteTrainerTarget).length > 0 ? (
-                  <>
-                    <button
-                      type="button"
-                      disabled={deletingTrainer}
-                      onClick={() => handleConfirmDeleteTrainer('deactivate')}
-                      className="px-4 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-extrabold text-xs cursor-pointer disabled:opacity-60 transition-colors border-none shadow-sm"
-                    >
-                      Keep Trainer / Deactivate
-                    </button>
-                    <button
-                      type="button"
-                      disabled={deletingTrainer}
-                      onClick={() => handleConfirmDeleteTrainer('delete')}
-                      className="px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-xs cursor-pointer disabled:opacity-60 transition-colors border-none shadow-sm"
-                    >
-                      Remove & Delete
-                    </button>
-                  </>
-                ) : (
-                  <button
-                    type="button"
-                    disabled={deletingTrainer}
-                    onClick={() => handleConfirmDeleteTrainer('delete')}
-                    className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-xs cursor-pointer disabled:opacity-60 transition-colors border-none shadow-sm"
-                  >
-                    {deletingTrainer ? 'Deleting...' : 'Delete Trainer'}
-                  </button>
-                )}
+                <button
+                  type="button"
+                  disabled={deactivatingTrainer}
+                  onClick={handleConfirmDeactivateTrainer}
+                  className="px-5 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-extrabold text-xs cursor-pointer disabled:opacity-60 transition-colors border-none shadow-sm"
+                >
+                  {deactivatingTrainer ? 'Deactivating...' : 'Deactivate Trainer'}
+                </button>
               </div>
             </motion.div>
           </div>

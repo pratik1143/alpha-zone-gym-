@@ -606,10 +606,10 @@ export default function EmployeesPage() {
 
               <div className="bg-rose-50/50 border border-rose-100 rounded-2xl p-4 text-xs font-semibold text-rose-800 space-y-1.5">
                 <p>
-                  Are you sure you want to delete <span className="font-black text-rose-950 font-sans">"{deleteTarget.name}"</span>?
+                  You are about to permanently remove <span className="font-black text-rose-950 font-sans">"{deleteTarget.name}"</span> from the staff directory.
                 </p>
                 <p className="text-[11px] text-rose-700 font-normal">
-                  This action will remove the employee from the active staff roster.
+                  If this employee is a trainer, their trainer profile and trainer assignments will also be affected.
                 </p>
               </div>
 
