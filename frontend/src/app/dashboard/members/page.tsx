@@ -63,6 +63,7 @@ import {
 } from "firebase/firestore";
 import MembersKPI from "./components/MembersKPI";
 import MembersTable from "./components/MembersTable";
+import MemberDrawer from "./components/MemberDrawer";
 import AddMemberModal from "./components/AddMemberModal";
 import RenewalCenterModal from "./components/RenewalCenterModal";
 import RenewalWizardModal from "./components/RenewalWizardModal";
@@ -912,8 +913,8 @@ export default function MembersPage() {
         setSearch={setSearch}
         statusFilter={statusFilter}
         setStatusFilter={setStatusFilter}
-        selectedMemberId={null}
-        onSelectMember={(m) => router.push(`/dashboard/members/${encodeURIComponent(m.id)}`)}
+        selectedMemberId={activeProfile?.id || null}
+        onSelectMember={setActiveProfile}
         onEdit={(m) => setEditingMember(m)}
         onRenew={(m) => setRenewWizardMember(m)}
         onFreeze={async (m) => {
@@ -935,6 +936,24 @@ export default function MembersPage() {
               toast.error('Failed to delete member');
             }
           }
+        }}
+      />
+
+      {/* Profile Drawer */}
+      <MemberDrawer
+        member={activeProfile}
+        onClose={() => setActiveProfile(null)}
+        onCall={(m) => window.open(`tel:${m.phone}`)}
+        onMessage={(m) => window.open(`https://wa.me/91${m.phone}`)}
+        onCheckIn={(m) => alert("Manual check-in feature...")}
+        onViewProfile={(m) => console.log("view full", m.id)}
+        onEdit={(m) => {
+          setEditingMember(m);
+          setActiveProfile(null);
+        }}
+        onRenew={(m) => {
+          setRenewWizardMember(m);
+          setActiveProfile(null);
         }}
       />
 
