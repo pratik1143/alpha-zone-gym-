@@ -117,11 +117,6 @@ const MemberTableRow = memo(function MemberTableRow({
         isSelected ? 'bg-indigo-50/40' : ''
       }`}
     >
-      {/* Checkbox */}
-      <td className="px-4 py-3.5 w-12" onClick={e => e.stopPropagation()}>
-        <input type="checkbox" className="rounded border-slate-300 cursor-pointer" />
-      </td>
-
       {/* 1. Member Profile */}
       <td className="px-4 py-3.5">
         <div className="flex items-center gap-3">
@@ -955,7 +950,6 @@ export default function MembersTable({
         <table className="w-full text-left text-sm whitespace-nowrap">
           <thead className="bg-[#0b5cbe] text-[#fdfdfd] font-bold border-b border-[#084a99]">
             <tr>
-              <th className="px-4 py-3.5 w-12 text-[#fdfdfd]"><input type="checkbox" className="rounded border-slate-300 cursor-pointer" /></th>
               <th className="px-4 py-3.5 text-[#fdfdfd]">Member</th>
               <th className="px-4 py-3.5 text-[#fdfdfd]">Phone</th>
               <th className="px-4 py-3.5 text-center text-[#fdfdfd]">Gender</th>
@@ -970,7 +964,7 @@ export default function MembersTable({
           <tbody className="divide-y divide-slate-100">
             {paginatedMembers.length === 0 ? (
               <tr>
-                <td colSpan={10} className="px-4 py-16 text-center text-slate-400">
+                <td colSpan={9} className="px-4 py-16 text-center text-slate-400">
                   <div className="max-w-sm mx-auto space-y-3">
                     <User className="w-12 h-12 text-slate-300 mx-auto" />
                     <h3 className="text-base font-black text-slate-800">No members found</h3>
