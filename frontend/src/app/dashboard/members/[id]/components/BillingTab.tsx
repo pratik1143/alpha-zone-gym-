@@ -103,19 +103,28 @@ export default function BillingTab({ member: initialMember }: { member: any }) {
           combinedMap.set(key, inv);
         });
       } else if (member) {
-        const baseAmt = Number(member.totalBilled) || Number(member.paid) || Number(member.amount) || 2500;
+        const amountPaid = Number(member.amountPaid !== undefined ? member.amountPaid : (member.paid ?? member.totalPaid ?? member.amount ?? member.price ?? 0));
+        const balanceAmount = Number(member.balanceAmount !== undefined ? member.balanceAmount : (member.balance ?? member.outstandingBalance ?? 0));
+        const totalBilled = Number(member.totalBilled !== undefined ? member.totalBilled : (amountPaid + balanceAmount));
         const autoInv = {
-          id: `inv_auto_${Date.now()}`,
-          invoiceNumber: member.memberId ? member.memberId.replace('AZ-2026-', '') : '670',
-          invoice: member.memberId ? member.memberId.replace('AZ-2026-', '') : '670',
-          plan: member.plan || 'Gym membership : 3 months',
-          amount: baseAmt,
-          paid: Number(member.totalPaid) || baseAmt,
+          id: `inv_auto_${member.id || Date.now()}`,
+          invoiceNumber: member.clientId ? `INV-LEG-${member.clientId}` : (member.memberId ? member.memberId.replace('AZ-2026-', '') : '670'),
+          invoice: member.clientId ? `INV-LEG-${member.clientId}` : (member.memberId ? member.memberId.replace('AZ-2026-', '') : '670'),
+          plan: member.packageName || member.plan || 'General Membership',
+          packageName: member.packageName || member.plan || 'General Membership',
+          amount: totalBilled,
+          totalBilled: totalBilled,
+          packagePrice: totalBilled,
+          paid: amountPaid,
+          amountPaid: amountPaid,
+          pendingAmount: balanceAmount,
+          balanceAmount: balanceAmount,
           discount: 0,
-          method: member.paymentMethod || member.method || 'Cash',
-          status: 'paid',
-          date: member.joinDate || new Date().toISOString().split('T')[0],
-          startDate: member.joinDate || new Date().toISOString().split('T')[0],
+          method: member.paymentMethod || member.method || 'Imported',
+          status: balanceAmount === 0 ? 'paid' : (amountPaid > 0 ? 'partial' : 'pending'),
+          paymentStatus: balanceAmount === 0 ? 'paid' : (amountPaid > 0 ? 'partial' : 'pending'),
+          date: member.startDate || member.joinDate || new Date().toISOString().split('T')[0],
+          startDate: member.startDate || member.joinDate || new Date().toISOString().split('T')[0],
           expiryDate: member.expiryDate || new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
         };
         combinedMap.set(autoInv.id, autoInv);

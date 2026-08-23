@@ -38,7 +38,8 @@ import {
   Star,
   Trophy,
   Dumbbell,
-  Zap
+  Zap,
+  Upload
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useGymStore } from "@/store";
@@ -135,9 +136,11 @@ export default function MembersPage() {
   const members = useMemo(() => {
     const seenKeys = new Set<string>();
     const uniqueRaw = (rawMembers || []).filter((m: any) => {
-      const key = (m.memberId && m.memberId !== 'AZ-2026-0000')
-        ? `mid_${m.memberId.trim()}`
-        : (m.phone ? `phone_${m.phone.replace(/\D/g, '')}` : `id_${m.id}`);
+      const key = m.clientId
+        ? `cid_${String(m.clientId).trim()}`
+        : (m.memberId && m.memberId !== 'AZ-2026-0000')
+          ? `mid_${String(m.memberId).trim()}`
+          : (m.id ? `id_${String(m.id).trim()}` : (m.phone ? `phone_${m.phone.replace(/\D/g, '')}` : `rnd_${Math.random()}`));
       if (seenKeys.has(key)) return false;
       seenKeys.add(key);
       return true;
@@ -146,21 +149,12 @@ export default function MembersPage() {
     return uniqueRaw.map((m: any) => {
       let expiryDate = typeof m.expiryDate === 'string' ? m.expiryDate : (m.expiryDate ? new Date(m.expiryDate).toISOString().split('T')[0] : '');
       const todayStr = new Date().toISOString().split('T')[0];
-      const rawJoin = m.joinDate || m.createdAt;
+      const rawJoin = m.startDate || m.joinDate || m.createdAt;
       const joinStr = typeof rawJoin === 'string'
         ? (rawJoin.includes('T') ? rawJoin.split('T')[0] : rawJoin)
         : (rawJoin && typeof rawJoin === 'object' && typeof rawJoin.seconds === 'number'
             ? new Date(rawJoin.seconds * 1000).toISOString().split('T')[0]
             : todayStr);
-
-      // Auto-heal members whose expiryDate was set to joinDate or missing for a plan like "10 DAYS"
-      if (m.plan && (!expiryDate || expiryDate === joinStr || expiryDate === todayStr)) {
-        const computed = membershipEngine.calculatePlanExpiryDate(m.plan, rawJoin || todayStr, plans);
-        if (computed > (expiryDate || '')) {
-          expiryDate = computed;
-          membershipEngine.selfHealMemberData({ ...m, expiryDate: computed });
-        }
-      }
 
       const daysLeft = membershipEngine.calculateDaysLeft(expiryDate);
       let derivedStatus = membershipEngine.calculateMembershipStatus(daysLeft, m.status).toLowerCase();
@@ -892,9 +886,16 @@ export default function MembersPage() {
             Manage your gym members, track attendance, and monitor renewals.
           </p>
         </div>
-        <div>
+        <div className="flex items-center gap-2.5">
           <button
-            className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black transition-all shadow-md cursor-pointer border-none active:scale-95"
+            className="flex items-center gap-2 px-4 py-2.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer active:scale-95"
+            onClick={() => router.push('/dashboard/import')}
+          >
+            <Upload size={15} className="text-[#0052FF]" />
+            <span>Import Members</span>
+          </button>
+          <button
+            className="flex items-center gap-2 px-5 py-2.5 bg-[#0052FF] hover:bg-blue-600 text-white rounded-xl text-xs font-black transition-all shadow-md cursor-pointer border-none active:scale-95"
             onClick={() => setShowAddModal(true)}
           >
             <Plus size={16} /> Add Member

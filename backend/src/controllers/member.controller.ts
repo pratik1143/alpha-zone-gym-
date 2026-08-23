@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { db, admin, isFirebaseInitialized } from '../firebase';
-import { triggerWelcomeEmail, triggerPaymentEmail } from '../services/automation.service';
+import { triggerWelcomeEmail, triggerPaymentEmail, triggerPtWelcomeEmail } from '../services/automation.service';
 
 export const getMembers = async (req: Request, res: Response) => {
   try {
@@ -354,7 +354,6 @@ export const updateMember = async (req: Request, res: Response) => {
     const isNowPt = req.body.isPt === true;
 
     if (isNowPt && !wasPt) {
-      const { triggerPtWelcomeEmail } = require('../services/automation.service');
       triggerPtWelcomeEmail(updated).catch((err: any) => console.error('[Automation] PT welcome email trigger failed:', err));
     }
 

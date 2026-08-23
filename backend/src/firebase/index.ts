@@ -624,9 +624,11 @@ export const db = {
 
         const seenKeys = new Set<string>();
         const deduplicatedList = membersList.filter((m: any) => {
-          const key = (m.memberId && m.memberId !== 'AZ-2026-0000')
-            ? `mid_${m.memberId.trim()}`
-            : (m.phone ? `phone_${m.phone.replace(/\D/g, '')}` : `id_${m.id}`);
+          const key = m.clientId
+            ? `cid_${String(m.clientId).trim()}`
+            : (m.memberId && m.memberId !== 'AZ-2026-0000')
+              ? `mid_${String(m.memberId).trim()}`
+              : (m.id ? `id_${String(m.id).trim()}` : (m.phone ? `phone_${m.phone.replace(/\D/g, '')}` : `rnd_${Math.random()}`));
           if (seenKeys.has(key)) return false;
           seenKeys.add(key);
           return true;
@@ -641,9 +643,11 @@ export const db = {
         }
         const seenMockKeys = new Set<string>();
         return mockMembers.filter((m: any) => {
-          const key = (m.memberId && m.memberId !== 'AZ-2026-0000')
-            ? `mid_${m.memberId.trim()}`
-            : (m.phone ? `phone_${m.phone.replace(/\D/g, '')}` : `id_${m.id}`);
+          const key = m.clientId
+            ? `cid_${String(m.clientId).trim()}`
+            : (m.memberId && m.memberId !== 'AZ-2026-0000')
+              ? `mid_${String(m.memberId).trim()}`
+              : (m.id ? `id_${String(m.id).trim()}` : (m.phone ? `phone_${m.phone.replace(/\D/g, '')}` : `rnd_${Math.random()}`));
           if (seenMockKeys.has(key)) return false;
           seenMockKeys.add(key);
           return true;
@@ -652,9 +656,11 @@ export const db = {
     }
     const seenMockKeys = new Set<string>();
     return mockMembers.filter((m: any) => {
-      const key = (m.memberId && m.memberId !== 'AZ-2026-0000')
-        ? `mid_${m.memberId.trim()}`
-        : (m.phone ? `phone_${m.phone.replace(/\D/g, '')}` : `id_${m.id}`);
+      const key = m.clientId
+        ? `cid_${String(m.clientId).trim()}`
+        : (m.memberId && m.memberId !== 'AZ-2026-0000')
+          ? `mid_${String(m.memberId).trim()}`
+          : (m.id ? `id_${String(m.id).trim()}` : (m.phone ? `phone_${m.phone.replace(/\D/g, '')}` : `rnd_${Math.random()}`));
       if (seenMockKeys.has(key)) return false;
       seenMockKeys.add(key);
       return true;
@@ -2035,12 +2041,12 @@ export const db = {
     if (firestore) {
       await firestore.collection('trainers').doc(id).update(updates);
       const doc = await firestore.collection('trainers').doc(id).get();
-      const updatedTrainerData = { id: doc.id, ...doc.data() };
+      const updatedTrainerData: any = { id: doc.id, ...doc.data() };
 
       // Sync updates to linked employee document if present
       try {
         const empId = (updatedTrainerData as any).employeeId;
-        const phone = updatedTrainerData.phone;
+        const phone = (updatedTrainerData as any).phone;
         let empDocRef: any = null;
 
         if (empId) {

@@ -122,19 +122,18 @@ const MemberTableRow = memo(function MemberTableRow({
     frozen: { label: 'Frozen', dot: 'bg-indigo-400', text: 'text-indigo-600 bg-indigo-50/50 px-2 py-0.5 rounded-full border border-indigo-150' },
   }[ds] || { label: member.status, dot: 'bg-slate-400', text: 'text-slate-600' };
 
-  const amountVal = Number(member.amount ?? member.currentAmount ?? member.paidAmount ?? member.price ?? member.totalPaid ?? 0);
-  const isPaid = member.paymentStatus === 'paid' || (member.totalPaid && member.totalBilled && member.totalPaid >= member.totalBilled);
-  const invoiceTotal = (Number(member.invoiceAmount) || 0) + (Number(member.invoiceGst) || 0);
-  const paidTotal    = isPaid ? (invoiceTotal || amountVal) : Number(member.paidAmount || member.totalPaid || 0);
-  const payStatus    = isPaid ? 'PAID' : (invoiceTotal > 0
-    ? paymentEngine.calculatePaymentStatus(invoiceTotal, paidTotal)
-    : (member.paymentStatus ? member.paymentStatus.toUpperCase() : 'PENDING'));
+  const amountPaidVal = Number(member.amountPaid !== undefined ? member.amountPaid : (member.paid ?? member.totalPaid ?? member.amount ?? member.price ?? 0));
+  const balanceVal = Number(member.balanceAmount !== undefined ? member.balanceAmount : (member.balance ?? member.outstandingBalance ?? 0));
+  const isPaid = balanceVal === 0 || member.paymentStatus === 'paid';
+  const payStatus = isPaid ? 'PAID' : (amountPaidVal > 0 ? 'PARTIAL' : 'PENDING');
 
   const payBadgeStyle = payStatus === 'PAID'
     ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
     : payStatus === 'PARTIAL'
       ? 'bg-amber-50 text-amber-700 border-amber-200'
       : 'bg-rose-50 text-rose-700 border-rose-200';
+
+  const displayClientId = member.clientId ? `AZ-${member.clientId}` : (member.memberId || member.id);
 
   return (
     <tr 
@@ -168,7 +167,7 @@ const MemberTableRow = memo(function MemberTableRow({
               )}
             </div>
             <div className="text-xs text-slate-400 font-mono flex items-center gap-2 mt-0.5">
-              <span>#{member.biometricId || member.memberId || member.id}</span>
+              <span className="font-bold text-slate-700">#{displayClientId}</span>
               <span>•</span>
               <span>{member.phone}</span>
             </div>
@@ -176,11 +175,12 @@ const MemberTableRow = memo(function MemberTableRow({
         </div>
       </td>
 
-      {/* Membership Plan */}
+      {/* Membership Plan & Dates */}
       <td className="px-4 py-4">
-        <div className="font-bold text-slate-800 text-xs">{member.plan || 'Standard'}</div>
-        <div className="text-[11px] text-slate-400 font-mono mt-0.5">
-          Exp: {formatDate(member.expiryDate)}
+        <div className="font-bold text-slate-800 text-xs">{member.packageName || member.plan || 'Standard'}</div>
+        <div className="text-[11px] text-slate-500 font-mono mt-0.5 flex flex-col gap-0.5">
+          {member.startDate && <span>Start: {formatDate(member.startDate)}</span>}
+          <span>Exp: {formatDate(member.expiryDate)}</span>
         </div>
       </td>
 
@@ -244,11 +244,23 @@ const MemberTableRow = memo(function MemberTableRow({
         </span>
       </td>
 
-      {/* Payment Status */}
+      {/* Payment / Balance */}
       <td className="px-4 py-4">
-        <span className={`px-2.5 py-1 rounded-lg text-[10px] font-mono font-black uppercase tracking-wider border ${payBadgeStyle}`}>
-          {payStatus}
-        </span>
+        <div className="space-y-1">
+          <div className="flex items-center gap-1.5">
+            <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-black uppercase tracking-wider border ${payBadgeStyle}`}>
+              {payStatus}
+            </span>
+            <span className="text-xs font-bold text-slate-900 font-mono">
+              ₹{amountPaidVal.toLocaleString('en-IN')}
+            </span>
+          </div>
+          {balanceVal > 0 && (
+            <div className="text-[10px] font-bold text-rose-600 font-mono">
+              Due: ₹{balanceVal.toLocaleString('en-IN')}
+            </div>
+          )}
+        </div>
       </td>
 
       {/* Actions Dropdown / Quick Buttons */}
@@ -480,13 +492,14 @@ export default function MembersTable({
 
       // G. Payment Status Filter
       if (filters.paymentStatus !== 'all') {
-        const isPaid = m.paymentStatus === 'paid' || (m.totalPaid && m.totalPaid >= m.totalBilled) || (m.outstandingBalance !== undefined && m.outstandingBalance <= 0);
-        const isPartial = m.paymentStatus === 'partial' || (m.totalPaid > 0 && m.outstandingBalance > 0);
-        const isPending = m.paymentStatus === 'pending' || (Number(m.totalPaid || 0) === 0);
+        const balance = Number(m.balanceAmount !== undefined ? m.balanceAmount : (m.balance ?? m.outstandingBalance ?? 0));
+        const paid = Number(m.amountPaid !== undefined ? m.amountPaid : (m.paid ?? m.totalPaid ?? 0));
+        const isPaid = (balance === 0 && (paid > 0 || m.paymentStatus === 'paid')) || m.paymentStatus === 'paid';
+        const isDue = balance > 0 || m.paymentStatus === 'partial' || m.paymentStatus === 'pending';
 
         if (filters.paymentStatus === 'paid' && !isPaid) return false;
-        if (filters.paymentStatus === 'partial' && !isPartial) return false;
-        if (filters.paymentStatus === 'pending' && !isPending) return false;
+        if ((filters.paymentStatus === 'due' || filters.paymentStatus === 'partial') && !isDue) return false;
+        if (filters.paymentStatus === 'pending' && paid > 0) return false;
       }
 
       // H. Date Joined Range Filter
@@ -689,9 +702,9 @@ export default function MembersTable({
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800"
                   >
                     <option value="all">All Payment Statuses</option>
-                    <option value="paid">Fully Paid</option>
-                    <option value="partial">Partially Paid</option>
-                    <option value="pending">Pending</option>
+                    <option value="paid">Fully Paid (₹0 Balance)</option>
+                    <option value="due">Balance Due (&gt; ₹0 Balance)</option>
+                    <option value="pending">Pending Payment</option>
                   </select>
                 </div>
 

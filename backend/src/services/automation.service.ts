@@ -310,8 +310,6 @@ export const generateInvoicePdf = async (payment: any, member: any): Promise<Buf
     const borderColor = '#e2e8f0'; // Slate 200
 
     // Header Logo & Gym Info
-    const path = require('path');
-    const fs = require('fs');
     const logoPath = path.join(process.cwd(), 'gym_logo.png');
 
     if (fs.existsSync(logoPath)) {

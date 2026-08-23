@@ -1,12 +1,12 @@
 'use client';
 
 import React from 'react';
-import SmartAutoMappingEngine from '../components/SmartAutoMappingEngine';
+import MemberImportWizard from '../components/MemberImportWizard';
 
 export default function ProductionMigrationWizard() {
   return (
-    <div className="pb-12">
-      <SmartAutoMappingEngine />
+    <div className="pb-12 px-2 sm:px-4">
+      <MemberImportWizard />
     </div>
   );
 }
