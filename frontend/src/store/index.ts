@@ -299,13 +299,9 @@ export const useGymStore = create<GymStore>((set, get) => ({
     if (!force && get().members.length > 0 && (now - _membersCacheTs) < STALE_MS) return;
     try {
       const res = await API.get('/members');
-      const rawData = (res.data && Array.isArray(res.data) && res.data.length > 0) ? res.data : [
-        { id: 'm1', uid: 'm1', memberId: 'AZ-2026-0001', name: 'Sahil', phone: '9877466899', email: 'sahil@alphagym.com', gender: 'Male', age: 24, weight: 75, height: 180, bmi: 23.1, plan: 'Monthly Standard', branch: 'Mohali, Punjab', trainer: 'Karan Verma', status: 'active', joinDate: '2026-01-15', expiryDate: '2026-07-15', biometricId: '1', streak: 5, attendancePercent: 88, daysLeft: 45 },
-        { id: 'm2', uid: 'm2', memberId: 'AZ-2026-0002', name: 'Arjun Mehta', phone: '9877407660', email: 'arjun@alphagym.com', gender: 'Male', age: 28, weight: 82, height: 178, bmi: 25.9, plan: 'Quarterly Prime', branch: 'Mohali, Punjab', trainer: 'Dev Rana', status: 'active', joinDate: '2026-04-10', expiryDate: '2026-07-10', biometricId: '2', streak: 12, attendancePercent: 95, daysLeft: 10 },
-        { id: 'm3', uid: 'm3', memberId: 'AZ-2026-0003', name: 'Simran Kaur', phone: '7814854830', email: 'simran@alphagym.com', gender: 'Female', age: 26, weight: 60, height: 165, bmi: 22.0, plan: 'Monthly Standard', branch: 'Mohali, Punjab', trainer: 'Sneha Kapoor', status: 'active', joinDate: '2026-05-20', expiryDate: '2026-06-20', biometricId: '3', streak: 3, attendancePercent: 75, daysLeft: -10 },
-        { id: 'm4', uid: 'm4', memberId: 'AZ-2026-0004', name: 'Priya Sharma', phone: '6239139878', email: 'priya@alphagym.com', gender: 'Female', age: 23, weight: 54, height: 162, bmi: 20.6, plan: 'Annual Premium', branch: 'Mohali, Punjab', trainer: 'Riya Menon', status: 'expired', joinDate: '2025-06-01', expiryDate: '2026-06-01', biometricId: '', streak: 0, attendancePercent: 60, daysLeft: -29 },
-        { id: 'm5', uid: 'm5', memberId: 'AZ-2026-0005', name: 'Kabir Singh', phone: '9988776650', email: 'kabir@alphagym.com', gender: 'Male', age: 31, weight: 90, height: 185, bmi: 26.3, plan: 'Semi-Annual Pro', branch: 'Mohali, Punjab', trainer: 'Rohit Sharma', status: 'frozen', joinDate: '2025-12-01', expiryDate: '2026-09-01', biometricId: '4', streak: 0, attendancePercent: 90, daysLeft: 120 }
-      ];
+      // STRICT: only use real server data — NEVER fall back to hardcoded mock members.
+      // If API returns empty or fails, show empty list. Do NOT fabricate member data.
+      const rawData = (res.data && Array.isArray(res.data)) ? res.data : [];
       const seen = new Set<string>();
       const unique = (rawData as any[]).filter(m => {
         const key = (m.memberId && m.memberId !== 'AZ-2026-0000')
@@ -319,6 +315,11 @@ export const useGymStore = create<GymStore>((set, get) => ({
       _membersCacheTs = Date.now();
     } catch (err) {
       console.error('Failed to fetch members:', err);
+      // On error, do NOT replace real members with mocks. Keep existing state as-is.
+      // If store is empty and the API is down, show empty list.
+      if (get().members.length === 0) {
+        set({ members: [] });
+      }
     }
   },
   addMember: async (member) => {
@@ -334,7 +335,11 @@ export const useGymStore = create<GymStore>((set, get) => ({
   },
   deleteMember: async (id) => {
     await API.delete(`/members/${id}`);
+    // 1. Immediately remove from local state so UI updates without waiting.
     set({ members: get().members.filter(m => m.id !== id) });
+    // 2. Invalidate stale-cache timestamp so the next fetchMembers() always
+    //    re-fetches from server, preventing the deleted member from reappearing.
+    _membersCacheTs = 0;
   },
   toggleFreeze: async (id) => {
     const res = await API.post(`/members/${id}/freeze`);

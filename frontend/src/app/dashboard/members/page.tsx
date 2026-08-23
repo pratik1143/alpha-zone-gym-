@@ -1673,7 +1673,7 @@ export default function MembersPage() {
                       await deleteMember(m.id);
                       setDeleteMemberTarget(null);
                       toast.success(`✓ ${m.name} has been removed successfully.`);
-                      fetchMembers();
+                      fetchMembers(true); // force=true: bypass stale cache, always re-fetch from server
                     } catch (err: unknown) {
                       console.error('[DeleteMember] Firebase error:', err);
                       toast.error('Unable to delete member. Please try again.');
