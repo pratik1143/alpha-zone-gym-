@@ -16,37 +16,31 @@ import { collection, onSnapshot, query, orderBy, doc, addDoc, updateDoc, deleteD
 import API from '@/services/api';
 import { useGymStore } from '@/store';
 
-interface Enquiry {
-  id: string;
-  name: string;
-  firstName?: string;
-  lastName?: string;
-  phone: string;
-  altPhone?: string;
-  email?: string;
-  gender?: string;
-  address?: string;
-  nextFollowUp?: string;
-  followUpTime?: string;
-  trialDate?: string;
-  status: 'Pending' | 'Contacted' | 'Trial Scheduled' | 'Converted' | 'Lost';
-  assignedTo?: string;
-  priority: 'Hot' | 'Warm' | 'Cold';
-  source?: string;
-  interestedPlan?: string;
-  remarks?: string;
-  createdAt: string;
-}
+import { z } from 'zod';
+import { enquiryService, EnquiryItem } from '@/services/enquiry.service';
+
+type Enquiry = EnquiryItem;
 
 const SOURCES = ['Walk-in', 'Instagram', 'Facebook', 'Google Ad', 'Referral', 'Phone Inquiry', 'Website Form', 'Other'];
 const PLANS = ['Monthly Standard', 'Quarterly Prime', 'Semi-Annual Pro', 'Annual VIP', 'Personal Training (PT)', 'Day Pass'];
 const STAFF_LIST = ['Karan Verma', 'Dev Rana', 'Sneha Kapoor', 'Riya Menon', 'Reception Desk', 'Demo Manager'];
+
+const enquiryFormSchema = z.object({
+  firstName: z.string().trim().min(2, 'First Name must be at least 2 characters'),
+  contact: z.string().trim().regex(/^[6-9]\d{9}$/, 'Enter a valid 10-digit mobile number'),
+  email: z.string().trim().optional().refine(val => !val || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val), 'Enter a valid email address'),
+  source: z.string().min(1, 'Please select a source'),
+  inquiryFor: z.string().min(1, 'Please select a membership plan'),
+  remarks: z.string().max(500, 'Remarks must be under 500 characters').optional()
+});
 
 export default function EnquiryGodLevelHub() {
   const { addMember, fetchMembers } = useGymStore();
 
   const [enquiries, setEnquiries] = useState<Enquiry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [viewMode, setViewMode] = useState<'table' | 'kanban'>('table');
   const [selectedEnquiry, setSelectedEnquiry] = useState<Enquiry | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -82,47 +76,21 @@ export default function EnquiryGodLevelHub() {
   const [convertPlan, setConvertPlan] = useState('Monthly Standard');
   const [convertPrice, setConvertPrice] = useState('2500');
 
-  // ── REALTIME FIRESTORE LISTENER WITH API BACKEND SYNC ──────────────
+  // ── REALTIME FIRESTORE LISTENER WITH IDEMPOTENT DEDUPLICATION ──────────────
   useEffect(() => {
     setLoading(true);
-    let isMounted = true;
-
-    const fetchFallbackEnquiries = async () => {
-      try {
-        const res = await API.get('/enquiries');
-        if (isMounted && res.data) {
-          setEnquiries(Array.isArray(res.data) ? res.data : []);
-          setLoading(false);
-          return;
-        }
-      } catch (err) {
-        console.warn('API fallback for enquiries failed:', err);
-      }
-      if (isMounted) {
-        setEnquiries([]);
-        setLoading(false);
-      }
-    };
-
-    try {
-      const q = query(collection(db, 'enquiries'), orderBy('createdAt', 'desc'));
-      const unsub = onSnapshot(q, (snapshot) => {
-        if (!isMounted) return;
-        const data = snapshot.docs.map(d => ({ id: d.id, ...d.data() })) as Enquiry[];
+    const unsubscribe = enquiryService.subscribe(
+      (data) => {
         setEnquiries(data);
         setLoading(false);
-      }, (error) => {
-        console.warn('Enquiries Firestore listener error:', error.message);
-        if (isMounted) fetchFallbackEnquiries();
-      });
+      },
+      (err) => {
+        console.warn('Enquiries listener warning:', err.message);
+        setLoading(false);
+      }
+    );
 
-      return () => {
-        isMounted = false;
-        unsub();
-      };
-    } catch (e) {
-      fetchFallbackEnquiries();
-    }
+    return () => unsubscribe();
   }, []);
 
   // ── FILTERED LEADS ──────────────
@@ -151,75 +119,88 @@ export default function EnquiryGodLevelHub() {
     setEmail(''); setGender('Male'); setAddress(''); setFollowupDate('');
     setFollowupTime('11:00'); setTrialDate(''); setStatus('Pending');
     setAttendedBy('Karan Verma'); setPriority('Warm'); setSource('Instagram');
-    setInquiryFor('Monthly Standard'); setRemarks('');
+    setInquiryFor('Monthly Standard'); setRemarks(''); setFormErrors({});
   };
 
-  // Create New Lead
+  // Create New Lead with Zod & Idempotent Service
   const handleCreateEnquiry = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!firstName || !contact) {
-      toast.error('First Name and Contact Number are required!');
+    if (isSubmitting) return;
+
+    // 1. Zod Validation
+    const validationResult = enquiryFormSchema.safeParse({
+      firstName,
+      contact,
+      email,
+      source,
+      inquiryFor,
+      remarks
+    });
+
+    if (!validationResult.success) {
+      const errors: Record<string, string> = {};
+      validationResult.error.issues.forEach(issue => {
+        if (issue.path[0]) {
+          errors[issue.path[0].toString()] = issue.message;
+        }
+      });
+      setFormErrors(errors);
+      toast.error('Please fix form validation errors before saving.');
       return;
     }
 
-    const newLeadPayload: Omit<Enquiry, 'id'> = {
-      name: `${firstName} ${lastName}`.trim(),
-      firstName,
-      lastName,
-      phone: contact,
-      altPhone: altContact,
-      email,
-      gender,
-      address,
-      nextFollowUp: followupDate || new Date().toISOString().split('T')[0],
-      followUpTime: followupTime || '11:00',
-      trialDate,
-      status,
-      assignedTo: attendedBy,
-      priority,
-      source,
-      interestedPlan: inquiryFor,
-      remarks,
-      createdAt: new Date().toISOString()
-    };
+    setFormErrors({});
+    setIsSubmitting(true);
 
     try {
-      let docId = 'enq_' + Date.now();
-      try {
-        const res = await API.post('/enquiries', newLeadPayload);
-        if (res.data?.enquiry?.id) {
-          docId = res.data.enquiry.id;
-        }
-      } catch (err) {
-        console.warn('API lead creation notice:', err);
-      }
+      const docId = `enq_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+      const fullName = `${firstName} ${lastName}`.trim();
 
-      try {
-        await addDoc(collection(db, 'enquiries'), { id: docId, ...newLeadPayload });
-      } catch (err) {}
+      const payload: Partial<Enquiry> = {
+        id: docId,
+        name: fullName,
+        firstName,
+        lastName,
+        phone: contact,
+        altPhone: altContact,
+        email,
+        gender,
+        address,
+        nextFollowUp: followupDate,
+        followUpTime: followupTime || '11:00',
+        trialDate,
+        status,
+        assignedTo: attendedBy,
+        priority,
+        source,
+        interestedPlan: inquiryFor,
+        remarks,
+        createdAt: new Date().toISOString()
+      };
 
-      setEnquiries(prev => [{ id: docId, ...newLeadPayload }, ...prev]);
+      await enquiryService.create(payload);
+
       toast.success('🎉 New Enquiry Lead Captured Successfully!');
       confetti({ particleCount: 60, spread: 70, origin: { y: 0.6 } });
       resetForm();
       setShowCreateModal(false);
     } catch (e: any) {
-      toast.error('Failed to create enquiry: ' + e.message);
+      toast.error('Failed to create enquiry: ' + (e.message || 'Error occurred'));
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   // Update Status
   const handleUpdateStatus = async (id: string, newStatus: Enquiry['status']) => {
     try {
-      await API.put(`/enquiries/${id}`, { status: newStatus });
-    } catch (_) {}
-    try {
-      await updateDoc(doc(db, 'enquiries', id), { status: newStatus });
-    } catch (_) {}
-    toast.success(`Updated status to ${newStatus}`);
-    setEnquiries(prev => prev.map(item => item.id === id ? { ...item, status: newStatus } : item));
-    if (selectedEnquiry?.id === id) {
-      setSelectedEnquiry(prev => prev ? { ...prev, status: newStatus } : null);
+      await enquiryService.update(id, { status: newStatus });
+      toast.success(`Updated status to ${newStatus}`);
+      if (selectedEnquiry?.id === id) {
+        setSelectedEnquiry(prev => prev ? { ...prev, status: newStatus } : null);
+      }
+    } catch (_) {
+      toast.error('Failed to update status');
     }
   };
 
@@ -227,14 +208,12 @@ export default function EnquiryGodLevelHub() {
   const handleDeleteEnquiry = async (id: string) => {
     if (!window.confirm('Are you sure you want to delete this enquiry record?')) return;
     try {
-      await API.delete(`/enquiries/${id}`);
-    } catch (_) {}
-    try {
-      await deleteDoc(doc(db, 'enquiries', id));
-    } catch (_) {}
-    setEnquiries(prev => prev.filter(e => e.id !== id));
-    if (selectedEnquiry?.id === id) setSelectedEnquiry(null);
-    toast.success('Enquiry record deleted');
+      await enquiryService.delete(id);
+      if (selectedEnquiry?.id === id) setSelectedEnquiry(null);
+      toast.success('Enquiry record deleted');
+    } catch (_) {
+      toast.error('Failed to delete enquiry');
+    }
   };
 
   // Convert Lead to Member
@@ -832,15 +811,46 @@ export default function EnquiryGodLevelHub() {
                   </div>
 
                   <div>
+                    <label className="text-[11px] font-bold text-slate-700 mb-1 block">First Name *</label>
+                    <input
+                      type="text"
+                      value={firstName}
+                      onChange={e => { setFirstName(e.target.value); if (formErrors.firstName) setFormErrors(prev => ({ ...prev, firstName: '' })); }}
+                      placeholder="e.g. Rahul"
+                      className={`w-full px-3.5 py-2.5 bg-slate-50 border ${formErrors.firstName ? 'border-red-500 bg-red-50/10' : 'border-slate-200'} rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:border-blue-500`}
+                    />
+                    {formErrors.firstName && (
+                      <p className="text-[11px] font-semibold text-red-500 mt-1 flex items-center gap-1">
+                        <AlertCircle size={12} /> {formErrors.firstName}
+                      </p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-700 mb-1 block">Last Name</label>
+                    <input
+                      type="text"
+                      value={lastName}
+                      onChange={e => setLastName(e.target.value)}
+                      placeholder="e.g. Verma"
+                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+
+                  <div>
                     <label className="text-[11px] font-bold text-slate-700 mb-1 block">Contact Number *</label>
                     <input
                       type="tel"
-                      required
                       value={contact}
-                      onChange={e => setContact(e.target.value)}
-                      placeholder="Mobile number"
-                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:border-blue-500"
+                      onChange={e => { setContact(e.target.value); if (formErrors.contact) setFormErrors(prev => ({ ...prev, contact: '' })); }}
+                      placeholder="e.g. 9876543210"
+                      className={`w-full px-3.5 py-2.5 bg-slate-50 border ${formErrors.contact ? 'border-red-500 bg-red-50/10' : 'border-slate-200'} rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:border-blue-500`}
                     />
+                    {formErrors.contact && (
+                      <p className="text-[11px] font-semibold text-red-500 mt-1 flex items-center gap-1">
+                        <AlertCircle size={12} /> {formErrors.contact}
+                      </p>
+                    )}
                   </div>
 
                   <div>
@@ -848,10 +858,15 @@ export default function EnquiryGodLevelHub() {
                     <input
                       type="email"
                       value={email}
-                      onChange={e => setEmail(e.target.value)}
+                      onChange={e => { setEmail(e.target.value); if (formErrors.email) setFormErrors(prev => ({ ...prev, email: '' })); }}
                       placeholder="email@example.com"
-                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:border-blue-500"
+                      className={`w-full px-3.5 py-2.5 bg-slate-50 border ${formErrors.email ? 'border-red-500 bg-red-50/10' : 'border-slate-200'} rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:border-blue-500`}
                     />
+                    {formErrors.email && (
+                      <p className="text-[11px] font-semibold text-red-500 mt-1 flex items-center gap-1">
+                        <AlertCircle size={12} /> {formErrors.email}
+                      </p>
+                    )}
                   </div>
 
                   <div>
@@ -868,25 +883,35 @@ export default function EnquiryGodLevelHub() {
                   </div>
 
                   <div>
-                    <label className="text-[11px] font-bold text-slate-700 mb-1 block">Lead Source</label>
+                    <label className="text-[11px] font-bold text-slate-700 mb-1 block">Lead Source *</label>
                     <select
                       value={source}
-                      onChange={e => setSource(e.target.value)}
-                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:border-blue-500"
+                      onChange={e => { setSource(e.target.value); if (formErrors.source) setFormErrors(prev => ({ ...prev, source: '' })); }}
+                      className={`w-full px-3.5 py-2.5 bg-slate-50 border ${formErrors.source ? 'border-red-500 bg-red-50/10' : 'border-slate-200'} rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:border-blue-500`}
                     >
                       {SOURCES.map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
+                    {formErrors.source && (
+                      <p className="text-[11px] font-semibold text-red-500 mt-1 flex items-center gap-1">
+                        <AlertCircle size={12} /> {formErrors.source}
+                      </p>
+                    )}
                   </div>
 
                   <div>
-                    <label className="text-[11px] font-bold text-slate-700 mb-1 block">Interested Membership</label>
+                    <label className="text-[11px] font-bold text-slate-700 mb-1 block">Interested Membership *</label>
                     <select
                       value={inquiryFor}
-                      onChange={e => setInquiryFor(e.target.value)}
-                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:border-blue-500"
+                      onChange={e => { setInquiryFor(e.target.value); if (formErrors.inquiryFor) setFormErrors(prev => ({ ...prev, inquiryFor: '' })); }}
+                      className={`w-full px-3.5 py-2.5 bg-slate-50 border ${formErrors.inquiryFor ? 'border-red-500 bg-red-50/10' : 'border-slate-200'} rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:border-blue-500`}
                     >
                       {PLANS.map(p => <option key={p} value={p}>{p}</option>)}
                     </select>
+                    {formErrors.inquiryFor && (
+                      <p className="text-[11px] font-semibold text-red-500 mt-1 flex items-center gap-1">
+                        <AlertCircle size={12} /> {formErrors.inquiryFor}
+                      </p>
+                    )}
                   </div>
 
                   <div>
@@ -926,10 +951,15 @@ export default function EnquiryGodLevelHub() {
                   <textarea
                     rows={3}
                     value={remarks}
-                    onChange={e => setRemarks(e.target.value)}
+                    onChange={e => { setRemarks(e.target.value); if (formErrors.remarks) setFormErrors(prev => ({ ...prev, remarks: '' })); }}
                     placeholder="Wants morning slots, interested in weight loss package..."
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:border-blue-500"
+                    className={`w-full px-3.5 py-2.5 bg-slate-50 border ${formErrors.remarks ? 'border-red-500 bg-red-50/10' : 'border-slate-200'} rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:border-blue-500`}
                   />
+                  {formErrors.remarks && (
+                    <p className="text-[11px] font-semibold text-red-500 mt-1 flex items-center gap-1">
+                      <AlertCircle size={12} /> {formErrors.remarks}
+                    </p>
+                  )}
                 </div>
 
                 <div className="flex items-center justify-between pt-4 border-t border-slate-100">
@@ -948,16 +978,25 @@ export default function EnquiryGodLevelHub() {
                   <div className="flex items-center gap-3">
                     <button
                       type="button"
+                      disabled={isSubmitting}
                       onClick={() => setShowCreateModal(false)}
-                      className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all cursor-pointer"
+                      className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all cursor-pointer disabled:opacity-50"
                     >
                       Cancel
                     </button>
                     <button
                       type="submit"
-                      className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-md cursor-pointer"
+                      disabled={isSubmitting}
+                      className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl text-xs font-bold transition-all shadow-md cursor-pointer flex items-center gap-2"
                     >
-                      Create Inquiry Lead
+                      {isSubmitting ? (
+                        <>
+                          <RefreshCw size={14} className="animate-spin" />
+                          Saving...
+                        </>
+                      ) : (
+                        'Save Enquiry'
+                      )}
                     </button>
                   </div>
                 </div>

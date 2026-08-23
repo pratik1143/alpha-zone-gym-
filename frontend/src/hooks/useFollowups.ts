@@ -93,7 +93,6 @@ export function useFollowups() {
 
   const createFollowup = useCallback(async (data: Partial<FollowUpItem>) => {
     const item = await followupService.create(data);
-    setDbFollowups((prev) => [item, ...prev]);
     return item;
   }, []);
 

@@ -1,5 +1,5 @@
 import { db } from '@/lib/firebase';
-import { collection, onSnapshot, query, doc, updateDoc, addDoc, deleteDoc } from 'firebase/firestore';
+import { collection, onSnapshot, query, doc, updateDoc, setDoc, addDoc, deleteDoc } from 'firebase/firestore';
 import API from '@/services/api';
 
 export interface FollowUpItem {
@@ -59,7 +59,9 @@ export const followupService = {
       q,
       (snapshot) => {
         firestoreLoaded = true;
-        const list: FollowUpItem[] = snapshot.docs.map((docSnap) => {
+        const itemMap = new Map<string, FollowUpItem>();
+
+        snapshot.docs.forEach((docSnap) => {
           const d = docSnap.data();
           const scheduledDate = d.scheduledDate || d.dueDate || d.date || d.createdAt?.split('T')[0] || new Date().toISOString().split('T')[0];
           const scheduledTime = d.scheduledTime || '10:00';
@@ -76,7 +78,7 @@ export const followupService = {
             ? 'Missed' 
             : 'Pending';
 
-          return {
+          const item: FollowUpItem = {
             id: docSnap.id,
             memberId: d.memberId || null,
             memberName: d.memberName || d.name || 'Member',
@@ -105,10 +107,35 @@ export const followupService = {
             outcome: d.outcome || '',
             remarks: d.remarks || ''
           };
+
+          itemMap.set(docSnap.id, item);
         });
 
-        list.sort((a, b) => a.scheduledTimestamp - b.scheduledTimestamp);
-        onData(list);
+        const list = Array.from(itemMap.values());
+
+        // Deduplicate any existing duplicate documents in database (same memberId/memberName + date + time + title)
+        const uniqueList: FollowUpItem[] = [];
+        const seenSigMap = new Map<string, FollowUpItem>();
+
+        for (const item of list) {
+          const sigKey = `${item.memberId || item.memberName}_${item.scheduledDate}_${item.scheduledTime}_${item.title || item.notes}_${item.status}`;
+          const existing = seenSigMap.get(sigKey);
+
+          if (existing) {
+            const timeA = new Date(item.createdAt || 0).getTime();
+            const timeB = new Date(existing.createdAt || 0).getTime();
+            // If created within 2 minutes of each other, suppress the duplicate
+            if (Math.abs(timeA - timeB) < 120_000 || !item.createdAt || !existing.createdAt) {
+              continue;
+            }
+          }
+
+          seenSigMap.set(sigKey, item);
+          uniqueList.push(item);
+        }
+
+        uniqueList.sort((a, b) => a.scheduledTimestamp - b.scheduledTimestamp);
+        onData(uniqueList);
       },
       (err) => {
         console.warn('[followupService] Snapshot warning:', err.message);
@@ -122,6 +149,8 @@ export const followupService = {
     const scheduledDate = data.scheduledDate || data.dueDate || new Date().toISOString().split('T')[0];
     const scheduledTime = data.scheduledTime || '10:00';
     const scheduledTimestamp = data.scheduledTimestamp || new Date(`${scheduledDate}T${scheduledTime}`).getTime() || Date.now();
+
+    const createdId = data.id || `fol_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
 
     const payload = {
       memberId: data.memberId || null,
@@ -148,15 +177,14 @@ export const followupService = {
       source: data.source || 'manual'
     };
 
-    let createdId = `fol_${Date.now()}`;
     try {
-      const docRef = await addDoc(collection(db, 'followups'), payload);
-      createdId = docRef.id;
-    } catch (_) {}
+      await setDoc(doc(db, 'followups', createdId), payload);
+    } catch (err: any) {
+      console.warn('[followupService] Direct Firestore setDoc warning:', err);
+    }
 
     try {
-      const res = await API.post('/followups', { ...payload, id: createdId });
-      if (res.data?.followup) return res.data.followup;
+      await API.post('/followups', { ...payload, id: createdId });
     } catch (_) {}
 
     return { id: createdId, ...payload } as FollowUpItem;

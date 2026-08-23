@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Bell, X, CheckCircle2, MessageSquare, Plus, Search, Trash2, 
   MessageCircle, Phone, Clock, Calendar, MoreVertical, 
-  AlertTriangle, Filter, RefreshCw, Check, User, Sparkles
+  AlertTriangle, AlertCircle, Filter, RefreshCw, Check, User, Sparkles
 } from 'lucide-react';
 import { db } from '@/lib/firebase';
 import { collection, doc, updateDoc, getDocs } from 'firebase/firestore';
@@ -13,6 +13,7 @@ import toast from 'react-hot-toast';
 import { useGymStore } from '@/store';
 import API from '@/services/api';
 import confetti from 'canvas-confetti';
+import { z } from 'zod';
 
 import { useFollowups } from '@/hooks/useFollowups';
 import { followupService } from '@/services/followup.service';
@@ -653,17 +654,20 @@ export default function FollowUpManager() {
         {showAddModal && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setShowAddModal(false)} />
-            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="relative bg-white border border-slate-200 rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden">
-              <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-4 flex items-center justify-between text-white">
-                <h2 className="text-sm font-bold uppercase tracking-wide">Schedule New Follow-up</h2>
-                <button onClick={() => setShowAddModal(false)} className="text-white/80 hover:text-white border-none cursor-pointer bg-transparent"><X size={18} /></button>
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="relative bg-white border border-slate-200 rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden text-left">
+              <div className="bg-blue-600 px-6 py-4 flex items-center justify-between text-white">
+                <div>
+                  <h2 className="text-sm font-bold uppercase tracking-wide">NEW FOLLOW-UP</h2>
+                  <p className="text-[11px] text-blue-100 font-medium mt-0.5">Create a follow-up reminder for a member.</p>
+                </div>
+                <button onClick={() => setShowAddModal(false)} className="text-white/80 hover:text-white border-none cursor-pointer bg-transparent p-1">
+                  <X size={18} />
+                </button>
               </div>
               <AddFollowUpWizard 
                 members={members} 
-                enquiries={enquiries} 
                 employees={employees} 
                 createFollowup={createFollowup}
-                onSuccess={() => {}}
                 onClose={() => setShowAddModal(false)} 
               />
             </motion.div>
@@ -778,108 +782,359 @@ export default function FollowUpManager() {
   );
 }
 
-function AddFollowUpWizard({ members, enquiries, employees, createFollowup, onSuccess, onClose }: { members: any[]; enquiries: any[]; employees: any[]; createFollowup?: (data: any) => Promise<any>; onSuccess: (newRecord: any) => void; onClose: () => void }) {
-  const [sourceType, setSourceType] = useState<'member' | 'enquiry' | 'employee'>('member');
-  const [selectedId, setSelectedId] = useState('');
-  const [title, setTitle] = useState('');
-  const [desc, setDesc] = useState('');
-  const [date, setDate] = useState('');
-  const [time, setTime] = useState('');
-  const [reminderBefore, setReminderBefore] = useState('0');
-  const [priority, setPriority] = useState('Medium');
+function SearchableMemberSelect({ 
+  members, 
+  selectedMemberId, 
+  onSelect 
+}: { 
+  members: any[]; 
+  selectedMemberId: string; 
+  onSelect: (member: any) => void;
+}) {
+  const [query, setQuery] = useState('');
+  const [isOpen, setIsOpen] = useState(false);
+
+  const selectedMember = useMemo(() => {
+    return members.find(m => (m.id && m.id === selectedMemberId) || (m.memberId && m.memberId === selectedMemberId));
+  }, [members, selectedMemberId]);
+
+  const filteredMembers = useMemo(() => {
+    if (!query) return members.slice(0, 50);
+    const q = query.toLowerCase();
+    return members.filter(m => {
+      const name = (m.name || '').toLowerCase();
+      const phone = (m.phone || '').toLowerCase();
+      const id = (m.memberId || m.id || '').toLowerCase();
+      return name.includes(q) || phone.includes(q) || id.includes(q);
+    }).slice(0, 50);
+  }, [members, query]);
+
+  return (
+    <div className="relative">
+      <div 
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full bg-slate-50 border border-slate-200 hover:border-blue-500 rounded-xl px-4 py-2.5 text-xs font-semibold text-slate-800 cursor-pointer flex items-center justify-between transition-all"
+      >
+        {selectedMember ? (
+          <div className="flex items-center gap-2 truncate">
+            <span className="font-bold text-slate-900">{selectedMember.name}</span>
+            <span className="text-[10px] font-bold bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded">
+              {selectedMember.memberId || (selectedMember.id ? selectedMember.id.substring(0, 8) : 'AZM')}
+            </span>
+            <span className="text-slate-500 text-[11px]">📞 {selectedMember.phone || 'N/A'}</span>
+          </div>
+        ) : (
+          <span className="text-slate-400 font-normal">-- Select member --</span>
+        )}
+        <Search size={14} className="text-slate-400 shrink-0" />
+      </div>
+
+      {isOpen && (
+        <div className="absolute left-0 right-0 top-full mt-1.5 bg-white border border-slate-200 rounded-2xl shadow-xl z-50 p-2 text-left">
+          <input 
+            type="text" 
+            autoFocus
+            placeholder="Search member name, ID or phone..." 
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 outline-none focus:border-blue-600 mb-2"
+          />
+          <div className="max-h-48 overflow-y-auto space-y-1">
+            {filteredMembers.length === 0 ? (
+              <p className="text-xs text-slate-400 p-2 text-center font-medium">No members found</p>
+            ) : (
+              filteredMembers.map((m) => (
+                <div 
+                  key={m.id || m.memberId}
+                  onClick={() => {
+                    onSelect(m);
+                    setIsOpen(false);
+                    setQuery('');
+                  }}
+                  className={`p-2.5 rounded-xl text-xs cursor-pointer flex items-center justify-between transition-all ${
+                    (selectedMemberId === m.id || selectedMemberId === m.memberId)
+                      ? 'bg-blue-50 text-blue-900 font-bold'
+                      : 'hover:bg-slate-50 text-slate-700 font-medium'
+                  }`}
+                >
+                  <div>
+                    <span className="font-bold block text-slate-900">{m.name}</span>
+                    <span className="text-[10px] text-slate-500 font-medium">📞 {m.phone || 'No phone'}</span>
+                  </div>
+                  <span className="text-[10px] font-bold bg-slate-100 text-slate-600 px-2 py-0.5 rounded">
+                    {m.memberId || (m.id ? m.id.substring(0, 8) : 'AZM')}
+                  </span>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const followUpFormSchema = z.object({
+  memberId: z.string().min(1, 'Please select a member'),
+  reason: z.string().trim().min(2, 'Follow-up reason must be at least 2 characters'),
+  date: z.string().min(1, 'Date is required'),
+  time: z.string().min(1, 'Time is required'),
+  priority: z.enum(['Low', 'Medium', 'High', 'Urgent'], { message: 'Select priority' })
+});
+
+function AddFollowUpWizard({ 
+  members, 
+  employees, 
+  createFollowup, 
+  onClose 
+}: { 
+  members: any[]; 
+  employees: any[]; 
+  createFollowup?: (data: any) => Promise<any>; 
+  onClose: () => void 
+}) {
+  const [selectedMember, setSelectedMember] = useState<any>(null);
+  const [reason, setReason] = useState('Renewal Reminder');
+  const [customReason, setCustomReason] = useState('');
+  const [date, setDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [time, setTime] = useState('15:30');
+  const [priority, setPriority] = useState<'Low' | 'Medium' | 'High' | 'Urgent'>('Medium');
   const [assignedTo, setAssignedTo] = useState('Receptionist');
-  const [saving, setSaving] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+
+  const REASON_OPTIONS = [
+    'Renewal Reminder',
+    'Payment Follow-up',
+    'Membership Expiry',
+    'PT Follow-up',
+    'Attendance Follow-up',
+    'General Follow-up',
+    'Custom'
+  ];
+
+  const staffOptions = useMemo(() => {
+    const list = ['Receptionist', 'Sales Executive', 'Manager', 'Owner'];
+    if (Array.isArray(employees)) {
+      employees.forEach(emp => {
+        const empName = emp.name || emp.fullName;
+        if (empName && !list.includes(empName)) {
+          list.push(empName);
+        }
+      });
+    }
+    return list;
+  }, [employees]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title || !date || !time || !selectedId) { toast.error('All fields marked with * are required'); return; }
-    setSaving(true);
+    if (isSubmitting) return;
+
+    const finalReason = reason === 'Custom' ? customReason.trim() : reason;
+    const memberId = selectedMember?.id || selectedMember?.memberId || '';
+
+    // Zod validation
+    const validationResult = followUpFormSchema.safeParse({
+      memberId,
+      reason: finalReason,
+      date,
+      time,
+      priority
+    });
+
+    if (!validationResult.success) {
+      const errors: Record<string, string> = {};
+      validationResult.error.issues.forEach(issue => {
+        if (issue.path[0]) {
+          errors[issue.path[0].toString()] = issue.message;
+        }
+      });
+      setFormErrors(errors);
+      toast.error('Please fix form validation errors before scheduling');
+      return;
+    }
+
+    setFormErrors({});
+    setIsSubmitting(true);
+
     try {
       const scheduledDateTime = new Date(`${date}T${time}`);
-      const ts = scheduledDateTime.getTime() - (parseInt(reminderBefore) * 60000);
+      const ts = scheduledDateTime.getTime() || Date.now();
 
-      const targetEntity = sourceType === 'member' 
-        ? members.find(m => m.id === selectedId || m.memberId === selectedId) 
-        : sourceType === 'enquiry' 
-        ? enquiries.find(e => e.id === selectedId) 
-        : employees.find(emp => emp.id === selectedId);
+      const memberName = selectedMember.name || 'Member';
+      const phone = selectedMember.phone || '';
+
+      const operationId = `fol_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
 
       const payload = {
-        memberId: sourceType === 'member' ? selectedId : null,
-        enquiryId: sourceType === 'enquiry' ? selectedId : null,
-        employeeId: sourceType === 'employee' ? selectedId : null,
-        memberName: targetEntity?.name || targetEntity?.fullName || '',
-        phone: targetEntity?.phone || '',
+        id: operationId,
+        memberId,
+        memberName,
+        phone,
         priority: priority as any,
-        title,
-        notes: desc,
-        description: desc,
+        title: finalReason,
+        notes: `Follow-up for ${memberName}: ${finalReason}`,
+        description: `Follow-up for ${memberName}: ${finalReason}`,
         assignedTo,
         scheduledDate: date,
         scheduledTime: time,
         scheduledTimestamp: ts,
-        type: (sourceType === 'member' ? 'Renewal' : sourceType === 'enquiry' ? 'Enquiry' : 'Custom') as any
+        status: 'Pending' as const,
+        type: (finalReason.includes('Renewal') ? 'Renewal' : finalReason.includes('Payment') ? 'Payment' : finalReason.includes('PT') ? 'PT' : 'General') as any,
+        createdAt: new Date().toISOString()
       };
 
       const createFn = createFollowup || followupService.create;
-      const createdRecord = await createFn(payload);
+      await createFn(payload);
 
-      onSuccess(createdRecord);
-      toast.success('Follow-up scheduled successfully!');
+      toast.success('✓ Follow-up scheduled successfully');
       onClose();
-    } catch (err: any) { 
-      toast.error('Failed: ' + (err.response?.data?.error || err.message)); 
-    } finally { 
-      setSaving(false); 
+    } catch (err: any) {
+      toast.error('Failed to schedule follow-up: ' + (err.response?.data?.error || err.message || 'Error occurred'));
+      setIsSubmitting(false);
     }
   };
 
   return (
     <form onSubmit={handleSubmit} className="p-6 space-y-4 text-left">
-      <div className="grid grid-cols-3 gap-2">
-        {['member', 'enquiry', 'employee'].map((type) => (
-          <button key={type} type="button" onClick={() => { setSourceType(type as any); setSelectedId(''); }} className={`py-2 text-center text-xs font-bold rounded-xl border transition-all uppercase cursor-pointer ${sourceType === type ? 'bg-blue-600 text-white border-blue-600' : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'}`}>
-            {type}
-          </button>
-        ))}
+      {/* 1. Member Selector */}
+      <div>
+        <label className="text-xs font-bold text-slate-700 mb-1.5 block">
+          Member <span className="text-blue-600">*</span>
+        </label>
+        <SearchableMemberSelect 
+          members={members} 
+          selectedMemberId={selectedMember?.id || selectedMember?.memberId || ''} 
+          onSelect={(m) => { setSelectedMember(m); if (formErrors.memberId) setFormErrors(prev => ({ ...prev, memberId: '' })); }} 
+        />
+        {formErrors.memberId && (
+          <p className="text-[11px] font-semibold text-red-500 mt-1 flex items-center gap-1">
+            <AlertCircle size={12} /> {formErrors.memberId}
+          </p>
+        )}
       </div>
 
+      {/* 2. Reason */}
       <div>
-        <label className="text-xs font-bold text-slate-600 mb-1.5 block">Select Entity <span className="text-blue-600">*</span></label>
-        <select required value={selectedId} onChange={e => setSelectedId(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-bold text-slate-800 outline-none focus:border-blue-600 cursor-pointer">
-          <option value="">-- Choose {sourceType} --</option>
-          {sourceType === 'member' && members.map(m => <option key={m.id || m.memberId} value={m.id || m.memberId}>{m.name} ({m.phone})</option>)}
-          {sourceType === 'enquiry' && enquiries.map(e => <option key={e.id} value={e.id}>{e.name} ({e.phone})</option>)}
-          {sourceType === 'employee' && employees.map(emp => <option key={emp.id} value={emp.id}>{emp.name || emp.fullName} ({emp.role})</option>)}
+        <label className="text-xs font-bold text-slate-700 mb-1.5 block">
+          Reason <span className="text-blue-600">*</span>
+        </label>
+        <select 
+          value={reason} 
+          onChange={e => { setReason(e.target.value); if (formErrors.reason) setFormErrors(prev => ({ ...prev, reason: '' })); }} 
+          className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-bold text-slate-800 outline-none focus:border-blue-600 cursor-pointer"
+        >
+          {REASON_OPTIONS.map(opt => (
+            <option key={opt} value={opt}>{opt}</option>
+          ))}
         </select>
+
+        {reason === 'Custom' && (
+          <input 
+            type="text" 
+            placeholder="Enter custom follow-up reason..." 
+            value={customReason} 
+            onChange={e => { setCustomReason(e.target.value); if (formErrors.reason) setFormErrors(prev => ({ ...prev, reason: '' })); }} 
+            className={`w-full mt-2 bg-slate-50 border ${formErrors.reason ? 'border-red-500' : 'border-slate-200'} rounded-xl px-4 py-2 text-xs font-semibold text-slate-800 outline-none focus:border-blue-600`}
+          />
+        )}
+        {formErrors.reason && (
+          <p className="text-[11px] font-semibold text-red-500 mt-1 flex items-center gap-1">
+            <AlertCircle size={12} /> {formErrors.reason}
+          </p>
+        )}
       </div>
 
-      <div>
-        <label className="text-xs font-bold text-slate-600 mb-1.5 block">Reason / Title <span className="text-blue-600">*</span></label>
-        <input type="text" required placeholder="e.g. Renewal Discussion" value={title} onChange={e => setTitle(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-bold text-slate-800 outline-none focus:border-blue-600" />
-      </div>
-
+      {/* 3. Date & Time */}
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="text-xs font-bold text-slate-600 mb-1.5 block">Date <span className="text-blue-600">*</span></label>
-          <input type="date" required value={date} onChange={e => setDate(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-bold text-slate-800 outline-none focus:border-blue-600 cursor-pointer" />
+          <label className="text-xs font-bold text-slate-700 mb-1.5 block">
+            Date <span className="text-blue-600">*</span>
+          </label>
+          <input 
+            type="date" 
+            value={date} 
+            onChange={e => { setDate(e.target.value); if (formErrors.date) setFormErrors(prev => ({ ...prev, date: '' })); }} 
+            className={`w-full bg-slate-50 border ${formErrors.date ? 'border-red-500' : 'border-slate-200'} rounded-xl px-4 py-2.5 text-xs font-bold text-slate-800 outline-none focus:border-blue-600 cursor-pointer`}
+          />
+          {formErrors.date && (
+            <p className="text-[11px] font-semibold text-red-500 mt-1 flex items-center gap-1">
+              <AlertCircle size={12} /> {formErrors.date}
+            </p>
+          )}
         </div>
         <div>
-          <label className="text-xs font-bold text-slate-600 mb-1.5 block">Time <span className="text-blue-600">*</span></label>
-          <input type="time" required value={time} onChange={e => setTime(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-bold text-slate-800 outline-none focus:border-blue-600 cursor-pointer" />
+          <label className="text-xs font-bold text-slate-700 mb-1.5 block">
+            Time <span className="text-blue-600">*</span>
+          </label>
+          <input 
+            type="time" 
+            value={time} 
+            onChange={e => { setTime(e.target.value); if (formErrors.time) setFormErrors(prev => ({ ...prev, time: '' })); }} 
+            className={`w-full bg-slate-50 border ${formErrors.time ? 'border-red-500' : 'border-slate-200'} rounded-xl px-4 py-2.5 text-xs font-bold text-slate-800 outline-none focus:border-blue-600 cursor-pointer`}
+          />
+          {formErrors.time && (
+            <p className="text-[11px] font-semibold text-red-500 mt-1 flex items-center gap-1">
+              <AlertCircle size={12} /> {formErrors.time}
+            </p>
+          )}
         </div>
       </div>
 
-      <div>
-        <label className="text-xs font-bold text-slate-600 mb-1.5 block">Assign To</label>
-        <select value={assignedTo} onChange={e => setAssignedTo(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-bold text-slate-800 outline-none focus:border-blue-600 cursor-pointer">
-          <option>Receptionist</option><option>Sales Executive</option><option>Trainer</option><option>Owner</option><option>Manager</option>
-        </select>
+      {/* 4. Assign To & Priority */}
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="text-xs font-bold text-slate-700 mb-1.5 block">Assign To</label>
+          <select 
+            value={assignedTo} 
+            onChange={e => setAssignedTo(e.target.value)} 
+            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-bold text-slate-800 outline-none focus:border-blue-600 cursor-pointer"
+          >
+            {staffOptions.map(staff => (
+              <option key={staff} value={staff}>{staff}</option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="text-xs font-bold text-slate-700 mb-1.5 block">Priority</label>
+          <select 
+            value={priority} 
+            onChange={e => setPriority(e.target.value as any)} 
+            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-bold text-slate-800 outline-none focus:border-blue-600 cursor-pointer"
+          >
+            <option value="Low">Low</option>
+            <option value="Medium">Medium</option>
+            <option value="High">High</option>
+            <option value="Urgent">Urgent</option>
+          </select>
+        </div>
       </div>
 
-      <div className="flex justify-end gap-3 pt-3">
-        <button type="button" onClick={onClose} className="px-5 py-2 border border-slate-200 hover:bg-slate-50 text-slate-600 rounded-xl font-bold text-xs cursor-pointer">Cancel</button>
-        <button type="submit" disabled={saving} className="px-6 py-2 bg-blue-600 text-white rounded-xl font-bold text-xs shadow-md shadow-blue-500/20 hover:bg-blue-700 uppercase transition-all disabled:opacity-50 border-none cursor-pointer">{saving ? 'Saving...' : 'Schedule'}</button>
+      {/* 5. Buttons */}
+      <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+        <button 
+          type="button" 
+          onClick={onClose} 
+          disabled={isSubmitting}
+          className="px-5 py-2.5 border border-slate-200 hover:bg-slate-50 text-slate-600 rounded-xl font-bold text-xs cursor-pointer transition-all disabled:opacity-50"
+        >
+          Cancel
+        </button>
+        <button 
+          type="submit" 
+          disabled={isSubmitting} 
+          className="px-6 py-2.5 bg-blue-600 text-white rounded-xl font-bold text-xs shadow-md shadow-blue-500/20 hover:bg-blue-700 transition-all disabled:opacity-50 border-none cursor-pointer flex items-center gap-2"
+        >
+          {isSubmitting ? (
+            <>
+              <RefreshCw size={14} className="animate-spin" />
+              <span>SCHEDULING...</span>
+            </>
+          ) : (
+            'Schedule Follow-up'
+          )}
+        </button>
       </div>
     </form>
   );

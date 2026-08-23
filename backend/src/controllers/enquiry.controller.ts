@@ -20,6 +20,9 @@ export const createEnquiry = async (req: Request, res: Response) => {
   try {
     const firestore = getFirestoreDb();
     const data = req.body;
+
+    const createdId = data.id || `enq_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+
     const newEnquiry = {
       name: data.name || `${data.firstName || ''} ${data.lastName || ''}`.trim() || 'New Lead',
       firstName: data.firstName || '',
@@ -29,11 +32,11 @@ export const createEnquiry = async (req: Request, res: Response) => {
       email: data.email || '',
       gender: data.gender || 'Male',
       address: data.address || '',
-      nextFollowUp: data.nextFollowUp || data.followupDate || new Date().toISOString().split('T')[0],
+      nextFollowUp: data.nextFollowUp || data.followupDate || '',
       followUpTime: data.followUpTime || data.followupTime || '11:00',
       trialDate: data.trialDate || '',
       status: data.status || 'Pending',
-      assignedTo: data.assignedTo || data.attendedBy || 'Karan Verma',
+      assignedTo: data.assignedTo || data.attendedBy || 'Reception Desk',
       priority: data.priority || 'Warm',
       source: data.source || 'Walk-in',
       interestedPlan: data.interestedPlan || data.inquiryFor || 'Monthly Access',
@@ -42,15 +45,47 @@ export const createEnquiry = async (req: Request, res: Response) => {
       updatedAt: new Date().toISOString()
     };
 
-    let createdId = `enq_${Date.now()}`;
-
     if (firestore) {
-      const docRef = await firestore.collection('enquiries').add(newEnquiry);
-      createdId = docRef.id;
+      await firestore.collection('enquiries').doc(createdId).set(newEnquiry, { merge: true });
+
+      // Automatically sync follow-up if nextFollowUp date exists
+      if (newEnquiry.nextFollowUp && newEnquiry.nextFollowUp.trim() !== '') {
+        const followUpId = `fol_enq_${createdId}`;
+        const priorityMap: Record<string, string> = { Hot: 'High', Warm: 'Medium', Cold: 'Low' };
+        await firestore.collection('followups').doc(followUpId).set({
+          id: followUpId,
+          sourceType: 'enquiry',
+          sourceId: createdId,
+          entityType: 'enquiry',
+          entityId: createdId,
+          enquiryId: createdId,
+          memberId: null,
+          memberName: newEnquiry.name,
+          phone: newEnquiry.phone,
+          title: `Follow-up: ${newEnquiry.name}`,
+          description: newEnquiry.remarks ? `Enquiry remarks: ${newEnquiry.remarks}` : `Lead follow-up for ${newEnquiry.name}`,
+          notes: newEnquiry.remarks ? `Enquiry remarks: ${newEnquiry.remarks}` : `Lead follow-up for ${newEnquiry.name}`,
+          scheduledDate: newEnquiry.nextFollowUp,
+          dueDate: newEnquiry.nextFollowUp,
+          scheduledTime: newEnquiry.followUpTime || '11:00',
+          scheduledTimestamp: new Date(`${newEnquiry.nextFollowUp}T${newEnquiry.followUpTime || '11:00'}`).getTime() || Date.now(),
+          status: 'Pending',
+          priority: priorityMap[newEnquiry.priority] || 'Medium',
+          assignedTo: newEnquiry.assignedTo || 'Reception Desk',
+          type: 'Enquiry',
+          source: 'enquiry',
+          createdAt: new Date().toISOString()
+        }, { merge: true });
+      }
     }
 
     const savedRecord = { id: createdId, ...newEnquiry };
-    mockEnquiries.unshift(savedRecord);
+    const existingIdx = mockEnquiries.findIndex(e => e.id === createdId);
+    if (existingIdx !== -1) {
+      mockEnquiries[existingIdx] = savedRecord;
+    } else {
+      mockEnquiries.unshift(savedRecord);
+    }
     saveMockDb();
 
     res.status(201).json({
@@ -73,6 +108,25 @@ export const updateEnquiry = async (req: Request, res: Response) => {
     const firestore = getFirestoreDb();
     if (firestore) {
       await firestore.collection('enquiries').doc(id).set(updates, { merge: true });
+
+      if (updates.nextFollowUp !== undefined) {
+        const followUpId = `fol_enq_${id}`;
+        if (!updates.nextFollowUp || updates.nextFollowUp.trim() === '') {
+          await firestore.collection('followups').doc(followUpId).delete().catch(() => {});
+        } else {
+          const docSnap = await firestore.collection('enquiries').doc(id).get();
+          const currentData = docSnap.exists ? docSnap.data() : {};
+          const scheduledDate = updates.nextFollowUp;
+          const scheduledTime = updates.followUpTime || currentData?.followUpTime || '11:00';
+          await firestore.collection('followups').doc(followUpId).set({
+            scheduledDate,
+            dueDate: scheduledDate,
+            scheduledTime,
+            scheduledTimestamp: new Date(`${scheduledDate}T${scheduledTime}`).getTime() || Date.now(),
+            updatedAt: new Date().toISOString()
+          }, { merge: true });
+        }
+      }
     }
 
     const idx = mockEnquiries.findIndex(e => e.id === id);
@@ -97,6 +151,7 @@ export const deleteEnquiry = async (req: Request, res: Response) => {
     const firestore = getFirestoreDb();
     if (firestore) {
       await firestore.collection('enquiries').doc(id).delete();
+      await firestore.collection('followups').doc(`fol_enq_${id}`).delete().catch(() => {});
     }
 
     const idx = mockEnquiries.findIndex(e => e.id === id);

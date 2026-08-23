@@ -46,11 +46,16 @@ export const createFollowup = async (req: Request, res: Response) => {
       updatedAt: new Date().toISOString()
     };
 
-    let createdId = `fol_${Date.now()}`;
+    let createdId = data.id || `fol_${Date.now()}`;
 
     if (firestore) {
-      const docRef = await firestore.collection('followups').add(payload);
-      createdId = docRef.id;
+      if (data.id) {
+        await firestore.collection('followups').doc(data.id).set(payload, { merge: true });
+        createdId = data.id;
+      } else {
+        const docRef = await firestore.collection('followups').add(payload);
+        createdId = docRef.id;
+      }
     }
 
     return res.status(201).json({
