@@ -181,6 +181,10 @@ export default function MembersPage() {
   const [showRenewalCenter, setShowRenewalCenter] = useState(false);
   const [renewWizardMember, setRenewWizardMember] = useState<any | null>(null);
 
+  // Delete Member modal state
+  const [deleteMemberTarget, setDeleteMemberTarget] = useState<any | null>(null);
+  const [deletingMember, setDeletingMember] = useState(false);
+
   // Form states for new member
   const [newName, setNewName] = useState("");
   const [newReferralCode, setNewReferralCode] = useState("");
@@ -925,16 +929,8 @@ export default function MembersPage() {
             toast.error('Failed to update status');
           }
         }}
-        onDelete={async (m) => {
-          if (confirm(`Are you sure you want to delete member ${m.name}? This action cannot be undone.`)) {
-            try {
-              await deleteMember(m.id);
-              toast.success(`Member ${m.name} deleted`);
-              fetchMembers();
-            } catch {
-              toast.error('Failed to delete member');
-            }
-          }
+        onDelete={(m) => {
+          setDeleteMemberTarget(m);
         }}
       />
 
@@ -1589,6 +1585,111 @@ export default function MembersPage() {
               >
                 Close Detail View
               </button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ── DELETE MEMBER CONFIRMATION MODAL ── */}
+      <AnimatePresence>
+        {deleteMemberTarget && (
+          <div className="fixed inset-0 z-[300] flex items-center justify-center p-4">
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm"
+              onClick={() => { if (!deletingMember) setDeleteMemberTarget(null); }}
+            />
+
+            {/* Modal Card */}
+            <motion.div
+              initial={{ scale: 0.92, opacity: 0, y: 12 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.92, opacity: 0, y: 12 }}
+              transition={{ type: 'spring', duration: 0.3 }}
+              className="relative bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md z-10 overflow-hidden"
+              onKeyDown={(e) => { if (e.key === 'Escape' && !deletingMember) setDeleteMemberTarget(null); }}
+            >
+              {/* Danger Header Strip */}
+              <div className="bg-rose-50 border-b border-rose-100 px-6 pt-6 pb-5 flex items-start gap-4">
+                <div className="w-11 h-11 rounded-xl bg-rose-100 border border-rose-200 text-rose-600 flex items-center justify-center shrink-0">
+                  <Trash2 size={20} />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-slate-900 text-base leading-tight">Delete Member?</h3>
+                  <p className="text-xs text-slate-500 font-medium mt-1 leading-relaxed">
+                    This will permanently remove the member from the active directory. This action cannot be undone.
+                  </p>
+                </div>
+              </div>
+
+              {/* Member Details Summary */}
+              <div className="px-6 py-4 space-y-3">
+                <div className="bg-slate-50 rounded-xl border border-slate-200 overflow-hidden divide-y divide-slate-100 text-xs">
+                  <div className="flex items-center justify-between px-4 py-2.5">
+                    <span className="text-slate-500 font-semibold">Member Name</span>
+                    <span className="font-extrabold text-slate-900">{deleteMemberTarget.name || '—'}</span>
+                  </div>
+                  <div className="flex items-center justify-between px-4 py-2.5">
+                    <span className="text-slate-500 font-semibold">Member ID</span>
+                    <span className="font-extrabold text-slate-900 font-mono">
+                      #{deleteMemberTarget.clientId || deleteMemberTarget.memberId || deleteMemberTarget.id}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between px-4 py-2.5">
+                    <span className="text-slate-500 font-semibold">Phone</span>
+                    <span className="font-bold text-slate-800">{deleteMemberTarget.phone || '—'}</span>
+                  </div>
+                  <div className="flex items-center justify-between px-4 py-2.5">
+                    <span className="text-slate-500 font-semibold">Membership</span>
+                    <span className="font-bold text-slate-800">{deleteMemberTarget.plan || '—'}</span>
+                  </div>
+                </div>
+
+                {/* Info note */}
+                <div className="flex items-start gap-2.5 bg-amber-50 border border-amber-200 rounded-xl px-3.5 py-3 text-[11px] text-amber-800 font-semibold leading-relaxed">
+                  <AlertTriangle size={14} className="mt-0.5 shrink-0 text-amber-600" />
+                  Payment history and attendance records will be preserved for audit purposes. Only the member profile will be removed.
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="px-6 pb-6 flex gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setDeleteMemberTarget(null)}
+                  disabled={deletingMember}
+                  className="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-700 font-bold text-xs hover:bg-slate-50 cursor-pointer disabled:opacity-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={deletingMember}
+                  onClick={async () => {
+                    const m = deleteMemberTarget;
+                    setDeletingMember(true);
+                    try {
+                      await deleteMember(m.id);
+                      setDeleteMemberTarget(null);
+                      toast.success(`✓ ${m.name} has been removed successfully.`);
+                      fetchMembers();
+                    } catch (err: unknown) {
+                      console.error('[DeleteMember] Firebase error:', err);
+                      toast.error('Unable to delete member. Please try again.');
+                    } finally {
+                      setDeletingMember(false);
+                    }
+                  }}
+                  className="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-xs cursor-pointer disabled:opacity-60 transition-colors flex items-center justify-center gap-1.5 border-none shadow-sm"
+                >
+                  {deletingMember ? (
+                    <><RefreshCw size={13} className="animate-spin" /> Deleting...</>
+                  ) : (
+                    <><Trash2 size={13} /> Delete Member</>
+                  )}
+                </button>
+              </div>
             </motion.div>
           </div>
         )}

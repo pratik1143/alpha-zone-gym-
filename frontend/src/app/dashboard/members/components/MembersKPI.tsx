@@ -1,18 +1,16 @@
 'use client';
 
-import React, { useMemo, useEffect } from 'react';
+import React, { useMemo } from 'react';
 import { Users, CheckCircle2, Clock, Activity, IndianRupee } from 'lucide-react';
 import { useGymStore } from '@/store';
 import { SYSTEM_CONFIG } from '@/config/system';
+import { useTodaysPayments } from '@/hooks/useTodaysPayments';
 
 export default function MembersKPI() {
-  const { members, attendance, payments, fetchPayments } = useGymStore();
+  const { members, attendance } = useGymStore();
 
-  useEffect(() => {
-    if (!payments || payments.length === 0) {
-      fetchPayments?.();
-    }
-  }, [payments, fetchPayments]);
+  // Live payment data — single source of truth (same Firestore listener as Billing/Overview/Dashboard)
+  const { allPayments } = useTodaysPayments();
 
   const stats = useMemo(() => {
     // Current date in Asia/Kolkata timezone
@@ -61,13 +59,15 @@ export default function MembersKPI() {
       }
     });
 
-    // Calculate REAL REVENUE THIS MONTH from actual payment transactions
-    // Strictly exclude historical imports (transactionType = 'historical_import')
+    // Calculate REAL REVENUE THIS MONTH from live Firestore payment transactions.
+    // Uses allPayments from useTodaysPayments hook — same Firestore listener as Billing/Overview.
+    // Excludes: deleted, historical/imported, void, non-paid, outside current IST month.
     const seenPaymentKeys = new Set<string>();
     let revenueThisMonth = 0;
 
-    (payments || []).forEach((p: any) => {
+    (allPayments || []).forEach((p: any) => {
       if (!p || p.isSample || p.isMock) return;
+      // deleted filter is already applied in allPayments (hook filters deleted !== true)
 
       // Exclude historical imported records from current month revenue
       const isHist = p.isHistorical === true || p.imported === true || p.isLegacyImport === true || p.transactionType === 'historical_import';
@@ -76,7 +76,7 @@ export default function MembersKPI() {
       const status = String(p.status || p.paymentStatus || 'paid').toLowerCase();
       if (status !== 'paid' && status !== 'partial') return;
 
-      // Payment date must fall within current calendar month
+      // Payment date must fall within current IST calendar month
       const pDate = String(p.paymentDate || p.date || '').split('T')[0];
       if (!pDate || !pDate.startsWith(currentYearMonth) || pDate > todayStr) return;
 
@@ -95,7 +95,7 @@ export default function MembersKPI() {
       pt: ptMembers,
       revenue: revenueThisMonth
     };
-  }, [members, attendance, payments]);
+  }, [members, attendance, allPayments]);
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
