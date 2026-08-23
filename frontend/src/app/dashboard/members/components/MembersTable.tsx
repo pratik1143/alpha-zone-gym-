@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useMemo, useEffect, useCallback, memo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Search, Filter, MoreHorizontal, Phone, MessageSquare, MapPin, Edit,
   RefreshCw, Snowflake, Trash2, Eye, Fingerprint, ChevronLeft, ChevronRight,
@@ -26,6 +27,16 @@ export interface FilterState {
   joinedTo: string;
   expiryStatus: string;
 }
+
+const getDynamicStatus = (m: any) => {
+  if (m.status === 'blocked' || m.status === 'blacklisted') return 'blocked';
+  if (m.status === 'frozen') return 'frozen';
+  const days = membershipEngine.calculateDaysLeft(m.expiryDate);
+  if (days <= 0) return 'expired';
+  if (days <= 7) return 'urgent';
+  if (days <= 30) return 'expiring_soon';
+  return 'active';
+};
 
 const initialFilterState: FilterState = {
   gender: 'all',
@@ -55,53 +66,18 @@ interface MembersTableProps {
   onMapBiometric?: (m: any) => void;
 }
 
-const getDynamicStatus = (m: any) => {
-  if (m.status === 'blocked' || m.status === 'blacklisted') return 'blocked';
-  if (m.status === 'frozen') return 'frozen';
-  const days = membershipEngine.calculateDaysLeft(m.expiryDate);
-  if (days <= 0) return 'expired';
-  if (days <= 7) return 'urgent';
-  if (days <= 30) return 'expiring_soon';
-  return 'active';
-};
-
-const getRiskLevel = (member: any) => {
-  const days = membershipEngine.calculateDaysLeft(member.expiryDate);
-  const risk = membershipEngine.calculateRenewalRisk(days);
-  if (days < 0) return { label: 'High', color: 'text-red-500', value: '95%' };
-  const config: Record<string, { color: string; value: string }> = {
-    Critical: { color: 'text-red-500', value: '95%' },
-    High:     { color: 'text-red-500', value: '85%' },
-    Medium:   { color: 'text-orange-500', value: '65%' },
-    Low:      { color: 'text-emerald-500', value: '25%' },
-  };
-  return { label: risk, ...(config[risk] || config.Low) };
-};
-
 // Memoized individual row component for smooth 60fps rendering
 const MemberTableRow = memo(function MemberTableRow({
   member,
   isSelected,
   onRowClick,
-  onMapBiometric,
-  onEdit,
-  onSelectMember,
-  onRenew,
-  onFreeze,
-  onDelete
+  onOpenActions,
 }: {
   member: any;
   isSelected: boolean;
   onRowClick: () => void;
-  onMapBiometric?: (m: any) => void;
-  onEdit?: (m: any) => void;
-  onSelectMember: (m: any) => void;
-  onRenew?: (m: any) => void;
-  onFreeze?: (m: any) => void;
-  onDelete?: (m: any) => void;
+  onOpenActions: (m: any, rect: DOMRect) => void;
 }) {
-  const ds = getDynamicStatus(member);
-  const risk = getRiskLevel(member);
   const attScore = calculateRealAttendance(member.joinDate, member.attendanceCount || 0);
   const hasPunched = (member.attendanceCount && member.attendanceCount > 0);
   
@@ -112,15 +88,6 @@ const MemberTableRow = memo(function MemberTableRow({
       : attScore > 40 
         ? '#f59e0b'
         : '#ef4444';
-
-  const statusConfig = {
-    active: { label: 'Healthy', dot: 'bg-emerald-500', text: 'text-emerald-600 bg-emerald-50/50 px-2 py-0.5 rounded-full border border-emerald-100' },
-    expiring_soon: { label: 'Renew Soon', dot: 'bg-orange-500', text: 'text-orange-600 bg-orange-50/50 px-2 py-0.5 rounded-full border border-orange-100' },
-    urgent: { label: 'Urgent', dot: 'bg-red-500', text: 'text-red-600 bg-red-50/50 px-2 py-0.5 rounded-full border border-red-100' },
-    expired: { label: 'Expired', dot: 'bg-slate-400', text: 'text-slate-500 bg-slate-50/50 px-2 py-0.5 rounded-full border border-slate-150' },
-    blocked: { label: 'Blocked', dot: 'bg-black', text: 'text-white bg-black px-2.5 py-1 rounded-full text-[9px] uppercase tracking-wider font-extrabold shadow-sm' },
-    frozen: { label: 'Frozen', dot: 'bg-indigo-400', text: 'text-indigo-600 bg-indigo-50/50 px-2 py-0.5 rounded-full border border-indigo-150' },
-  }[ds] || { label: member.status, dot: 'bg-slate-400', text: 'text-slate-600' };
 
   const amountPaidVal = Number(member.amountPaid !== undefined ? member.amountPaid : (member.paid ?? member.totalPaid ?? member.amount ?? member.price ?? 0));
   const balanceVal = Number(member.balanceAmount !== undefined ? member.balanceAmount : (member.balance ?? member.outstandingBalance ?? 0));
@@ -135,6 +102,14 @@ const MemberTableRow = memo(function MemberTableRow({
 
   const displayClientId = member.clientId ? `AZ-${member.clientId}` : (member.memberId || member.id);
 
+  // Gender resolution (Strict - No guessing or random assigning)
+  const rawGender = String(member.gender || member.sex || '').trim().toLowerCase();
+  const isMale = rawGender === 'male' || rawGender === 'm';
+  const isFemale = rawGender === 'female' || rawGender === 'f';
+  const isOther = rawGender === 'other';
+
+  const phoneDisplay = member.phone || member.mobile || member.phoneNumber || null;
+
   return (
     <tr 
       onClick={onRowClick}
@@ -142,12 +117,13 @@ const MemberTableRow = memo(function MemberTableRow({
         isSelected ? 'bg-indigo-50/40' : ''
       }`}
     >
-      <td className="px-4 py-4" onClick={e => e.stopPropagation()}>
+      {/* Checkbox */}
+      <td className="px-4 py-3.5 w-12" onClick={e => e.stopPropagation()}>
         <input type="checkbox" className="rounded border-slate-300 cursor-pointer" />
       </td>
 
-      {/* Member Profile info */}
-      <td className="px-4 py-4">
+      {/* 1. Member Profile */}
+      <td className="px-4 py-3.5">
         <div className="flex items-center gap-3">
           <div className="relative shrink-0">
             <MemberAvatar member={member} className="w-10 h-10 rounded-full border border-slate-200 shadow-2xs object-cover" size={40} />
@@ -166,17 +142,46 @@ const MemberTableRow = memo(function MemberTableRow({
                 </span>
               )}
             </div>
-            <div className="text-xs text-slate-400 font-mono flex items-center gap-2 mt-0.5">
+            <div className="text-xs text-slate-400 font-mono mt-0.5">
               <span className="font-bold text-slate-700">#{displayClientId}</span>
-              <span>•</span>
-              <span>{member.phone}</span>
             </div>
           </div>
         </div>
       </td>
 
-      {/* Membership Plan & Dates */}
-      <td className="px-4 py-4">
+      {/* 2. Dedicated Phone Number */}
+      <td className="px-4 py-3.5 font-mono text-xs">
+        {phoneDisplay ? (
+          <div className="flex items-center gap-1.5 font-bold text-slate-800">
+            <Phone size={12} className="text-slate-400 shrink-0" />
+            <span>{phoneDisplay}</span>
+          </div>
+        ) : (
+          <span className="text-slate-400 font-mono font-bold text-xs">—</span>
+        )}
+      </td>
+
+      {/* 3. Dedicated Gender */}
+      <td className="px-4 py-3.5 text-center">
+        {isMale ? (
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-blue-50 text-blue-700 border border-blue-200/70">
+            <span>♂</span> Male
+          </span>
+        ) : isFemale ? (
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-pink-50 text-pink-700 border border-pink-200/70">
+            <span>♀</span> Female
+          </span>
+        ) : isOther ? (
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-purple-50 text-purple-700 border border-purple-200/70">
+            Other
+          </span>
+        ) : (
+          <span className="text-slate-400 font-mono font-bold text-xs">—</span>
+        )}
+      </td>
+
+      {/* 4. Membership Plan & Dates */}
+      <td className="px-4 py-3.5">
         <div className="font-bold text-slate-800 text-xs">{member.packageName || member.plan || 'Standard'}</div>
         <div className="text-[11px] text-slate-500 font-mono mt-0.5 flex flex-col gap-0.5">
           {member.startDate && <span>Start: {formatDate(member.startDate)}</span>}
@@ -184,8 +189,8 @@ const MemberTableRow = memo(function MemberTableRow({
         </div>
       </td>
 
-      {/* Assigned Trainer */}
-      <td className="px-4 py-4 text-xs font-bold text-slate-700">
+      {/* 5. Assigned Trainer */}
+      <td className="px-4 py-3.5 text-xs font-bold text-slate-700">
         {member.trainer && member.trainer !== 'Unassigned' ? (
           <span className="inline-flex items-center gap-1 text-slate-800 bg-slate-100 px-2.5 py-1 rounded-lg border border-slate-200">
             <User size={12} className="text-indigo-600" />
@@ -196,8 +201,8 @@ const MemberTableRow = memo(function MemberTableRow({
         )}
       </td>
 
-      {/* Attendance Circular Progress */}
-      <td className="px-4 py-4 text-center">
+      {/* 6. Attendance Circular Progress */}
+      <td className="px-4 py-3.5 text-center">
         <div className="inline-flex items-center justify-center relative">
           <svg className="w-9 h-9">
             <circle cx="18" cy="18" r="14" stroke="#f1f5f9" strokeWidth="3" fill="none" />
@@ -218,10 +223,10 @@ const MemberTableRow = memo(function MemberTableRow({
         </div>
       </td>
 
-      {/* Days Left */}
-      <td className="px-4 py-4 text-center font-mono text-xs font-bold">
+      {/* 7. Days Left */}
+      <td className="px-4 py-3.5 text-center font-mono text-xs font-bold">
         {member.daysLeft < 0 ? (
-          <span className="text-red-500 font-black">Expired {Math.abs(member.daysLeft)}d ago</span>
+          <span className="text-rose-500 font-black">Expired {Math.abs(member.daysLeft)}d ago</span>
         ) : member.daysLeft === 0 ? (
           <span className="text-orange-500 font-black">Expires Today</span>
         ) : (
@@ -229,23 +234,8 @@ const MemberTableRow = memo(function MemberTableRow({
         )}
       </td>
 
-      {/* Renewal Risk */}
-      <td className="px-4 py-4 text-center">
-        <span className={`font-mono text-xs font-black ${risk.color}`}>
-          {risk.label} ({risk.value})
-        </span>
-      </td>
-
-      {/* Status */}
-      <td className="px-4 py-4">
-        <span className={`inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wider ${statusConfig.text}`}>
-          <span className={`w-1.5 h-1.5 rounded-full ${statusConfig.dot}`} />
-          {statusConfig.label}
-        </span>
-      </td>
-
-      {/* Payment / Balance */}
-      <td className="px-4 py-4">
+      {/* 8. Payment / Balance */}
+      <td className="px-4 py-3.5">
         <div className="space-y-1">
           <div className="flex items-center gap-1.5">
             <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-black uppercase tracking-wider border ${payBadgeStyle}`}>
@@ -263,45 +253,21 @@ const MemberTableRow = memo(function MemberTableRow({
         </div>
       </td>
 
-      {/* Actions Dropdown / Quick Buttons */}
-      <td className="px-4 py-4 text-right" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-end gap-1.5">
-          <button 
-            title="View Member Profile"
-            onClick={() => onSelectMember(member)}
-            className="p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer border-0"
-          >
-            <Eye size={14} />
-          </button>
-          <button 
-            title="Edit Member"
-            onClick={() => onEdit ? onEdit(member) : onSelectMember(member)}
-            className="p-1.5 text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors cursor-pointer border-0"
-          >
-            <Edit size={14} />
-          </button>
-          <button 
-            title="Renew Membership"
-            onClick={() => onRenew ? onRenew(member) : null}
-            className="p-1.5 text-emerald-600 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition-colors cursor-pointer border-0"
-          >
-            <RefreshCw size={14} />
-          </button>
-          <button 
-            title={member.status === 'frozen' ? 'Unfreeze Status' : 'Freeze Status'}
-            onClick={() => onFreeze ? onFreeze(member) : null}
-            className="p-1.5 text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors cursor-pointer border-0"
-          >
-            <Snowflake size={14} />
-          </button>
-          <button 
-            title="Delete Member"
-            onClick={() => onDelete ? onDelete(member) : null}
-            className="p-1.5 text-rose-600 bg-rose-50 hover:bg-rose-100 rounded-lg transition-colors cursor-pointer border-0"
-          >
-            <Trash2 size={14} />
-          </button>
-        </div>
+      {/* 9. Single Actions Dropdown Button */}
+      <td className="px-4 py-3.5 text-right" onClick={e => e.stopPropagation()}>
+        <button 
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            const rect = e.currentTarget.getBoundingClientRect();
+            onOpenActions(member, rect);
+          }}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-[#eaf3ff] hover:text-[#0b5cbe] hover:border-[#b9d6f5] text-slate-700 text-xs font-black uppercase tracking-wider transition-all border border-slate-200 cursor-pointer shadow-2xs active:scale-95"
+          title="Member Actions"
+        >
+          <MoreHorizontal size={14} />
+          <span>Actions</span>
+        </button>
       </td>
     </tr>
   );
@@ -317,6 +283,30 @@ export default function MembersTable({
   const [localSearch, setLocalSearch] = useState(search);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
+
+  // Floating Actions Dropdown Menu state
+  const [actionsMenu, setActionsMenu] = useState<{
+    member: any;
+    rect: DOMRect;
+  } | null>(null);
+
+  // Close floating actions menu on outside click or scroll
+  useEffect(() => {
+    if (!actionsMenu) return;
+    const handleClose = (e: MouseEvent | Event) => {
+      const target = e.target as HTMLElement;
+      if (target?.closest('.actions-portal-menu')) return;
+      setActionsMenu(null);
+    };
+    window.addEventListener('scroll', handleClose, true);
+    window.addEventListener('resize', handleClose);
+    window.addEventListener('mousedown', handleClose);
+    return () => {
+      window.removeEventListener('scroll', handleClose, true);
+      window.removeEventListener('resize', handleClose);
+      window.removeEventListener('mousedown', handleClose);
+    };
+  }, [actionsMenu]);
 
   // Advanced 9-Field Filter State
   const [filters, setFilters] = useState<FilterState>(initialFilterState);
@@ -965,16 +955,16 @@ export default function MembersTable({
         <table className="w-full text-left text-sm whitespace-nowrap">
           <thead className="bg-[#0b5cbe] text-[#fdfdfd] font-bold border-b border-[#084a99]">
             <tr>
-              <th className="px-4 py-4 w-12 text-[#fdfdfd]"><input type="checkbox" className="rounded border-slate-300" /></th>
-              <th className="px-4 py-4 text-[#fdfdfd]">Member</th>
-              <th className="px-4 py-4 text-[#fdfdfd]">Membership</th>
-              <th className="px-4 py-4 text-[#fdfdfd]">Trainer</th>
-              <th className="px-4 py-4 text-center text-[#fdfdfd]">Attendance</th>
-              <th className="px-4 py-4 text-center text-[#fdfdfd]">Days Left</th>
-              <th className="px-4 py-4 text-center text-[#fdfdfd]">Renewal Risk</th>
-              <th className="px-4 py-4 text-[#fdfdfd]">Status</th>
-              <th className="px-4 py-4 text-[#fdfdfd]">Payment</th>
-              <th className="px-4 py-4 text-right text-[#fdfdfd]">Actions</th>
+              <th className="px-4 py-3.5 w-12 text-[#fdfdfd]"><input type="checkbox" className="rounded border-slate-300 cursor-pointer" /></th>
+              <th className="px-4 py-3.5 text-[#fdfdfd]">Member</th>
+              <th className="px-4 py-3.5 text-[#fdfdfd]">Phone</th>
+              <th className="px-4 py-3.5 text-center text-[#fdfdfd]">Gender</th>
+              <th className="px-4 py-3.5 text-[#fdfdfd]">Membership</th>
+              <th className="px-4 py-3.5 text-[#fdfdfd]">Trainer</th>
+              <th className="px-4 py-3.5 text-center text-[#fdfdfd]">Attendance</th>
+              <th className="px-4 py-3.5 text-center text-[#fdfdfd]">Days Left</th>
+              <th className="px-4 py-3.5 text-[#fdfdfd]">Payment</th>
+              <th className="px-4 py-3.5 text-right text-[#fdfdfd]">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -1008,18 +998,96 @@ export default function MembersTable({
                   member={member}
                   isSelected={selectedMemberId === member.id}
                   onRowClick={() => router.push(`/dashboard/members/${member.id}`)}
-                  onMapBiometric={onMapBiometric}
-                  onEdit={onEdit}
-                  onSelectMember={onSelectMember}
-                  onRenew={onRenew}
-                  onFreeze={onFreeze}
-                  onDelete={onDelete}
+                  onOpenActions={(m, rect) => setActionsMenu({ member: m, rect })}
                 />
               ))
             )}
           </tbody>
         </table>
       </div>
+
+      {/* Floating Actions Portal Dropdown (Never Clipped by Table Container) */}
+      {actionsMenu && typeof document !== 'undefined' && createPortal(
+        <div
+          className="actions-portal-menu fixed z-[99999] bg-white border border-slate-200 rounded-2xl shadow-[0_15px_40px_rgba(0,0,0,0.18)] py-1.5 w-48 text-left text-xs font-semibold text-slate-800 animate-in fade-in select-none"
+          style={{
+            top: (window.innerHeight - actionsMenu.rect.bottom < 240)
+              ? Math.max(10, actionsMenu.rect.top - 230)
+              : actionsMenu.rect.bottom + 4,
+            left: Math.max(10, Math.min(window.innerWidth - 200, actionsMenu.rect.right - 180)),
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            type="button"
+            onClick={() => {
+              const m = actionsMenu.member;
+              setActionsMenu(null);
+              onSelectMember(m);
+            }}
+            className="w-full px-3.5 py-2 hover:bg-slate-50 flex items-center gap-2.5 text-left border-none bg-transparent cursor-pointer text-slate-700 transition-colors font-bold"
+          >
+            <Eye size={14} className="text-slate-500" />
+            <span>View Profile</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              const m = actionsMenu.member;
+              setActionsMenu(null);
+              if (onEdit) onEdit(m);
+              else onSelectMember(m);
+            }}
+            className="w-full px-3.5 py-2 hover:bg-blue-50 hover:text-blue-700 flex items-center gap-2.5 text-left border-none bg-transparent cursor-pointer text-slate-700 transition-colors font-bold"
+          >
+            <Edit size={14} className="text-blue-600" />
+            <span>Edit Member</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              const m = actionsMenu.member;
+              setActionsMenu(null);
+              if (onRenew) onRenew(m);
+            }}
+            className="w-full px-3.5 py-2 hover:bg-emerald-50 hover:text-emerald-700 flex items-center gap-2.5 text-left border-none bg-transparent cursor-pointer text-slate-700 transition-colors font-bold"
+          >
+            <RefreshCw size={14} className="text-emerald-600" />
+            <span>Renew Membership</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              const m = actionsMenu.member;
+              setActionsMenu(null);
+              if (onFreeze) onFreeze(m);
+            }}
+            className="w-full px-3.5 py-2 hover:bg-indigo-50 hover:text-indigo-700 flex items-center gap-2.5 text-left border-none bg-transparent cursor-pointer text-slate-700 transition-colors font-bold"
+          >
+            <Snowflake size={14} className="text-indigo-600" />
+            <span>{actionsMenu.member.status === 'frozen' ? 'Unfreeze Status' : 'Freeze / Unfreeze'}</span>
+          </button>
+
+          <div className="h-px bg-slate-100 my-1" />
+
+          <button
+            type="button"
+            onClick={() => {
+              const m = actionsMenu.member;
+              setActionsMenu(null);
+              if (onDelete) onDelete(m);
+            }}
+            className="w-full px-3.5 py-2 hover:bg-rose-50 hover:text-rose-700 flex items-center gap-2.5 text-left border-none bg-transparent cursor-pointer text-rose-600 transition-colors font-bold"
+          >
+            <Trash2 size={14} className="text-rose-600" />
+            <span>Delete Member</span>
+          </button>
+        </div>,
+        document.body
+      )}
 
       {/* Pagination Footer */}
       <div className="p-4 border-t border-slate-100 flex flex-wrap items-center justify-between gap-4 text-sm text-slate-500">
