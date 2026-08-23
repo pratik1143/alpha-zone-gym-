@@ -169,22 +169,26 @@ export default function FollowUpManager() {
   const filteredTasks = useMemo(() => {
     let result: FollowUpItem[] = [];
 
-    if (activeTab === 'today') {
-      result = todaysFollowups;
-    } else if (activeTab === 'active') {
-      result = activeFollowups;
-    } else if (activeTab === 'overdue') {
-      result = overdueFollowups;
-    } else if (activeTab === 'history') {
-      result = followups.filter(f => f.status === 'Completed' || f.status === 'Cancelled');
-    }
-
-    // If user explicitly modified the date range pickers in Active or History tab
     if (isCustomDateFilterActive && filterStartDate && filterEndDate) {
-      result = result.filter(f => {
+      // When date range is explicitly selected, filter from all relevant tasks matching that date range
+      const baseList = activeTab === 'history' 
+        ? followups.filter(f => f.status === 'Completed' || f.status === 'Cancelled')
+        : followups.filter(f => f.status !== 'Completed' && f.status !== 'Cancelled');
+
+      result = baseList.filter(f => {
         const itemDate = (f.dueDate || f.scheduledDate || f.date || '').split('T')[0];
         return itemDate >= filterStartDate && itemDate <= filterEndDate;
       });
+    } else {
+      if (activeTab === 'today') {
+        result = todaysFollowups;
+      } else if (activeTab === 'active') {
+        result = activeFollowups;
+      } else if (activeTab === 'overdue') {
+        result = overdueFollowups;
+      } else if (activeTab === 'history') {
+        result = followups.filter(f => f.status === 'Completed' || f.status === 'Cancelled');
+      }
     }
 
     if (filterType !== 'All') {
@@ -397,11 +401,11 @@ export default function FollowUpManager() {
 
       {/* 2. STAT CARDS ROW */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Card 1: Due Today */}
+        {/* Card 1: Today's Queue */}
         <div 
-          onClick={() => { setActiveTab('today'); setIsCustomDateFilterActive(false); }}
+          onClick={() => { setActiveTab('today'); setIsCustomDateFilterActive(false); setFilterStartDate(todayDateStr); setFilterEndDate(todayDateStr); }}
           className={`bg-white p-5 rounded-2xl border transition-all cursor-pointer shadow-xs hover:shadow-md ${
-            activeTab === 'today' ? 'border-blue-600 ring-2 ring-blue-500/20' : 'border-slate-200/80 hover:border-blue-300'
+            activeTab === 'today' && !isCustomDateFilterActive ? 'border-blue-600 ring-2 ring-blue-500/20' : 'border-slate-200/80 hover:border-blue-300'
           }`}
         >
           <div className="flex items-center justify-between">
@@ -414,15 +418,15 @@ export default function FollowUpManager() {
             </div>
           </div>
           <span className="text-[10px] text-blue-600 font-bold mt-2 block">
-            {activeTab === 'today' ? '● Showing Today\'s Queue' : 'Click to view today\'s queue →'}
+            {activeTab === 'today' && !isCustomDateFilterActive ? '● Showing Today\'s Queue' : 'Click to view today\'s queue →'}
           </span>
         </div>
 
         {/* Card 2: Overdue Tasks */}
         <div 
-          onClick={() => { setActiveTab('overdue'); }}
+          onClick={() => { setActiveTab('overdue'); setIsCustomDateFilterActive(false); }}
           className={`bg-white p-5 rounded-2xl border transition-all cursor-pointer shadow-xs hover:shadow-md ${
-            activeTab === 'overdue' ? 'border-red-600 ring-2 ring-red-500/20' : 'border-slate-200/80 hover:border-red-300'
+            activeTab === 'overdue' && !isCustomDateFilterActive ? 'border-red-600 ring-2 ring-red-500/20' : 'border-slate-200/80 hover:border-red-300'
           }`}
         >
           <div className="flex items-center justify-between">
@@ -435,38 +439,50 @@ export default function FollowUpManager() {
             </div>
           </div>
           <span className="text-[10px] text-red-600 font-bold mt-2 block">
-            {activeTab === 'overdue' ? '● Showing Overdue Tasks' : 'Click to view overdue →'}
+            {activeTab === 'overdue' && !isCustomDateFilterActive ? '● Showing Overdue Tasks' : 'Click to view overdue →'}
           </span>
         </div>
 
         {/* Card 3: Completed Today */}
         <div 
-          onClick={() => { setActiveTab('history'); }}
-          className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center justify-between hover:border-emerald-300 transition-all cursor-pointer"
+          onClick={() => { setActiveTab('history'); setIsCustomDateFilterActive(false); }}
+          className={`bg-white p-5 rounded-2xl border transition-all cursor-pointer shadow-xs hover:shadow-md ${
+            activeTab === 'history' && !isCustomDateFilterActive ? 'border-emerald-600 ring-2 ring-emerald-500/20' : 'border-slate-200/80 hover:border-emerald-300'
+          }`}
         >
-          <div>
-            <span className="text-[11px] font-bold uppercase text-slate-400 block tracking-wider">Completed Today</span>
-            <span className="text-2xl font-black text-emerald-600 mt-1 block">{completedTodayCount}</span>
+          <div className="flex items-center justify-between">
+            <div>
+              <span className="text-[11px] font-bold uppercase text-slate-400 block tracking-wider">Completed History</span>
+              <span className="text-2xl font-black text-emerald-600 mt-1 block">{completedTodayCount}</span>
+            </div>
+            <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
+              <CheckCircle2 size={22} />
+            </div>
           </div>
-          <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
-            <CheckCircle2 size={22} />
-          </div>
+          <span className="text-[10px] text-emerald-600 font-bold mt-2 block">
+            {activeTab === 'history' && !isCustomDateFilterActive ? '● Showing Completed History' : 'Click to view history →'}
+          </span>
         </div>
 
         {/* Card 4: Total Active */}
         <div 
-          onClick={() => { setActiveTab('active'); }}
+          onClick={() => { setActiveTab('active'); setIsCustomDateFilterActive(false); }}
           className={`bg-white p-5 rounded-2xl border transition-all cursor-pointer shadow-xs hover:shadow-md ${
-            activeTab === 'active' ? 'border-blue-600 ring-2 ring-blue-500/20' : 'border-slate-200/80 hover:border-blue-300'
+            activeTab === 'active' && !isCustomDateFilterActive ? 'border-blue-600 ring-2 ring-blue-500/20' : 'border-slate-200/80 hover:border-blue-300'
           }`}
         >
-          <div>
-            <span className="text-[11px] font-bold uppercase text-slate-400 block tracking-wider">Total Active</span>
-            <span className="text-2xl font-black text-blue-600 mt-1 block">{totalActiveCount}</span>
+          <div className="flex items-center justify-between">
+            <div>
+              <span className="text-[11px] font-bold uppercase text-slate-400 block tracking-wider">Total Active</span>
+              <span className="text-2xl font-black text-blue-600 mt-1 block">{totalActiveCount}</span>
+            </div>
+            <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
+              <MessageSquare size={22} />
+            </div>
           </div>
-          <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
-            <MessageSquare size={22} />
-          </div>
+          <span className="text-[10px] text-blue-600 font-bold mt-2 block">
+            {activeTab === 'active' && !isCustomDateFilterActive ? '● Showing All Active' : 'Click to view all active →'}
+          </span>
         </div>
       </div>
 
@@ -485,7 +501,7 @@ export default function FollowUpManager() {
             />
           </div>
 
-          {/* Date Picker (Auto-selected to Today) */}
+          {/* Date Picker */}
           <div className="flex items-center gap-1.5 bg-slate-50 p-1 rounded-xl border border-slate-200">
             <input 
               type="date" 
@@ -500,6 +516,20 @@ export default function FollowUpManager() {
               onChange={(e) => { setFilterEndDate(e.target.value); setIsCustomDateFilterActive(true); }}
               className="px-2.5 py-1 text-xs font-bold text-slate-700 bg-transparent outline-none cursor-pointer"
             />
+            {isCustomDateFilterActive && (
+              <button
+                type="button"
+                onClick={() => {
+                  setIsCustomDateFilterActive(false);
+                  setFilterStartDate(todayDateStr);
+                  setFilterEndDate(todayDateStr);
+                }}
+                className="px-1.5 py-0.5 text-[10px] font-extrabold text-blue-600 hover:bg-blue-100 rounded-lg border-none cursor-pointer"
+                title="Reset to default"
+              >
+                Reset
+              </button>
+            )}
           </div>
 
           {/* Type Filter */}

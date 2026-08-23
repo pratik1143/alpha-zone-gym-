@@ -204,8 +204,8 @@ export const followupService = {
           const enqId = docSnap.id;
           const enqStatus = (enq.status || '').toLowerCase();
           const followUpDate = (enq.nextFollowUpDate || enq.nextFollowUp || enq.followupDate || '').split('T')[0];
-
-          if (enqStatus === 'pending' && followUpDate) {
+          const isNotClosed = enqStatus !== 'converted' && enqStatus !== 'closed' && enqStatus !== 'lost' && enqStatus !== 'cancelled';
+          if (isNotClosed && followUpDate) {
             const key = `ENQUIRY_FOLLOWUP_${enqId}_${followUpDate}`;
             if (!existingKeySet.has(key)) {
               existingKeySet.add(key);
@@ -217,10 +217,10 @@ export const followupService = {
                 memberName: enq.name || 'Enquiry Lead',
                 phone: enq.phone || enq.contact || '',
                 type: 'Enquiry',
-                title: 'Enquiry Follow-Up',
-                reason: 'Enquiry Follow-Up',
+                title: `Enquiry Follow-Up: ${enq.name || 'Client'}`,
+                reason: 'Enquiry callback',
                 description: `Enquiry callback for ${enq.name || 'Client'}${enq.duration ? ` (${enq.duration})` : ''}`,
-                notes: `Enquiry callback for ${enq.name || 'Client'}${enq.duration ? ` (${enq.duration})` : ''}`,
+                notes: enq.remarks || `Enquiry callback for ${enq.name || 'Client'}`,
                 priority: enq.priority === 'Hot' ? 'High' : 'Medium',
                 dueDate: followUpDate,
                 scheduledDate: followUpDate,
@@ -228,9 +228,9 @@ export const followupService = {
                 scheduledTimestamp: new Date(`${followUpDate}T${enq.followUpTime || '11:00'}:00+05:30`).getTime() || Date.now(),
                 assignedTo: enq.assignedTo || enq.attendedBy || 'Veer Chand (manager)',
                 status: 'Pending',
-                source: 'automatic',
+                source: 'enquiry',
                 plan: enq.duration || enq.interestedPlan || '',
-                createdAt: new Date().toISOString(),
+                createdAt: enq.createdAt || new Date().toISOString(),
                 updatedAt: new Date().toISOString()
               };
               await setDoc(doc(db, 'followups', key), payload, { merge: true }).catch(() => {});

@@ -309,8 +309,8 @@ export async function generateAutomatedFollowups(todayStrOverride?: string): Pro
     const enqId = enquiry.id;
     const enqStatus = (enquiry.status || '').toLowerCase();
     const followUpDate = enquiry.nextFollowUpDate || enquiry.nextFollowUp || enquiry.followupDate;
-
-    if (enqId && enqStatus === 'pending' && followUpDate && typeof followUpDate === 'string' && followUpDate.trim() !== '') {
+    const isNotClosed = enqStatus !== 'converted' && enqStatus !== 'closed' && enqStatus !== 'lost' && enqStatus !== 'cancelled';
+    if (enqId && isNotClosed && followUpDate && typeof followUpDate === 'string' && followUpDate.trim() !== '') {
       const cleanEnqDate = followUpDate.split('T')[0];
       const autoKey = `ENQUIRY_FOLLOWUP_${enqId}_${cleanEnqDate}`;
 

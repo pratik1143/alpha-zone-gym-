@@ -15,6 +15,7 @@ import toast from 'react-hot-toast';
 import confetti from 'canvas-confetti';
 import { z } from 'zod';
 import { enquiryService, EnquiryItem, EnquiryHistoryItem } from '@/services/enquiry.service';
+import { followupService } from '@/services/followup.service';
 import { getTodayInIndia, isTodayInIndia, isOverdueInIndia, isUpcomingInIndia, formatIndianDate } from '@/lib/dateUtils';
 import { resolveAvatarUrl, MALE_DEFAULT_AVATAR, FEMALE_DEFAULT_AVATAR } from '@/lib/avatar';
 
@@ -395,8 +396,35 @@ export default function EnquiryGodLevelHub() {
         createdAt: new Date().toISOString()
       };
 
-      await enquiryService.create(payload);
-      toast.success('✓ Enquiry created successfully');
+      const created = await enquiryService.create(payload);
+      if (followupDate) {
+        const normDate = followupDate.trim().split('T')[0];
+        const enqId = created?.id || payload.id;
+        const followUpKey = `ENQUIRY_FOLLOWUP_${enqId}_${normDate}`;
+        await followupService.create({
+          id: followUpKey,
+          automationKey: followUpKey,
+          enquiryId: enqId,
+          memberId: null,
+          memberName: fullName,
+          phone: cleanPhone,
+          type: 'Enquiry',
+          title: `Enquiry Follow-Up: ${fullName}`,
+          reason: 'New enquiry follow-up',
+          description: `Initial enquiry callback for ${fullName}${inquiryFor ? ` (${inquiryFor})` : ''}`,
+          notes: remarks.trim() || `New enquiry follow-up for ${fullName}`,
+          priority: priority === 'Hot' ? 'High' : 'Medium',
+          dueDate: normDate,
+          scheduledDate: normDate,
+          scheduledTime: followupTime || '11:00',
+          assignedTo: attendedBy || 'Reception Desk',
+          status: 'Pending',
+          source: 'enquiry',
+          plan: inquiryFor
+        });
+      }
+
+      toast.success('✓ Enquiry lead & follow-up created successfully');
       setShowCreateModal(false);
       resetForm();
     } catch (err: any) {
@@ -458,19 +486,48 @@ export default function EnquiryGodLevelHub() {
     e.preventDefault();
     if (!schedulingEnquiry || !newScheduleDate) return;
     try {
+      const normalizedDate = newScheduleDate.trim().split('T')[0];
+
+      // 1. Update enquiry document
       await enquiryService.update(schedulingEnquiry.id, {
-        nextFollowUpDate: newScheduleDate,
-        nextFollowUp: newScheduleDate,
+        nextFollowUpDate: normalizedDate,
+        nextFollowUp: normalizedDate,
         status: 'Pending',
         updatedAt: new Date().toISOString()
       });
-      toast.success('Follow-up scheduled for ' + formatIndianDate(newScheduleDate));
+
+      // 2. Create canonical follow-up record in followups collection
+      const followUpKey = `ENQUIRY_FOLLOWUP_${schedulingEnquiry.id}_${normalizedDate}`;
+      await followupService.create({
+        id: followUpKey,
+        automationKey: followUpKey,
+        enquiryId: schedulingEnquiry.id,
+        memberId: null,
+        memberName: schedulingEnquiry.name || 'Enquiry Lead',
+        phone: schedulingEnquiry.phone || '',
+        type: 'Enquiry',
+        title: `Enquiry Follow-Up: ${schedulingEnquiry.name || 'Client'}`,
+        reason: 'Scheduled enquiry callback',
+        description: `Enquiry callback for ${schedulingEnquiry.name || 'Client'}${schedulingEnquiry.duration ? ` (${schedulingEnquiry.duration})` : ''}`,
+        notes: schedulingEnquiry.remarks || `Enquiry callback for ${schedulingEnquiry.name || 'Client'}`,
+        priority: schedulingEnquiry.priority === 'Hot' ? 'High' : 'Medium',
+        dueDate: normalizedDate,
+        scheduledDate: normalizedDate,
+        scheduledTime: schedulingEnquiry.followUpTime || '11:00',
+        assignedTo: schedulingEnquiry.assignedTo || 'Reception Desk',
+        status: 'Pending',
+        source: 'enquiry',
+        plan: schedulingEnquiry.duration || schedulingEnquiry.interestedPlan || ''
+      });
+
+      toast.success(`✓ Follow-up scheduled for ${schedulingEnquiry.name} on ${formatIndianDate(normalizedDate)}`);
       setSchedulingEnquiry(null);
       if (selectedEnquiry?.id === schedulingEnquiry.id) {
-        setSelectedEnquiry(prev => prev ? ({ ...prev, nextFollowUpDate: newScheduleDate, status: 'Pending' }) : null);
+        setSelectedEnquiry(prev => prev ? ({ ...prev, nextFollowUpDate: normalizedDate, status: 'Pending' }) : null);
       }
     } catch (err: any) {
-      toast.error('Failed to schedule follow-up: ' + err.message);
+      console.error('Failed to schedule follow-up:', err);
+      toast.error('Unable to schedule follow-up. Please try again.');
     }
   };
 
