@@ -1,21 +1,43 @@
 'use client';
-import React, { useState, useEffect } from 'react';
-import { X, Receipt, Send, CreditCard, User, Smartphone, Banknote, Clock, ChevronDown } from 'lucide-react';
+
+import React, { useState, useEffect, useMemo } from 'react';
+import { 
+  X, Receipt, CreditCard, User, Smartphone, Banknote, Landmark, Clock, 
+  ChevronDown, Check, AlertCircle, Sparkles, Percent, Tag, Calculator
+} from 'lucide-react';
 import { db } from '@/lib/firebase';
-import { collection, addDoc } from 'firebase/firestore';
+import { collection, doc, setDoc, updateDoc } from 'firebase/firestore';
 import { paymentEngine } from '@/lib/engines/paymentEngine';
 import { membershipEngine } from '@/lib/engines/membershipEngine';
 import toast from 'react-hot-toast';
+import { z } from 'zod';
 
 import { useGymStore } from '@/store';
 
-// ── Payment Modes ──────────────────────────────────────
-const PAYMENT_MODES = [
-  { value: 'Cash',        label: 'Cash',      icon: '💵', color: '#16a34a' },
-  { value: 'UPI',         label: 'UPI',       icon: '📱', color: '#7c3aed' },
-  { value: 'Card',        label: 'Card',      icon: '💳', color: '#2563eb' },
-  { value: 'not_paid',    label: 'Not Paid',  icon: '🕐', color: '#dc2626' },
-];
+// ── Zod Validation Schema for Payment Collection ──────────────────────────
+const paymentFormSchema = z.object({
+  memberId: z.string().min(1, 'Please select a member'),
+  plan: z.string().min(1, 'Please select a membership plan or enter description'),
+  baseAmount: z.number().min(1, 'Payment amount must be greater than ₹0'),
+  gstPercent: z.number().min(0, 'GST cannot be negative').default(0),
+  discountAmount: z.number().min(0, 'Discount cannot be negative').default(0),
+  paymentMethod: z.enum(['Cash', 'UPI', 'Card', 'Net Banking'], {
+    message: 'Please select a valid payment method'
+  }),
+  paymentStatus: z.enum(['paid', 'pending'], {
+    message: 'Please select a valid payment status'
+  })
+});
+
+type PaymentFormValues = z.infer<typeof paymentFormSchema>;
+
+// ── Payment Methods with Lucide Icons ──────────────────────────────────────
+const PAYMENT_METHODS = [
+  { value: 'Cash',        label: 'Cash',        icon: Banknote },
+  { value: 'UPI',         label: 'UPI',         icon: Smartphone },
+  { value: 'Card',        label: 'Card',        icon: CreditCard },
+  { value: 'Net Banking', label: 'Net Banking', icon: Landmark },
+] as const;
 
 // ── Member status helper ──────────────────────────────────────────────────────
 function getMemberStatus(m: any): 'active' | 'expiring' | 'expired' | 'frozen' {
@@ -33,392 +55,568 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }
   frozen:   { label: 'Frozen',   color: '#6366f1', bg: '#eef2ff' },
 };
 
-export default function InvoiceBuilderModal({ isOpen, type, onClose, members }: any) {
-  const { plans, fetchPlans } = useGymStore();
+interface InvoiceBuilderModalProps {
+  isOpen: boolean;
+  type: string | null;
+  onClose: () => void;
+  members: any[];
+}
+
+export default function InvoiceBuilderModal({ isOpen, type, onClose, members }: InvoiceBuilderModalProps) {
+  const { plans, fetchPlans, fetchMembers, fetchPayments } = useGymStore();
 
   useEffect(() => {
     fetchPlans();
   }, [fetchPlans]);
 
-  const activePlans = plans && plans.length > 0 ? plans : [
-    { id: '1m', name: '1 Month Standard', price: 2500, durationDays: 30 },
-    { id: '3m', name: '3 Months Pro', price: 6500, durationDays: 90 },
-    { id: '6m', name: '6 Months Elite', price: 11500, durationDays: 180 },
-    { id: '12m', name: '12 Months VIP', price: 18000, durationDays: 365 },
+  // Standard preset plans list matching user request
+  const defaultPlans = [
+    { label: '3+1 Month', months: 4, price: 7500 },
+    { label: '10 Days', months: 0.33, price: 1000 },
+    { label: 'Annual Premium', months: 12, price: 14000 },
+    { label: '1 Month', months: 1, price: 3000 },
+    { label: '3 Months', months: 3, price: 6500 },
+    { label: '6 Months', months: 6, price: 9500 },
   ];
 
-  const SUBSCRIPTION_PLANS = activePlans.map((p: any) => ({
-    label: p.name,
-    months: Math.max(1, Math.round((p.durationDays || 30) / 30)),
-    price: p.price
-  }));
+  const activePlans = useMemo(() => {
+    if (plans && plans.length > 0) {
+      return plans.map((p: any) => ({
+        label: p.name,
+        months: Math.max(0.1, Math.round(((p.durationDays || 30) / 30) * 100) / 100),
+        price: p.price
+      }));
+    }
+    return defaultPlans;
+  }, [plans]);
 
-  const [memberId, setMemberId]       = useState('');
-  const [selectedPlan, setSelectedPlan] = useState<any | null>(null);
-  const [baseAmount, setBaseAmount]   = useState<number | ''>('');
-  const [paymentMode, setPaymentMode] = useState('Cash');
-  const [description, setDescription] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  // Form States
+  const [memberId, setMemberId]               = useState('');
+  const [selectedPlanLabel, setSelectedPlanLabel] = useState('');
+  const [selectedPlanObj, setSelectedPlanObj] = useState<any | null>(null);
+  const [description, setDescription]         = useState('');
+  const [baseAmount, setBaseAmount]           = useState<number | ''>('');
+  const [gstPercent, setGstPercent]           = useState<number | ''>(0);
+  const [discountAmount, setDiscountAmount]   = useState<number | ''>(0);
+  const [paymentMethod, setPaymentMethod]     = useState<'Cash' | 'UPI' | 'Card' | 'Net Banking'>('UPI');
+  const [paymentStatus, setPaymentStatus]     = useState<'paid' | 'pending'>('paid');
+  
+  const [errors, setErrors]                   = useState<Record<string, string>>({});
+  const [isSubmitting, setIsSubmitting]       = useState(false);
 
-  // Reset when modal opens
+  // Reset modal state on open
   useEffect(() => {
     if (isOpen) {
       setMemberId('');
-      setSelectedPlan(null);
-      setBaseAmount('');
-      setPaymentMode('Cash');
+      setSelectedPlanLabel('');
+      setSelectedPlanObj(null);
       setDescription('');
+      setBaseAmount('');
+      setGstPercent(0);
+      setDiscountAmount(0);
+      setPaymentMethod('UPI');
+      setPaymentStatus('paid');
+      setErrors({});
+      setIsSubmitting(false);
     }
   }, [isOpen]);
 
-  // Auto-fill price when plan is selected
+  // Selected Member Object
+  const selectedMember = useMemo(() => {
+    if (!memberId) return null;
+    return members.find((m: any) => m.id === memberId || m.memberId === memberId) || null;
+  }, [memberId, members]);
+
+  // Select Plan Handler
   const handlePlanSelect = (plan: any) => {
-    setSelectedPlan(plan);
+    setSelectedPlanLabel(plan.label);
+    setSelectedPlanObj(plan);
     setBaseAmount(plan.price);
-    if (!description) setDescription(plan.label + ' Membership');
+    setDescription(`${plan.label} Membership`);
+    setErrors(prev => ({ ...prev, plan: '', baseAmount: '' }));
   };
 
-  // Calculations — NO GST
-  const base        = Number(baseAmount) || 0;
-  const gst         = 0;   // GST removed
-  const total       = base; // total = base only
-  const notPaid     = paymentMode === 'not_paid';
-  const paid        = notPaid ? 0 : total;
-  const outstanding = paymentEngine.calculateOutstandingAmount(total, paid);
-  const status      = paymentEngine.calculatePaymentStatus(total, paid);
+  // Mathematical Calculations
+  const baseNum = Number(baseAmount) || 0;
+  const gstPct = Number(gstPercent) || 0;
+  const discNum = Number(discountAmount) || 0;
 
-  // Group members by status
-  const grouped = {
-    active:   members.filter((m: any) => getMemberStatus(m) === 'active'),
-    expiring: members.filter((m: any) => getMemberStatus(m) === 'expiring'),
-    expired:  members.filter((m: any) => getMemberStatus(m) === 'expired'),
-    frozen:   members.filter((m: any) => getMemberStatus(m) === 'frozen'),
-  };
+  const gstVal = Math.round((baseNum * gstPct) / 100);
+  const grandTotal = Math.max(0, (baseNum + gstVal) - discNum);
+  const paidVal = paymentStatus === 'paid' ? grandTotal : 0;
+  const pendingVal = grandTotal - paidVal;
 
-  const handleGenerate = async (e: React.FormEvent) => {
+  // Group members for searchable selection
+  const groupedMembers = useMemo(() => {
+    return {
+      active:   members.filter((m: any) => getMemberStatus(m) === 'active'),
+      expiring: members.filter((m: any) => getMemberStatus(m) === 'expiring'),
+      expired:  members.filter((m: any) => getMemberStatus(m) === 'expired'),
+      frozen:   members.filter((m: any) => getMemberStatus(m) === 'frozen'),
+    };
+  }, [members]);
+
+  const handleGenerateInvoice = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!memberId)   return toast.error('Please select a member');
-    if (base <= 0)   return toast.error('Please select a plan or enter an amount');
+    if (isSubmitting) return;
 
+    // Validate with Zod
+    const rawData = {
+      memberId,
+      plan: description || selectedPlanLabel || (type === 'POS' ? 'Product Purchase' : ''),
+      baseAmount: baseNum,
+      gstPercent: gstPct,
+      discountAmount: discNum,
+      paymentMethod,
+      paymentStatus
+    };
+
+    const result = paymentFormSchema.safeParse(rawData);
+    if (!result.success) {
+      const formattedErrors: Record<string, string> = {};
+      result.error.issues.forEach(issue => {
+        const fieldName = issue.path[0] as string;
+        formattedErrors[fieldName] = issue.message;
+      });
+      setErrors(formattedErrors);
+      toast.error('Please fix validation errors before submitting.');
+      return;
+    }
+
+    setErrors({});
     setIsSubmitting(true);
+
     try {
-      const member = members.find((m: any) => m.id === memberId || m.memberId === memberId);
-      const invoiceNumber = `INV-${Date.now().toString().slice(-6)}`;
-      const todayStr = new Date().toISOString().split('T')[0];
+      // 1. Generate Idempotent Unique Invoice Number (AZ-INV-XXXXXX)
+      const dateCode = new Date().toISOString().replace(/\D/g, '').slice(2, 8); // e.g. 260823
+      const randomCode = Math.floor(1000 + Math.random() * 9000);
+      const invoiceNumber = `AZ-INV-${dateCode}${randomCode}`;
+      const docId = `inv_${invoiceNumber.toLowerCase().replace(/[^a-z0-9]/g, '')}`;
 
-      const payload = {
-        invoice:         invoiceNumber,
-        memberId:        memberId,
-        memberName:      member?.name || 'Member',
-        memberPhone:     member?.phone || '',
-        plan:            description || selectedPlan?.label || 'Membership',
-        amount:          base,
-        gst:             0,
-        total:           Math.round(total),
-        paid:            Math.round(paid),
-        pendingAmount:   Math.round(outstanding),
-        status:          notPaid ? 'pending' : 'paid',
-        method:          notPaid ? 'Not Paid' : paymentMode,
-        date:            todayStr,
+      const todayIso = new Date().toISOString();
+      const todayStr = todayIso.split('T')[0];
+
+      const invoicePayload = {
+        id: docId,
+        invoice: invoiceNumber,
+        invoiceNumber: invoiceNumber,
+        memberId: memberId,
+        memberName: selectedMember?.name || 'Member',
+        memberPhone: selectedMember?.phone || '',
+        plan: rawData.plan,
+        baseAmount: baseNum,
+        gstPercent: gstPct,
+        gstAmount: gstVal,
+        gst: gstVal,
+        discountAmount: discNum,
+        discount: discNum,
+        amount: baseNum,
+        total: grandTotal,
+        grandTotal: grandTotal,
+        paid: paidVal,
+        amountPaid: paidVal,
+        pendingAmount: pendingVal,
+        status: paymentStatus,
+        method: paymentMethod,
+        paymentMethod: paymentMethod,
+        date: todayStr,
+        createdAt: todayIso,
         isRealTimeToday: true,
-        createdAt:       new Date().toISOString(),
       };
 
-      try {
-        const { default: API } = await import('@/services/api');
-        await API.post('/billing', payload);
-      } catch (_) {
-        await addDoc(collection(db, 'payments'), payload);
-        await addDoc(collection(db, 'invoices'), payload);
-      }
+      // 2. Write to Firestore Payments & Invoices collections idempotently
+      await setDoc(doc(db, 'payments', docId), invoicePayload, { merge: true });
+      await setDoc(doc(db, 'invoices', docId), invoicePayload, { merge: true });
 
-      // ── SYNC MEMBER DOCUMENT ──────────────────────────────────────
-      let memberUpdates: any = {
-        invoiceAmount:  base,
-        invoiceGst:     0,
-        invoiceTotal:   Math.round(total),
-        paidAmount:     Math.round(paid),
-        pendingAmount:  Math.round(outstanding),
-        paymentStatus:  notPaid ? 'pending' : 'paid',
-        lastInvoice:    invoiceNumber,
-        lastBillDate:   new Date().toISOString(),
+      // 3. Update Member Record & Sync Membership Expiry
+      const memberUpdates: any = {
+        invoiceAmount: baseNum,
+        invoiceGst: gstVal,
+        invoiceTotal: grandTotal,
+        paidAmount: paidVal,
+        pendingAmount: pendingVal,
+        paymentStatus: paymentStatus,
+        lastInvoice: invoiceNumber,
+        lastBillDate: todayIso,
       };
 
-      // Auto-renew member if a plan is selected
-      if (type !== 'POS' && selectedPlan) {
-        let currentExpiry = member?.expiryDate ? new Date(member.expiryDate) : new Date();
+      if (type !== 'POS' && selectedPlanObj) {
+        const currentExpiry = selectedMember?.expiryDate ? new Date(selectedMember.expiryDate) : new Date();
         const now = new Date();
-        let startDate = currentExpiry < now ? now : currentExpiry;
-        const newExpiry = new Date(startDate.getTime() + selectedPlan.months * 30 * 24 * 60 * 60 * 1000);
+        const startDate = currentExpiry < now ? now : currentExpiry;
+        const addDays = Math.round((selectedPlanObj.months || 1) * 30);
+        const newExpiry = new Date(startDate.getTime() + addDays * 24 * 60 * 60 * 1000);
         
-        memberUpdates.plan = selectedPlan.label;
+        memberUpdates.plan = selectedPlanLabel || selectedPlanObj.label;
         memberUpdates.expiryDate = newExpiry.toISOString().split('T')[0];
         memberUpdates.status = 'active';
       }
 
-      try {
-        const { updateDoc, doc } = await import('firebase/firestore');
-        await updateDoc(doc(db, 'members', memberId), memberUpdates);
-      } catch (_) {}
+      await updateDoc(doc(db, 'members', memberId), memberUpdates);
 
-      // Refresh store state so Overview & Billing update in real-time
-      try {
-        const { useGymStore } = await import('@/store');
-        useGymStore.getState().fetchMembers();
-        useGymStore.getState().fetchPayments();
-      } catch (_) {}
+      // 4. Refresh global state
+      fetchMembers();
+      fetchPayments();
 
-      toast.success(`Payment of ₹${Math.round(paid).toLocaleString('en-IN')} received via ${paymentMode}! Invoice ${invoiceNumber} issued for ${member?.name}! 📄✨`);
+      toast.success(`Invoice ${invoiceNumber} created! ₹${grandTotal.toLocaleString('en-IN')} recorded via ${paymentMethod}. 🎉`);
       onClose();
     } catch (err: any) {
-      toast.error('Failed: ' + err.message);
+      console.error('Invoice creation error:', err);
+      toast.error('Failed to generate invoice: ' + (err.message || 'Unknown error'));
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  if (!isOpen || !type) return null;
-
-  const titleMap: any = {
-    'Gym': 'Gym Membership Bill', 'PT': 'Personal Training Bill',
-    'Group': 'Group Class Bill',  'POS': 'POS / Product Sale',
-  };
+  if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={onClose} />
-      <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl relative flex flex-col max-h-[92vh] overflow-hidden">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+      {/* Backdrop */}
+      <div 
+        className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" 
+        onClick={onClose} 
+      />
 
-        {/* ── Header ─────────────────────────────────────────────── */}
-        <div className="px-6 py-4 flex items-center justify-between bg-gradient-to-r from-pink-500 to-rose-500 text-white flex-shrink-0">
+      {/* Modal Container */}
+      <div className="relative bg-white rounded-2xl w-full max-w-[660px] max-h-[88vh] shadow-2xl border border-slate-200 flex flex-col overflow-hidden text-left z-10 my-auto">
+        
+        {/* ── HEADER (Alpha Zone Blue - NO PINK) ── */}
+        <div className="px-5 py-4 bg-[#0B5CBE] text-white flex items-center justify-between shrink-0 shadow-md">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center">
-              <Receipt size={16} />
+            <div className="w-10 h-10 rounded-xl bg-white/15 backdrop-blur-md flex items-center justify-center border border-white/20 text-white shrink-0">
+              <Receipt size={20} />
             </div>
             <div>
-              <h2 className="font-black text-base">{titleMap[type]}</h2>
-              <p className="text-[9px] font-bold text-pink-100 uppercase tracking-wider">Invoice Generator</p>
+              <h2 className="font-extrabold text-base tracking-tight flex items-center gap-2">
+                💳 Collect Membership Payment
+              </h2>
+              <p className="text-xs text-blue-100 font-medium">
+                Create invoice and record payment
+              </p>
             </div>
           </div>
-          <button onClick={onClose} className="p-2 bg-white/10 hover:bg-white/20 rounded-xl transition-colors">
-            <X size={15} />
+          <button 
+            onClick={onClose}
+            className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-all cursor-pointer border-none"
+          >
+            <X size={18} />
           </button>
         </div>
 
-        {/* ── Body ───────────────────────────────────────────────── */}
-        <div className="p-5 overflow-y-auto flex-1 space-y-4">
-          <form id="invoice-form" onSubmit={handleGenerate} className="space-y-4">
-
-            {/* 1 ── Member Selection (Grouped by Status) ─────────── */}
+        {/* ── SCROLLABLE BODY ── */}
+        <div className="p-5 overflow-y-auto space-y-5 flex-1">
+          <form id="billing-form" onSubmit={handleGenerateInvoice} className="space-y-5">
+            
+            {/* 1. MEMBER SELECTION */}
             <div>
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider flex items-center gap-1.5 mb-1.5">
-                <User size={11} /> Select Member
+              <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center justify-between mb-1.5">
+                <span className="flex items-center gap-1.5">
+                  <User size={14} className="text-[#0B5CBE]" /> Select Member <span className="text-rose-500">*</span>
+                </span>
+                {errors.memberId && (
+                  <span className="text-rose-600 text-[11px] font-semibold flex items-center gap-1">
+                    <AlertCircle size={12} /> {errors.memberId}
+                  </span>
+                )}
               </label>
+
               <select
                 value={memberId}
-                onChange={e => setMemberId(e.target.value)}
-                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 outline-none focus:border-pink-500 focus:bg-white transition-all"
-                required
+                onChange={e => {
+                  setMemberId(e.target.value);
+                  setErrors(prev => ({ ...prev, memberId: '' }));
+                }}
+                className={`w-full px-3.5 py-2.5 bg-slate-50 border rounded-xl text-xs font-bold text-slate-800 outline-none transition-all ${
+                  errors.memberId ? 'border-rose-400 focus:ring-2 focus:ring-rose-200' : 'border-slate-200 focus:border-[#0B5CBE] focus:bg-white'
+                }`}
               >
                 <option value="">-- Choose Member --</option>
-
-                {/* Active */}
-                {grouped.active.length > 0 && (
-                  <optgroup label={`✅ Active (${grouped.active.length})`}>
-                    {grouped.active.map((m: any) => (
-                      <option key={m.id} value={m.id}>{m.name} · {m.phone}</option>
+                {groupedMembers.active.length > 0 && (
+                  <optgroup label={`Active Members (${groupedMembers.active.length})`}>
+                    {groupedMembers.active.map((m: any) => (
+                      <option key={m.id} value={m.id}>{m.name} • {m.phone || 'No phone'}</option>
                     ))}
                   </optgroup>
                 )}
-
-                {/* Expiring Soon */}
-                {grouped.expiring.length > 0 && (
-                  <optgroup label={`⚠️ Expiring Soon (${grouped.expiring.length})`}>
-                    {grouped.expiring.map((m: any) => (
-                      <option key={m.id} value={m.id}>{m.name} · {m.phone}</option>
+                {groupedMembers.expiring.length > 0 && (
+                  <optgroup label={`Expiring Soon (${groupedMembers.expiring.length})`}>
+                    {groupedMembers.expiring.map((m: any) => (
+                      <option key={m.id} value={m.id}>{m.name} • {m.phone || 'No phone'}</option>
                     ))}
                   </optgroup>
                 )}
-
-                {/* Expired */}
-                {grouped.expired.length > 0 && (
-                  <optgroup label={`❌ Expired (${grouped.expired.length})`}>
-                    {grouped.expired.map((m: any) => (
-                      <option key={m.id} value={m.id}>{m.name} · {m.phone}</option>
+                {groupedMembers.expired.length > 0 && (
+                  <optgroup label={`Expired (${groupedMembers.expired.length})`}>
+                    {groupedMembers.expired.map((m: any) => (
+                      <option key={m.id} value={m.id}>{m.name} • {m.phone || 'No phone'}</option>
                     ))}
                   </optgroup>
                 )}
-
-                {/* Frozen */}
-                {grouped.frozen.length > 0 && (
-                  <optgroup label={`❄️ Frozen (${grouped.frozen.length})`}>
-                    {grouped.frozen.map((m: any) => (
-                      <option key={m.id} value={m.id}>{m.name} · {m.phone}</option>
+                {groupedMembers.frozen.length > 0 && (
+                  <optgroup label={`Frozen (${groupedMembers.frozen.length})`}>
+                    {groupedMembers.frozen.map((m: any) => (
+                      <option key={m.id} value={m.id}>{m.name} • {m.phone || 'No phone'}</option>
                     ))}
                   </optgroup>
                 )}
               </select>
 
-              {/* Show selected member status badge */}
-              {memberId && (() => {
-                const m = members.find((x: any) => x.id === memberId);
-                if (!m) return null;
-                const s = getMemberStatus(m);
-                const cfg = STATUS_CONFIG[s];
-                const days = membershipEngine.calculateDaysLeft(m.expiryDate);
+              {/* Selected Member Preview Card */}
+              {selectedMember && (() => {
+                const status = getMemberStatus(selectedMember);
+                const cfg = STATUS_CONFIG[status];
+                const days = membershipEngine.calculateDaysLeft(selectedMember.expiryDate);
                 return (
-                  <div className="mt-2 flex items-center gap-2 px-3 py-2 rounded-xl" style={{ background: cfg.bg }}>
-                    <span className="text-[10px] font-black px-2 py-0.5 rounded-full" style={{ color: cfg.color, background: `${cfg.color}18` }}>{cfg.label}</span>
-                    <span className="text-[10px] font-bold text-slate-500">
-                      {s === 'expired' ? `Expired ${Math.abs(days)} days ago` : s === 'frozen' ? 'Membership Frozen' : `${days} days remaining`}
+                  <div className="mt-2.5 p-3 rounded-xl bg-blue-50/60 border border-blue-100 flex items-center justify-between">
+                    <div>
+                      <div className="text-xs font-black text-slate-900">{selectedMember.name}</div>
+                      <div className="text-[11px] font-medium text-slate-500 flex items-center gap-2 mt-0.5">
+                        <span className="font-mono">ID: {selectedMember.memberId || selectedMember.id?.slice(0,8)}</span>
+                        <span>•</span>
+                        <span>{selectedMember.phone || 'No phone'}</span>
+                      </div>
+                    </div>
+                    <span 
+                      className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider"
+                      style={{ color: cfg.color, backgroundColor: cfg.bg }}
+                    >
+                      {cfg.label} ({days > 0 ? `${days}d left` : 'Expired'})
                     </span>
                   </div>
                 );
               })()}
             </div>
 
-            {/* 2 ── Subscription Plan Selector ───────────────────── */}
-            {type !== 'POS' && (
-              <div>
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-2 block">
-                  Subscription Plan
-                </label>
-                <div className="grid grid-cols-4 gap-2">
-                  {SUBSCRIPTION_PLANS.map(plan => (
+            {/* 2. MEMBERSHIP PLAN SELECTION */}
+            <div>
+              <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center justify-between mb-2">
+                <span>Membership Plan</span>
+                {errors.plan && (
+                  <span className="text-rose-600 text-[11px] font-semibold flex items-center gap-1">
+                    <AlertCircle size={12} /> {errors.plan}
+                  </span>
+                )}
+              </label>
+
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {activePlans.map(plan => {
+                  const isSelected = selectedPlanLabel === plan.label;
+                  return (
                     <button
                       key={plan.label}
                       type="button"
                       onClick={() => handlePlanSelect(plan)}
-                      className={`flex flex-col items-center py-3 px-2 rounded-xl border-2 transition-all cursor-pointer ${
-                        selectedPlan?.label === plan.label
-                          ? 'border-pink-500 bg-pink-50 shadow-md'
-                          : 'border-slate-200 bg-white hover:border-pink-300 hover:bg-pink-50/50'
+                      className={`p-3 rounded-xl border transition-all text-left relative cursor-pointer ${
+                        isSelected 
+                          ? 'border-[#0B5CBE] bg-blue-50/70 text-[#0B5CBE] shadow-sm' 
+                          : 'border-slate-200 bg-white hover:border-slate-300 text-slate-700 hover:bg-slate-50'
                       }`}
                     >
-                      <span className={`text-[10px] font-black ${selectedPlan?.label === plan.label ? 'text-pink-600' : 'text-slate-700'}`}>
+                      {isSelected && (
+                        <div className="absolute top-2 right-2 w-4 h-4 rounded-full bg-[#0B5CBE] text-white flex items-center justify-center">
+                          <Check size={10} strokeWidth={3} />
+                        </div>
+                      )}
+                      <div className={`text-xs font-extrabold ${isSelected ? 'text-[#0B5CBE]' : 'text-slate-900'}`}>
                         {plan.label}
-                      </span>
-                      <span className={`text-xs font-black mt-1 ${selectedPlan?.label === plan.label ? 'text-pink-500' : 'text-slate-500'}`}>
+                      </div>
+                      <div className={`text-sm font-black mt-1 ${isSelected ? 'text-[#0B5CBE]' : 'text-slate-700'}`}>
                         ₹{plan.price.toLocaleString('en-IN')}
-                      </span>
+                      </div>
                     </button>
-                  ))}
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* 3. BILL DETAILS */}
+            <div className="space-y-3 bg-slate-50/80 p-4 rounded-xl border border-slate-200/80">
+              <div className="text-xs font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5 pb-1 border-b border-slate-200">
+                <Calculator size={14} className="text-[#0B5CBE]" /> Bill Details
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {/* Base Amount */}
+                <div>
+                  <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider block mb-1">
+                    Base Amount (₹) <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    placeholder="e.g. 6500"
+                    value={baseAmount}
+                    onChange={e => {
+                      const val = e.target.value === '' ? '' : Number(e.target.value);
+                      setBaseAmount(val);
+                      setErrors(prev => ({ ...prev, baseAmount: '' }));
+                    }}
+                    className={`w-full px-3 py-2 bg-white border rounded-lg text-xs font-bold text-slate-800 outline-none ${
+                      errors.baseAmount ? 'border-rose-400' : 'border-slate-200 focus:border-[#0B5CBE]'
+                    }`}
+                  />
+                  {errors.baseAmount && (
+                    <span className="text-rose-600 text-[10px] font-semibold mt-1 block">{errors.baseAmount}</span>
+                  )}
+                </div>
+
+                {/* GST (%) */}
+                <div>
+                  <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider block mb-1">
+                    GST (%)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    placeholder="0"
+                    value={gstPercent}
+                    onChange={e => setGstPercent(e.target.value === '' ? '' : Number(e.target.value))}
+                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-800 outline-none focus:border-[#0B5CBE]"
+                  />
+                </div>
+
+                {/* Discount (₹) */}
+                <div>
+                  <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider block mb-1">
+                    Discount (₹)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    placeholder="0"
+                    value={discountAmount}
+                    onChange={e => setDiscountAmount(e.target.value === '' ? '' : Number(e.target.value))}
+                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-800 outline-none focus:border-[#0B5CBE]"
+                  />
                 </div>
               </div>
-            )}
 
-            {/* 3 ── Description + Custom Amount ──────────────────── */}
-            <div className="grid grid-cols-2 gap-3">
+              {/* Description */}
               <div>
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1.5 block">
+                <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider block mb-1">
                   Description
                 </label>
                 <input
                   type="text"
-                  placeholder={type === 'POS' ? 'e.g. Whey Protein' : 'e.g. 3 Months VIP'}
+                  placeholder="e.g. 3 Months VIP Membership"
                   value={description}
                   onChange={e => setDescription(e.target.value)}
-                  className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 outline-none focus:border-pink-500 focus:bg-white transition-all"
-                  required
+                  className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-800 outline-none focus:border-[#0B5CBE]"
                 />
               </div>
-              <div>
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1.5 block">
-                  Base Amount (₹)
-                </label>
-                <input
-                  type="number"
-                  value={baseAmount}
-                  onChange={e => setBaseAmount(Number(e.target.value))}
-                  placeholder="Auto-filled from plan"
-                  className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-black text-slate-700 outline-none focus:border-pink-500 focus:bg-white transition-all"
-                  min="1"
-                  required
-                />
-              </div>
-            </div>
 
-            {/* 4 ── Payment Mode ─────────────────────────────────── */}
-            <div>
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-2 block">
-                Payment Mode
-              </label>
-              <div className="grid grid-cols-4 gap-2">
-                {PAYMENT_MODES.map(mode => (
-                  <button
-                    key={mode.value}
-                    type="button"
-                    onClick={() => setPaymentMode(mode.value)}
-                    className={`flex flex-col items-center py-3 px-1 rounded-xl border-2 transition-all cursor-pointer ${
-                      paymentMode === mode.value
-                        ? 'border-slate-900 bg-slate-900 shadow-md'
-                        : 'border-slate-200 bg-white hover:border-slate-400'
-                    }`}
-                  >
-                    <span className="text-lg leading-none">{mode.icon}</span>
-                    <span className={`text-[9px] font-black mt-1 ${paymentMode === mode.value ? 'text-white' : 'text-slate-600'}`}>
-                      {mode.label}
-                    </span>
-                  </button>
-                ))}
-              </div>
-
-              {/* Not Paid warning */}
-              {notPaid && (
-                <div className="mt-2 px-3 py-2 bg-red-50 border border-red-100 rounded-xl">
-                  <p className="text-[10px] font-black text-red-600">
-                    ⚠️ Invoice will be saved as PENDING — ₹{Math.round(total).toLocaleString('en-IN')} outstanding
-                  </p>
+              {/* Breakdown Totals */}
+              <div className="pt-2 border-t border-slate-200 text-xs space-y-1.5">
+                <div className="flex justify-between text-slate-600 font-medium">
+                  <span>Base Amount:</span>
+                  <span className="font-bold text-slate-800">₹{baseNum.toLocaleString('en-IN')}</span>
                 </div>
-              )}
+                {gstPct > 0 && (
+                  <div className="flex justify-between text-slate-600 font-medium">
+                    <span>GST ({gstPct}%):</span>
+                    <span className="font-bold text-slate-800">+ ₹{gstVal.toLocaleString('en-IN')}</span>
+                  </div>
+                )}
+                {discNum > 0 && (
+                  <div className="flex justify-between text-emerald-700 font-medium">
+                    <span>Discount:</span>
+                    <span className="font-bold">- ₹{discNum.toLocaleString('en-IN')}</span>
+                  </div>
+                )}
+                <div className="flex justify-between text-sm font-black text-slate-900 pt-1.5 border-t border-slate-200">
+                  <span>Grand Total:</span>
+                  <span className="text-[#0B5CBE]">₹{grandTotal.toLocaleString('en-IN')}</span>
+                </div>
+              </div>
             </div>
-          </form>
 
-          {/* ── Bill Summary ──────────────────────────────────────── */}
-          <div className="bg-slate-900 rounded-2xl p-4 text-white">
-            <div className="flex justify-between items-center mb-1.5">
-              <span className="text-xs font-bold text-slate-400">Base Amount</span>
-              <span className="text-sm font-black">₹{base.toLocaleString('en-IN')}</span>
+            {/* 4. PAYMENT METHOD (Segmented Buttons - Lucide icons) */}
+            <div>
+              <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block mb-2">
+                Payment Method
+              </label>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {PAYMENT_METHODS.map(m => {
+                  const IconComp = m.icon;
+                  const isSelected = paymentMethod === m.value;
+                  return (
+                    <button
+                      key={m.value}
+                      type="button"
+                      onClick={() => setPaymentMethod(m.value)}
+                      className={`p-3 rounded-xl border flex flex-col items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                        isSelected 
+                          ? 'border-[#0B5CBE] bg-[#0B5CBE] text-white shadow-sm' 
+                          : 'border-slate-200 bg-white hover:border-slate-300 text-slate-700'
+                      }`}
+                    >
+                      <IconComp size={18} />
+                      <span className="text-xs font-bold">{m.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-            <div className="w-full h-px bg-slate-700 mb-3" />
-            <div className="flex justify-between items-center mb-1.5">
-              <span className="text-xs font-bold text-slate-300">Total Invoice</span>
-              <span className="text-lg font-black text-pink-400">₹{Math.round(total).toLocaleString('en-IN')}</span>
+
+            {/* 5. PAYMENT STATUS */}
+            <div>
+              <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block mb-2">
+                Payment Status
+              </label>
+              <div className="flex bg-slate-100 p-1 rounded-xl gap-1">
+                <button
+                  type="button"
+                  onClick={() => setPaymentStatus('paid')}
+                  className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer border-none flex items-center justify-center gap-1.5 ${
+                    paymentStatus === 'paid' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <Check size={14} /> Paid (₹{grandTotal.toLocaleString('en-IN')})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPaymentStatus('pending')}
+                  className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer border-none flex items-center justify-center gap-1.5 ${
+                    paymentStatus === 'pending' ? 'bg-amber-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <Clock size={14} /> Pending (₹{grandTotal.toLocaleString('en-IN')})
+                </button>
+              </div>
             </div>
-            <div className="flex justify-between items-center">
-              <span className="text-xs font-bold text-slate-400">
-                {notPaid ? 'Amount Collected' : 'Outstanding'}
-              </span>
-              <span className={`text-sm font-black ${outstanding > 0 ? 'text-amber-400' : 'text-emerald-400'}`}>
-                ₹{Math.round(notPaid ? 0 : outstanding).toLocaleString('en-IN')}
-              </span>
-            </div>
-            <div className="mt-3 flex items-center justify-between">
-              <span className="text-[9px] text-slate-500 font-bold">
-                {notPaid ? '🕐 Not Paid' : `Paid via ${paymentMode}`}
-              </span>
-              <span className={`text-[9px] uppercase tracking-widest font-black px-2.5 py-1 rounded-full ${
-                status === 'PAID'    ? 'bg-emerald-500/20 text-emerald-400' :
-                status === 'PARTIAL' ? 'bg-amber-500/20 text-amber-400' :
-                                       'bg-red-500/20 text-red-400'
-              }`}>{status}</span>
-            </div>
-          </div>
+
+          </form>
         </div>
 
-        {/* ── Footer ─────────────────────────────────────────────── */}
-        <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-3 flex-shrink-0">
-          <button type="button" onClick={onClose} className="px-5 py-2.5 rounded-xl text-xs font-black text-slate-600 hover:bg-slate-200 transition-colors">
+        {/* ── MODAL ACTIONS (Footer) ── */}
+        <div className="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-3 shrink-0">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer bg-white"
+          >
             Cancel
           </button>
+          
           <button
-            form="invoice-form"
+            form="billing-form"
             type="submit"
             disabled={isSubmitting}
-            className="px-6 py-2.5 rounded-xl text-xs font-black text-white bg-pink-500 hover:bg-pink-600 transition-all shadow-md flex items-center gap-2 disabled:opacity-50"
+            className="px-5 py-2.5 rounded-xl bg-[#0B5CBE] hover:bg-blue-700 text-white text-xs font-bold transition-all shadow-md flex items-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed border-none"
           >
-            <Send size={13} />
-            {isSubmitting ? 'Generating...' : 'Generate & Save Bill'}
+            {isSubmitting ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                Generating...
+              </>
+            ) : (
+              <>
+                <Receipt size={14} />
+                Generate Invoice &amp; Save
+              </>
+            )}
           </button>
         </div>
 
