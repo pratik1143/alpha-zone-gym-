@@ -750,22 +750,9 @@ export default function MembersPage() {
     }
   };
 
-  const handleDeleteMember = async (member: any) => {
-    if (
-      confirm(
-        `Are you sure you want to delete member ${member.name}? This will also delete their fingerprint from all biometric terminals.`,
-      )
-    ) {
-      try {
-        await deleteMember(member.id);
-        toast.success(
-          `Deleted member ${member.name} and queued biometric cleanup.`,
-        );
-        setActiveProfile(null);
-      } catch (err) {
-        toast.error("Failed to delete member");
-      }
-    }
+  const handleDeleteMember = (member: any) => {
+    setDeleteMemberTarget(member);
+    setActiveProfile(null);
   };
 
   const handleResetPassword = async (member: any) => {

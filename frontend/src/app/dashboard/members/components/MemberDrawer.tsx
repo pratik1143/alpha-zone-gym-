@@ -19,12 +19,13 @@ interface MemberDrawerProps {
   onViewProfile?: (m: any) => void;
   onEdit?: (m: any) => void;
   onRenew?: (m: any) => void;
+  onDelete?: (m: any) => void;
 }
 
 import { createPortal } from 'react-dom';
 import { useState, useEffect } from 'react';
 
-export default function MemberDrawer({ member, onClose, onCall, onMessage, onCheckIn, onViewProfile, onEdit, onRenew }: MemberDrawerProps) {
+export default function MemberDrawer({ member, onClose, onCall, onMessage, onCheckIn, onViewProfile, onEdit, onRenew, onDelete }: MemberDrawerProps) {
   const { toggleFreeze, resetPassword, sendCredentials, triggerGateUnlock, enrollFingerprint, deleteBiometric, syncMemberBiometric, deleteMember } = useGymStore();
   const daysLeft = member ? membershipEngine.calculateDaysLeft(member.expiryDate) : 0;
   const isExpiring = daysLeft <= 15 && daysLeft > 0;
@@ -432,17 +433,18 @@ export default function MemberDrawer({ member, onClose, onCall, onMessage, onChe
                 </div>
                 <button 
                   onClick={() => {
-                    if (window.confirm(`Are you sure you want to delete ${member.name}?`)) {
-                      toast.loading('Deleting member...', { id: 'delete' });
+                    if (onDelete) {
+                      onDelete(member);
+                    } else {
                       deleteMember(member.id)
                         .then(() => {
-                          toast.success('Member deleted successfully.', { id: 'delete' });
+                          toast.success('Member deleted successfully.');
                           onClose();
                         })
-                        .catch(() => toast.error('Failed to delete member. Are you an Owner?', { id: 'delete' }));
+                        .catch(() => toast.error('Failed to delete member.'));
                     }
                   }}
-                  className="w-full py-3 mt-2 bg-red-50 text-red-600 hover:bg-red-100 border border-red-100 rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-2"
+                  className="w-full py-3 mt-2 bg-red-50 text-red-600 hover:bg-red-100 border border-red-100 rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-2 cursor-pointer"
                 >
                   <Trash2 size={14} /> Delete Member Account
                 </button>

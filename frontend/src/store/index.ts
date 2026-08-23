@@ -334,11 +334,20 @@ export const useGymStore = create<GymStore>((set, get) => ({
     set({ members: get().members.map(m => m.id === id ? res.data : m) });
   },
   deleteMember: async (id) => {
-    await API.delete(`/members/${id}`);
+    try {
+      await API.delete(`/members/${id}`);
+    } catch (e) {
+      console.warn('API delete member notice:', e);
+    }
+    try {
+      const { db } = await import('@/lib/firebase');
+      const { doc, deleteDoc } = await import('firebase/firestore');
+      await deleteDoc(doc(db, 'members', id));
+    } catch (e) {}
+
     // 1. Immediately remove from local state so UI updates without waiting.
-    set({ members: get().members.filter(m => m.id !== id) });
-    // 2. Invalidate stale-cache timestamp so the next fetchMembers() always
-    //    re-fetches from server, preventing the deleted member from reappearing.
+    set({ members: get().members.filter(m => m.id !== id && m.memberId !== id) });
+    // 2. Invalidate stale-cache timestamp
     _membersCacheTs = 0;
   },
   toggleFreeze: async (id) => {

@@ -632,98 +632,21 @@ export const db = {
   },
 
   getMembers: async (): Promise<any[]> => {
-    // Cache removed to ensure real-time single-source-of-truth from Firestore
+    // Single-source-of-truth from Firestore
     const firestore = getFirestoreDb();
     if (firestore) {
       try {
-        // Fetch both collections in parallel for maximum speed
-        const [membersSnap, usersSnap] = await Promise.all([
-          firestore.collection('members').get(),
-          firestore.collection('users').where('role', '==', 'member').get()
-        ]);
+        const membersSnap = await firestore.collection('members').get();
+        const rawMembers = membersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-        let membersList = membersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        const memberUsers = usersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any[];
-
-        if (membersList.length === 0 && memberUsers.length === 0) {
-          console.log('[Auto-Seed] Firestore members empty. Seeding mockMembers into Firestore...');
-          const batch = firestore.batch();
-          for (const m of mockMembers) {
-            const docRef = firestore.collection('members').doc(m.id);
-            batch.set(docRef, m);
-            membersList.push({ id: m.id, ...m });
-          }
-          await batch.commit().catch(e => console.error('[Auto-Seed] Failed to seed mock members:', e));
-        }
-
-        const existingUids = new Set(membersList.map(m => m.id));
-        const newMembersToCreate: any[] = [];
-
-        for (const u of memberUsers) {
-          if (!existingUids.has(u.id)) {
-            // Provision a default member profile matching this User Auth record
-            const currentYear = new Date().getFullYear();
-            const prefix = `AZ-${currentYear}-`;
-            
-            const count = membersList.length + newMembersToCreate.length + 1;
-            const memberId = `${prefix}${String(count).padStart(4, '0')}`;
-
-            const defaultMember = {
-              memberId,
-              uid: u.id,
-              name: u.name || 'Gym Member',
-              phone: (u as any).phone || '9876543210',
-              email: (u as any).email || '',
-              plan: 'Monthly',
-              joinDate: (u as any).createdAt ? (u as any).createdAt.split('T')[0] : new Date().toISOString().split('T')[0],
-              expiryDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-              status: 'active',
-              branch: (u as any).branch || 'Mohali, Punjab',
-              trainer: '',
-              gender: 'Male',
-              age: 25,
-              weight: 70,
-              height: 170,
-              bmi: 24.2,
-              bloodGroup: 'O+',
-              emergencyContact: '',
-              maritalStatus: 'Single',
-              anniversaryDate: '',
-              birthdayDate: '',
-              medicalConditions: '',
-              fitnessGoal: 'General Fitness',
-              occupation: '',
-              address: '',
-              avatarUrl: (u as any).avatar || '',
-              biometricId: '',
-              daysLeft: 30,
-              attendanceCount: 0,
-              attendanceStreak: 0,
-              streak: 1,
-              password: '1234567',
-              fingerprintStatus: 'none',
-              biometricEnrolled: false
-            };
-            
-            newMembersToCreate.push({ id: u.id, data: defaultMember });
-            membersList.push({ id: u.id, ...defaultMember });
-          }
-        }
-
-        // Commit missing profiles in background so we don't add latency to the API request
-        if (newMembersToCreate.length > 0) {
-          const batch = firestore.batch();
-          newMembersToCreate.forEach(m => {
-            const docRef = firestore.collection('members').doc(m.id);
-            batch.set(docRef, m.data);
-          });
-          batch.commit()
-            .then(() => console.log(`[Self-Healing] Successfully auto-provisioned ${newMembersToCreate.length} missing member profiles.`))
-            .catch(err => console.error('[Self-Healing] Failed to commit auto-provisioned members batch:', err));
-        }
+        // Strict: Filter out soft-deleted members
+        const activeMembers = rawMembers.filter((m: any) => {
+          if (m.isDeleted === true || m.deletedAt) return false;
+          return true;
+        });
 
         const seenKeys = new Set<string>();
-        const deduplicatedList = membersList.filter((m: any) => {
+        const deduplicatedList = activeMembers.filter((m: any) => {
           const key = m.clientId
             ? `cid_${String(m.clientId).trim()}`
             : (m.memberId && m.memberId !== 'AZ-2026-0000')
@@ -950,14 +873,35 @@ export const db = {
   deleteMember: async (id: string): Promise<boolean> => {
     const firestore = getFirestoreDb();
     if (firestore) {
-      await firestore.collection('members').doc(id).delete();
+      const now = new Date().toISOString();
+
+      // 1. Delete from members collection
+      try {
+        await firestore.collection('members').doc(id).delete().catch(() => {});
+        const mDoc = await firestore.collection('members').where('memberId', '==', id).get();
+        mDoc.forEach(d => d.ref.delete().catch(() => {}));
+      } catch (err) {
+        console.warn(`[Firestore] deleteMember doc error for ${id}:`, err);
+      }
+
+      // 2. Remove matching user records in 'users' collection to prevent auto-provision resurrection
+      try {
+        await firestore.collection('users').doc(id).delete().catch(() => {});
+        const userDocs = await firestore.collection('users').where('uid', '==', id).get();
+        userDocs.forEach(d => d.ref.delete().catch(() => {}));
+        const userByMid = await firestore.collection('users').where('memberId', '==', id).get();
+        userByMid.forEach(d => d.ref.delete().catch(() => {}));
+      } catch (err) {
+        console.warn(`[Firestore] deleteMember users purge error for ${id}:`, err);
+      }
+
       if (membersCache) {
-        membersCache = membersCache.filter(m => m.id !== id);
+        membersCache = membersCache.filter(m => m.id !== id && m.memberId !== id);
       }
       return true;
     }
 
-    mockMembers = mockMembers.filter(m => m.id !== id);
+    mockMembers = mockMembers.filter(m => m.id !== id && m.memberId !== id);
     return true;
   },
 
