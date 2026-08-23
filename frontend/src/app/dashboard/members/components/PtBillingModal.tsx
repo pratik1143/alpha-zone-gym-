@@ -175,9 +175,14 @@ export default function PtBillingModal({
         expiryDate,
         invoiceNo,
         invoiceNumber: invoiceNo,
+        transactionType: 'pt_payment',
+        isHistorical: false,
+        imported: false,
+        paymentDate: todayStr,
         status: 'PAID',
         createdAt: new Date().toISOString(),
         date: todayStr,
+        isRealTimeToday: true,
       };
 
       try {

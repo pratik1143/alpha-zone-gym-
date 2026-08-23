@@ -125,12 +125,14 @@ export default function BillingPage() {
   const validPayments = useMemo(() => payments.filter(p => p && p.status !== 'VOID' && p.status !== 'void' && !p.isDuplicate), [payments]);
   const paidPayments = useMemo(() => validPayments.filter(p => (p.status || '').toLowerCase() === 'paid'), [validPayments]);
   
-  // Today's Collection
+  // Today's Collection (Strictly excludes historical/imported payments)
   const todaysRealCollection = useMemo(() => {
     return paidPayments
       .filter(p => {
-        if (!p || p.isLegacyImport) return false;
-        const pDate = String(p.date || p.paymentDate || p.createdAt || '').split('T')[0];
+        if (!p) return false;
+        const isHistorical = p.isHistorical === true || p.imported === true || p.isLegacyImport === true || p.transactionType === 'historical_import';
+        if (isHistorical) return false;
+        const pDate = String(p.paymentDate || p.date || '').split('T')[0];
         return pDate === todayStr || p.isRealTimeToday;
       })
       .reduce((s, p) => s + (Number(p.paid) || Number(p.amountPaid) || Number(p.amount) || 0), 0);
@@ -321,7 +323,7 @@ export default function BillingPage() {
             <h3 className="text-xl font-black text-emerald-600 mt-0.5 leading-none">
               ₹{todaysRealCollection.toLocaleString('en-IN')}
             </h3>
-            <p className="text-[10px] font-semibold text-slate-400 mt-1">Collected today</p>
+            <p className="text-[10px] font-semibold text-emerald-600 mt-1">Collected today</p>
           </div>
         </div>
 
@@ -335,7 +337,7 @@ export default function BillingPage() {
             <h3 className="text-xl font-black text-slate-900 mt-0.5 leading-none">
               ₹{totalCollected.toLocaleString('en-IN')}
             </h3>
-            <p className="text-[10px] font-semibold text-slate-400 mt-1">All-time paid</p>
+            <p className="text-[10px] font-semibold text-slate-400 mt-1">All-time recorded payments</p>
           </div>
         </div>
 
@@ -349,7 +351,7 @@ export default function BillingPage() {
             <h3 className="text-xl font-black text-slate-900 mt-0.5 leading-none">
               ₹{Math.round(avgPayment).toLocaleString('en-IN')}
             </h3>
-            <p className="text-[10px] font-semibold text-slate-400 mt-1">Average transaction</p>
+            <p className="text-[10px] font-semibold text-slate-400 mt-1">All-time average transaction</p>
           </div>
         </div>
 

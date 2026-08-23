@@ -29,6 +29,7 @@ export default function DashboardPage() {
   const [empAttendance, setEmpAttendance] = useState<any[]>([]);
   const [memberAttendance, setMemberAttendance] = useState<any[]>([]);
   const [realtimeMembers, setRealtimeMembers] = useState<any[]>([]);
+  const [realtimePayments, setRealtimePayments] = useState<any[]>([]);
   const [enquiriesCount, setEnquiriesCount] = useState<number>(0);
   const [activeHeatmapFilter, setActiveHeatmapFilter] = useState('Yours');
 
@@ -64,10 +65,17 @@ export default function DashboardPage() {
       }).catch(() => {});
     });
 
+    const unsubPayments = onSnapshot(collection(fDb, 'payments'), (snap) => {
+      setRealtimePayments(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    }, (err) => {
+      console.warn("Firestore payments listener notice:", err);
+    });
+
     return () => {
       unsubEmployees();
       unsubEmpAtt();
       unsubEnq();
+      unsubPayments();
     };
   }, []);
 
@@ -259,28 +267,37 @@ export default function DashboardPage() {
 
   const todaysCollection = useMemo(() => {
     const todayStr = new Date().toISOString().split('T')[0];
-    const todayDateStr = new Date().toDateString();
     const seen = new Set<string>();
 
+    const activeList = (realtimePayments && realtimePayments.length > 0) ? realtimePayments : (payments || []);
     let total = 0;
 
-    if (Array.isArray(payments) && payments.length > 0) {
-      payments.forEach((p: any) => {
+    if (Array.isArray(activeList) && activeList.length > 0) {
+      activeList.forEach((p: any) => {
         if (!p || p.isSample || p.isMock) return;
-        const key = String(p.id || p.invoiceNumber || p.invoice || '').trim();
+
+        // Strictly exclude historical imports from today's collection
+        const isHistorical = p.isHistorical === true || p.imported === true || p.isLegacyImport === true || p.transactionType === 'historical_import';
+        if (isHistorical) return;
+
+        const status = String(p.status || p.paymentStatus || 'paid').toLowerCase();
+        if (status !== 'paid' && status !== 'partial') return;
+
+        // Payment date must match today (NEVER fall back to createdAt)
+        const pDate = String(p.paymentDate || p.date || '').split('T')[0];
+        if (pDate !== todayStr && !p.isRealTimeToday) return;
+
+        const key = String(p.id || p.invoiceNumber || p.invoice || p.idempotencyKey || '').trim();
         if (key && seen.has(key)) return;
         if (key) seen.add(key);
 
-        const pDate = String(p.date || p.createdAt || p.paymentDate || '').split('T')[0];
-        if (pDate === todayStr || (p.createdAt && new Date(p.createdAt).toDateString() === todayDateStr)) {
-          const val = Number(p.amountPaid !== undefined ? p.amountPaid : (p.paid !== undefined ? p.paid : (p.amount || 0)));
-          total += (isNaN(val) ? 0 : val);
-        }
+        const val = Number(p.amountPaid !== undefined ? p.amountPaid : (p.paid !== undefined ? p.paid : (p.amount || 0)));
+        total += (isNaN(val) ? 0 : val);
       });
     }
 
     return total;
-  }, [payments]);
+  }, [realtimePayments, payments]);
 
   const expiringSoonCount = realtimeMembers.filter((m: any) => {
     const left = daysUntilExpiry(m.expiryDate);
@@ -374,7 +391,7 @@ export default function DashboardPage() {
             <h3 className="text-xl font-black text-slate-900 mt-0.5">
               ₹{todaysCollection.toLocaleString('en-IN')}
             </h3>
-            <p className="text-[9px] text-[#0b5cbe] font-bold mt-0.5">Click to view billing ledger →</p>
+            <p className="text-[9px] text-emerald-600 font-bold mt-0.5">Collected today →</p>
           </div>
         </div>
       </div>

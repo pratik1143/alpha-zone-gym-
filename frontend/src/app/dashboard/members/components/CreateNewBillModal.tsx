@@ -238,9 +238,14 @@ export default function CreateNewBillModal({
         method: data.method,
         status: 'paid',
         date: new Date().toISOString().split('T')[0],
+        paymentDate: new Date().toISOString().split('T')[0],
+        transactionType: 'membership_payment',
+        isHistorical: false,
+        imported: false,
         startDate: data.startDate,
         expiryDate: data.expiryDate,
         createdAt: new Date().toISOString(),
+        isRealTimeToday: true,
       };
 
       // 1. Create separate payment invoice document

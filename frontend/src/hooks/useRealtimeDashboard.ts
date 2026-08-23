@@ -145,14 +145,15 @@ export function useRealtimeDashboard() {
       const todayAttendance = attendance.filter(a => isToday(a.checkIn)).length;
 
       // Revenue
+      const isHist = (p: any) => p.isHistorical === true || p.imported === true || p.isLegacyImport === true || p.transactionType === 'historical_import';
       const todayRevenue = payments
-        .filter(p => p.status === 'paid' && isToday(p.createdAt || p.date))
+        .filter(p => p.status === 'paid' && !isHist(p) && isToday(p.paymentDate || p.date))
         .reduce((s, p) => s + (p.amount || 0), 0);
       const monthRevenue = payments
-        .filter(p => p.status === 'paid' && isThisMonth(p.createdAt || p.date))
+        .filter(p => p.status === 'paid' && isThisMonth(p.paymentDate || p.date || p.createdAt))
         .reduce((s, p) => s + (p.amount || 0), 0);
       const yearRevenue = payments
-        .filter(p => p.status === 'paid' && isThisYear(p.createdAt || p.date))
+        .filter(p => p.status === 'paid' && isThisYear(p.paymentDate || p.date || p.createdAt))
         .reduce((s, p) => s + (p.amount || 0), 0);
       const pendingRevenue = payments
         .filter(p => p.status === 'overdue' || p.status === 'pending')

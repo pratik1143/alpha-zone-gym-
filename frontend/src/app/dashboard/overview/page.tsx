@@ -4,13 +4,13 @@ import React, { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuthStore, useGymStore } from "@/store";
 import { db } from "@/lib/firebase";
-import { collection, onSnapshot, query, addDoc } from "firebase/firestore";
+import { collection, addDoc } from "firebase/firestore";
 import {
   UserPlus, Coins, Wallet, Dumbbell, IndianRupee,
   MessageSquare, UserMinus, CalendarCheck, PhoneCall,
-  UserCheck, Users, Activity, TrendingUp, TrendingDown,
-  Zap, Fingerprint, CalendarDays, BarChart3, ArrowUpRight,
-  Shield, Target, Clock, Star, X, CheckCircle2, Calendar, Sparkles
+  UserCheck, Users, Activity,
+  Fingerprint, BarChart3,
+  X, CheckCircle2, Sparkles, AlertCircle, Info
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
@@ -19,6 +19,7 @@ import API from "@/services/api";
 import FinancialAnalytics from "./components/FinancialAnalytics";
 import PresentMembersModal from "./components/PresentMembersModal";
 import { useFollowups } from "@/hooks/useFollowups";
+import { SYSTEM_START_DATE, SYSTEM_CONFIG } from "@/config/system";
 
 const fadeUp = (delay = 0) => ({
   initial: { opacity: 0, y: 18 },
@@ -29,20 +30,55 @@ const fadeUp = (delay = 0) => ({
 export default function OverviewCommandCenter() {
   const { user } = useAuthStore();
   const router = useRouter();
-  const { followups, todaysCount, pendingCount, createFollowup } = useFollowups();
+  const { followups, todaysCount, createFollowup } = useFollowups();
   const {
     members, fetchMembers,
-    attendance, fetchAttendance,
+    attendance,
     payments, fetchPayments,
   } = useGymStore();
 
-  const [fromDate, setFromDate] = useState(new Date().toISOString().split("T")[0]);
-  const [toDate, setToDate] = useState(new Date().toISOString().split("T")[0]);
-  const [dateRange, setDateRange] = useState("Today");
-  const [lastUpdated, setLastUpdated] = useState(0);
+  // Helper to format date in YYYY-MM-DD in Asia/Kolkata timezone
+  const getLocalDateStr = (d: Date = new Date()) => {
+    const formatter = new Intl.DateTimeFormat('en-CA', {
+      timeZone: SYSTEM_CONFIG.timezone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    });
+    return formatter.format(d);
+  };
+
+  const todayStr = useMemo(() => getLocalDateStr(new Date()), []);
+
+  const yesterdayStr = useMemo(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 1);
+    return getLocalDateStr(d);
+  }, []);
+
+  const sevenDaysAgoStr = useMemo(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 6);
+    return getLocalDateStr(d);
+  }, []);
+
+  const thirtyDaysAgoStr = useMemo(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 29);
+    return getLocalDateStr(d);
+  }, []);
+
+  const monthStartStr = useMemo(() => {
+    const d = new Date();
+    d.setDate(1);
+    return getLocalDateStr(d);
+  }, []);
+
+  // Filter Dates State
+  const [fromDate, setFromDate] = useState(todayStr);
+  const [toDate, setToDate] = useState(todayStr);
+  const [dateRange, setDateRange] = useState<string>("Today");
   const [enquiries, setEnquiries] = useState<any[]>([]);
-  const [employees, setEmployees] = useState<any[]>([]);
-  const [now, setNow] = useState(new Date());
 
   // Modal States
   const [showNewEnquiryModal, setShowNewEnquiryModal] = useState(false);
@@ -55,7 +91,7 @@ export default function OverviewCommandCenter() {
   const [enqPhone, setEnqPhone] = useState('');
   const [enqSource, setEnqSource] = useState('Walk-in');
   const [enqPlan, setEnqPlan] = useState('Monthly Standard');
-  const [enqDate, setEnqDate] = useState(new Date().toISOString().split('T')[0]);
+  const [enqDate, setEnqDate] = useState(todayStr);
   const [enqRemarks, setEnqRemarks] = useState('');
   const [enqSaving, setEnqSaving] = useState(false);
 
@@ -63,7 +99,7 @@ export default function OverviewCommandCenter() {
   const [folSourceType, setFolSourceType] = useState<'member' | 'enquiry'>('member');
   const [folSelectedId, setFolSelectedId] = useState('');
   const [folTitle, setFolTitle] = useState('');
-  const [folDate, setFolDate] = useState(new Date().toISOString().split('T')[0]);
+  const [folDate, setFolDate] = useState(todayStr);
   const [folTime, setFolTime] = useState('10:00');
   const [folPriority, setFolPriority] = useState<'High' | 'Medium' | 'Low'>('Medium');
   const [folSaving, setFolSaving] = useState(false);
@@ -76,74 +112,48 @@ export default function OverviewCommandCenter() {
   const [memMethod, setMemMethod] = useState('UPI');
   const [memSaving, setMemSaving] = useState(false);
 
-  const getLocalDateStr = (d: Date = new Date()) => {
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${y}-${m}-${day}`;
+  // Quick preset button click handler (Syncs both state and calendar inputs)
+  const handleSelectPreset = (preset: "Today" | "Yesterday" | "7 Days" | "30 Days" | "Month") => {
+    setDateRange(preset);
+    if (preset === "Today") {
+      setFromDate(todayStr);
+      setToDate(todayStr);
+    } else if (preset === "Yesterday") {
+      setFromDate(yesterdayStr);
+      setToDate(yesterdayStr);
+    } else if (preset === "7 Days") {
+      setFromDate(sevenDaysAgoStr);
+      setToDate(todayStr);
+    } else if (preset === "30 Days") {
+      setFromDate(thirtyDaysAgoStr);
+      setToDate(todayStr);
+    } else if (preset === "Month") {
+      setFromDate(monthStartStr);
+      setToDate(todayStr);
+    }
   };
 
-  const todayStr = useMemo(() => {
-    const d = new Date();
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${y}-${m}-${day}`;
-  }, []);
+  // Calendar date input change handler
+  const handleDateInputChange = (newFrom: string, newTo: string) => {
+    setFromDate(newFrom);
+    setToDate(newTo);
 
-  const yesterdayStr = useMemo(() => {
-    const d = new Date();
-    d.setDate(d.getDate() - 1);
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${y}-${m}-${day}`;
-  }, []);
-
-  const isWithinRange = (dateInput: string | Date | null | undefined, range: string) => {
-    if (!dateInput || dateInput === 'N/A' || dateInput === '—') return false;
-
-    let targetYMD = '';
-    let targetDateObj: Date;
-
-    if (dateInput instanceof Date) {
-      targetDateObj = dateInput;
-      targetYMD = getLocalDateStr(dateInput);
+    if (newFrom === todayStr && newTo === todayStr) {
+      setDateRange("Today");
+    } else if (newFrom === yesterdayStr && newTo === yesterdayStr) {
+      setDateRange("Yesterday");
+    } else if (newFrom === sevenDaysAgoStr && newTo === todayStr) {
+      setDateRange("7 Days");
+    } else if (newFrom === thirtyDaysAgoStr && newTo === todayStr) {
+      setDateRange("30 Days");
+    } else if (newFrom === monthStartStr && newTo === todayStr) {
+      setDateRange("Month");
     } else {
-      const rawStr = String(dateInput).trim();
-      targetYMD = rawStr.includes('T') ? rawStr.split('T')[0] : rawStr;
-      targetDateObj = new Date(rawStr);
+      setDateRange("Custom");
     }
-
-    if (range === "Today") {
-      return targetYMD === todayStr;
-    }
-    if (range === "Yesterday") {
-      return targetYMD === yesterdayStr;
-    }
-
-    if (isNaN(targetDateObj.getTime())) return false;
-    const nowLocal = new Date(); nowLocal.setHours(0, 0, 0, 0);
-
-    if (range === "7 Days") {
-      const p = new Date(nowLocal); p.setDate(p.getDate() - 7);
-      return targetDateObj >= p;
-    }
-    if (range === "30 Days") {
-      const p = new Date(nowLocal); p.setDate(p.getDate() - 30);
-      return targetDateObj >= p;
-    }
-    if (range === "Month") {
-      return targetDateObj.getMonth() === nowLocal.getMonth() && targetDateObj.getFullYear() === nowLocal.getFullYear();
-    }
-    if (range === "Custom") {
-      const s = new Date(fromDate); s.setHours(0, 0, 0, 0);
-      const e = new Date(toDate); e.setHours(23, 59, 59, 999);
-      return targetDateObj >= s && targetDateObj <= e;
-    }
-    return true;
   };
 
+  // Greeting helper
   const getGreeting = () => {
     const h = new Date().getHours();
     if (h < 12) return "Good Morning";
@@ -151,84 +161,64 @@ export default function OverviewCommandCenter() {
     return "Good Evening";
   };
 
-  const PLAN_RATES: Record<string, number> = {
-    '1 Month': 2500, 'Monthly Standard': 2500,
-    '3 Months': 6500, 'Quarterly Prime': 6500,
-    '6 Months': 11500, 'Semi-Annual Pro': 11500,
-    '12 Months': 18000, 'Annual VIP': 18000,
-    'PT': 8000, 'Personal Training (PT)': 8000,
-    'Elite': 12000, 'Lifetime': 50000
-  };
+  // Fetch enquiries on mount
+  useEffect(() => {
+    API.get('/enquiries').then(res => {
+      if (Array.isArray(res.data)) setEnquiries(res.data);
+    }).catch(() => {});
+  }, []);
 
-  // Total Revenue based on all Active Members' subscriptions
-  const totalActiveSubscriptionRevenue = useMemo(() => {
-    return members
-      .filter(m => m.status === 'active')
-      .reduce((sum, m) => {
-        const rate = Number(m.paid) || Number(m.amount) || PLAN_RATES[m.plan] || 2500;
-        return sum + rate;
-      }, 0);
-  }, [members]);
+  // Query Bounds clamped to SYSTEM_START_DATE (2026-08-23) and todayStr (no future data)
+  const queryBounds = useMemo(() => {
+    const s = fromDate || todayStr;
+    const e = toDate || todayStr;
+    const effectiveStart = s > SYSTEM_START_DATE ? s : SYSTEM_START_DATE;
+    const effectiveEnd = e < todayStr ? e : todayStr;
+    // Data exists only if the query window overlaps with [SYSTEM_START_DATE, todayStr]
+    const hasData = e >= SYSTEM_START_DATE && s <= todayStr && effectiveStart <= effectiveEnd;
 
-  // Session Real-Time metrics
-  const [sessionCollection, setSessionCollection] = useState(0);
-  const [sessionNewClients, setSessionNewClients] = useState(0);
+    return {
+      requestedStart: s,
+      requestedEnd: e,
+      effectiveStart,
+      effectiveEnd,
+      hasData
+    };
+  }, [fromDate, toDate, todayStr]);
 
+  // 1. TODAY'S COLLECTION (Floating KPI Strip - strictly for today)
   const todaysRealCollection = useMemo(() => {
     const seen = new Set<string>();
-
-    const fromPayments = payments
-      .filter(p => {
-        if (!p || p.isSample || p.isMock) return false;
-        const status = String(p.status || p.paymentStatus || 'paid').toLowerCase();
-        if (status !== 'paid' && status !== 'partial') return false;
-
-        const pDate = String(p.date || p.paymentDate || p.createdAt || '').split('T')[0];
-        if (pDate !== todayStr) return false;
-
-        const idKey = String(p.id || p.paymentId || p.invoiceNumber || p.invoice || p.idempotencyKey || '').trim();
-        if (idKey && seen.has(idKey)) return false;
-        if (idKey) seen.add(idKey);
-        return true;
-      })
-      .reduce((sum, p) => {
-        const val = Number(p.amountPaid !== undefined ? p.amountPaid : (p.paid !== undefined ? p.paid : (p.amount || 0)));
-        return sum + (isNaN(val) ? 0 : val);
-      }, 0);
-
-    return fromPayments + sessionCollection;
-  }, [payments, todayStr, sessionCollection]);
-
-  // Dynamic Date-Range Filtered Collection (deduplicated)
-  const filteredRangeCollection = useMemo(() => {
-    const seen = new Set<string>();
     return payments
-      .filter(p => {
+      .filter((p: any) => {
         if (!p || p.isSample || p.isMock) return false;
+        const isHistorical = p.isHistorical === true || p.imported === true || p.isLegacyImport === true || p.transactionType === 'historical_import';
+        if (isHistorical) return false;
+
         const status = String(p.status || p.paymentStatus || 'paid').toLowerCase();
         if (status !== 'paid' && status !== 'partial') return false;
 
-        const pDate = p.date || p.paymentDate || p.createdAt;
-        if (!isWithinRange(pDate, dateRange)) return false;
+        const pDate = String(p.paymentDate || p.date || '').split('T')[0];
+        if (pDate !== todayStr && !p.isRealTimeToday) return false;
 
         const idKey = String(p.id || p.paymentId || p.invoiceNumber || p.invoice || p.idempotencyKey || '').trim();
         if (idKey && seen.has(idKey)) return false;
         if (idKey) seen.add(idKey);
         return true;
       })
-      .reduce((sum, p) => {
+      .reduce((sum: number, p: any) => {
         const val = Number(p.amountPaid !== undefined ? p.amountPaid : (p.paid !== undefined ? p.paid : (p.amount || 0)));
         return sum + (isNaN(val) ? 0 : val);
       }, 0);
-  }, [payments, dateRange, fromDate, toDate]);
+  }, [payments, todayStr]);
 
-  // Unique Members Present in the selected date range
-  const todayCheckins = useMemo(() => {
+  // 2. PRESENT TODAY (Unique member attendance for today)
+  const presentTodayCount = useMemo(() => {
     const uniqueMembers = new Set<string>();
-    attendance.forEach(a => {
+    attendance.forEach((a: any) => {
       if (!a) return;
-      const checkInDate = a.checkIn || a.timestamp || a.createdAt;
-      if (isWithinRange(checkInDate, dateRange)) {
+      const checkInDate = String(a.checkIn || a.timestamp || a.createdAt || '').split('T')[0];
+      if (checkInDate === todayStr) {
         const mKey = a.memberId || a.biometricId || a.deviceUserId || a.memberName;
         if (mKey && String(mKey).trim() && !String(mKey).includes('unmapped')) {
           uniqueMembers.add(String(mKey).trim().toLowerCase());
@@ -236,54 +226,126 @@ export default function OverviewCommandCenter() {
       }
     });
     return uniqueMembers.size;
-  }, [attendance, dateRange, fromDate, toDate]);
+  }, [attendance, todayStr]);
 
-  // New Clients registered strictly within selected date range
-  const newClientsCount = useMemo(() => {
-    const count = members.filter(m => {
-      if (!m || m.isSample || m.isMock) return false;
-      const joined = m.joinDate || m.registrationDate || m.createdAt;
-      return isWithinRange(joined, dateRange);
-    }).length;
-
-    return count + (dateRange === "Today" ? sessionNewClients : 0);
-  }, [members, dateRange, fromDate, toDate, sessionNewClients]);
-
-  // Active Members (strictly valid date range & status)
+  // 3. ACTIVE MEMBERS (Current active members count - does NOT fluctuate with date filter)
   const activeMembersCount = useMemo(() => {
-    const today = new Date().toISOString().split('T')[0];
-    return members.filter(m => {
+    return members.filter((m: any) => {
       if (!m) return false;
-      const startDate = m.startDate || m.joinDate;
-      if (startDate && startDate > today) return false;
       if (m.status === 'frozen' || m.status === 'Frozen' || m.status === 'blocked' || m.status === 'Blocked') return false;
-      return m.status === 'active' || m.status === 'Active' || (m.expiryDate && m.expiryDate >= today);
+      return m.status === 'active' || m.status === 'Active' || (m.expiryDate && m.expiryDate >= todayStr);
     }).length;
-  }, [members]);
+  }, [members, todayStr]);
 
-  // Upcoming Members (membership starts in future)
-  const upcomingMembersCount = useMemo(() => {
-    const today = new Date().toISOString().split('T')[0];
-    return members.filter(m => {
-      if (!m) return false;
-      const startDate = m.startDate || m.joinDate;
-      return (startDate && startDate > today) || m.status === 'upcoming' || m.status === 'Upcoming';
-    }).length;
-  }, [members]);
-
-  // Expired Members (expired & not covered by future membership)
+  // 4. EXPIRED MEMBERS
   const expiredMembersCount = useMemo(() => {
-    const today = new Date().toISOString().split('T')[0];
-    return members.filter(m => {
+    return members.filter((m: any) => {
       if (!m) return false;
-      const startDate = m.startDate || m.joinDate;
-      if (startDate && startDate > today) return false;
-      return m.status === 'expired' || m.status === 'Expired' || (m.expiryDate && m.expiryDate < today);
+      if (m.status === 'frozen' || m.status === 'Frozen' || m.status === 'blocked' || m.status === 'Blocked') return false;
+      return m.status === 'expired' || m.status === 'Expired' || (m.expiryDate && m.expiryDate < todayStr);
     }).length;
-  }, [members]);
+  }, [members, todayStr]);
 
-  // Pending Enquiries Count
-  const pendingEnquiriesCount = useMemo(() => enquiries.filter(e => e.status !== "Converted" && e.status !== "Lost").length, [enquiries]);
+  // 5. FILTERED RANGE COLLECTION (Strict real database records only)
+  const filteredRangeCollection = useMemo(() => {
+    if (!queryBounds.hasData) return 0;
+    const seen = new Set<string>();
+
+    return payments
+      .filter((p: any) => {
+        if (!p || p.isSample || p.isMock) return false;
+        const isHist = p.isHistorical === true || p.imported === true || p.isLegacyImport === true || p.transactionType === 'historical_import';
+        if (isHist) return false;
+
+        const status = String(p.status || p.paymentStatus || 'paid').toLowerCase();
+        if (status !== 'paid' && status !== 'partial') return false;
+
+        const pDate = String(p.paymentDate || p.date || '').split('T')[0];
+        if (!pDate) return false;
+        if (pDate < queryBounds.effectiveStart || pDate > queryBounds.effectiveEnd) return false;
+
+        const idKey = String(p.id || p.paymentId || p.invoiceNumber || p.invoice || p.idempotencyKey || '').trim();
+        if (idKey && seen.has(idKey)) return false;
+        if (idKey) seen.add(idKey);
+        return true;
+      })
+      .reduce((sum: number, p: any) => {
+        const val = Number(p.amountPaid !== undefined ? p.amountPaid : (p.paid !== undefined ? p.paid : (p.amount || 0)));
+        return sum + (isNaN(val) ? 0 : val);
+      }, 0);
+  }, [payments, queryBounds]);
+
+  // 6. FILTERED PT COLLECTION
+  const filteredPTCollection = useMemo(() => {
+    if (!queryBounds.hasData) return 0;
+    const seen = new Set<string>();
+
+    return payments
+      .filter((p: any) => {
+        if (!p || p.isSample || p.isMock) return false;
+        const isHist = p.isHistorical === true || p.imported === true || p.isLegacyImport === true || p.transactionType === 'historical_import';
+        if (isHist) return false;
+
+        const isPT = p.isPT || p.billingType === 'PT' || p.packageType === 'PT' || p.invoiceType === 'PT' || p.transactionType === 'pt_payment';
+        if (!isPT) return false;
+
+        const status = String(p.status || p.paymentStatus || 'paid').toLowerCase();
+        if (status !== 'paid' && status !== 'partial') return false;
+
+        const pDate = String(p.paymentDate || p.date || '').split('T')[0];
+        if (pDate < queryBounds.effectiveStart || pDate > queryBounds.effectiveEnd) return false;
+
+        const idKey = String(p.id || p.paymentId || p.invoiceNumber || p.invoice || p.idempotencyKey || '').trim();
+        if (idKey && seen.has(idKey)) return false;
+        if (idKey) seen.add(idKey);
+        return true;
+      })
+      .reduce((sum: number, p: any) => {
+        const val = Number(p.amountPaid !== undefined ? p.amountPaid : (p.paid !== undefined ? p.paid : (p.amount || 0)));
+        return sum + (isNaN(val) ? 0 : val);
+      }, 0);
+  }, [payments, queryBounds]);
+
+  // 7. FILTERED ATTENDANCE CHECK-INS
+  const filteredCheckins = useMemo(() => {
+    if (!queryBounds.hasData) return 0;
+    const uniqueMembers = new Set<string>();
+
+    attendance.forEach((a: any) => {
+      if (!a) return;
+      const checkInDate = String(a.checkIn || a.timestamp || a.createdAt || '').split('T')[0];
+      if (checkInDate >= queryBounds.effectiveStart && checkInDate <= queryBounds.effectiveEnd) {
+        const mKey = a.memberId || a.biometricId || a.deviceUserId || a.memberName;
+        if (mKey && String(mKey).trim() && !String(mKey).includes('unmapped')) {
+          uniqueMembers.add(String(mKey).trim().toLowerCase());
+        }
+      }
+    });
+    return uniqueMembers.size;
+  }, [attendance, queryBounds]);
+
+  // 8. FILTERED FOLLOW-UPS COUNT
+  const filteredFollowupsCount = useMemo(() => {
+    if (!queryBounds.hasData) return 0;
+    return followups.filter((f: any) => {
+      if (!f) return false;
+      const fDate = String(f.scheduledDate || f.followUpDate || f.dueDate || f.date || '').split('T')[0];
+      return fDate >= queryBounds.effectiveStart && fDate <= queryBounds.effectiveEnd;
+    }).length;
+  }, [followups, queryBounds]);
+
+  // 9. FILTERED NEW CLIENTS
+  const filteredNewClients = useMemo(() => {
+    if (!queryBounds.hasData) return 0;
+    return members.filter((m: any) => {
+      if (!m || m.isSample || m.isMock) return false;
+      const joined = String(m.joinDate || m.registrationDate || m.createdAt || '').split('T')[0];
+      return joined >= queryBounds.effectiveStart && joined <= queryBounds.effectiveEnd;
+    }).length;
+  }, [members, queryBounds]);
+
+  // 10. PENDING ENQUIRIES COUNT
+  const pendingEnquiriesCount = useMemo(() => enquiries.filter((e: any) => e.status !== "Converted" && e.status !== "Lost").length, [enquiries]);
 
   // Submit Handlers for Popups
   const handleCreateEnquiry = async (e: React.FormEvent) => {
@@ -332,8 +394,8 @@ export default function OverviewCommandCenter() {
     setFolSaving(true);
     try {
       const targetEntity = folSourceType === 'member'
-        ? members.find(m => m.id === folSelectedId || m.memberId === folSelectedId)
-        : enquiries.find(eq => eq.id === folSelectedId);
+        ? members.find((m: any) => m.id === folSelectedId || m.memberId === folSelectedId)
+        : enquiries.find((eq: any) => eq.id === folSelectedId);
 
       await createFollowup({
         memberId: folSourceType === 'member' ? folSelectedId : null,
@@ -387,6 +449,10 @@ export default function OverviewCommandCenter() {
         paymentStatus: 'paid',
         paymentMethod: memMethod,
         invoiceNumber: invoiceNumber,
+        transactionType: 'membership_payment',
+        isHistorical: false,
+        imported: false,
+        paymentDate: todayStr,
         idempotencyKey: `overview_mem_${memPhone.replace(/\D/g, '')}_${todayStr}`,
         isRealTimeToday: true,
         createdAt: new Date().toISOString()
@@ -408,16 +474,19 @@ export default function OverviewCommandCenter() {
           plan: memPlan,
           method: memMethod,
           invoice: invoiceNumber,
+          invoiceNumber: invoiceNumber,
           status: 'paid',
+          transactionType: 'membership_payment',
+          isHistorical: false,
+          imported: false,
           date: todayStr,
+          paymentDate: todayStr,
+          isRealTimeToday: true,
           createdAt: new Date().toISOString()
         });
       }
 
-      // Realtime Overview Dashboard Updates
-      setSessionNewClients(prev => prev + 1);
-
-      toast.success(`Member registered & Invoice ${invoiceNumber} (${memMethod}) issued! 📄✨`);
+      toast.success(`Member registered & Invoice ${invoiceNumber} issued! 📄✨`);
       setShowNewMemberModal(false);
       setMemName(''); setMemPhone(''); setMemPaid('6500');
       fetchMembers();
@@ -429,40 +498,49 @@ export default function OverviewCommandCenter() {
     }
   };
 
-  const timeStr = now.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true });
-  const dateStr = now.toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+  const headerDateStr = useMemo(() => {
+    return new Date().toLocaleDateString("en-IN", {
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+      timeZone: SYSTEM_CONFIG.timezone
+    });
+  }, []);
 
   return (
     <div className="w-full space-y-4 pb-6 text-left">
 
-      {/* ── HERO HEADER CARD ── */}
-      <div className="relative overflow-hidden bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 rounded-[24px] px-6 pt-6 pb-14 border border-slate-800 shadow-xl">
+      {/* ── HERO HEADER CARD (Clean greeting, quick actions, date range filter with 2-way sync) ── */}
+      <div className="relative overflow-hidden bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 rounded-[24px] px-6 py-6 border border-slate-800 shadow-xl">
         <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
         <div className="absolute -bottom-8 left-0 w-56 h-56 bg-violet-500/10 rounded-full blur-3xl pointer-events-none" />
 
-        <div className="relative z-10 flex flex-col lg:flex-row lg:items-start justify-between gap-6">
-          {/* Greeting */}
-          <div>
-            <motion.div {...fadeUp(0)} className="flex items-center gap-3 mb-2">
+        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+          {/* Greeting & Quick Actions */}
+          <div className="space-y-4">
+            <motion.div {...fadeUp(0)} className="flex items-center gap-3">
               <span className="px-3 py-1 rounded-full bg-white/10 border border-white/10 text-[9.5px] font-black uppercase tracking-[0.15em] text-white/80 flex items-center gap-1.5">
                 <span className="relative flex h-2 w-2">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
                 </span>
-                Live Sync • {lastUpdated < 5 ? "Just now" : `${lastUpdated}s ago`}
+                Live Sync
               </span>
             </motion.div>
 
-            <motion.h1 {...fadeUp(0.05)} className="text-3xl md:text-4xl font-black text-white tracking-tight leading-tight">
-              {getGreeting()}, <span className="text-blue-300 font-extrabold">Mr. Veer Chand</span> 👋
-            </motion.h1>
+            <div>
+              <motion.h1 {...fadeUp(0.05)} className="text-2xl sm:text-3xl md:text-4xl font-black text-white tracking-tight leading-tight">
+                {getGreeting()}, <span className="text-blue-300 font-extrabold">{user?.name || 'Mr. Veer Chand'}</span> 👋
+              </motion.h1>
 
-            <motion.p {...fadeUp(0.1)} className="text-slate-300 text-xs md:text-sm mt-1.5 font-semibold">
-              {dateStr}
-            </motion.p>
+              <motion.p {...fadeUp(0.1)} className="text-slate-300 text-xs md:text-sm mt-1 font-semibold">
+                {headerDateStr}
+              </motion.p>
+            </div>
 
             {/* POPUP ACTION BUTTONS */}
-            <motion.div {...fadeUp(0.15)} className="flex flex-wrap gap-2.5 mt-5">
+            <motion.div {...fadeUp(0.15)} className="flex flex-wrap gap-2.5 pt-1">
               <button
                 onClick={() => router.push('/dashboard/members?action=add')}
                 className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-white bg-[#0b5cbe] hover:bg-[#084a99] border border-blue-400/30 transition-all cursor-pointer shadow-md active:scale-95"
@@ -493,64 +571,69 @@ export default function OverviewCommandCenter() {
             </motion.div>
           </div>
 
-          {/* Date filter + clock */}
-          <motion.div {...fadeUp(0.1)} className="flex flex-col items-end gap-4 shrink-0">
-            <div className="text-right">
-              <div className="text-3xl font-black text-white font-mono tracking-tight">{timeStr}</div>
-              <div className="text-[10px] text-blue-300 font-bold uppercase tracking-widest mt-0.5">ALPHA ZONE GYM</div>
-            </div>
-
-            {/* Date range picker */}
-            <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-2xl p-2">
+          {/* Date Filter & Calendar Controls */}
+          <motion.div {...fadeUp(0.1)} className="flex flex-col items-start lg:items-end gap-3 shrink-0">
+            {/* Calendar Date Inputs */}
+            <div className="flex flex-wrap items-center gap-2 bg-white/5 border border-white/10 rounded-2xl p-2">
               <input
                 type="date"
                 value={fromDate}
-                onChange={e => setFromDate(e.target.value)}
+                onChange={e => handleDateInputChange(e.target.value, toDate)}
                 className="bg-white/10 border border-white/10 text-white text-[11px] font-bold rounded-xl px-3 py-1.5 outline-none focus:border-blue-400 transition-all w-36 cursor-pointer"
               />
               <span className="text-slate-400 text-xs font-black">→</span>
               <input
                 type="date"
                 value={toDate}
-                onChange={e => setToDate(e.target.value)}
+                onChange={e => handleDateInputChange(fromDate, e.target.value)}
                 className="bg-white/10 border border-white/10 text-white text-[11px] font-bold rounded-xl px-3 py-1.5 outline-none focus:border-blue-400 transition-all w-36 cursor-pointer"
               />
               <button
-                onClick={() => setDateRange("Custom")}
-                className="px-4 py-1.5 bg-[#0b5cbe] hover:bg-[#084a99] text-white text-[11px] font-black rounded-xl transition-all tracking-wider uppercase cursor-pointer border-none"
+                onClick={() => handleDateInputChange(fromDate, toDate)}
+                className="px-4 py-1.5 bg-[#0b5cbe] hover:bg-[#084a99] text-white text-[11px] font-black rounded-xl transition-all tracking-wider uppercase cursor-pointer border-none shadow-sm"
               >
                 Filter
               </button>
             </div>
 
-            {/* Quick range pills */}
-            <div className="flex gap-1.5">
-              {["Today", "Yesterday", "7 Days", "30 Days", "Month"].map(r => (
+            {/* Quick Range Preset Buttons */}
+            <div className="flex flex-wrap gap-1.5">
+              {(["Today", "Yesterday", "7 Days", "30 Days", "Month"] as const).map(r => (
                 <button
                   key={r}
-                  onClick={() => setDateRange(r)}
-                  className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer border ${
+                  onClick={() => handleSelectPreset(r)}
+                  className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer border ${
                     dateRange === r
-                      ? "bg-[#0b5cbe] text-white border-[#0b5cbe]"
+                      ? "bg-[#0b5cbe] text-white border-[#0b5cbe] shadow-sm"
                       : "bg-white/10 text-slate-200 border-white/10 hover:border-blue-400/50 hover:text-white"
                   }`}
                 >
                   {r}
                 </button>
               ))}
+              {dateRange === "Custom" && (
+                <span className="px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider bg-emerald-600/30 text-emerald-300 border border-emerald-500/40">
+                  Custom
+                </span>
+              )}
+            </div>
+
+            <div className="text-[10px] font-medium text-slate-400 flex items-center gap-1">
+              <Info size={11} className="text-blue-300" />
+              Software data live from: <span className="text-blue-300 font-bold">23-Aug-2026</span>
             </div>
           </motion.div>
         </div>
       </div>
 
-      {/* ── FLOATING KPI STRIP (REAL CALCULATED METRICS) ── */}
+      {/* ── FLOATING KPI STRIP (REAL CALCULATED OPERATIONAL METRICS) ── */}
       <motion.div
         {...fadeUp(0.2)}
-        className="grid grid-cols-2 sm:grid-cols-4 gap-3 -mt-10 relative z-10"
+        className="grid grid-cols-2 sm:grid-cols-4 gap-3 relative z-10"
       >
         {[
           { title: "Today's Collection", value: `₹${todaysRealCollection.toLocaleString('en-IN')}`, icon: IndianRupee, color: "#0b5cbe" },
-          { title: "Present Today", value: todayCheckins, icon: UserCheck, color: "#0b5cbe", onClick: () => setShowPresentModal(true) },
+          { title: "Present Today", value: presentTodayCount, icon: UserCheck, color: "#0b5cbe", onClick: () => setShowPresentModal(true) },
           { title: "Active Members", value: activeMembersCount, icon: Activity, color: "#0b5cbe" },
           { title: "Today's Follow-ups", value: todaysCount, icon: PhoneCall, color: "#0b5cbe" },
         ].map((kpi, i) => (
@@ -578,7 +661,7 @@ export default function OverviewCommandCenter() {
       {/* ── MAIN BODY ── */}
       <div className="space-y-5">
 
-        {/* ─── SUMMARY STATISTICS (EXACT 13 CARDS MATCHING OLD SOFTWARE) ─── */}
+        {/* ─── SUMMARY STATISTICS (13 REAL-TIME OPERATIONAL CARDS) ─── */}
         <motion.div {...fadeUp(0.25)}>
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
@@ -593,11 +676,26 @@ export default function OverviewCommandCenter() {
             </span>
           </div>
 
+          {/* Clean notice when filtering date before system launch */}
+          {!queryBounds.hasData && (
+            <div className="mb-4 p-4 rounded-2xl bg-amber-50/80 border border-amber-200 text-amber-900 flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+                <AlertCircle size={18} />
+              </div>
+              <div>
+                <h4 className="text-xs font-bold text-amber-900">No activity recorded for this period</h4>
+                <p className="text-[11px] text-amber-700 font-medium mt-0.5">
+                  No attendance, billing or follow-up activity was recorded during {fromDate} to {toDate}. Software data started fresh on 23-Aug-2026.
+                </p>
+              </div>
+            </div>
+          )}
+
           <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-4">
             {/* Row 1 */}
             <SummaryStatCard
               title="New clients"
-              value={newClientsCount}
+              value={filteredNewClients}
               icon={Dumbbell}
               color="#0b5cbe"
               lineAccentColor="#0b5cbe"
@@ -618,7 +716,7 @@ export default function OverviewCommandCenter() {
             />
             <SummaryStatCard
               title="Total PT Collection"
-              value="₹0"
+              value={`₹${filteredPTCollection.toLocaleString('en-IN')}`}
               icon={Sparkles}
               color="#0b5cbe"
               lineAccentColor="#0040d0"
@@ -657,7 +755,7 @@ export default function OverviewCommandCenter() {
             {/* Row 3 */}
             <SummaryStatCard
               title="Profile Created clients"
-              value={newClientsCount}
+              value={filteredNewClients}
               icon={UserCheck}
               color="#0b5cbe"
               lineAccentColor="#084a99"
@@ -671,14 +769,14 @@ export default function OverviewCommandCenter() {
             />
             <SummaryStatCard
               title="Follow-ups"
-              value={todaysCount}
+              value={filteredFollowupsCount}
               icon={PhoneCall}
               color="#0b5cbe"
               lineAccentColor="#0b5cbe"
             />
             <SummaryStatCard
               title="Today Present Client"
-              value={todayCheckins}
+              value={filteredCheckins}
               icon={Users}
               color="#0b5cbe"
               lineAccentColor="#084a99"
@@ -696,9 +794,13 @@ export default function OverviewCommandCenter() {
           </div>
         </motion.div>
 
-        {/* ─── FINANCIAL ANALYTICS (FULL WIDTH) ─── */}
+        {/* ─── FINANCIAL ANALYTICS (FULL WIDTH - REAL DATA ONLY) ─── */}
         <motion.div {...fadeUp(0.3)} className="w-full">
-          <FinancialAnalytics />
+          <FinancialAnalytics
+            fromDate={fromDate}
+            toDate={toDate}
+            dateRangeTitle={dateRange}
+          />
         </motion.div>
 
       </div>
@@ -801,8 +903,8 @@ export default function OverviewCommandCenter() {
                   <label className="text-xs font-bold text-slate-600 block mb-1">Select Client <span className="text-blue-600">*</span></label>
                   <select required value={folSelectedId} onChange={e => setFolSelectedId(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-bold text-slate-800 outline-none focus:border-blue-600 cursor-pointer">
                     <option value="">-- Select {folSourceType} --</option>
-                    {folSourceType === 'member' && members.map(m => <option key={m.id || m.memberId} value={m.id || m.memberId}>{m.name} ({m.phone})</option>)}
-                    {folSourceType === 'enquiry' && enquiries.map(eq => <option key={eq.id} value={eq.id}>{eq.name} ({eq.phone})</option>)}
+                    {folSourceType === 'member' && members.map((m: any) => <option key={m.id || m.memberId} value={m.id || m.memberId}>{m.name} ({m.phone})</option>)}
+                    {folSourceType === 'enquiry' && enquiries.map((eq: any) => <option key={eq.id} value={eq.id}>{eq.name} ({eq.phone})</option>)}
                   </select>
                 </div>
 

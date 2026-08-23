@@ -44,6 +44,10 @@ export const createInvoice = async (req: Request, res: Response) => {
     );
 
     const todayYMD = new Date().toISOString().split('T')[0];
+    const txType = req.body.transactionType || (req.body.billingType === 'PT' || req.body.invoiceType === 'PT' ? 'pt_payment' : (req.body.type === 'POS' ? 'other_payment' : 'membership_payment'));
+    const isHist = req.body.isHistorical ?? (txType === 'historical_import' || req.body.imported || false);
+    const invoiceDate = date || todayYMD;
+
     const invoice = await db.addPayment({
       memberId: m?.id || memberId || `m_${Date.now()}`,
       memberName: m?.name || memberName || 'Gym Member',
@@ -62,9 +66,13 @@ export const createInvoice = async (req: Request, res: Response) => {
       plan: plan || m?.plan || 'Monthly Standard',
       method: method || 'Cash',
       status: Math.max(0, finalNet - finalPaid) <= 0 ? 'paid' : (finalPaid > 0 ? 'partial' : 'pending'),
-      date: date || todayYMD,
-      idempotencyKey: idempotencyKey || `pay_${m?.id || memberId}_${plan}_${date || todayYMD}`,
-      isRealTimeToday: true,
+      date: invoiceDate,
+      paymentDate: req.body.paymentDate || invoiceDate,
+      transactionType: txType,
+      isHistorical: isHist,
+      imported: Boolean(req.body.imported || isHist),
+      idempotencyKey: idempotencyKey || `pay_${m?.id || memberId}_${plan}_${invoiceDate}`,
+      isRealTimeToday: !isHist && invoiceDate === todayYMD,
       notes: notes || 'Member Payment Invoice'
     });
 
@@ -127,6 +135,7 @@ export const markPaymentPaid = async (req: Request, res: Response) => {
     const plansList = await db.getPlans();
     const matchedPlan = plansList.find(p => p.name?.toLowerCase() === (m.plan || '').toLowerCase());
     const amount = matchedPlan ? matchedPlan.price : 2500;
+    const todayYMD = new Date().toISOString().split('T')[0];
 
     // Generate Invoice
     const invoice = await db.addPayment({
@@ -141,7 +150,13 @@ export const markPaymentPaid = async (req: Request, res: Response) => {
       outstandingAmount: 0,
       plan: m.plan || 'Monthly',
       method: 'UPI',
-      status: 'paid'
+      status: 'paid',
+      date: todayYMD,
+      paymentDate: todayYMD,
+      transactionType: 'membership_payment',
+      isHistorical: false,
+      imported: false,
+      isRealTimeToday: true
     });
 
     // Trigger Email

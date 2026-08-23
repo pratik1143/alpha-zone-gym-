@@ -217,9 +217,14 @@ export default function RenewalWizardModal({ isOpen, member, onClose }: RenewalW
         invoice: generatedInvoiceNum,
         invoiceNumber: generatedInvoiceNum,
         date: todayStr,
+        paymentDate: todayStr,
+        transactionType: 'membership_payment',
+        isHistorical: false,
+        imported: false,
         startDate: renewalStart,
         expiryDate: newExpiryString,
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
+        isRealTimeToday: true
       };
 
       await addPayment(invoiceData);

@@ -1,62 +1,106 @@
 'use client';
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useEffect } from 'react';
 import { Users, CheckCircle2, Clock, Activity, IndianRupee } from 'lucide-react';
 import { useGymStore } from '@/store';
+import { SYSTEM_CONFIG } from '@/config/system';
 
 export default function MembersKPI() {
-  const { members, dashboardAnalytics, attendance } = useGymStore();
+  const { members, attendance, payments, fetchPayments } = useGymStore();
+
+  useEffect(() => {
+    if (!payments || payments.length === 0) {
+      fetchPayments?.();
+    }
+  }, [payments, fetchPayments]);
 
   const stats = useMemo(() => {
-    const today = new Date();
+    // Current date in Asia/Kolkata timezone
+    const now = new Date();
+    const formatter = new Intl.DateTimeFormat('en-CA', {
+      timeZone: SYSTEM_CONFIG.timezone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    });
+    const todayStr = formatter.format(now); // e.g. "2026-08-23"
+    const currentYearMonth = todayStr.substring(0, 7); // e.g. "2026-08"
+
     let expiringThisMonth = 0;
     let ptMembers = 0;
-    let revenueThisMonth = 0;
 
-    members.forEach((m: any) => {
+    (members || []).forEach((m: any) => {
       // Calculate expiring this month
       if (m.expiryDate) {
-        const exp = new Date(m.expiryDate);
-        if (exp.getMonth() === today.getMonth() && exp.getFullYear() === today.getFullYear()) {
+        const expStr = String(m.expiryDate).includes('T') ? m.expiryDate.split('T')[0] : m.expiryDate;
+        if (expStr.startsWith(currentYearMonth)) {
           expiringThisMonth++;
         }
       }
-      
+
       // Calculate PT members
-      if (m.trainer && m.trainer.trim() !== '') {
+      const hasTrainer = m.trainer && String(m.trainer).trim() !== '' && !String(m.trainer).toLowerCase().includes('unassigned');
+      const isPTPlan = m.plan && (m.plan.includes('PT') || m.plan.includes('Personal Training'));
+      if (hasTrainer || isPTPlan || m.isPT) {
         ptMembers++;
       }
-      
-      // Calculate revenue using actual member amounts
-      const amt = Number(m.amount ?? m.currentAmount ?? m.paidAmount ?? 0);
-      revenueThisMonth += amt;
     });
 
     // Calculate unique members who punched today
-    const todayStr = today.toISOString().split('T')[0];
-    const todayPunches = new Set();
-    
-    // We need attendance from store
+    const todayPunches = new Set<string>();
     const attendanceLogs = attendance || [];
     attendanceLogs.forEach((log: any) => {
-      if (log.checkIn && log.checkIn.startsWith(todayStr)) {
-        todayPunches.add(log.memberId);
+      if (!log) return;
+      const checkInStr = String(log.checkIn || log.timestamp || log.createdAt || '');
+      const checkInYMD = checkInStr.includes('T') ? checkInStr.split('T')[0] : checkInStr;
+      if (checkInYMD === todayStr) {
+        const mKey = log.memberId || log.biometricId || log.memberName;
+        if (mKey && String(mKey).trim()) {
+          todayPunches.add(String(mKey).trim());
+        }
       }
     });
 
+    // Calculate REAL REVENUE THIS MONTH from actual payment transactions
+    // Strictly exclude historical imports (transactionType = 'historical_import')
+    const seenPaymentKeys = new Set<string>();
+    let revenueThisMonth = 0;
+
+    (payments || []).forEach((p: any) => {
+      if (!p || p.isSample || p.isMock) return;
+
+      // Exclude historical imported records from current month revenue
+      const isHist = p.isHistorical === true || p.imported === true || p.isLegacyImport === true || p.transactionType === 'historical_import';
+      if (isHist) return;
+
+      const status = String(p.status || p.paymentStatus || 'paid').toLowerCase();
+      if (status !== 'paid' && status !== 'partial') return;
+
+      // Payment date must fall within current calendar month
+      const pDate = String(p.paymentDate || p.date || '').split('T')[0];
+      if (!pDate || !pDate.startsWith(currentYearMonth) || pDate > todayStr) return;
+
+      const key = String(p.id || p.paymentId || p.invoiceNumber || p.invoice || p.idempotencyKey || '').trim();
+      if (key && seenPaymentKeys.has(key)) return;
+      if (key) seenPaymentKeys.add(key);
+
+      const val = Number(p.amountPaid !== undefined ? p.amountPaid : (p.paid !== undefined ? p.paid : (p.amount || 0)));
+      revenueThisMonth += (isNaN(val) ? 0 : val);
+    });
+
     return {
-      total: members.length,
-      activeToday: todayPunches.size, // Use actual punches today!
+      total: (members || []).length,
+      activeToday: todayPunches.size,
       expiring: expiringThisMonth,
       pt: ptMembers,
       revenue: revenueThisMonth
     };
-  }, [members, dashboardAnalytics, attendance]);
+  }, [members, attendance, payments]);
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
-      {/* Total Members */}
-      <div className="bg-white rounded-2xl p-5 shadow-[0_2px_10px_rgba(11,92,190,0.04)] border border-[#d9e7f7] flex flex-col justify-between hover:border-[#0b5cbe] transition-all">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+      {/* 1. Total Members */}
+      <div className="bg-white rounded-2xl p-5 shadow-xs border border-[#d9e7f7] flex flex-col justify-between hover:border-[#0b5cbe] transition-all">
         <div className="flex justify-between items-start">
           <span className="text-xs font-semibold text-slate-500">Total Members</span>
           <div className="w-8 h-8 rounded-full bg-[#eaf3ff] flex items-center justify-center text-[#0b5cbe]">
@@ -66,7 +110,7 @@ export default function MembersKPI() {
         <div className="mt-2">
           <h3 className="text-2xl font-black text-[#10233f]">{stats.total}</h3>
           <p className="text-[10px] font-bold text-[#0b5cbe] mt-1 flex items-center gap-1">
-            <span>&uarr; 12%</span> <span className="text-slate-400 font-medium">this month</span>
+            <span>Roster registered</span>
           </p>
         </div>
         <div className="mt-4 h-6 w-full opacity-60">
@@ -76,8 +120,8 @@ export default function MembersKPI() {
         </div>
       </div>
 
-      {/* Active Today */}
-      <div className="bg-white rounded-2xl p-5 shadow-[0_2px_10px_rgba(11,92,190,0.04)] border border-[#d9e7f7] flex flex-col justify-between hover:border-[#0b5cbe] transition-all">
+      {/* 2. Active Today */}
+      <div className="bg-white rounded-2xl p-5 shadow-xs border border-[#d9e7f7] flex flex-col justify-between hover:border-[#0b5cbe] transition-all">
         <div className="flex justify-between items-start">
           <span className="text-xs font-semibold text-slate-500">Active Today</span>
           <div className="w-8 h-8 rounded-full bg-[#eaf3ff] flex items-center justify-center text-[#0b5cbe]">
@@ -86,19 +130,19 @@ export default function MembersKPI() {
         </div>
         <div className="mt-2">
           <h3 className="text-2xl font-black text-[#10233f]">{stats.activeToday}</h3>
-          <p className="text-[10px] font-bold text-[#0b5cbe] mt-1 flex items-center gap-1">
-            <span>&uarr; 8%</span>
+          <p className="text-[10px] font-bold text-emerald-600 mt-1 flex items-center gap-1">
+            <span>Punched in today</span>
           </p>
         </div>
         <div className="mt-4 h-6 w-full opacity-60">
           <svg viewBox="0 0 100 20" className="w-full h-full preserve-aspect-ratio-none">
-            <path d="M0,15 Q20,10 40,15 T80,5 T100,10" fill="none" stroke="#2876d0" strokeWidth="2" strokeLinecap="round" />
+            <path d="M0,15 Q20,10 40,15 T80,5 T100,10" fill="none" stroke="#10b981" strokeWidth="2" strokeLinecap="round" />
           </svg>
         </div>
       </div>
 
-      {/* Expiring This Month */}
-      <div className="bg-white rounded-2xl p-5 shadow-[0_2px_10px_rgba(11,92,190,0.04)] border border-[#d9e7f7] flex flex-col justify-between hover:border-[#0b5cbe] transition-all">
+      {/* 3. Expiring This Month */}
+      <div className="bg-white rounded-2xl p-5 shadow-xs border border-[#d9e7f7] flex flex-col justify-between hover:border-[#0b5cbe] transition-all">
         <div className="flex justify-between items-start">
           <span className="text-xs font-semibold text-slate-500">Expiring This Month</span>
           <div className="w-8 h-8 rounded-full bg-[#eaf3ff] flex items-center justify-center text-[#0b5cbe]">
@@ -107,19 +151,19 @@ export default function MembersKPI() {
         </div>
         <div className="mt-2">
           <h3 className="text-2xl font-black text-[#10233f]">{stats.expiring}</h3>
-          <p className="text-[10px] font-bold text-[#0b5cbe] mt-1 flex items-center gap-1">
-            <span>&darr; 2%</span>
+          <p className="text-[10px] font-bold text-amber-600 mt-1 flex items-center gap-1">
+            <span>Requires renewal</span>
           </p>
         </div>
         <div className="mt-4 h-6 w-full opacity-60">
           <svg viewBox="0 0 100 20" className="w-full h-full preserve-aspect-ratio-none">
-            <path d="M0,10 Q20,15 40,5 T80,15 T100,10" fill="none" stroke="#0040d0" strokeWidth="2" strokeLinecap="round" />
+            <path d="M0,10 Q20,15 40,5 T80,15 T100,10" fill="none" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round" />
           </svg>
         </div>
       </div>
 
-      {/* PT Members */}
-      <div className="bg-white rounded-2xl p-5 shadow-[0_2px_10px_rgba(11,92,190,0.04)] border border-[#d9e7f7] flex flex-col justify-between hover:border-[#0b5cbe] transition-all">
+      {/* 4. PT Members */}
+      <div className="bg-white rounded-2xl p-5 shadow-xs border border-[#d9e7f7] flex flex-col justify-between hover:border-[#0b5cbe] transition-all">
         <div className="flex justify-between items-start">
           <span className="text-xs font-semibold text-slate-500">PT Members</span>
           <div className="w-8 h-8 rounded-full bg-[#eaf3ff] flex items-center justify-center text-[#0b5cbe]">
@@ -129,7 +173,7 @@ export default function MembersKPI() {
         <div className="mt-2">
           <h3 className="text-2xl font-black text-[#10233f]">{stats.pt}</h3>
           <p className="text-[10px] font-bold text-[#0b5cbe] mt-1 flex items-center gap-1">
-            <span>&uarr; 15%</span>
+            <span>Personal training</span>
           </p>
         </div>
         <div className="mt-4 h-6 w-full opacity-60">
@@ -139,8 +183,8 @@ export default function MembersKPI() {
         </div>
       </div>
 
-      {/* Revenue This Month */}
-      <div className="bg-white rounded-2xl p-5 shadow-[0_2px_10px_rgba(11,92,190,0.04)] border border-[#d9e7f7] flex flex-col justify-between hover:border-[#0b5cbe] transition-all">
+      {/* 5. Revenue This Month */}
+      <div className="bg-white rounded-2xl p-5 shadow-xs border border-[#d9e7f7] flex flex-col justify-between hover:border-[#0b5cbe] transition-all">
         <div className="flex justify-between items-start">
           <span className="text-xs font-semibold text-slate-500">Revenue This Month</span>
           <div className="w-8 h-8 rounded-full bg-[#eaf3ff] flex items-center justify-center text-[#0b5cbe]">
@@ -148,18 +192,17 @@ export default function MembersKPI() {
           </div>
         </div>
         <div className="mt-2">
-          <h3 className="text-2xl font-black text-[#10233f]">₹{stats.revenue.toLocaleString()}</h3>
-          <p className="text-[10px] font-bold text-[#0b5cbe] mt-1 flex items-center gap-1">
-            <span>&uarr; 18%</span>
+          <h3 className="text-2xl font-black text-[#10233f]">₹{stats.revenue.toLocaleString('en-IN')}</h3>
+          <p className="text-[10px] font-bold text-emerald-600 mt-1 flex items-center gap-1">
+            <span>Actual payments collected this month</span>
           </p>
         </div>
         <div className="mt-4 h-6 w-full opacity-60">
           <svg viewBox="0 0 100 20" className="w-full h-full preserve-aspect-ratio-none">
-            <path d="M0,15 Q20,10 40,15 T80,5 T100,10" fill="none" stroke="#2876d0" strokeWidth="2" strokeLinecap="round" />
+            <path d="M0,15 Q20,10 40,15 T80,5 T100,10" fill="none" stroke="#10b981" strokeWidth="2" strokeLinecap="round" />
           </svg>
         </div>
       </div>
-
     </div>
   );
 }

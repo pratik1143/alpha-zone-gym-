@@ -430,7 +430,29 @@ export const loadMockDb = () => {
       const data = JSON.parse(fs.readFileSync(MOCK_DB_FILE, 'utf8'));
       if (data.mockMembers) { mockMembers.length = 0; mockMembers.push(...data.mockMembers); }
       if (data.mockAttendance) { mockAttendance.length = 0; mockAttendance.push(...data.mockAttendance); }
-      if (data.mockPayments) { mockPayments.length = 0; mockPayments.push(...data.mockPayments); }
+      if (data.mockPayments) {
+        mockPayments.length = 0;
+        data.mockPayments.forEach((p: any) => {
+          const isHist = p.isHistorical === true || p.imported === true || p.isLegacyImport === true ||
+            String(p.invoiceNumber || p.invoice || '').startsWith('INV-LEG-') ||
+            String(p.id || '').startsWith('inv_member_') ||
+            String(p.id || '').startsWith('p') ||
+            p.method === 'Imported' || p.paymentMethod === 'Imported' ||
+            p.transactionType === 'historical_import';
+          if (isHist) {
+            mockPayments.push({
+              ...p,
+              transactionType: 'historical_import',
+              isHistorical: true,
+              imported: true,
+              isLegacyImport: true,
+              paymentDate: p.paymentDate || p.date || p.billingDate || p.startDate || '2026-01-01'
+            });
+          } else {
+            mockPayments.push(p);
+          }
+        });
+      }
       if (data.mockTrainers) { mockTrainers.length = 0; mockTrainers.push(...data.mockTrainers); }
       if (data.mockBranches) { mockBranches.length = 0; mockBranches.push(...data.mockBranches); }
       if (data.mockWorkouts) { mockWorkouts.length = 0; mockWorkouts.push(...data.mockWorkouts); }
@@ -497,7 +519,10 @@ if (serviceAccountJsonRaw) {
     
     // Proactively verify Cloud Firestore API availability
     admin.firestore().collection('system_config').doc('test').get()
-      .then(() => console.log('✅ Cloud Firestore API connection verified.'))
+      .then(() => {
+        console.log('✅ Cloud Firestore API connection verified.');
+        classifyHistoricalPayments().catch(e => console.error('Classification error:', e));
+      })
       .catch((err: any) => {
         console.warn('⚠️ Cloud Firestore API disabled or unreachable. Switching backend to Local Database mode.');
         disableFirestore();
@@ -520,10 +545,87 @@ export const getFirestoreDb = () => {
   return admin.firestore();
 };
 
+export const classifyHistoricalPayments = async () => {
+  try {
+    // 1. Sanitize Mock DB payments
+    let mockUpdated = false;
+    mockPayments.forEach((p: any) => {
+      const isHistorical = p.isHistorical === true || p.imported === true || p.isLegacyImport === true ||
+        String(p.invoiceNumber || p.invoice || '').startsWith('INV-LEG-') ||
+        String(p.id || '').startsWith('inv_member_') ||
+        String(p.id || '').startsWith('p') ||
+        p.method === 'Imported' || p.paymentMethod === 'Imported' ||
+        p.transactionType === 'historical_import';
+
+      if (isHistorical) {
+        if (p.transactionType !== 'historical_import' || !p.isHistorical || !p.imported) {
+          p.transactionType = 'historical_import';
+          p.isHistorical = true;
+          p.imported = true;
+          p.isLegacyImport = true;
+          p.paymentDate = p.paymentDate || p.date || p.billingDate || p.startDate || '2026-01-01';
+          mockUpdated = true;
+        }
+      }
+    });
+    if (mockUpdated) saveMockDb();
+
+    // 2. Sanitize Firestore payments
+    const firestore = getFirestoreDb();
+    if (firestore) {
+      const snap = await firestore.collection('payments').get();
+      let updatedCount = 0;
+      const chunkSize = 100;
+      for (let i = 0; i < snap.docs.length; i += chunkSize) {
+        const batch = firestore.batch();
+        let batchHasUpdates = false;
+        const chunk = snap.docs.slice(i, i + chunkSize);
+
+        chunk.forEach((doc: any) => {
+          const p = doc.data();
+          const isHistorical = p.isHistorical === true || p.imported === true || p.isLegacyImport === true ||
+            String(p.invoiceNumber || p.invoice || '').startsWith('INV-LEG-') ||
+            String(doc.id).startsWith('inv_member_') ||
+            p.method === 'Imported' || p.paymentMethod === 'Imported' ||
+            p.transactionType === 'historical_import';
+
+          if (isHistorical) {
+            if (p.transactionType !== 'historical_import' || !p.isHistorical || !p.imported) {
+              batch.update(doc.ref, {
+                transactionType: 'historical_import',
+                isHistorical: true,
+                imported: true,
+                isLegacyImport: true,
+                paymentDate: p.paymentDate || p.date || p.billingDate || p.startDate || '2026-01-01',
+                isRealTimeToday: false
+              });
+              batchHasUpdates = true;
+              updatedCount++;
+            }
+          }
+        });
+
+        if (batchHasUpdates) {
+          await batch.commit();
+        }
+      }
+
+      if (updatedCount > 0) {
+        console.log(`[Historical Payment Classifier] Correctly tagged ${updatedCount} Firestore payments as 'historical_import'.`);
+      }
+    }
+  } catch (err) {
+    console.error('[Historical Payment Classifier Error]', err);
+  }
+};
+
 let membersCache: any[] | null = null;
 
 // Database helper functions (asynchronous to support Firestore)
 export const db = {
+  classifyHistoricalPayments: async () => {
+    await classifyHistoricalPayments();
+  },
   saveMockDb: () => {
     saveMockDb();
   },
@@ -897,18 +999,24 @@ export const db = {
         return m.status === 'active' || m.status === 'Active' || (m.expiryDate && m.expiryDate >= todayStr);
       }).length;
 
-      // 2. Today's Deduplicated Revenue
+      // 2. Today's Deduplicated Revenue (Strict Isolation: Only non-historical payments belonging strictly to TODAY)
       const paymentsSnap = await firestore.collection('payments').get();
       const seen = new Set<string>();
       let todayRevenue = 0;
 
-      paymentsSnap.docs.forEach(doc => {
+      paymentsSnap.docs.forEach((doc: any) => {
         const p = doc.data() as any;
         if (!p || p.isSample || p.isMock) return;
+
+        // Strictly exclude historical imports from today's collection
+        const isHistorical = p.isHistorical === true || p.imported === true || p.isLegacyImport === true || p.transactionType === 'historical_import';
+        if (isHistorical) return;
+
         const status = String(p.status || p.paymentStatus || 'paid').toLowerCase();
         if (status !== 'paid' && status !== 'partial') return;
 
-        const pDate = String(p.date || p.paymentDate || p.createdAt || '').split('T')[0];
+        // Payment date must match today (NEVER fall back to createdAt!)
+        const pDate = String(p.paymentDate || p.date || '').split('T')[0];
         if (pDate !== todayStr && !p.isRealTimeToday) return;
 
         const idKey = String(doc.id || p.paymentId || p.invoiceNumber || p.invoice || p.idempotencyKey || '').trim();
@@ -922,7 +1030,7 @@ export const db = {
       // 3. Today's Unique Attendance
       const attendanceSnap = await firestore.collection('attendance_logs').get();
       const uniqueAttendance = new Set<string>();
-      attendanceSnap.docs.forEach(doc => {
+      attendanceSnap.docs.forEach((doc: any) => {
         const a = doc.data() as any;
         if (!a) return;
         const checkInDate = String(a.checkIn || a.timestamp || a.createdAt || '').split('T')[0];
@@ -943,7 +1051,30 @@ export const db = {
         lastUpdated: new Date().toISOString()
       };
     }
-    return { totalMembers: 0, todayAttendance: 0, activeMembers: 0, revenue: 0, todayCollection: 0 };
+
+    const todayStr = new Date().toISOString().split('T')[0];
+    const seen = new Set<string>();
+    let mockTodayRevenue = 0;
+    mockPayments.forEach((p: any) => {
+      if (!p || p.isSample || p.isMock) return;
+      const isHistorical = p.isHistorical === true || p.imported === true || p.isLegacyImport === true || p.transactionType === 'historical_import';
+      if (isHistorical) return;
+
+      const status = String(p.status || p.paymentStatus || 'paid').toLowerCase();
+      if (status !== 'paid' && status !== 'partial') return;
+
+      const pDate = String(p.paymentDate || p.date || '').split('T')[0];
+      if (pDate !== todayStr && !p.isRealTimeToday) return;
+
+      const idKey = String(p.id || p.paymentId || p.invoiceNumber || p.invoice || p.idempotencyKey || '').trim();
+      if (idKey && seen.has(idKey)) return;
+      if (idKey) seen.add(idKey);
+
+      const val = Number(p.amountPaid !== undefined ? p.amountPaid : (p.paid !== undefined ? p.paid : (p.amount || 0)));
+      mockTodayRevenue += (isNaN(val) ? 0 : val);
+    });
+
+    return { totalMembers: mockMembers.length, todayAttendance: 0, activeMembers: mockMembers.filter(m => m.status === 'active').length, revenue: mockTodayRevenue, todayCollection: mockTodayRevenue };
   },
 
   addAttendance: async (log: any): Promise<any> => {
@@ -1204,6 +1335,10 @@ export const db = {
       return await pendingInvoicesMap.get(idempotencyKey);
     }
 
+    const isHistorical = payment.isHistorical ?? (payment.transactionType === 'historical_import' || payment.imported || payment.isLegacyImport || false);
+    const txType = payment.transactionType || (isHistorical ? 'historical_import' : (payment.billingType === 'PT' || payment.invoiceType === 'PT' ? 'pt_payment' : 'membership_payment'));
+    const paymentDate = payment.paymentDate || payment.date || todayStr;
+
     const processPayment = async () => {
       const newPayment = {
         ...payment,
@@ -1211,6 +1346,10 @@ export const db = {
         invoice: payment.invoiceNumber || payment.invoice || ('INV-' + Math.floor(100000 + Math.random() * 900000)),
         invoiceNumber: payment.invoiceNumber || payment.invoice || ('INV-' + Math.floor(100000 + Math.random() * 900000)),
         date: payment.date || todayStr,
+        paymentDate: paymentDate,
+        transactionType: txType,
+        isHistorical: isHistorical,
+        imported: Boolean(payment.imported || isHistorical),
         originalAmount: origAmt,
         discountAmount: discAmt,
         discount: discAmt,

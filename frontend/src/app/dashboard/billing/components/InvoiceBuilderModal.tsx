@@ -220,6 +220,10 @@ export default function InvoiceBuilderModal({ isOpen, type, onClose, members }: 
         method: paymentMethod,
         paymentMethod: paymentMethod,
         date: todayStr,
+        paymentDate: todayStr,
+        transactionType: type === 'PT' ? 'pt_payment' : (type === 'POS' ? 'other_payment' : 'membership_payment'),
+        isHistorical: false,
+        imported: false,
         createdAt: todayIso,
         isRealTimeToday: true,
       };

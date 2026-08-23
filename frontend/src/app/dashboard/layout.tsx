@@ -22,6 +22,8 @@ import AttendancePopupManager from './components/AttendancePopupManager';
 import EmployeePopupManager from './components/EmployeePopupManager';
 import NotificationCenter from './components/NotificationCenter';
 import UniversalSearchBar from './components/UniversalSearchBar';
+import LiveTimeCard from './components/LiveTimeCard';
+import SoftwareFooter from './components/SoftwareFooter';
 
 export default function DashboardLayout({
   children,
@@ -342,11 +344,15 @@ export default function DashboardLayout({
 
       {/* ─── Main Workspace Content Area ─── */}
       <main className="flex-1 min-w-0 w-full p-4 sm:p-6 overflow-y-auto flex flex-col gap-4 text-left bg-[#FDFDFD]">
-        {/* Universal Search Header */}
-        <div className="w-full flex items-center justify-between gap-4 shrink-0 pb-1">
-          <UniversalSearchBar />
+        {/* Top Header Bar: Universal Search (Left/Center) + Live Time Card (Right) */}
+        <div className="w-full flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 shrink-0 pb-1">
+          <div className="w-full sm:max-w-[460px] md:max-w-[500px]">
+            <UniversalSearchBar />
+          </div>
+          <LiveTimeCard />
         </div>
         {children}
+        <SoftwareFooter />
       </main>
 
       {/* AI Gym Copilot Helper */}
