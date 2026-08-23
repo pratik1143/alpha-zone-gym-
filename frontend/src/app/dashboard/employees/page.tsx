@@ -124,10 +124,14 @@ export default function EmployeesPage() {
   }, []);
 
   const defaultFallbackEmployees = [
-    { id: 'emp_501', name: 'Ramesh Kumar', phone: '9876543210', email: 'ramesh@alphagym.com', role: 'Manager', branch: 'Mohali, Punjab', emergencyContact: '9876543211', address: 'Phase 3B2, Mohali', biometricId: 501, todayStatus: 'Present', currentStatus: 'Inside', lastPunch: new Date().toISOString() },
-    { id: 'emp_502', name: 'Karan Verma', phone: '9988776655', email: 'karan@alphagym.com', role: 'Trainer', branch: 'Mohali, Punjab', emergencyContact: '9988776600', address: 'Sector 70, Mohali', biometricId: 502, todayStatus: 'Present', currentStatus: 'Inside', lastPunch: new Date().toISOString() },
-    { id: 'emp_503', name: 'Sneha Kapoor', phone: '9988776656', email: 'sneha@alphagym.com', role: 'Trainer', branch: 'Mohali, Punjab', emergencyContact: '9988776601', address: 'Sector 68, Mohali', biometricId: 503, todayStatus: 'Absent', currentStatus: 'Outside', lastPunch: null },
-    { id: 'emp_504', name: 'Priya Singh', phone: '9877407661', email: 'priya.reception@alphagym.com', role: 'Reception', branch: 'Mohali, Punjab', emergencyContact: '9877407600', address: 'Sector 71, Mohali', biometricId: 504, todayStatus: 'Present', currentStatus: 'Inside', lastPunch: new Date().toISOString() }
+    { id: 'emp_10021', name: 'Sourav Arora', phone: '7973649709', email: '', role: 'Trainer', branch: 'Alpha zone gym', emergencyContact: '', address: '', biometricId: 10021, todayStatus: 'Absent', currentStatus: 'Outside', lastPunch: null },
+    { id: 'emp_10012', name: 'Deepak', phone: '8196852386', email: '', role: 'Trainer', branch: 'Alpha zone gym', emergencyContact: '', address: '', biometricId: 10012, todayStatus: 'Absent', currentStatus: 'Outside', lastPunch: null },
+    { id: 'emp_10009', name: 'Kuldeep', phone: '8629841471', email: 'kuldeep86298@gmail.com', role: 'Trainer', branch: 'Alpha zone gym', emergencyContact: '', address: '', biometricId: 10009, todayStatus: 'Absent', currentStatus: 'Outside', lastPunch: null },
+    { id: 'emp_10008', name: 'Arshdeep Singh', phone: '9915866576', email: '', role: 'Trainer', branch: 'Alpha zone gym', emergencyContact: '', address: '', biometricId: 10008, todayStatus: 'Absent', currentStatus: 'Outside', lastPunch: null },
+    { id: 'emp_10005', name: 'Achhar Pal', phone: '9592691190', email: '', role: 'Trainer', branch: 'Alpha zone gym', emergencyContact: '', address: 'kaimbwala chd', biometricId: 10005, todayStatus: 'Absent', currentStatus: 'Outside', lastPunch: null },
+    { id: 'emp_10003', name: 'Abc', phone: '7884977777', email: '', role: 'Trainer', branch: 'Alpha zone gym', emergencyContact: '', address: '', biometricId: 10003, todayStatus: 'Absent', currentStatus: 'Outside', lastPunch: null },
+    { id: 'emp_501', name: 'Ramesh Kumar', phone: '9876543210', email: 'ramesh@alphagym.com', role: 'Manager', branch: 'Alpha zone gym', emergencyContact: '', address: 'Phase 3B2, Mohali', biometricId: 501, todayStatus: 'Present', currentStatus: 'Inside', lastPunch: new Date().toISOString() },
+    { id: 'emp_504', name: 'Priya Singh', phone: '9877407661', email: 'priya.reception@alphagym.com', role: 'Reception', branch: 'Alpha zone gym', emergencyContact: '', address: 'Sector 71, Mohali', biometricId: 504, todayStatus: 'Present', currentStatus: 'Inside', lastPunch: new Date().toISOString() }
   ];
 
   const rawEmployeesList = employees && employees.length > 0 ? employees : defaultFallbackEmployees;

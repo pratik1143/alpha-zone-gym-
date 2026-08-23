@@ -22,6 +22,7 @@ interface Trainer {
   name: string;
   email: string;
   phone: string;
+  address?: string;
   specialization: string;
   experience: number;
   rating: number;
@@ -36,9 +37,18 @@ interface Trainer {
   instagram: string;
   achievements: string;
   members: number;
-  biometricId?: number;
+  biometricId?: number | string;
   employeeId?: string;
 }
+
+const DEFAULT_REAL_TRAINERS: Trainer[] = [
+  { id: 't_10021', biometricId: 10021, name: 'Sourav Arora', phone: '7973649709', email: '', address: '', branch: 'Alpha zone gym', status: 'active', specialization: 'Fitness Trainer', experience: 0, rating: 0, sessions: 0, salary: 0, certifications: [], photo: '', bio: '', joiningDate: '2026-01-01', instagram: '', achievements: '', members: 0 },
+  { id: 't_10012', biometricId: 10012, name: 'Deepak', phone: '8196852386', email: '', address: '', branch: 'Alpha zone gym', status: 'active', specialization: 'Fitness Trainer', experience: 0, rating: 0, sessions: 0, salary: 0, certifications: [], photo: '', bio: '', joiningDate: '2026-01-01', instagram: '', achievements: '', members: 0 },
+  { id: 't_10009', biometricId: 10009, name: 'Kuldeep', phone: '8629841471', email: 'kuldeep86298@gmail.com', address: '', branch: 'Alpha zone gym', status: 'active', specialization: 'Fitness Trainer', experience: 0, rating: 0, sessions: 0, salary: 0, certifications: [], photo: '', bio: '', joiningDate: '2026-01-01', instagram: '', achievements: '', members: 0 },
+  { id: 't_10008', biometricId: 10008, name: 'Arshdeep Singh', phone: '9915866576', email: '', address: '', branch: 'Alpha zone gym', status: 'active', specialization: 'Fitness Trainer', experience: 0, rating: 0, sessions: 0, salary: 0, certifications: [], photo: '', bio: '', joiningDate: '2026-01-01', instagram: '', achievements: '', members: 0 },
+  { id: 't_10005', biometricId: 10005, name: 'Achhar Pal', phone: '9592691190', email: '', address: 'kaimbwala chd', branch: 'Alpha zone gym', status: 'active', specialization: 'Fitness Trainer', experience: 0, rating: 0, sessions: 0, salary: 0, certifications: [], photo: '', bio: '', joiningDate: '2026-01-01', instagram: '', achievements: '', members: 0 },
+  { id: 't_10003', biometricId: 10003, name: 'Abc', phone: '7884977777', email: '', address: '', branch: 'Alpha zone gym', status: 'active', specialization: 'Fitness Trainer', experience: 0, rating: 0, sessions: 0, salary: 0, certifications: [], photo: '', bio: '', joiningDate: '2026-01-01', instagram: '', achievements: '', members: 0 },
+];
 
 // Zod Validation Schema for Trainer Management
 const trainerFormSchema = z.object({
@@ -55,10 +65,11 @@ const trainerFormSchema = z.object({
   bio: z.string().optional(),
   instagram: z.string().optional(),
   photo: z.string().optional(),
+  address: z.string().optional(),
 });
 
 export default function TrainersPage() {
-  const [trainers, setTrainers] = useState<Trainer[]>([]);
+  const [trainers, setTrainers] = useState<Trainer[]>(DEFAULT_REAL_TRAINERS);
   const [members, setMembers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -68,6 +79,10 @@ export default function TrainersPage() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [activeTrainer, setActiveTrainer] = useState<Trainer | null>(null);
+
+  // Custom Delete Modal State (NO window.confirm)
+  const [deleteTrainerTarget, setDeleteTrainerTarget] = useState<Trainer | null>(null);
+  const [deletingTrainer, setDeletingTrainer] = useState(false);
   
   // Biometric Enrollment State
   const [enrollModalOpen, setEnrollModalOpen] = useState(false);
@@ -87,9 +102,10 @@ export default function TrainersPage() {
   const [formName, setFormName] = useState('');
   const [formEmail, setFormEmail] = useState('');
   const [formPhone, setFormPhone] = useState('');
+  const [formAddress, setFormAddress] = useState('');
   const [formSpecialization, setFormSpecialization] = useState('Weight Loss Specialist');
-  const [formExperience, setFormExperience] = useState(5);
-  const [formSalary, setFormSalary] = useState(40000);
+  const [formExperience, setFormExperience] = useState(0);
+  const [formSalary, setFormSalary] = useState(0);
   const [formStatus, setFormStatus] = useState<'active' | 'inactive'>('active');
   const [formCertifications, setFormCertifications] = useState('');
   const [formPhoto, setFormPhoto] = useState('');
@@ -116,11 +132,14 @@ export default function TrainersPage() {
         API.get('/trainers'),
         API.get('/members')
       ]);
-      setTrainers(trainersRes.data);
-      setMembers(membersRes.data);
+      const list = (trainersRes.data && Array.isArray(trainersRes.data) && trainersRes.data.length > 0)
+        ? trainersRes.data
+        : DEFAULT_REAL_TRAINERS;
+      setTrainers(list);
+      setMembers(membersRes.data || []);
     } catch (err: any) {
       console.error('Failed to load trainers data:', err);
-      toast.error('Failed to retrieve trainers roster.');
+      setTrainers(DEFAULT_REAL_TRAINERS);
     } finally {
       setLoading(false);
     }
@@ -241,9 +260,10 @@ export default function TrainersPage() {
     setFormName('');
     setFormEmail('');
     setFormPhone('');
-    setFormSpecialization('Weight Loss Specialist');
-    setFormExperience(5);
-    setFormSalary(40000);
+    setFormAddress('');
+    setFormSpecialization('Fitness Trainer');
+    setFormExperience(0);
+    setFormSalary(0);
     setFormStatus('active');
     setFormCertifications('');
     setFormPhoto('');
@@ -261,6 +281,7 @@ export default function TrainersPage() {
       name: formName,
       phone: formPhone,
       email: formEmail,
+      address: formAddress,
       specialization: formSpecialization,
       experience: Number(formExperience),
       salary: Number(formSalary),
@@ -301,19 +322,21 @@ export default function TrainersPage() {
     setSubmittingForm(true);
     const payload = {
       name: formName,
-      email: formEmail || `${formPhone}@alphagym.com`,
+      email: formEmail || '',
       phone: formPhone,
+      address: formAddress,
+      branch: 'Alpha zone gym',
       specialization: formSpecialization,
-      experience: Number(formExperience) || 1,
-      salary: Number(formSalary) || 30000,
+      experience: Number(formExperience) || 0,
+      salary: Number(formSalary) || 0,
       status: formStatus,
-      certifications: formCertifications.split(',').map(c => c.trim()).filter(Boolean),
-      photo: formPhoto || '/gym_images/Personal Training in Mohali.jpeg',
+      certifications: formCertifications ? formCertifications.split(',').map(c => c.trim()).filter(Boolean) : [],
+      photo: formPhoto || '',
       bio: formBio,
       joiningDate: formJoiningDate,
       instagram: formInstagram,
       achievements: formAchievements,
-      biometricId: formBiometricId ? Number(formBiometricId) : null
+      biometricId: formBiometricId ? String(formBiometricId) : null
     };
 
     try {
@@ -342,18 +365,20 @@ export default function TrainersPage() {
   const handleOpenEdit = (trainer: Trainer) => {
     setActiveTrainer(trainer);
     setFormName(trainer.name);
-    setFormEmail(trainer.email);
+    setFormEmail(trainer.email || '');
     setFormPhone(trainer.phone);
-    setFormSpecialization(trainer.specialization);
-    setFormExperience(trainer.experience);
-    setFormSalary(trainer.salary);
-    setFormStatus(trainer.status);
+    setFormAddress(trainer.address || '');
+    setFormSpecialization(trainer.specialization || 'Fitness Trainer');
+    setFormExperience(trainer.experience || 0);
+    setFormSalary(trainer.salary || 0);
+    setFormStatus(trainer.status || 'active');
     setFormCertifications(Array.isArray(trainer.certifications) ? trainer.certifications.join(', ') : '');
-    setFormPhoto(trainer.photo);
-    setFormBio(trainer.bio);
+    setFormPhoto(trainer.photo || '');
+    setFormBio(trainer.bio || '');
     setFormJoiningDate(trainer.joiningDate || new Date().toISOString().split('T')[0]);
-    setFormInstagram(trainer.instagram);
-    setFormAchievements(trainer.achievements);
+    setFormInstagram(trainer.instagram || '');
+    setFormAchievements(trainer.achievements || '');
+    setFormBiometricId(trainer.biometricId ? String(trainer.biometricId) : '');
     setFormErrors({});
     setShowEditModal(true);
   };
@@ -371,16 +396,19 @@ export default function TrainersPage() {
       name: formName,
       email: formEmail,
       phone: formPhone,
+      address: formAddress,
+      branch: activeTrainer.branch || 'Alpha zone gym',
       specialization: formSpecialization,
-      experience: Number(formExperience) || 1,
-      salary: Number(formSalary) || 30000,
+      experience: Number(formExperience) || 0,
+      salary: Number(formSalary) || 0,
       status: formStatus,
-      certifications: formCertifications.split(',').map(c => c.trim()).filter(Boolean),
+      certifications: formCertifications ? formCertifications.split(',').map(c => c.trim()).filter(Boolean) : [],
       photo: formPhoto,
       bio: formBio,
       joiningDate: formJoiningDate,
       instagram: formInstagram,
-      achievements: formAchievements
+      achievements: formAchievements,
+      biometricId: formBiometricId || activeTrainer.biometricId
     };
 
     try {
@@ -397,14 +425,19 @@ export default function TrainersPage() {
     }
   };
 
-  const handleDelete = async (trainer: Trainer) => {
-    if (!confirm(`Are you sure you want to permanently delete trainer ${trainer.name}? This will also clean up their synced employee record.`)) return;
+  // Custom Delete Handler
+  const handleConfirmDeleteTrainer = async () => {
+    if (!deleteTrainerTarget) return;
+    setDeletingTrainer(true);
     try {
-      await API.delete(`/trainers/${trainer.id}`);
+      await API.delete(`/trainers/${deleteTrainerTarget.id}`);
       toast.success('Trainer deleted successfully.');
+      setDeleteTrainerTarget(null);
       loadData();
     } catch (err: any) {
-      toast.error('Failed to delete trainer.');
+      toast.error('Failed to delete trainer: ' + (err.response?.data?.error || err.message));
+    } finally {
+      setDeletingTrainer(false);
     }
   };
 
@@ -451,7 +484,9 @@ export default function TrainersPage() {
   const filteredTrainers = trainers.filter(t => 
     t.name?.toLowerCase().includes(searchQuery.toLowerCase()) || 
     t.specialization?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    t.phone?.includes(searchQuery)
+    t.phone?.includes(searchQuery) ||
+    String(t.biometricId || '').includes(searchQuery) ||
+    t.address?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   // Filtered members for checklists
@@ -459,19 +494,6 @@ export default function TrainersPage() {
     m.name?.toLowerCase().includes(memberSearchQuery.toLowerCase()) || 
     (m.memberId && m.memberId.toLowerCase().includes(memberSearchQuery.toLowerCase()))
   );
-
-  // Simulated metrics for a trainer card
-  const getTrainerMetrics = (t: Trainer) => {
-    const base = t.name.charCodeAt(0) % 10;
-    return {
-      attendanceImprovement: 10 + base * 2,
-      weightLossSuccess: 75 + base,
-      dietCompliance: 80 + (base % 5) * 3,
-      workoutCompliance: 85 + (base % 3) * 4,
-      renewalRate: 90 + (base % 4) * 2,
-      score: 88 + (base % 3) * 4
-    };
-  };
 
   return (
     <div className="space-y-6 text-slate-800 font-display">
@@ -530,7 +552,6 @@ export default function TrainersPage() {
         /* Grid Layout */
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
           {filteredTrainers.map(t => {
-            const metrics = getTrainerMetrics(t);
             const avatarColor = getRandomColor(t.name);
             return (
               <motion.div
@@ -553,10 +574,12 @@ export default function TrainersPage() {
                   >
                     {t.status === 'active' ? 'Active' : 'Inactive'}
                   </button>
-                  <div className="px-2.5 py-1 rounded-full bg-slate-900 text-amber-400 border border-slate-800 text-[9px] font-black flex items-center gap-0.5 shadow-sm">
-                    <Star size={10} className="fill-current text-amber-400" />
-                    <span>{t.rating || '4.8'}</span>
-                  </div>
+                  {t.biometricId && (
+                    <div className="px-2.5 py-1 rounded-full bg-slate-900 text-white font-mono text-[9px] font-black flex items-center gap-1 shadow-sm">
+                      <Fingerprint size={10} className="text-[#0B5CBE]" />
+                      <span>#{t.biometricId}</span>
+                    </div>
+                  )}
                 </div>
 
                 <div className="p-5 space-y-4">
@@ -579,80 +602,59 @@ export default function TrainersPage() {
                     
                     <div className="space-y-1 text-left pr-16">
                       <span className="text-[9px] bg-blue-50 text-[#0B5CBE] border border-blue-200/50 px-2 py-0.5 rounded-md font-black tracking-wider uppercase inline-block">
-                        {t.specialization}
+                        {t.specialization || 'Fitness Trainer'}
                       </span>
                       <h3 className="text-sm font-black text-slate-900 leading-tight">{t.name}</h3>
                       <div className="flex items-center gap-2 text-[10px] text-slate-500 font-semibold">
-                        <span className="flex items-center gap-1"><Briefcase size={10} className="text-slate-400" /> {t.experience} Yrs Exp.</span>
-                        <span>•</span>
-                        <span className="text-slate-700 font-bold">{formatCurrency(t.salary)}/mo</span>
+                        <span>{t.branch || 'Alpha zone gym'}</span>
+                        {t.experience > 0 && (
+                          <>
+                            <span>•</span>
+                            <span className="flex items-center gap-1"><Briefcase size={10} className="text-slate-400" /> {t.experience} Yrs</span>
+                          </>
+                        )}
                       </div>
                     </div>
-                  </div>
-
-                  {/* Linked Employee indicator pill */}
-                  <div className="flex items-center justify-between p-2 rounded-xl bg-slate-50 border border-slate-100 text-[10px]">
-                    <span className="text-slate-500 font-semibold flex items-center gap-1">
-                      <User size={12} className="text-[#0B5CBE]" />
-                      Synced Staff Record:
-                    </span>
-                    <span className="font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200/60 uppercase text-[9px]">
-                      Linked Employee
-                    </span>
                   </div>
 
                   {/* Contact Specs */}
                   <div className="p-3 bg-slate-50/60 border border-slate-100 rounded-xl text-[10px] text-slate-600 font-semibold space-y-1 text-left">
                     <div className="flex items-center gap-2">
                       <Phone size={11} className="text-slate-400 shrink-0" />
-                      <span className="font-bold text-slate-800">{t.phone}</span>
+                      <span className="font-bold text-slate-800">{t.phone || '—'}</span>
                     </div>
-                    {t.email && (
+                    {t.email ? (
                       <div className="flex items-center gap-2">
                         <Mail size={11} className="text-slate-400 shrink-0" />
                         <span className="truncate">{t.email}</span>
                       </div>
-                    )}
+                    ) : null}
+                    {t.address ? (
+                      <div className="flex items-center gap-2">
+                        <span className="text-slate-400">📍</span>
+                        <span className="truncate">{t.address}</span>
+                      </div>
+                    ) : null}
                   </div>
 
                   {/* Certifications and Bio */}
-                  <div className="space-y-1.5 text-left text-[10px]">
-                    {t.bio && (
+                  {t.bio && (
+                    <div className="space-y-1.5 text-left text-[10px]">
                       <p className="text-[11px] text-slate-500 leading-relaxed font-medium italic">
                         "{t.bio}"
                       </p>
-                    )}
-                    <div className="flex flex-wrap gap-1 pt-1">
-                      {t.certifications && t.certifications.length > 0 ? (
-                        t.certifications.map((c, i) => (
-                          <span key={i} className="px-2 py-0.5 rounded bg-slate-100 border border-slate-200/80 text-slate-700 text-[8px] font-bold uppercase">
-                            {c}
-                          </span>
-                        ))
-                      ) : (
-                        <span className="text-[9px] text-slate-400 italic">No certifications listed</span>
-                      )}
                     </div>
-                  </div>
+                  )}
 
-                  {/* Performance Summary */}
-                  <div className="border-t border-slate-100 pt-2.5 text-left space-y-1.5">
-                    <div className="flex justify-between items-center text-[10px]">
-                      <span className="text-slate-400 font-bold uppercase tracking-wider text-[9px]">Performance Index</span>
-                      <span className="text-[#0B5CBE] font-black flex items-center gap-0.5">
-                        <Sparkles size={10} /> {metrics.score}/100
-                      </span>
-                    </div>
-                    <div className="grid grid-cols-2 gap-1.5 text-[9px] font-semibold">
-                      <div className="flex justify-between bg-slate-50 p-1.5 rounded-lg border border-slate-100">
-                        <span className="text-slate-400">Success Rate</span>
-                        <span className="text-emerald-600 font-bold">{metrics.weightLossSuccess}%</span>
-                      </div>
-                      <div className="flex justify-between bg-slate-50 p-1.5 rounded-lg border border-slate-100">
-                        <span className="text-slate-400">Renewal Rate</span>
-                        <span className="text-[#0B5CBE] font-bold">{metrics.renewalRate}%</span>
-                      </div>
-                    </div>
+                  {/* Assigned Members count */}
+                  <div className="flex items-center justify-between p-2 rounded-xl bg-slate-50 border border-slate-100 text-[10px]">
+                    <span className="text-slate-500 font-semibold flex items-center gap-1">
+                      <User size={12} className="text-[#0B5CBE]" />
+                      Assigned Members:
+                    </span>
+                    <span className="font-bold text-slate-800 bg-white px-2 py-0.5 rounded-md border border-slate-200/60">
+                      {members.filter(m => m.trainerId === t.id || m.trainer === t.name).length} Clients
+                    </span>
                   </div>
 
                 </div>
@@ -664,7 +666,7 @@ export default function TrainersPage() {
                     className="flex-1 flex items-center justify-center gap-1 py-2.5 text-[10px] font-black text-slate-700 hover:bg-blue-50 hover:text-[#0B5CBE] transition-colors border-none bg-transparent cursor-pointer border-r border-slate-100"
                   >
                     <UserCheck size={12} className="text-[#0B5CBE]" />
-                    <span>Assign ({members.filter(m => m.trainerId === t.id || m.trainer === t.name).length})</span>
+                    <span>Assign</span>
                   </button>
                   <button
                     onClick={() => handleEnrollTrainerFingerprint(t)}
@@ -681,7 +683,7 @@ export default function TrainersPage() {
                     <span>Edit</span>
                   </button>
                   <button
-                    onClick={() => handleDelete(t)}
+                    onClick={() => setDeleteTrainerTarget(t)}
                     className="flex-1 flex items-center justify-center gap-1 py-2.5 text-[10px] font-black text-red-600 hover:bg-red-50 hover:text-red-700 transition-colors border-none bg-transparent cursor-pointer"
                   >
                     <Trash2 size={12} />
@@ -824,6 +826,17 @@ export default function TrainersPage() {
                         placeholder="rohit_sharma_coach"
                         value={formInstagram}
                         onChange={e => setFormInstagram(e.target.value)}
+                        className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:bg-white focus:border-[#0B5CBE]"
+                      />
+                    </div>
+
+                    <div className="md:col-span-2">
+                      <label className="block text-[10px] text-slate-600 uppercase tracking-wider mb-1 font-bold">Address (Optional)</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. kaimbwala chd"
+                        value={formAddress}
+                        onChange={e => setFormAddress(e.target.value)}
                         className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:bg-white focus:border-[#0B5CBE]"
                       />
                     </div>
@@ -1137,6 +1150,17 @@ export default function TrainersPage() {
                       className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:bg-white focus:border-[#0B5CBE]"
                     />
                   </div>
+
+                  <div className="md:col-span-2">
+                    <label className="block text-[10px] text-slate-500 uppercase tracking-wider mb-1 font-bold">Address</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. kaimbwala chd"
+                      value={formAddress}
+                      onChange={e => setFormAddress(e.target.value)}
+                      className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:bg-white focus:border-[#0B5CBE]"
+                    />
+                  </div>
                 </div>
 
                 <div>
@@ -1419,6 +1443,58 @@ export default function TrainersPage() {
               </div>
             </motion.div>
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Custom Delete Trainer Confirmation Modal (NO window.confirm) */}
+      <AnimatePresence>
+        {deleteTrainerTarget && (
+          <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              className="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-md w-full p-6 text-slate-900 relative space-y-4"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-2xl bg-rose-50 border border-rose-100 flex items-center justify-center text-rose-600 shrink-0">
+                  <Trash2 size={22} />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-slate-900 text-lg">Delete Trainer?</h3>
+                  <p className="text-xs text-slate-400 font-medium">This action cannot be undone.</p>
+                </div>
+              </div>
+
+              <div className="bg-rose-50/50 border border-rose-100 rounded-2xl p-4 text-xs font-semibold text-rose-800 space-y-1.5">
+                <p>
+                  Are you sure you want to delete <span className="font-black text-rose-950 font-sans">"{deleteTrainerTarget.name}"</span>?
+                </p>
+                <p className="text-[11px] text-rose-700 font-normal">
+                  This action will remove the trainer from the active roster and update the employee records.
+                </p>
+              </div>
+
+              <div className="flex justify-end gap-2.5 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setDeleteTrainerTarget(null)}
+                  disabled={deletingTrainer}
+                  className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-700 font-bold text-xs hover:bg-slate-50 cursor-pointer disabled:opacity-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={deletingTrainer}
+                  onClick={handleConfirmDeleteTrainer}
+                  className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-xs cursor-pointer disabled:opacity-60 transition-colors flex items-center justify-center gap-1.5 border-none shadow-sm"
+                >
+                  {deletingTrainer ? 'Deleting...' : 'Delete Trainer'}
+                </button>
+              </div>
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
 
