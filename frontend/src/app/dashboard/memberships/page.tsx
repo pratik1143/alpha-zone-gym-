@@ -13,59 +13,190 @@ const IconMap: Record<string, any> = {
   Crown
 };
 
-// Fallback plans adhering strictly to Alpha Zone OS (#0B5CBE) theme
+// Official 14 Client Master Packages strictly adhering to Alpha Zone OS (#0B5CBE) theme
 const defaultPlansData = [
   {
-    id: 'p_mon',
-    name: 'Monthly Standard',
-    price: 2500,
-    duration: '30 Days',
-    durationDays: 30,
+    id: 'pkg_15d',
+    name: '15 days',
+    price: 2000,
+    duration: '15 days',
+    durationDays: 15,
+    rewardPoints: 0,
+    status: 'Active',
     icon: 'Shield',
     accent: '#0B5CBE',
-    accentBg: '#ffffff',
-    border: '1px solid rgba(226, 232, 240, 0.9)',
     badge: null,
-    features: ['Biometric Access Roster', 'Daily facility check-ins', 'Locker Room access'],
+    features: ['15-Day Full Gym Access', 'Biometric Roster Access', 'Locker Room Facilities'],
   },
   {
-    id: 'p_qrt',
-    name: 'Quarterly Prime',
-    price: 6500,
-    duration: '90 Days',
-    durationDays: 90,
-    icon: 'Zap',
+    id: 'pkg_1d',
+    name: '1 day',
+    price: 500,
+    duration: '1 day',
+    durationDays: 1,
+    rewardPoints: 0,
+    status: 'Active',
+    icon: 'Shield',
     accent: '#0B5CBE',
-    accentBg: '#ffffff',
-    border: '1px solid rgba(226, 232, 240, 0.9)',
-    badge: 'Popular',
-    features: ['All Monthly benefits', '2 PT consultation sessions', 'Steam Bath Access'],
+    badge: null,
+    features: ['Single Day Pass Access', 'Facility Check-in', 'Locker Room Access'],
   },
   {
-    id: 'p_semi',
-    name: 'Semi-Annual Pro',
-    price: 11500,
-    duration: '180 Days',
-    durationDays: 180,
-    icon: 'Star',
-    accent: '#10b981',
-    accentBg: '#ffffff',
-    border: '1px solid rgba(226, 232, 240, 0.9)',
-    badge: 'Best Value',
-    features: ['All Quarterly benefits', 'Diet & Nutrition builder', 'Body fat measurements'],
-  },
-  {
-    id: 'p_ann',
-    name: 'Annual Premium',
-    price: 18000,
-    duration: '365 Days',
-    durationDays: 365,
+    id: 'pkg_1m_pt',
+    name: '1 month pt',
+    price: 12000,
+    duration: '30 days',
+    durationDays: 30,
+    rewardPoints: 0,
+    status: 'Active',
+    type: 'PT',
     icon: 'Crown',
     accent: '#0B5CBE',
-    accentBg: 'linear-gradient(135deg, #EFF6FF 0%, #FFFFFF 100%)',
-    border: '1px solid rgba(191, 217, 245, 0.9)',
+    badge: 'Personal Training',
+    features: ['1-on-1 Personal Coach', 'Custom Diet & Workout Plan', 'Priority Locker'],
+  },
+  {
+    id: 'pkg_10d',
+    name: '10 days',
+    price: 2000,
+    duration: '10 days',
+    durationDays: 10,
+    rewardPoints: 0,
+    status: 'Active',
+    icon: 'Shield',
+    accent: '#0B5CBE',
+    badge: null,
+    features: ['10-Day Short Term Pass', 'Biometric Access', 'Standard Floor Access'],
+  },
+  {
+    id: 'pkg_3m_std',
+    name: '3 months',
+    price: 7000,
+    duration: '90 days',
+    durationDays: 90,
+    rewardPoints: 0,
+    status: 'Active',
+    icon: 'Zap',
+    accent: '#0B5CBE',
+    badge: 'Popular',
+    features: ['90-Day Full Gym Access', 'Steam Bath Access', 'Fitness Evaluation'],
+  },
+  {
+    id: 'pkg_6_plus_2m',
+    name: '6+2 months',
+    price: 10000,
+    duration: '240 days',
+    durationDays: 240,
+    rewardPoints: 0,
+    status: 'Active',
+    icon: 'Star',
+    accent: '#0B5CBE',
+    badge: 'Special Offer',
+    features: ['6 Months + 2 Bonus Months', 'Total 8 Months Access', 'Free Diet Consultation'],
+  },
+  {
+    id: 'pkg_6_plus_1m',
+    name: '6+1 months',
+    price: 9000,
+    duration: '210 days',
+    durationDays: 210,
+    rewardPoints: 0,
+    status: 'Active',
+    icon: 'Star',
+    accent: '#0B5CBE',
+    badge: null,
+    features: ['6 Months + 1 Bonus Month', 'Total 7 Months Access', 'Complete Facility Access'],
+  },
+  {
+    id: 'pkg_3_plus_1m',
+    name: '3+1 months',
+    price: 7500,
+    duration: '120 days',
+    durationDays: 120,
+    rewardPoints: 0,
+    status: 'Active',
+    icon: 'Zap',
+    accent: '#0B5CBE',
+    badge: 'Value Pack',
+    features: ['3 Months + 1 Bonus Month', 'Total 4 Months Access', 'Full Gym Equipment Access'],
+  },
+  {
+    id: 'pkg_3_plus_2m',
+    name: '3+2 months',
+    price: 8000,
+    duration: '150 days',
+    durationDays: 150,
+    rewardPoints: 0,
+    status: 'Active',
+    icon: 'Zap',
+    accent: '#0B5CBE',
+    badge: 'Popular Deal',
+    features: ['3 Months + 2 Bonus Months', 'Total 5 Months Access', 'Locker & Biometric Roster'],
+  },
+  {
+    id: 'pkg_1m_std',
+    name: '1 month',
+    price: 3000,
+    duration: '30 days',
+    durationDays: 30,
+    rewardPoints: 0,
+    status: 'Active',
+    icon: 'Shield',
+    accent: '#0B5CBE',
+    badge: null,
+    features: ['Monthly Gym Membership', 'Biometric Check-in Roster', 'Cardio & Strength Area'],
+  },
+  {
+    id: 'pkg_2m',
+    name: '2 months',
+    price: 4500,
+    duration: '60 days',
+    durationDays: 60,
+    rewardPoints: 0,
+    status: 'Active',
+    icon: 'Shield',
+    accent: '#0B5CBE',
+    badge: null,
+    features: ['60 Days Gym Access', 'General Trainer Guidance', 'Locker Room Access'],
+  },
+  {
+    id: 'pkg_12m',
+    name: '12 months',
+    price: 15000,
+    duration: '365 days',
+    durationDays: 365,
+    rewardPoints: 0,
+    status: 'Active',
+    icon: 'Crown',
+    accent: '#0B5CBE',
     badge: 'Elite',
-    features: ['All Semi-Annual benefits', 'Dedicated coach + personal locker', 'Guest passes (5/month)'],
+    features: ['Full Year Unlimited Access', 'Free Guest Passes (5/month)', 'Personal Locker & Steam Bath'],
+  },
+  {
+    id: 'pkg_6m',
+    name: '6 months',
+    price: 9000,
+    duration: '180 days',
+    durationDays: 180,
+    rewardPoints: 0,
+    status: 'Active',
+    icon: 'Star',
+    accent: '#10b981',
+    badge: 'Best Value',
+    features: ['180 Days Gym Membership', 'Body Fat Analysis & Diet Plan', 'Steam Bath Access'],
+  },
+  {
+    id: 'pkg_3m_inactive',
+    name: '3 months',
+    price: 6500,
+    duration: '90 days',
+    durationDays: 90,
+    rewardPoints: 0,
+    status: 'Inactive',
+    icon: 'Zap',
+    accent: '#64748b',
+    badge: 'Inactive',
+    features: ['Legacy Tier (₹6,500)', 'Inactive Membership Package'],
   },
 ];
 
@@ -86,6 +217,7 @@ export default function MembershipsPage() {
   const [planDuration, setPlanDuration] = useState('30 Days');
   const [planDurationDays, setPlanDurationDays] = useState(30);
   const [planBadge, setPlanBadge] = useState('');
+  const [planStatus, setPlanStatus] = useState('Active');
   const [planAccent, setPlanAccent] = useState('#0B5CBE');
   const [planIcon, setPlanIcon] = useState('Shield');
   const [planFeatures, setPlanFeatures] = useState<string[]>(['']);
@@ -108,7 +240,8 @@ export default function MembershipsPage() {
       p.name?.toLowerCase().includes(q) ||
       p.duration?.toLowerCase().includes(q) ||
       p.price?.toString().includes(q) ||
-      (p.badge && p.badge.toLowerCase().includes(q))
+      (p.badge && p.badge.toLowerCase().includes(q)) ||
+      (p.status && p.status.toLowerCase().includes(q))
     );
   });
 
@@ -137,6 +270,7 @@ export default function MembershipsPage() {
     setPlanDuration('30 Days');
     setPlanDurationDays(30);
     setPlanBadge('');
+    setPlanStatus('Active');
     setPlanAccent('#0B5CBE');
     setPlanIcon('Shield');
     setPlanFeatures(['']);
@@ -150,6 +284,7 @@ export default function MembershipsPage() {
     setPlanDuration(plan.duration || '');
     setPlanDurationDays(plan.durationDays || 30);
     setPlanBadge(plan.badge || '');
+    setPlanStatus(plan.status || 'Active');
     setPlanAccent(plan.accent || '#0B5CBE');
     setPlanIcon(plan.icon || 'Shield');
     setPlanFeatures(plan.features || ['']);
@@ -184,8 +319,10 @@ export default function MembershipsPage() {
       price: Number(planPrice),
       duration: planDuration || `${planDurationDays} Days`,
       durationDays: Number(planDurationDays),
+      rewardPoints: 0,
+      status: planStatus,
       features: planFeatures.filter(f => f.trim() !== ''),
-      badge: planBadge || null,
+      badge: planBadge || (planStatus === 'Inactive' ? 'Inactive' : null),
       accent: planAccent || '#0B5CBE',
       accentBg,
       border,
@@ -233,7 +370,7 @@ export default function MembershipsPage() {
             Membership Plans
           </h1>
           <p className="text-xs text-slate-500 mt-0.5 font-medium">
-            Manage subscription packages, contract renewals, and freezes.
+            Manage official 14 subscription packages, contract renewals, and freezes.
           </p>
         </div>
         <button
@@ -251,7 +388,7 @@ export default function MembershipsPage() {
           type="text"
           value={searchQuery}
           onChange={e => setSearchQuery(e.target.value)}
-          placeholder="Search by plan name, duration, price, or category..."
+          placeholder="Search by package name, duration, price, or status..."
           className="w-full h-11 pl-10 pr-4 bg-white border border-slate-200 focus:border-[#0B5CBE] focus:ring-2 focus:ring-blue-500/10 rounded-xl text-xs font-semibold text-slate-800 placeholder:text-slate-400 outline-none transition-all shadow-2xs"
         />
       </div>
@@ -260,44 +397,57 @@ export default function MembershipsPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4.5 lg:gap-5">
         {filteredPlans.map(plan => {
           const Icon = IconMap[plan.icon] || Shield;
-          const isElite = plan.icon === 'Crown' || plan.id === 'p_ann' || (plan.badge && plan.badge.toLowerCase().includes('elite'));
-          
+          const isElite = plan.icon === 'Crown' || plan.id === 'pkg_12m' || (plan.badge && plan.badge.toLowerCase().includes('elite'));
+          const isInactive = plan.status === 'Inactive';
+
           // Badge theme logic: No purple/yellow/orange
           let badgeBg = 'bg-blue-50 text-[#0B5CBE] border-blue-200/80';
-          if (plan.badge) {
+          let badgeText = plan.badge || (isInactive ? 'Inactive' : null);
+
+          if (isInactive) {
+            badgeBg = 'bg-slate-100 text-slate-500 border-slate-200';
+          } else if (plan.badge) {
             const bLower = plan.badge.toLowerCase();
             if (bLower.includes('elite') || bLower.includes('crown')) {
               badgeBg = 'bg-[#0B5CBE] text-white border-transparent shadow-xs shadow-blue-500/20';
             } else if (bLower.includes('best value')) {
               badgeBg = 'bg-emerald-50 text-emerald-700 border-emerald-200/80';
+            } else if (bLower.includes('personal training') || bLower.includes('pt')) {
+              badgeBg = 'bg-indigo-50 text-indigo-700 border-indigo-200/80';
             }
           }
 
           return (
             <div
-              key={plan.id}
+              key={plan.id || plan.name}
               className={`relative rounded-2xl p-4.5 sm:p-5 flex flex-col justify-between transition-all duration-200 hover:-translate-y-0.5 min-h-[310px] ${
-                isElite
+                isInactive
+                  ? 'bg-slate-50/70 border border-slate-200/80 opacity-80'
+                  : isElite
                   ? 'bg-gradient-to-br from-blue-50/90 via-white to-blue-50/50 border border-blue-200/90 shadow-sm shadow-blue-500/5 hover:border-blue-300'
                   : 'bg-white border border-slate-200/90 shadow-xs hover:shadow-md hover:shadow-blue-500/5 hover:border-blue-300'
               }`}
             >
               {/* Top Row: Icon + Badge */}
               <div className="flex items-start justify-between gap-2 mb-3">
-                <div className="w-11 h-11 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center text-[#0B5CBE] shrink-0">
-                  <Icon size={20} className="text-[#0B5CBE]" />
+                <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${
+                  isInactive ? 'bg-slate-200 text-slate-500 border border-slate-300' : 'bg-blue-50 border border-blue-100 text-[#0B5CBE]'
+                }`}>
+                  <Icon size={20} className={isInactive ? 'text-slate-500' : 'text-[#0B5CBE]'} />
                 </div>
-                {plan.badge && (
+                {badgeText && (
                   <span className={`text-[9px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full border ${badgeBg}`}>
-                    {plan.badge}
+                    {badgeText}
                   </span>
                 )}
               </div>
 
               {/* Package Meta: Duration & Title */}
               <div className="text-left mb-3">
-                <div className="text-[10px] font-black uppercase tracking-widest text-[#0B5CBE] mb-0.5">
-                  {plan.duration || `${plan.durationDays} Days`}
+                <div className={`text-[10px] font-black uppercase tracking-widest mb-0.5 ${
+                  isInactive ? 'text-slate-400' : 'text-[#0B5CBE]'
+                }`}>
+                  {plan.duration || `${plan.durationDays} days`} ({plan.durationDays} DAYS)
                 </div>
                 <h3 className="text-[18px] font-extrabold text-slate-900 leading-tight">
                   {plan.name}
@@ -319,7 +469,7 @@ export default function MembershipsPage() {
                 <ul className="space-y-1.5 my-2 text-left flex-1">
                   {plan.features.slice(0, 3).map((feat: string, idx: number) => (
                     <li key={idx} className="flex items-center gap-2 text-[11px] text-slate-600 font-medium leading-tight">
-                      <CheckCircle size={13} className="text-[#0B5CBE] shrink-0" />
+                      <CheckCircle size={13} className={isInactive ? 'text-slate-400 shrink-0' : 'text-[#0B5CBE] shrink-0'} />
                       <span className="truncate">{feat}</span>
                     </li>
                   ))}
@@ -329,9 +479,13 @@ export default function MembershipsPage() {
               {/* CTA Action Button */}
               <button
                 onClick={() => openEditModal(plan)}
-                className="w-full h-11 mt-3 bg-[#0B5CBE] hover:bg-blue-700 active:bg-blue-800 text-white font-bold text-xs rounded-xl shadow-xs transition-all cursor-pointer flex items-center justify-center gap-1.5 border-none"
+                className={`w-full h-11 mt-3 text-white font-bold text-xs rounded-xl shadow-xs transition-all cursor-pointer flex items-center justify-center gap-1.5 border-none ${
+                  isInactive 
+                    ? 'bg-slate-500 hover:bg-slate-600' 
+                    : 'bg-[#0B5CBE] hover:bg-blue-700 active:bg-blue-800'
+                }`}
               >
-                {isElite ? 'Configure Elite Plan' : 'Configure Plan'}
+                {isInactive ? 'Edit Inactive Plan' : isElite ? 'Configure Elite Plan' : 'Configure Plan'}
               </button>
             </div>
           );
@@ -504,6 +658,18 @@ export default function MembershipsPage() {
                 </div>
 
                 <div>
+                  <label className="block text-[10px] font-black text-slate-600 uppercase tracking-wider mb-1">Status</label>
+                  <select
+                    value={planStatus}
+                    onChange={e => setPlanStatus(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs text-slate-800 font-bold focus:outline-none focus:border-[#0B5CBE] transition-all cursor-pointer"
+                  >
+                    <option value="Active">Active</option>
+                    <option value="Inactive">Inactive</option>
+                  </select>
+                </div>
+
+                <div>
                   <label className="block text-[10px] font-black text-slate-600 uppercase tracking-wider mb-1">Badge (Optional)</label>
                   <input
                     type="text"
@@ -512,19 +678,6 @@ export default function MembershipsPage() {
                     placeholder="e.g. Popular or Elite"
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs text-slate-800 font-bold focus:outline-none focus:border-[#0B5CBE] transition-all"
                   />
-                </div>
-
-                <div>
-                  <label className="block text-[10px] font-black text-slate-600 uppercase tracking-wider mb-1">Theme Accent</label>
-                  <select
-                    value={planAccent}
-                    onChange={e => setPlanAccent(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs text-slate-800 font-bold focus:outline-none focus:border-[#0B5CBE] transition-all cursor-pointer"
-                  >
-                    <option value="#0B5CBE">🔵 Primary Blue</option>
-                    <option value="#10b981">🟢 Emerald (Best Value)</option>
-                    <option value="#4f46e5">🟣 Indigo</option>
-                  </select>
                 </div>
 
                 <div>
