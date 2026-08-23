@@ -3,18 +3,16 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { 
-  Users, Clock, Plus, ArrowUpRight, Activity, Unlock, Phone, MessageSquare, CheckCircle2, TrendingUp, DollarSign, ShieldAlert, Sparkles, ClipboardList, AlertTriangle
+  Users, Clock, Plus, ArrowUpRight, Unlock, Phone, MessageSquare, 
+  DollarSign, ShieldAlert, Sparkles, ClipboardList, AlertTriangle, ChevronLeft, ChevronRight
 } from 'lucide-react';
-import { ComposedChart, Bar, Line, XAxis, ResponsiveContainer } from 'recharts';
 import { useGymStore } from '@/store';
 import { getInitials, daysUntilExpiry } from '@/lib/utils';
 import toast from 'react-hot-toast';
 import { collection, addDoc, onSnapshot } from 'firebase/firestore';
 import { db as fDb, isFirebaseReady } from '@/lib/firebase';
 import API from '@/services/api';
-
 import { useFollowups } from '@/hooks/useFollowups';
-import DashboardRightPanel from './components/DashboardRightPanel';
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -33,6 +31,7 @@ export default function DashboardPage() {
   const [memberAttendance, setMemberAttendance] = useState<any[]>([]);
   const [realtimeMembers, setRealtimeMembers] = useState<any[]>([]);
   const [enquiriesCount, setEnquiriesCount] = useState<number>(0);
+  const [activeHeatmapFilter, setActiveHeatmapFilter] = useState('Yours');
 
   // Sync store members to local state
   useEffect(() => {
@@ -41,11 +40,10 @@ export default function DashboardPage() {
     }
   }, [members]);
 
-  // Setup real-time listeners — ONLY for data that genuinely needs realtime
+  // Setup real-time listeners for required operational data
   useEffect(() => {
     if (!isFirebaseReady || !fDb) return;
     
-    // Employees — small collection, OK to snapshot
     const unsubEmployees = onSnapshot(collection(fDb, 'employees'), (snap) => {
       setEmployees(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     }, (err) => {
@@ -58,12 +56,10 @@ export default function DashboardPage() {
       console.warn("Firestore employeeAttendance listener error:", err);
     });
 
-    // Enquiries — single lightweight listener (replaces both onSnapshot + 5s polling)
     const unsubEnq = onSnapshot(collection(fDb, 'enquiries'), (snap) => {
       setEnquiriesCount(snap.size);
     }, (err) => {
       console.warn("Enquiries listener notice:", err);
-      // Fallback single fetch if listener fails
       API.get('/enquiries').then(res => {
         if (Array.isArray(res.data)) setEnquiriesCount(res.data.length);
       }).catch(() => {});
@@ -176,42 +172,6 @@ export default function DashboardPage() {
     }
   };
 
-  // 1. Prepare Chart Data from real attendance logs only
-  const weekdays = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul'];
-  const chartData = weekdays.map((month, idx) => {
-    const checkinCount = attendance ? attendance.filter((a: any) => {
-      const date = new Date(a.checkIn || a.createdAt || '');
-      return date.getMonth() === idx;
-    }).length : 0;
-
-    return {
-      name: month,
-      checkins: checkinCount || 0,
-      intensity: checkinCount ? checkinCount * 1.3 : 0
-    };
-  });
-
-  const hasChartData = chartData.some(d => d.checkins > 0);
-
-  // 2. Prepare Biometric Timeline Tracks from real checked-in members today
-  const todayActivities = attendance ? attendance.filter((a: any) => {
-    const checkinDate = new Date(a.checkIn || '');
-    const today = new Date();
-    return checkinDate.toDateString() === today.toDateString();
-  }).slice(0, 3) : []; // Max 3 rows
-
-  // 3. Calculations
-  const today = new Date();
-  const totalCheckinsThisWeek = attendance ? attendance.filter((a: any) => {
-    const checkinDate = new Date(a.checkIn || '');
-    const diff = (today.getTime() - checkinDate.getTime()) / (1000 * 3600 * 24);
-    return diff <= 7;
-  }).length : 0;
-
-  const planPrices: Record<string, number> = {
-    'Monthly': 2500, 'Quarterly': 6500, 'Semi-Annual': 11500, 'Annual Premium': 18000
-  };
-
   const getMemberRisk = (m: any) => {
     const daysLeft = daysUntilExpiry(m.expiryDate);
     const count = m.attendanceCount || 0;
@@ -235,22 +195,13 @@ export default function DashboardPage() {
 
   // Evaluate members risk
   const evaluatedMembers = realtimeMembers.map(m => ({ ...m, ai: getMemberRisk(m) }));
-  
-  // Owner metrics
-  const totalAtRiskCount = evaluatedMembers.filter(m => m.ai.category === 'Red' || m.ai.category === 'Orange').length;
-  const retentionRate = realtimeMembers.length > 0 ? Math.round(((realtimeMembers.length - totalAtRiskCount) / realtimeMembers.length) * 100) : 92;
-  const churnRate = 100 - retentionRate;
-  const expectedRevenueLoss = evaluatedMembers.reduce((sum, m) => {
-    const price = planPrices[m.plan] || 2500;
-    return sum + (price * (m.ai.cancellationChance / 100));
-  }, 0);
-  const expectedRenewalsCount = evaluatedMembers.reduce((sum, m) => sum + (m.ai.renewalChance / 100), 0);
 
   // Receptionist view lists
   const membersToCall = evaluatedMembers.filter(m => m.ai.category === 'Red' || m.ai.daysLeft <= 0).slice(0, 5);
   const membersAtRisk = evaluatedMembers.filter(m => m.ai.category === 'Orange' || m.ai.category === 'Red').slice(0, 5);
   const membersExpiringSoon = evaluatedMembers.filter(m => m.ai.daysLeft > 0 && m.ai.daysLeft <= 15).slice(0, 5);
   const renewalOpportunities = evaluatedMembers.filter(m => m.ai.renewalChance > 70).slice(0, 5);
+
   const getAbsenceStats = () => {
     const SYSTEM_LIVE_DATE = new Date('2026-07-01');
     const todayStr = new Date().toDateString();
@@ -337,622 +288,486 @@ export default function DashboardPage() {
     return left >= 0 && left <= 30;
   }).length;
 
+  const today = new Date();
+  const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+  const checkinDays = attendance ? attendance.map((a: any) => new Date(a.checkIn || '').getDate()) : [];
+
   return (
-    <div className="flex flex-col gap-3.5 w-full text-slate-800 text-left">
+    <div className="flex flex-col gap-5 w-full text-slate-800 text-left bg-[#FDFDFD]">
       
-      {/* Header Title Area & Switcher */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-2.5">
+      {/* ─── 1. PAGE HEADER ─── */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs">
         <div>
-          <h2 className="font-rowdies text-2xl font-bold text-slate-900 uppercase tracking-tight leading-none">
-            {viewMode === 'owner' ? 'Owner Dashboard' : 'Receptionist Console'}
-          </h2>
-          <p className="text-slate-500 text-[11px] mt-1 font-medium">
-            {viewMode === 'owner' 
-              ? 'Manage gym operations, expected revenue loss, and member retention rates.' 
-              : 'Track daily member follow-ups, at-risk members, and turnstile check-ins.'}
+          <h1 className="font-rowdies text-2xl font-bold text-slate-900 uppercase tracking-tight leading-none">
+            Dashboard
+          </h1>
+          <p className="text-slate-500 text-xs mt-1.5 font-medium">
+            Manage gym operations, memberships, attendance and business performance.
           </p>
         </div>
 
-        {/* Device Status & View mode toggle pill */}
-        <div className="flex flex-col md:flex-row items-end md:items-center gap-2">
-          <div className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-100 border border-slate-200 rounded-lg shadow-sm text-[9.5px] font-black uppercase tracking-wider text-slate-600">
-            <span className={`w-1.5 h-1.5 rounded-full ${deviceStatus === 'connected' ? 'bg-green-500' : deviceStatus === 'syncing' ? 'bg-yellow-500 animate-pulse' : 'bg-red-500'}`} />
+        <div className="flex items-center gap-3">
+          {/* Device status badge */}
+          <div className="flex items-center gap-2 px-3 py-1.5 bg-[#f4f8fd] border border-[#b9d7f7] rounded-xl text-[10px] font-black uppercase tracking-wider text-[#0b5cbe]">
+            <span className={`w-2 h-2 rounded-full ${deviceStatus === 'connected' ? 'bg-emerald-500' : deviceStatus === 'syncing' ? 'bg-blue-400 animate-pulse' : 'bg-rose-500'}`} />
             {deviceStatus === 'connected' ? 'Device Online' : deviceStatus === 'syncing' ? 'Syncing...' : 'Device Offline'}
           </div>
-          <div className="px-2.5 py-1 bg-slate-900 text-[#d4ff00] text-[9.5px] font-black uppercase tracking-widest rounded-full shadow-sm">
-            Owner Command Center
+
+          {/* View Mode Switcher */}
+          <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200">
+            <button
+              onClick={() => setViewMode('owner')}
+              className={`px-3 py-1 rounded-lg text-[10px] font-extrabold uppercase tracking-wider transition-all border-none cursor-pointer ${
+                viewMode === 'owner' ? 'bg-[#0b5cbe] text-white shadow-xs' : 'text-slate-600 hover:text-[#0b5cbe]'
+              }`}
+            >
+              Owner View
+            </button>
+            <button
+              onClick={() => setViewMode('reception')}
+              className={`px-3 py-1 rounded-lg text-[10px] font-extrabold uppercase tracking-wider transition-all border-none cursor-pointer ${
+                viewMode === 'reception' ? 'bg-[#0b5cbe] text-white shadow-xs' : 'text-slate-600 hover:text-[#0b5cbe]'
+              }`}
+            >
+              Receptionist View
+            </button>
           </div>
         </div>
       </div>
 
-      {viewMode === 'owner' ? (
-        <>
-          {/* Owner Analytics Metrics Row - 4 Clickable Action Cards (Spans Full Desktop Width) */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 animate-fade-in w-full">
-            {/* Card 1: Today's Followups */}
-            <div 
-              onClick={() => router.push('/dashboard/follow-up')}
-              className="bg-white border border-slate-200/80 p-4 rounded-2xl shadow-xs flex items-center gap-3.5 hover:border-amber-400 hover:shadow-md transition-all cursor-pointer group"
-            >
-              <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
-                <AlertTriangle size={18} />
-              </div>
-              <div>
-                <span className="text-[9px] font-black uppercase tracking-wider text-slate-400 block">Today's Followups</span>
-                <h3 className="text-lg font-black text-slate-900 mt-0.5">{todaysCount} Follow-ups</h3>
-                <p className="text-[8.5px] text-amber-600 font-semibold mt-0.5">Click to view follow-up list →</p>
-              </div>
-            </div>
+      {/* ─── 2. TOP KPI CARDS (ROW 1) ─── */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 w-full">
+        {/* Card 1: Today's Follow-ups */}
+        <div 
+          onClick={() => router.push('/dashboard/follow-up')}
+          className="bg-white border border-slate-200/80 p-4.5 rounded-2xl shadow-xs flex items-center gap-4 hover:border-[#0b5cbe] hover:shadow-md transition-all cursor-pointer group"
+        >
+          <div className="w-11 h-11 rounded-xl bg-[#eaf3ff] text-[#0b5cbe] flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform border border-[#b9d7f7]">
+            <AlertTriangle size={20} />
+          </div>
+          <div>
+            <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">Today's Follow-ups</span>
+            <h3 className="text-xl font-black text-slate-900 mt-0.5">{todaysCount} Follow-ups</h3>
+            <p className="text-[9px] text-[#0b5cbe] font-bold mt-0.5">Click to view follow-up list →</p>
+          </div>
+        </div>
 
-            {/* Card 2: Total Enquiry */}
-            <div 
-              onClick={() => router.push('/dashboard/enquiries')}
-              className="bg-white border border-slate-200/80 p-4 rounded-2xl shadow-xs flex items-center gap-3.5 hover:border-blue-400 hover:shadow-md transition-all cursor-pointer group"
-            >
-              <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
-                <ClipboardList size={18} />
-              </div>
-              <div>
-                <span className="text-[9px] font-black uppercase tracking-wider text-slate-400 block">Total Enquiry</span>
-                <h3 className="text-lg font-black text-slate-900 mt-0.5">{enquiriesCount} Enquiries</h3>
-                <p className="text-[8.5px] text-blue-600 font-semibold mt-0.5">Click to view enquiry leads →</p>
-              </div>
-            </div>
+        {/* Card 2: Total Enquiry */}
+        <div 
+          onClick={() => router.push('/dashboard/enquiries')}
+          className="bg-white border border-slate-200/80 p-4.5 rounded-2xl shadow-xs flex items-center gap-4 hover:border-[#0b5cbe] hover:shadow-md transition-all cursor-pointer group"
+        >
+          <div className="w-11 h-11 rounded-xl bg-[#eaf3ff] text-[#0b5cbe] flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform border border-[#b9d7f7]">
+            <ClipboardList size={20} />
+          </div>
+          <div>
+            <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">Total Enquiry</span>
+            <h3 className="text-xl font-black text-slate-900 mt-0.5">{enquiriesCount} Enquiries</h3>
+            <p className="text-[9px] text-[#0b5cbe] font-bold mt-0.5">Click to view enquiry leads →</p>
+          </div>
+        </div>
 
-            {/* Card 3: Expiring Soon Clients */}
-            <div 
-              onClick={() => router.push('/dashboard/expired')}
-              className="bg-white border border-slate-200/80 p-4 rounded-2xl shadow-xs flex items-center gap-3.5 hover:border-orange-400 hover:shadow-md transition-all cursor-pointer group"
-            >
-              <div className="w-10 h-10 rounded-xl bg-orange-50 text-orange-600 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
-                <Clock size={18} />
-              </div>
-              <div>
-                <span className="text-[9px] font-black uppercase tracking-wider text-slate-400 block">Expiring Soon Clients</span>
-                <h3 className="text-lg font-black text-slate-900 mt-0.5">{expiringSoonCount} Clients</h3>
-                <p className="text-[8.5px] text-orange-600 font-semibold mt-0.5">Click to view expiring list →</p>
-              </div>
-            </div>
+        {/* Card 3: Expiring Soon Clients */}
+        <div 
+          onClick={() => router.push('/dashboard/expired')}
+          className="bg-white border border-slate-200/80 p-4.5 rounded-2xl shadow-xs flex items-center gap-4 hover:border-[#0b5cbe] hover:shadow-md transition-all cursor-pointer group"
+        >
+          <div className="w-11 h-11 rounded-xl bg-[#eaf3ff] text-[#0b5cbe] flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform border border-[#b9d7f7]">
+            <Clock size={20} />
+          </div>
+          <div>
+            <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">Expiring Soon Clients</span>
+            <h3 className="text-xl font-black text-slate-900 mt-0.5">{expiringSoonCount} Clients</h3>
+            <p className="text-[9px] text-[#0b5cbe] font-bold mt-0.5">Click to view expiring list →</p>
+          </div>
+        </div>
 
-            {/* Card 4: Today's Collection */}
-            <div 
-              onClick={() => router.push('/dashboard/billing')}
-              className="bg-white border border-slate-200/80 p-4 rounded-2xl shadow-xs flex items-center gap-3.5 hover:border-emerald-400 hover:shadow-md transition-all cursor-pointer group"
-            >
-              <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
-                <DollarSign size={18} />
-              </div>
-              <div>
-                <span className="text-[9px] font-black uppercase tracking-wider text-slate-400 block">Today's Collection</span>
-                <h3 className="text-lg font-black text-emerald-600 mt-0.5">
-                  ₹{todaysCollection.toLocaleString('en-IN')}
-                </h3>
-                <p className="text-[8.5px] text-emerald-600 font-semibold mt-0.5">Click to view billing ledger →</p>
-              </div>
+        {/* Card 4: Today's Collection */}
+        <div 
+          onClick={() => router.push('/dashboard/billing')}
+          className="bg-white border border-slate-200/80 p-4.5 rounded-2xl shadow-xs flex items-center gap-4 hover:border-[#0b5cbe] hover:shadow-md transition-all cursor-pointer group"
+        >
+          <div className="w-11 h-11 rounded-xl bg-[#eaf3ff] text-[#0b5cbe] flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform border border-[#b9d7f7]">
+            <DollarSign size={20} />
+          </div>
+          <div>
+            <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">Today's Collection</span>
+            <h3 className="text-xl font-black text-slate-900 mt-0.5">
+              ₹{todaysCollection.toLocaleString('en-IN')}
+            </h3>
+            <p className="text-[9px] text-[#0b5cbe] font-bold mt-0.5">Click to view billing ledger →</p>
+          </div>
+        </div>
+      </div>
+
+      {/* ─── 3. SECONDARY OPERATIONS CARDS (ROW 2) ─── */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 w-full">
+        {/* Card 1: Members Inside */}
+        <div className="bg-white border border-slate-200/80 p-4 rounded-2xl shadow-xs flex flex-col justify-between min-h-[120px]">
+          <div className="flex justify-between items-center text-slate-400">
+            <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Members Inside</span>
+            <div className="w-6 h-6 rounded-full bg-[#f4f8fd] border border-[#b9d7f7] flex items-center justify-center text-[#0b5cbe]">
+              <ArrowUpRight size={12} />
             </div>
           </div>
+          <div className="mt-2">
+            <h3 className="text-2xl font-black text-slate-900 leading-none">
+              {liveCount}
+            </h3>
+            <div className="h-1.5 bg-slate-100 rounded-full mt-2.5 overflow-hidden flex">
+              <div className="h-full bg-[#0b5cbe]" style={{ width: `${Math.min(100, (liveCount / 50) * 100)}%` }} />
+            </div>
+            <div className="flex justify-between text-[9px] text-slate-400 font-bold mt-1.5">
+              <span>Inside Now</span>
+              <span>Cap 50</span>
+            </div>
+          </div>
+        </div>
 
-          {/* Main Workspace 2-Column Responsive Layout */}
-          <div className="grid grid-cols-1 xl:grid-cols-12 gap-5 w-full items-start">
+        {/* Card 2: Active Pass */}
+        <div className="bg-white border border-slate-200/80 p-4 rounded-2xl shadow-xs flex flex-col justify-between min-h-[120px]">
+          <div className="flex justify-between items-center text-slate-400">
+            <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Active Pass</span>
+            <span className="text-[9px] bg-[#eaf3ff] text-[#0b5cbe] px-2 py-0.5 rounded-full font-black uppercase border border-[#b9d7f7]">Gold</span>
+          </div>
+          <div className="mt-2 text-left">
+            <h3 className="text-xl font-black text-slate-900 leading-none">
+              {realtimeMembers ? realtimeMembers.filter(m => m.status === 'active').length : 0} Members
+            </h3>
             
-            {/* Primary Content Column (70-75% width on large screens) */}
-            <div className="xl:col-span-8 flex flex-col gap-4 min-w-0 w-full">
-              
-              {/* Top Row 4 Status Cards */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                {/* Card 1: Members Inside */}
-                <div className="bg-white border border-slate-200/80 p-3.5 rounded-2xl shadow-xs flex flex-col justify-between min-h-[110px] relative overflow-hidden group hover:border-slate-300 transition-colors">
-                  <div className="flex justify-between items-center text-slate-400">
-                    <span className="text-[9px] font-black uppercase tracking-wider">Members Inside</span>
-                    <div className="w-5 h-5 rounded-full bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-700">
-                      <ArrowUpRight size={10} />
-                    </div>
-                  </div>
-                  <div className="mt-2">
-                    <h3 className="text-2xl font-black text-slate-900 leading-none">
-                      {liveCount}
-                    </h3>
-                    <div className="h-1.5 bg-slate-100 rounded-full mt-2 overflow-hidden flex">
-                      <div className="h-full bg-[#0b5cbe]" style={{ width: `${Math.min(100, (liveCount / 50) * 100)}%` }} />
-                    </div>
-                    <div className="flex justify-between text-[8px] text-slate-400 font-bold mt-1">
-                      <span>Inside Now</span>
-                      <span>Cap 50</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Card 2: Active Pass */}
-                <div className="bg-gradient-to-br from-[#0b5cbe] to-[#064a9b] border border-[#b9d7f7]/30 p-3.5 rounded-2xl shadow-xs flex flex-col justify-between min-h-[110px] relative overflow-hidden text-white">
-                  <div className="flex justify-between items-center text-white">
-                    <span className="text-[9px] font-black uppercase tracking-wider text-blue-100">Active Pass</span>
-                    <span className="text-[8px] bg-white/20 text-white px-2 py-0.5 rounded-full font-bold uppercase backdrop-blur-xs border border-white/20">Gold</span>
-                  </div>
-                  <div className="mt-2 text-left">
-                    <h3 className="text-base font-black text-white leading-none">
-                      {realtimeMembers ? realtimeMembers.filter(m => m.status === 'active').length : 0} Members
-                    </h3>
-                    
-                    <div className="flex items-center gap-1.5 mt-2">
-                      <div className="flex -space-x-2 overflow-hidden">
-                        {realtimeMembers ? realtimeMembers.slice(0, 3).map((m, idx) => {
-                           const colors = ['bg-blue-300', 'bg-blue-400', 'bg-blue-200'];
-                           return (
-                             <div 
-                               key={idx} 
-                               className={`w-5 h-5 rounded-full border border-[#0b5cbe] ${colors[idx % 3]} text-blue-950 text-[7.5px] font-black flex items-center justify-center`}
-                             >
-                               {getInitials(m.name)}
-                             </div>
-                           );
-                        }) : null}
-                      </div>
-                      {realtimeMembers && realtimeMembers.length > 3 && (
-                        <span className="text-[8px] bg-white/20 text-white px-1.5 py-0.5 rounded-full font-black border border-white/20">
-                          +{realtimeMembers.length - 3}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Card 3: Staff Live */}
-                <div className="bg-white border border-slate-200/80 p-3 rounded-2xl shadow-xs flex flex-col justify-between min-h-[110px] text-xs font-semibold">
-                  <div className="flex justify-between items-center text-slate-400">
-                    <span className="text-[9px] font-black uppercase tracking-wider flex items-center gap-1">
-                      👨‍💼 Staff Live
-                    </span>
-                    <span className="text-[7.5px] bg-emerald-50 text-emerald-600 px-1.5 py-0.5 rounded-full font-black uppercase tracking-widest border border-emerald-100 animate-pulse">
-                      Live
-                    </span>
-                  </div>
-                  
-                  <div className="mt-1 space-y-0.5 text-[9px]">
-                    {[
-                      { label: 'Trainers', inside: employees.filter(e => e.role === 'Trainer' && e.currentStatus === 'Inside').length, total: employees.filter(e => e.role === 'Trainer').length, iconColor: 'bg-emerald-500' },
-                      { label: 'Reception', inside: employees.filter(e => e.role === 'Reception' && e.currentStatus === 'Inside').length, total: employees.filter(e => e.role === 'Reception').length, iconColor: 'bg-blue-500' },
-                      { label: 'Manager', inside: employees.filter(e => e.role === 'Manager' && e.currentStatus === 'Inside').length, total: employees.filter(e => e.role === 'Manager').length, iconColor: 'bg-purple-500' },
-                      { label: 'Cleaner', inside: employees.filter(e => e.role === 'Cleaner' && e.currentStatus === 'Inside').length, total: employees.filter(e => e.role === 'Cleaner').length, iconColor: 'bg-orange-500' }
-                    ].map((item, idx) => {
-                      const isAvailable = item.inside > 0;
-                      return (
-                        <div key={idx} className="flex justify-between items-center">
-                          <span className="flex items-center gap-1 text-slate-500 font-bold">
-                            <span className={`w-1.5 h-1.5 rounded-full ${isAvailable ? item.iconColor : 'bg-slate-300'}`} />
-                            {item.label}
-                          </span>
-                          <span className="text-slate-800 font-black font-mono">
-                            {item.inside}/{item.total}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  <div className="mt-1 pt-1 border-t border-slate-100 flex justify-between items-center text-[8.5px]">
-                    <span className="text-slate-400 font-bold">Total Staff Inside</span>
-                    <span className="font-black text-slate-900 font-mono">
-                      {employees.filter(e => e.currentStatus === 'Inside').length}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Card 4: Unlock Turnstile */}
-                <button 
-                  onClick={handleManualUnlock}
-                  disabled={gateUnlocked}
-                  className="bg-white border-2 border-dashed border-[#b9d7f7] hover:border-[#0b5cbe] hover:bg-[#eaf3ff] rounded-2xl p-3.5 flex flex-col items-center justify-center min-h-[110px] transition-all cursor-pointer group text-center"
-                >
-                  <div className={`w-8 h-8 rounded-full border-2 border-dashed ${gateUnlocked ? 'bg-[#0b5cbe] border-[#0b5cbe] text-white' : 'border-[#0b5cbe]/30 text-[#0b5cbe] group-hover:bg-[#0b5cbe] group-hover:text-white'} flex items-center justify-center transition-all`}>
-                    {gateUnlocked ? <Unlock size={14} /> : <Plus size={14} />}
-                  </div>
-                  <span className="text-[11px] font-black uppercase tracking-wider text-[#0b1f3a] mt-2 block">
-                    {gateUnlocked ? 'Gate Unlocked' : 'Unlock Turnstile'}
-                  </span>
-                  <span className="text-[7.5px] text-[#5f7692] font-bold mt-0.5">ESSL Gate Trigger Bridge</span>
-                </button>
-
-              </div>
-
-              {/* Attendance Inconsistency Alerts */}
-              <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-xs space-y-3 text-left">
-                <div className="flex justify-between items-center">
-                  <span className="text-[9px] font-black uppercase tracking-wider text-slate-400 flex items-center gap-1.5 font-display">
-                    ⚠️ Attendance Inconsistency Alerts
-                  </span>
-                  <span className="text-[7.5px] bg-rose-50 text-rose-600 px-2 py-0.5 rounded-full font-black uppercase tracking-widest border border-rose-100 animate-pulse">
-                    Action Required
-                  </span>
-                </div>
-                
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  {[
-                    { label: 'Members Missing Today', value: membersMissing, sub: 'Needs punch today', color: 'bg-slate-50 text-slate-750 border-slate-200/80' },
-                    { label: 'Employees Missing Today', value: employeesMissing, sub: 'Staff attendance status', color: 'bg-slate-50 text-slate-750 border-slate-200/80' },
-                    { label: 'Needs Follow-up', value: needsFollowUp, sub: '2-3 Days Absent', color: 'bg-amber-50 text-amber-800 border-amber-200/80' },
-                    { label: 'Critical (10+ Days)', value: critical, sub: 'Inconsistent attendance', color: 'bg-rose-50 text-rose-800 border-rose-200/80' }
-                  ].map((item, idx) => (
-                    <div key={idx} className={`p-3 rounded-xl border flex flex-col justify-between min-h-[72px] ${item.color}`}>
-                      <span className="text-[8px] font-black uppercase tracking-wider opacity-60 leading-none">{item.label}</span>
-                      <div className="text-lg font-black mt-1 leading-none font-mono">{item.value}</div>
-                      <span className="text-[8px] font-bold mt-0.5 opacity-70 leading-none">{item.sub}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Chart & Live Activity Hub Row */}
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                
-                {/* Chart Card */}
-                <div className="lg:col-span-2 bg-gradient-to-br from-[#083f82] to-[#0b5cbe] text-white p-4 rounded-2xl shadow-md flex flex-col md:flex-row gap-4 justify-between min-h-[200px] relative overflow-hidden border border-blue-400/20">
-                  <div className="absolute right-0 top-0 w-24 h-24 rounded-full bg-white/5 blur-xl pointer-events-none" />
-
-                  <div className="flex-1 flex flex-col justify-between">
-                    <div>
-                      <span className="text-[8.5px] font-black uppercase tracking-wider text-blue-200">Attendance Intensity</span>
-                      <h4 className="text-xs font-extrabold text-white mt-0.5 leading-none">Weekly Check-in Distribution</h4>
-                    </div>
-
-                    <div className="h-[110px] w-full mt-2">
-                      {isMounted && hasChartData ? (
-                        <ResponsiveContainer width="100%" height="100%">
-                          <ComposedChart data={chartData} margin={{ top: 5, right: 0, bottom: 0, left: -40 }}>
-                            <XAxis dataKey="name" stroke="transparent" tick={{ fill: '#b9d7f7', fontSize: 8, fontWeight: 700 }} axisLine={false} tickLine={false} />
-                            <Bar dataKey="checkins" fill="#FFFFFF" radius={[3, 3, 0, 0]} barSize={12} />
-                            <Line type="monotone" dataKey="intensity" stroke="#b9d7f7" strokeWidth={2} dot={false} />
-                          </ComposedChart>
-                        </ResponsiveContainer>
-                      ) : (
-                        <div className="h-full w-full flex flex-col items-center justify-center text-center gap-1.5">
-                          <Activity size={16} className="text-blue-200/50" />
-                          <span className="text-[9.5px] text-blue-200 font-bold">No biometric data recorded this year</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="w-full md:w-[150px] border-t md:border-t-0 md:border-l border-white/10 pt-3 md:pt-0 md:pl-4 flex flex-col justify-between text-left shrink-0">
-                    <div>
-                      <span className="text-[8px] font-black uppercase tracking-wider text-blue-200 block">Weekly Syncs</span>
-                      <div className="flex items-center gap-1.5 mt-1">
-                        <div className="text-lg font-black text-white">{totalCheckinsThisWeek}</div>
-                        <span className="text-[8px] bg-red-900/50 text-red-300 px-1 py-0.5 rounded font-black">-7%</span>
-                      </div>
-                      <p className="text-[7px] text-blue-200/70 font-bold mt-0.5">Checkins since last week</p>
-                    </div>
-
-                    <div className="mt-2 border-t border-white/5 pt-2">
-                      <span className="text-[8px] font-black uppercase tracking-wider text-blue-200 block">Monthly Syncs</span>
-                      <div className="flex items-center gap-1.5 mt-1">
-                        <div className="text-lg font-black text-white">{attendance ? attendance.length : 0}</div>
-                        <span className="text-[8px] bg-white/20 text-white px-1 py-0.5 rounded font-black">+13%</span>
-                      </div>
-                      <p className="text-[7px] text-blue-200/70 font-bold mt-0.5">Checkins this month</p>
-                    </div>
-
-                    <div className="mt-2 flex items-center gap-2 text-[7px] text-blue-200/80 font-black uppercase">
-                      <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-white" /> This Year</span>
-                      <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-blue-300" /> Last Year</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Live Activity Hub Column */}
-                <div className="bg-white border border-slate-200/80 p-4 rounded-2xl shadow-xs flex flex-col justify-between min-h-[200px] text-left">
-                  <div className="flex justify-between items-center border-b border-slate-100 pb-2">
-                    <div>
-                      <h3 className="font-extrabold text-slate-800 text-sm flex items-center gap-1.5">
-                        Live Activity Hub
-                        <span className="relative flex h-2 w-2">
-                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
-                          <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500"></span>
-                        </span>
-                      </h3>
-                      <p className="text-[9px] text-slate-400 font-bold mt-0.5">Real-time biometric attendance feed</p>
-                    </div>
-                    <span className="text-[8px] bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded-full font-black uppercase tracking-wider border border-emerald-100 animate-pulse">
-                      Live
-                    </span>
-                  </div>
-                  
-                  <div className="mt-3 space-y-2.5 flex-1 overflow-y-auto max-h-[180px] pr-1 custom-scrollbar">
-                    {(() => {
-                      const recentAttendance = [...memberAttendance]
-                        .sort((a, b) => {
-                          const tA = new Date(a.checkIn || a.createdAt || 0).getTime();
-                          const tB = new Date(b.checkIn || b.createdAt || 0).getTime();
-                          return tB - tA;
-                        })
-                        .slice(0, 4);
-
-                      if (recentAttendance.length === 0) {
-                        return (
-                          <div className="h-full flex flex-col items-center justify-center text-center gap-2 py-8">
-                            <Activity size={16} className="text-slate-350 animate-pulse" />
-                            <span className="text-[10px] text-slate-400 font-bold">Waiting for live sync...</span>
-                          </div>
-                        );
-                      }
-
-                      return recentAttendance.map((item, idx) => {
-                        const checkInTime = new Date(item.checkIn || item.createdAt || new Date());
-                        const timeStr = checkInTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
-                        const isCheckOut = !!item.checkOut;
-                        const avatar = item.avatarUrl || item.avatar || `https://api.dicebear.com/7.x/adventurer/svg?seed=${(item.memberName || item.name || 'User').replace(/ /g, '')}`;
-                        
-                        return (
-                          <div key={item.id || idx} className="flex items-center justify-between bg-slate-50 border border-slate-100 p-2 rounded-xl hover:bg-slate-100/50 transition-all">
-                            <div className="flex items-center gap-2 min-w-0">
-                              <img 
-                                src={avatar}
-                                className="w-8 h-8 rounded-full bg-white border border-slate-100 shadow-xs shrink-0 object-cover"
-                                alt=""
-                                onError={(e) => { (e.target as HTMLImageElement).src = `https://api.dicebear.com/7.x/adventurer/svg?seed=${idx}` }}
-                              />
-                              <div className="truncate">
-                                <div className="text-[11px] font-black text-slate-800 truncate">{item.memberName || item.name || 'Unknown Athlete'}</div>
-                                <div className="text-[8.5px] text-slate-400 font-bold flex items-center gap-1 font-mono">
-                                  <span>{timeStr}</span>
-                                  <span>•</span>
-                                  <span className="text-[8px] font-sans font-semibold uppercase">{item.method || 'Biometric'}</span>
-                                </div>
-                              </div>
-                            </div>
-                            <span className={`px-2 py-0.5 rounded-full text-[7.5px] font-black uppercase tracking-wider shrink-0 ${
-                              isCheckOut 
-                                ? 'bg-rose-50 text-rose-600 border border-rose-100' 
-                                : 'bg-emerald-50 text-emerald-600 border border-emerald-100'
-                            }`}>
-                              {isCheckOut ? 'Exit' : 'In'}
-                            </span>
-                          </div>
-                        );
-                      });
-                    })()}
-                  </div>
-                </div>
-
-              </div>
-
-            </div>
-
-            {/* Activity Sidebar Column (25-30% width on large screens) */}
-            <div className="xl:col-span-4 w-full sticky top-4">
-              <DashboardRightPanel realtimeFeed={memberAttendance} />
-            </div>
-
-          </div>
-        </>
-      ) : (
-        /* Receptionist Console View */
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-fade-in">
-          {/* Card 1: Members to Call Today */}
-          <div className="bg-white border border-slate-100 p-5 rounded-[28px] shadow-sm flex flex-col min-h-[300px]">
-            <div className="flex justify-between items-center border-b border-slate-50 pb-3">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-xl bg-red-50 text-red-500 flex items-center justify-center">
-                  <Phone size={14} />
-                </div>
-                <div>
-                  <h3 className="font-extrabold text-slate-800 text-sm">Members To Call Today</h3>
-                  <p className="text-[8.5px] text-slate-400 font-bold uppercase tracking-wider">Critical Risk / Lapsed Members</p>
-                </div>
-              </div>
-              <span className="text-[9px] bg-red-100 text-red-600 px-2 py-0.5 rounded-full font-black">
-                {membersToCall.length} Pending
-              </span>
-            </div>
-            <div className="mt-4 flex-1 overflow-y-auto space-y-3 max-h-[220px] pr-1">
-              {membersToCall.map((m, idx) => (
-                <div key={idx} className="flex items-center justify-between bg-slate-50 border border-slate-100 p-3 rounded-2xl">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-8 h-8 rounded-full bg-slate-200 text-black text-[9px] font-black flex items-center justify-center shrink-0">
-                      {getInitials(m.name)}
-                    </div>
-                    <div className="truncate">
-                      <div className="text-xs font-black text-slate-800 truncate">{m.name}</div>
-                      <div className="text-[8.5px] text-slate-400 font-semibold">{m.phone} · Risk: {m.ai.score}%</div>
-                    </div>
-                  </div>
-                  <button 
-                    onClick={() => handleReceptionAction(m, 'Call Member')}
-                    className="px-3 py-1.5 rounded-xl bg-black text-white hover:bg-black/90 transition-all text-[8.5px] font-black uppercase tracking-wider flex items-center gap-1 cursor-pointer border-none shrink-0"
+            <div className="flex items-center gap-1.5 mt-2.5">
+              <div className="flex -space-x-2 overflow-hidden">
+                {realtimeMembers ? realtimeMembers.slice(0, 4).map((m, idx) => (
+                  <div 
+                    key={idx} 
+                    className="w-6 h-6 rounded-full border-2 border-white bg-[#0b5cbe] text-white text-[8px] font-black flex items-center justify-center shadow-xs"
                   >
-                    <Phone size={10} /> Call
-                  </button>
-                </div>
-              ))}
-              {membersToCall.length === 0 && (
-                <div className="text-center py-10 text-[10px] text-slate-400 italic">No members need calls today</div>
-              )}
-            </div>
-          </div>
-
-          {/* Card 2: Members Expiring Soon */}
-          <div className="bg-white border border-slate-100 p-5 rounded-[28px] shadow-sm flex flex-col min-h-[300px]">
-            <div className="flex justify-between items-center border-b border-slate-50 pb-3">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-xl bg-orange-50 text-orange-500 flex items-center justify-center">
-                  <Clock size={14} />
-                </div>
-                <div>
-                  <h3 className="font-extrabold text-slate-800 text-sm">Members Expiring Soon</h3>
-                  <p className="text-[8.5px] text-slate-400 font-bold uppercase tracking-wider">Expiry within 15 Days</p>
-                </div>
-              </div>
-              <span className="text-[9px] bg-orange-100 text-orange-600 px-2 py-0.5 rounded-full font-black">
-                {membersExpiringSoon.length} Expiring
-              </span>
-            </div>
-            <div className="mt-4 flex-1 overflow-y-auto space-y-3 max-h-[220px] pr-1">
-              {membersExpiringSoon.map((m, idx) => (
-                <div key={idx} className="flex items-center justify-between bg-slate-50 border border-slate-100 p-3 rounded-2xl">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-8 h-8 rounded-full bg-slate-200 text-black text-[9px] font-black flex items-center justify-center shrink-0">
-                      {getInitials(m.name)}
-                    </div>
-                    <div className="truncate">
-                      <div className="text-xs font-black text-slate-800 truncate">{m.name}</div>
-                      <div className="text-[8.5px] text-slate-400 font-semibold">{m.ai.daysLeft} days left · {m.plan}</div>
-                    </div>
+                    {getInitials(m.name)}
                   </div>
-                  <button 
-                    onClick={() => handleReceptionAction(m, 'Send WhatsApp')}
-                    className="px-3 py-1.5 rounded-xl bg-[#25D366] hover:bg-[#20ba5a] text-white transition-all text-[8.5px] font-black uppercase tracking-wider flex items-center gap-1 cursor-pointer border-none shrink-0"
-                  >
-                    <MessageSquare size={10} /> WhatsApp
-                  </button>
-                </div>
-              ))}
-              {membersExpiringSoon.length === 0 && (
-                <div className="text-center py-10 text-[10px] text-slate-400 italic">No memberships expiring soon</div>
-              )}
-            </div>
-          </div>
-
-          {/* Card 3: Members At Risk */}
-          <div className="bg-white border border-slate-100 p-5 rounded-[28px] shadow-sm flex flex-col min-h-[300px]">
-            <div className="flex justify-between items-center border-b border-slate-50 pb-3">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-500 flex items-center justify-center">
-                  <ShieldAlert size={14} />
-                </div>
-                <div>
-                  <h3 className="font-extrabold text-slate-800 text-sm">Members At Risk</h3>
-                  <p className="text-[8.5px] text-slate-400 font-bold uppercase tracking-wider">Moderate / High Risk (Score &gt; 30)</p>
-                </div>
+                )) : null}
               </div>
-              <span className="text-[9px] bg-amber-100 text-amber-600 px-2 py-0.5 rounded-full font-black">
-                {membersAtRisk.length} Flagged
-              </span>
-            </div>
-            <div className="mt-4 flex-1 overflow-y-auto space-y-3 max-h-[220px] pr-1">
-              {membersAtRisk.map((m, idx) => (
-                <div key={idx} className="flex items-center justify-between bg-slate-50 border border-slate-100 p-3 rounded-2xl">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-8 h-8 rounded-full bg-slate-200 text-black text-[9px] font-black flex items-center justify-center shrink-0">
-                      {getInitials(m.name)}
-                    </div>
-                    <div className="truncate">
-                      <div className="text-xs font-black text-slate-800 truncate">{m.name}</div>
-                      <div className="text-[8.5px] text-slate-400 font-semibold">Risk: {m.ai.score}% · Trainer: {m.trainer || 'None'}</div>
-                    </div>
-                  </div>
-                  <button 
-                    onClick={() => handleReceptionAction(m, 'Assign Trainer')}
-                    className="px-3 py-1.5 rounded-xl bg-blue-600 text-white hover:bg-blue-700 transition-all text-[8.5px] font-black uppercase tracking-wider flex items-center gap-1 cursor-pointer border-none shrink-0"
-                  >
-                    <Plus size={10} /> Assign
-                  </button>
-                </div>
-              ))}
-              {membersAtRisk.length === 0 && (
-                <div className="text-center py-10 text-[10px] text-slate-400 italic">No members currently flagged at risk</div>
-              )}
-            </div>
-          </div>
-
-          {/* Card 4: Renewal Opportunities */}
-          <div className="bg-white border border-slate-100 p-5 rounded-[28px] shadow-sm flex flex-col min-h-[300px]">
-            <div className="flex justify-between items-center border-b border-slate-50 pb-3">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-500 flex items-center justify-center">
-                  <Sparkles size={14} />
-                </div>
-                <div>
-                  <h3 className="font-extrabold text-slate-800 text-sm">Renewal Opportunities</h3>
-                  <p className="text-[8.5px] text-slate-400 font-bold uppercase tracking-wider">Chance of Renewal &gt; 70%</p>
-                </div>
-              </div>
-              <span className="text-[9px] bg-emerald-100 text-emerald-600 px-2 py-0.5 rounded-full font-black">
-                {renewalOpportunities.length} Opportunity
-              </span>
-            </div>
-            <div className="mt-4 flex-1 overflow-y-auto space-y-3 max-h-[220px] pr-1">
-              {renewalOpportunities.map((m, idx) => (
-                <div key={idx} className="flex items-center justify-between bg-slate-50 border border-slate-100 p-3 rounded-2xl">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-8 h-8 rounded-full bg-slate-200 text-black text-[9px] font-black flex items-center justify-center shrink-0">
-                      {getInitials(m.name)}
-                    </div>
-                    <div className="truncate">
-                      <div className="text-xs font-black text-slate-800 truncate">{m.name}</div>
-                      <div className="text-[8.5px] text-slate-400 font-semibold">Renewal Chance: {m.ai.renewalChance}% · Expiry: {m.ai.daysLeft}d</div>
-                    </div>
-                  </div>
-                  <button 
-                    onClick={() => handleReceptionAction(m, 'Offer Discount')}
-                    className="px-3 py-1.5 rounded-xl bg-[#0b5cbe] text-white hover:bg-[#064a9b] transition-all text-[8.5px] font-black uppercase tracking-wider flex items-center gap-1 cursor-pointer border-none shrink-0"
-                  >
-                    <Plus size={10} /> Offer 20%
-                  </button>
-                </div>
-              ))}
-              {renewalOpportunities.length === 0 && (
-                <div className="text-center py-10 text-[10px] text-slate-400 italic">No renewal opportunities found</div>
+              {realtimeMembers && realtimeMembers.length > 4 && (
+                <span className="text-[9px] bg-[#f4f8fd] text-[#0b5cbe] px-2 py-0.5 rounded-full font-black border border-[#b9d7f7]">
+                  +{realtimeMembers.length - 4}
+                </span>
               )}
             </div>
           </div>
         </div>
-      )}
 
-      {/* Bottom Row: Today's Biometric Flow Timeline */}
-      <div className="bg-white border border-slate-100 p-5 rounded-[28px] shadow-sm flex flex-col justify-between min-h-[240px]">
-        <div className="flex justify-between items-center border-b border-slate-50 pb-3">
-          <div>
-            <h3 className="font-extrabold text-slate-800 text-sm">Today&apos;s Biometric Session Flow</h3>
-            <p className="text-[9px] text-slate-400 font-bold mt-0.5">Live workout duration tracks from ESSL gate logs</p>
+        {/* Card 3: Staff Live */}
+        <div className="bg-white border border-slate-200/80 p-4 rounded-2xl shadow-xs flex flex-col justify-between min-h-[120px] text-xs font-semibold">
+          <div className="flex justify-between items-center text-slate-400">
+            <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 flex items-center gap-1">
+              Staff Live
+            </span>
+            <span className="text-[8px] bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded-full font-black uppercase tracking-widest border border-emerald-100">
+              Live
+            </span>
           </div>
-          <span className="text-[8.5px] bg-[#eaf3ff] text-[#0b5cbe] border border-[#b9d7f7] px-2 py-1 rounded font-black uppercase tracking-wider">
-            June 2026
+          
+          <div className="mt-1.5 space-y-1 text-[9.5px]">
+            {[
+              { label: 'Trainers', inside: employees.filter(e => e.role === 'Trainer' && e.currentStatus === 'Inside').length, total: employees.filter(e => e.role === 'Trainer').length },
+              { label: 'Reception', inside: employees.filter(e => e.role === 'Reception' && e.currentStatus === 'Inside').length, total: employees.filter(e => e.role === 'Reception').length },
+              { label: 'Manager', inside: employees.filter(e => e.role === 'Manager' && e.currentStatus === 'Inside').length, total: employees.filter(e => e.role === 'Manager').length },
+              { label: 'Cleaner', inside: employees.filter(e => e.role === 'Cleaner' && e.currentStatus === 'Inside').length, total: employees.filter(e => e.role === 'Cleaner').length }
+            ].map((item, idx) => (
+              <div key={idx} className="flex justify-between items-center">
+                <span className="flex items-center gap-1.5 text-slate-500 font-bold">
+                  <span className={`w-1.5 h-1.5 rounded-full ${item.inside > 0 ? 'bg-[#0b5cbe]' : 'bg-slate-300'}`} />
+                  {item.label}
+                </span>
+                <span className="text-slate-800 font-black font-mono">
+                  {item.inside}/{item.total}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-1.5 pt-1.5 border-t border-slate-100 flex justify-between items-center text-[9px]">
+            <span className="text-slate-400 font-bold">Total Staff Inside</span>
+            <span className="font-black text-slate-900 font-mono">
+              {employees.filter(e => e.currentStatus === 'Inside').length}
+            </span>
+          </div>
+        </div>
+
+        {/* Card 4: Unlock Turnstile */}
+        <button 
+          onClick={handleManualUnlock}
+          disabled={gateUnlocked}
+          className="bg-white border-2 border-dashed border-[#b9d7f7] hover:border-[#0b5cbe] hover:bg-[#f4f8fd] rounded-2xl p-4 flex flex-col items-center justify-center min-h-[120px] transition-all cursor-pointer group text-center"
+        >
+          <div className={`w-9 h-9 rounded-full border-2 border-dashed ${gateUnlocked ? 'bg-[#0b5cbe] border-[#0b5cbe] text-white' : 'border-[#0b5cbe]/40 text-[#0b5cbe] group-hover:bg-[#0b5cbe] group-hover:text-white'} flex items-center justify-center transition-all`}>
+            {gateUnlocked ? <Unlock size={16} /> : <Plus size={16} />}
+          </div>
+          <span className="text-xs font-black uppercase tracking-wider text-slate-900 mt-2 block">
+            {gateUnlocked ? 'Gate Unlocked' : 'Unlock Turnstile'}
+          </span>
+          <span className="text-[8px] text-slate-400 font-bold mt-0.5">ESSL Gate Trigger Bridge</span>
+        </button>
+      </div>
+
+      {/* ─── 4. ATTENDANCE INCONSISTENCY ALERTS ─── */}
+      <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs space-y-3.5 text-left w-full">
+        <div className="flex justify-between items-center">
+          <span className="text-[10px] font-black uppercase tracking-wider text-slate-500 flex items-center gap-1.5 font-display">
+            ⚠️ Attendance Inconsistency Alerts
+          </span>
+          <span className="text-[8px] bg-rose-50 text-rose-600 px-2.5 py-0.5 rounded-full font-black uppercase tracking-widest border border-rose-100">
+            Action Required
           </span>
         </div>
-
-        <div className="mt-4 space-y-4 flex-1">
-          {todayActivities.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center text-center gap-2 py-6">
-              <Clock size={16} className="text-slate-300" />
-              <span className="text-[10px] text-slate-400 font-bold">No active sessions tracked today</span>
+        
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+          {[
+            { label: 'Members Missing Today', value: membersMissing, sub: 'Needs punch today', color: 'bg-[#f4f8fd] text-slate-800 border-[#b9d7f7]' },
+            { label: 'Employees Missing Today', value: employeesMissing, sub: 'Staff attendance status', color: 'bg-[#f4f8fd] text-slate-800 border-[#b9d7f7]' },
+            { label: 'Needs Follow-up', value: needsFollowUp, sub: '2-3 Days Absent', color: 'bg-[#eaf3ff] text-[#0b5cbe] border-[#b9d7f7]' },
+            { label: 'Critical (10+ Days)', value: critical, sub: 'Inconsistent attendance', color: 'bg-rose-50 text-rose-800 border-rose-200/80' }
+          ].map((item, idx) => (
+            <div key={idx} className={`p-3.5 rounded-xl border flex flex-col justify-between min-h-[76px] ${item.color}`}>
+              <span className="text-[8.5px] font-black uppercase tracking-wider opacity-70 leading-none">{item.label}</span>
+              <div className="text-xl font-black mt-1.5 leading-none font-mono">{item.value}</div>
+              <span className="text-[8.5px] font-bold mt-1 opacity-80 leading-none">{item.sub}</span>
             </div>
-          ) : (
-            todayActivities.map((act: any, idx) => {
-              const checkinTime = new Date(act.checkIn);
-              const startHour = checkinTime.getHours();
-              const startOffset = Math.max(0, startHour - 6);
-              return (
-                <div key={idx} className="grid grid-cols-12 gap-3 items-center">
-                  <div className="col-span-3 flex items-center gap-2 text-left">
-                    <div className="w-6 h-6 rounded-full bg-slate-100 text-black text-[8px] font-black flex items-center justify-center">
-                      {getInitials(act.memberName)}
-                    </div>
-                    <div className="truncate">
-                      <div className="text-[10px] font-black text-slate-800 truncate">{act.memberName}</div>
-                      <div className="text-[7.5px] text-slate-400 leading-none">Checked in</div>
-                    </div>
-                  </div>
-
-                  <div className="col-span-9 relative h-6 bg-slate-50 border border-slate-100 rounded-xl overflow-hidden flex items-center">
-                    <div 
-                      className="absolute h-4 bg-gradient-to-r from-[#0b5cbe] to-[#2876d0] text-white border border-blue-400/30 rounded-full flex items-center px-2 text-[8px] font-black shadow-sm"
-                      style={{ left: `${(startOffset / 14) * 100}%`, width: '25%' }}
-                    >
-                      Workout Session
-                    </div>
-                  </div>
-                </div>
-              );
-            })
-          )}
-        </div>
-
-        <div className="grid grid-cols-12 gap-3 text-center border-t border-slate-50 pt-2.5 mt-4 text-[7px] text-slate-400 font-black uppercase tracking-wider">
-          <div className="col-span-3 text-left">Timeframe</div>
-          {['6 AM', '8 AM', '10 AM', '12 PM', '2 PM', '4 PM', '6 PM', '8 PM', '10 PM'].map((h, i) => (
-            <div key={i} className="col-span-1">{h}</div>
           ))}
         </div>
+      </div>
 
+      {/* ─── 5. ACTIVITY HEATMAP CALENDAR (FULL WIDTH) ─── */}
+      <div className="bg-white border border-slate-200/80 p-5 rounded-2xl shadow-xs flex flex-col justify-between min-h-[260px] w-full text-left">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
+          <div>
+            <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">Attendance Logs</span>
+            <h3 className="text-sm font-black text-slate-900 uppercase mt-0.5 font-display">Activity Heatmap</h3>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <div className="flex gap-1.5">
+              {['Yours', 'Mohali'].map((f) => (
+                <button
+                  key={f}
+                  onClick={() => setActiveHeatmapFilter(f)}
+                  className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-wider transition-all border-none cursor-pointer ${
+                    activeHeatmapFilter === f ? 'bg-[#0b5cbe] text-white shadow-xs' : 'bg-slate-100 text-slate-600 hover:bg-[#eaf3ff] hover:text-[#0b5cbe]'
+                  }`}
+                >
+                  {f}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex items-center gap-1.5 text-[10px] font-black text-slate-700">
+              <span>June 2026</span>
+              <div className="flex gap-1">
+                <button className="w-6 h-6 rounded-full bg-slate-100 hover:bg-[#eaf3ff] text-[#0b5cbe] flex items-center justify-center border border-slate-200 cursor-pointer">
+                  <ChevronLeft size={12} />
+                </button>
+                <button className="w-6 h-6 rounded-full bg-slate-100 hover:bg-[#eaf3ff] text-[#0b5cbe] flex items-center justify-center border border-slate-200 cursor-pointer">
+                  <ChevronRight size={12} />
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-7 gap-2.5 my-4 justify-items-center text-[10px] font-black text-slate-400 w-full">
+          {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map(d => (
+            <div key={d} className="w-8 text-center">{d}</div>
+          ))}
+          {[1, 2].map(o => (
+            <div key={`offset-${o}`} className="w-8 h-8 bg-transparent" />
+          ))}
+          {Array.from({ length: daysInMonth }).map((_, idx) => {
+            const dateNum = idx + 1;
+            const hasCheckin = checkinDays.includes(dateNum);
+            return (
+              <div
+                key={idx}
+                className={`w-8 h-8 rounded-xl border transition-all text-[10px] font-bold flex items-center justify-center ${
+                  hasCheckin
+                    ? 'bg-[#0b5cbe] border-[#0b5cbe] text-white font-black shadow-xs'
+                    : 'border-slate-200 bg-slate-50 text-slate-600 hover:border-[#b9d7f7] hover:bg-[#eaf3ff] hover:text-[#0b5cbe] cursor-pointer'
+                }`}
+              >
+                {dateNum}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ─── 6. RECEPTION & ACTION ROSTER (FULL WIDTH 4 CARDS) ─── */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 w-full">
+        {/* Card 1: Members to Call */}
+        <div className="bg-white border border-slate-200/80 p-4.5 rounded-2xl shadow-xs flex flex-col min-h-[280px]">
+          <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-xl bg-[#eaf3ff] text-[#0b5cbe] flex items-center justify-center border border-[#b9d7f7]">
+                <Phone size={14} />
+              </div>
+              <div>
+                <h3 className="font-extrabold text-slate-800 text-xs">Members To Call</h3>
+                <p className="text-[8px] text-slate-400 font-bold uppercase tracking-wider">Lapsed Members</p>
+              </div>
+            </div>
+            <span className="text-[8.5px] bg-rose-50 text-rose-600 px-2 py-0.5 rounded-full font-black border border-rose-100">
+              {membersToCall.length} Pending
+            </span>
+          </div>
+          <div className="mt-3 flex-1 overflow-y-auto space-y-2.5 max-h-[200px] pr-1">
+            {membersToCall.map((m, idx) => (
+              <div key={idx} className="flex items-center justify-between bg-slate-50 border border-slate-100 p-2.5 rounded-xl">
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="w-7 h-7 rounded-full bg-[#0b5cbe] text-white text-[8px] font-black flex items-center justify-center shrink-0">
+                    {getInitials(m.name)}
+                  </div>
+                  <div className="truncate">
+                    <div className="text-[11px] font-black text-slate-800 truncate">{m.name}</div>
+                    <div className="text-[8px] text-slate-400 font-semibold">{m.phone}</div>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => handleReceptionAction(m, 'Call Member')}
+                  className="px-2.5 py-1.5 rounded-lg bg-[#0b5cbe] hover:bg-[#084a99] text-white transition-all text-[8px] font-black uppercase tracking-wider flex items-center gap-1 cursor-pointer border-none shrink-0"
+                >
+                  <Phone size={9} /> Call
+                </button>
+              </div>
+            ))}
+            {membersToCall.length === 0 && (
+              <div className="text-center py-8 text-[10px] text-slate-400 italic">No members need calls</div>
+            )}
+          </div>
+        </div>
+
+        {/* Card 2: Members Expiring Soon */}
+        <div className="bg-white border border-slate-200/80 p-4.5 rounded-2xl shadow-xs flex flex-col min-h-[280px]">
+          <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-xl bg-[#eaf3ff] text-[#0b5cbe] flex items-center justify-center border border-[#b9d7f7]">
+                <Clock size={14} />
+              </div>
+              <div>
+                <h3 className="font-extrabold text-slate-800 text-xs">Expiring Soon</h3>
+                <p className="text-[8px] text-slate-400 font-bold uppercase tracking-wider">Within 15 Days</p>
+              </div>
+            </div>
+            <span className="text-[8.5px] bg-[#eaf3ff] text-[#0b5cbe] px-2 py-0.5 rounded-full font-black border border-[#b9d7f7]">
+              {membersExpiringSoon.length} Expiring
+            </span>
+          </div>
+          <div className="mt-3 flex-1 overflow-y-auto space-y-2.5 max-h-[200px] pr-1">
+            {membersExpiringSoon.map((m, idx) => (
+              <div key={idx} className="flex items-center justify-between bg-slate-50 border border-slate-100 p-2.5 rounded-xl">
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="w-7 h-7 rounded-full bg-[#0b5cbe] text-white text-[8px] font-black flex items-center justify-center shrink-0">
+                    {getInitials(m.name)}
+                  </div>
+                  <div className="truncate">
+                    <div className="text-[11px] font-black text-slate-800 truncate">{m.name}</div>
+                    <div className="text-[8px] text-slate-400 font-semibold">{m.ai.daysLeft}d left</div>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => handleReceptionAction(m, 'Send WhatsApp')}
+                  className="px-2.5 py-1.5 rounded-lg bg-[#25D366] hover:bg-[#20ba5a] text-white transition-all text-[8px] font-black uppercase tracking-wider flex items-center gap-1 cursor-pointer border-none shrink-0"
+                >
+                  <MessageSquare size={9} /> WA
+                </button>
+              </div>
+            ))}
+            {membersExpiringSoon.length === 0 && (
+              <div className="text-center py-8 text-[10px] text-slate-400 italic">No memberships expiring</div>
+            )}
+          </div>
+        </div>
+
+        {/* Card 3: Members At Risk */}
+        <div className="bg-white border border-slate-200/80 p-4.5 rounded-2xl shadow-xs flex flex-col min-h-[280px]">
+          <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-xl bg-[#eaf3ff] text-[#0b5cbe] flex items-center justify-center border border-[#b9d7f7]">
+                <ShieldAlert size={14} />
+              </div>
+              <div>
+                <h3 className="font-extrabold text-slate-800 text-xs">Members At Risk</h3>
+                <p className="text-[8px] text-slate-400 font-bold uppercase tracking-wider">High Risk Flagged</p>
+              </div>
+            </div>
+            <span className="text-[8.5px] bg-[#eaf3ff] text-[#0b5cbe] px-2 py-0.5 rounded-full font-black border border-[#b9d7f7]">
+              {membersAtRisk.length} Flagged
+            </span>
+          </div>
+          <div className="mt-3 flex-1 overflow-y-auto space-y-2.5 max-h-[200px] pr-1">
+            {membersAtRisk.map((m, idx) => (
+              <div key={idx} className="flex items-center justify-between bg-slate-50 border border-slate-100 p-2.5 rounded-xl">
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="w-7 h-7 rounded-full bg-[#0b5cbe] text-white text-[8px] font-black flex items-center justify-center shrink-0">
+                    {getInitials(m.name)}
+                  </div>
+                  <div className="truncate">
+                    <div className="text-[11px] font-black text-slate-800 truncate">{m.name}</div>
+                    <div className="text-[8px] text-slate-400 font-semibold">Risk: {m.ai.score}%</div>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => handleReceptionAction(m, 'Assign Trainer')}
+                  className="px-2.5 py-1.5 rounded-lg bg-[#0b5cbe] hover:bg-[#084a99] text-white transition-all text-[8px] font-black uppercase tracking-wider flex items-center gap-1 cursor-pointer border-none shrink-0"
+                >
+                  <Plus size={9} /> Coach
+                </button>
+              </div>
+            ))}
+            {membersAtRisk.length === 0 && (
+              <div className="text-center py-8 text-[10px] text-slate-400 italic">No members flagged at risk</div>
+            )}
+          </div>
+        </div>
+
+        {/* Card 4: Renewal Opportunities */}
+        <div className="bg-white border border-slate-200/80 p-4.5 rounded-2xl shadow-xs flex flex-col min-h-[280px]">
+          <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center border border-emerald-100">
+                <Sparkles size={14} />
+              </div>
+              <div>
+                <h3 className="font-extrabold text-slate-800 text-xs">Renewal Leads</h3>
+                <p className="text-[8px] text-slate-400 font-bold uppercase tracking-wider">Chance &gt; 70%</p>
+              </div>
+            </div>
+            <span className="text-[8.5px] bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded-full font-black border border-emerald-100">
+              {renewalOpportunities.length} Leads
+            </span>
+          </div>
+          <div className="mt-3 flex-1 overflow-y-auto space-y-2.5 max-h-[200px] pr-1">
+            {renewalOpportunities.map((m, idx) => (
+              <div key={idx} className="flex items-center justify-between bg-slate-50 border border-slate-100 p-2.5 rounded-xl">
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="w-7 h-7 rounded-full bg-[#0b5cbe] text-white text-[8px] font-black flex items-center justify-center shrink-0">
+                    {getInitials(m.name)}
+                  </div>
+                  <div className="truncate">
+                    <div className="text-[11px] font-black text-slate-800 truncate">{m.name}</div>
+                    <div className="text-[8px] text-slate-400 font-semibold">{m.ai.renewalChance}% Chance</div>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => handleReceptionAction(m, 'Offer Discount')}
+                  className="px-2.5 py-1.5 rounded-lg bg-[#0b5cbe] text-white hover:bg-[#084a99] transition-all text-[8px] font-black uppercase tracking-wider flex items-center gap-1 cursor-pointer border-none shrink-0"
+                >
+                  <Plus size={9} /> Offer 20%
+                </button>
+              </div>
+            ))}
+            {renewalOpportunities.length === 0 && (
+              <div className="text-center py-8 text-[10px] text-slate-400 italic">No renewal leads found</div>
+            )}
+          </div>
+        </div>
       </div>
 
     </div>

@@ -267,7 +267,7 @@ export default function DashboardLayout({
           <nav className="space-y-1 pr-1">
             {[
               { to: '/dashboard/overview', label: 'Overview', icon: LayoutDashboard },
-              { to: '/dashboard', label: 'Control Center', icon: HomeIcon },
+              { to: '/dashboard', label: 'Dashboard', icon: HomeIcon },
               { to: '/dashboard/members', label: 'Members', icon: Users },
               { to: '/dashboard/employees', label: 'Employees', icon: Briefcase, badge: 'NEW' },
               { to: '/dashboard/enquiries', label: 'Enquiries', icon: ClipboardList },
