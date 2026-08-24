@@ -27,7 +27,7 @@ import PtBillingModal from '../components/PtBillingModal';
 import ProfileTab from './components/ProfileTab';
 import BillingTab from './components/BillingTab';
 import CommunicationTab from './components/CommunicationTab';
-import AttendanceTab from './components/AttendanceTab';
+import AttendanceTab, { buildAttendanceSessions } from './components/AttendanceTab';
 
 const TABS = [
   'Profile', 'Billing', 'Communication', 'Attendance'
@@ -107,35 +107,35 @@ export default function ClientProfileSystem() {
 
   const [realAttendanceCount, setRealAttendanceCount] = useState<number>(0);
 
-  // ── Real-time listener for member attendance logs ───────────
+  // ── Real-time listener for member attendance sessions ───────────
   useEffect(() => {
     if (!id && !member) return;
     let isMounted = true;
 
-    const qAtt = collection(db, 'attendance_logs');
-    const unsub = onSnapshot(qAtt, (snap) => {
-      if (!isMounted) return;
-      const rawLogs = snap.docs.map(d => d.data());
-      const mId = member?.id || member?.uid || member?.memberId || id;
-      const mBioId = member?.biometricId || member?.deviceUserId || '';
-      const mPhone = member?.phone ? String(member.phone).replace(/\D/g, '') : '';
-      const mName = String(member?.name || '').trim().toLowerCase();
+    const docId = String(member?.id || member?.uid || member?.memberId || id || '').trim();
+    const memberCode = String(member?.memberId || member?.clientId || '').trim();
+    const bioId = String(member?.biometricId || member?.deviceUserId || member?.bioId || '').trim();
+    const phone = member?.phone ? String(member.phone).replace(/\D/g, '').slice(-10) : '';
 
-      const count = rawLogs.filter((log: any) => {
-        if (!log || log.status === 'duplicate') return false;
+    const unsub = onSnapshot(collection(db, 'attendance'), (snap) => {
+      if (!isMounted) return;
+      const rawLogs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+      const memberLogs = rawLogs.filter((log: any) => {
+        if (!log) return false;
         const lMemberId = String(log.memberId || log.memberCode || log.uid || '').trim();
         const lBioId = String(log.biometricId || log.deviceUserId || log.bioId || '').trim();
-        const lPhone = log.phone ? String(log.phone).replace(/\D/g, '') : '';
-        const lName = String(log.memberName || '').trim().toLowerCase();
+        const lPhone = log.phone ? String(log.phone).replace(/\D/g, '').slice(-10) : '';
 
-        if (mId && lMemberId === String(mId).trim()) return true;
-        if (mBioId && lBioId === String(mBioId).trim()) return true;
-        if (mPhone && lPhone && mPhone === lPhone) return true;
-        if (mName && lName && mName === lName) return true;
+        if (docId && lMemberId && docId === lMemberId) return true;
+        if (memberCode && lMemberId && memberCode === lMemberId) return true;
+        if (bioId && lBioId && bioId === lBioId) return true;
+        if (phone && lPhone && phone === lPhone) return true;
         return false;
-      }).length;
+      });
 
-      setRealAttendanceCount(count);
+      const sessions = buildAttendanceSessions(memberLogs);
+      setRealAttendanceCount(sessions.length);
     }, (error) => {
       console.warn("Member attendance count snapshot notice:", error.message);
     });

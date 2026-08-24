@@ -1223,9 +1223,11 @@ def run_membership_validation(user_id, device_id, device_name, branch, timestamp
     print(f"Gate Relay   : {'OPENED (3.0s)' if gate_will_trigger else 'DISABLED'}")
     print("="*52 + "\n")
 
-    # 7. Save Attendance Log ONLY for resolved members (DO NOT save for unmapped users)
+    # 7. Save Attendance Session ONLY for resolved members (Duplicate protected)
     if mapping_found and attendance_written:
-        att_doc_id = f"att_{device_id}_{user_id_str}_{int(time.time())}"
+        today_str = datetime.now().strftime("%Y-%m-%d")
+        att_doc_id = f"att_{member_id_str}_{today_str}"
+        
         punch_record = {
             'docId': att_doc_id,
             'attendanceId': att_doc_id,
@@ -1241,6 +1243,7 @@ def run_membership_validation(user_id, device_id, device_name, branch, timestamp
             'branch': branch,
             'timestamp': timestamp_iso,
             'checkIn': timestamp_iso,
+            'checkOut': None,
             'status': status,
             'reason': reason,
             'method': 'biometric',
@@ -1250,8 +1253,33 @@ def run_membership_validation(user_id, device_id, device_name, branch, timestamp
 
         if db is not None:
             try:
-                db.collection('attendance').document(att_doc_id).set(punch_record)
-                db.collection('attendance_logs').document(att_doc_id).set(punch_record)
+                # If member is already inside, check if this is a checkout punch or duplicate double-tap
+                if status == 'already_inside':
+                    doc_ref = db.collection('attendance').document(att_doc_id)
+                    existing_snap = doc_ref.get()
+                    if existing_snap.exists:
+                        ex_data = existing_snap.to_dict() or {}
+                        ex_in = ex_data.get('checkIn', '')
+                        # If more than 10 minutes since checkin, mark as checkout
+                        if ex_in:
+                            try:
+                                in_dt = datetime.fromisoformat(ex_in.replace('Z', '+00:00'))
+                                curr_dt = datetime.fromisoformat(timestamp_iso.replace('Z', '+00:00'))
+                                diff_mins = (curr_dt - in_dt).total_seconds() / 60.0
+                                if diff_mins >= 10:
+                                    doc_ref.update({
+                                        'checkOut': timestamp_iso,
+                                        'status': 'completed',
+                                        'updatedAt': timestamp_iso
+                                    })
+                                    logging.info(f"🚪 [Checkout Recorded] Member {member_name} checked out at {timestamp_iso}")
+                            except Exception as parse_err:
+                                logging.warning(f"Checkout time parse warning: {parse_err}")
+                else:
+                    # New check-in session for today
+                    db.collection('attendance').document(att_doc_id).set(punch_record, merge=True)
+                    db.collection('attendance_logs').document(f"log_{device_id}_{user_id_str}_{int(time.time())}").set(punch_record)
+                
                 flush_offline_queue()
             except Exception as save_err:
                 logging.warning(f"Firebase write failed during punch. Queuing punch locally: {save_err}")
