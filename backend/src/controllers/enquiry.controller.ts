@@ -125,7 +125,7 @@ export const createEnquiry = async (req: Request, res: Response) => {
           priority: newEnquiry.priority === 'Hot' ? 'High' : 'Medium',
           assignedTo: newEnquiry.assignedTo || 'Reception Desk',
           type: 'Enquiry',
-          source: 'automatic',
+          source: 'manual',
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
         }, { merge: true });
@@ -242,7 +242,7 @@ export const updateEnquiry = async (req: Request, res: Response) => {
           priority: updates.priority === 'Hot' ? 'High' : 'Medium',
           assignedTo: updates.assignedTo || currentEnquiry?.assignedTo || 'Reception Desk',
           type: 'Enquiry',
-          source: 'automatic',
+          source: 'manual',
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
         }, { merge: true });

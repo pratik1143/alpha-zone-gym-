@@ -420,7 +420,7 @@ export default function EnquiryGodLevelHub() {
           scheduledTime: data.followupTime || '11:00',
           assignedTo: data.attendedBy || 'Reception Desk',
           status: 'Pending',
-          source: 'enquiry',
+          source: 'manual',
           plan: data.inquiryFor
         });
       }
@@ -583,7 +583,7 @@ export default function EnquiryGodLevelHub() {
         scheduledTime: parsed.data.followUpTime,
         assignedTo: schedulingEnquiry.assignedTo || 'Reception Desk',
         status: 'Pending',
-        source: 'enquiry',
+        source: 'manual',
         plan: schedulingEnquiry.duration || schedulingEnquiry.interestedPlan || ''
       });
 

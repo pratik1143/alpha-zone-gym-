@@ -18,7 +18,8 @@ import {
   AlertTriangle,
   MessageSquare,
   Sparkles,
-  Layers
+  Layers,
+  PenLine
 } from 'lucide-react';
 import toast from '@/lib/toast';
 import confetti from 'canvas-confetti';
@@ -30,6 +31,53 @@ import { useGymStore } from '@/store';
 import { useFollowups } from '@/hooks/useFollowups';
 import { followupService, FollowUpItem } from '@/services/followup.service';
 import { getTodayInIndia, isTodayInIndia, isOverdueInIndia, isUpcomingInIndia, formatIndianDate } from '@/lib/dateUtils';
+
+// Helper: Normalize & classify Follow-up Source from real database record
+export function getFollowupSourceInfo(task: FollowUpItem | any) {
+  const rawSource = String(task?.source || '').trim().toLowerCase();
+  
+  // 1. Explicit source values
+  if (rawSource === 'manual' || rawSource === 'staff' || rawSource === 'user') {
+    return {
+      type: 'manual',
+      label: 'MANUAL',
+      title: 'Staff Created',
+      iconText: '✎',
+      badgeClass: 'bg-indigo-50/90 text-indigo-700 border border-indigo-200/90 shadow-2xs font-extrabold'
+    };
+  }
+  
+  if (rawSource === 'auto' || rawSource === 'automatic' || rawSource === 'system' || rawSource === 'rule') {
+    return {
+      type: 'auto',
+      label: 'AUTO',
+      title: 'System Generated',
+      iconText: '✦',
+      badgeClass: 'bg-blue-50/90 text-[#0b5cbe] border border-blue-200/90 shadow-2xs font-extrabold'
+    };
+  }
+
+  // 2. Safe Fallback for existing legacy records:
+  // If task has an automationKey or ID starts with AUTO_ or is an automated renewal type:
+  if (task?.automationKey?.startsWith('AUTO_') || task?.id?.startsWith('AUTO_') || task?.type === 'GYM MEMBERSHIP RENEWAL' || task?.type === 'PT RENEWAL' || task?.type === 'PENDING BALANCE') {
+    return {
+      type: 'auto',
+      label: 'AUTO',
+      title: 'System Generated',
+      iconText: '✦',
+      badgeClass: 'bg-blue-50/90 text-[#0b5cbe] border border-blue-200/90 shadow-2xs font-extrabold'
+    };
+  }
+
+  // If it's a manually scheduled enquiry or custom task:
+  return {
+    type: 'manual',
+    label: 'MANUAL',
+    title: 'Staff Created',
+    iconText: '✎',
+    badgeClass: 'bg-indigo-50/90 text-indigo-700 border border-indigo-200/90 shadow-2xs font-extrabold'
+  };
+}
 
 // Zod Schema for validation
 const followUpFormSchema = z.object({
@@ -72,6 +120,7 @@ export default function FollowUpManager() {
   // Filters
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState('All');
+  const [filterSource, setFilterSource] = useState('All');
   const [filterStaff, setFilterStaff] = useState('All');
   const [filterPriority, setFilterPriority] = useState('All');
   const [filterStartDate, setFilterStartDate] = useState(todayDateStr);
@@ -195,6 +244,10 @@ export default function FollowUpManager() {
       result = result.filter(f => f.type === filterType);
     }
 
+    if (filterSource !== 'All') {
+      result = result.filter(f => getFollowupSourceInfo(f).type === filterSource);
+    }
+
     if (filterStaff !== 'All') {
       result = result.filter(f => f.assignedTo === filterStaff);
     }
@@ -228,6 +281,7 @@ export default function FollowUpManager() {
     filterStartDate, 
     filterEndDate, 
     filterType, 
+    filterSource,
     filterStaff, 
     filterPriority, 
     searchQuery, 
@@ -357,6 +411,7 @@ export default function FollowUpManager() {
   const resetFilters = () => {
     setSearchQuery('');
     setFilterType('All');
+    setFilterSource('All');
     setFilterStaff('All');
     setFilterPriority('All');
     setFilterStartDate(todayDateStr);
@@ -486,95 +541,132 @@ export default function FollowUpManager() {
         </div>
       </div>
 
-      {/* 3. CLEAN FILTER BAR */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-3 flex-1">
-          {/* Search Box */}
-          <div className="relative min-w-[220px] flex-1">
-            <Search size={14} className="absolute left-3.5 top-3 text-slate-400" />
-            <input 
-              type="text" 
-              placeholder="Search member name, phone or reason..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 text-xs font-semibold text-slate-800 rounded-xl border border-slate-200 outline-none focus:border-blue-600 transition-all placeholder-slate-400"
-            />
+      {/* 3. CLEAN FILTER BAR & SOURCE LEGEND */}
+      <div className="space-y-3">
+        {/* Source Legend & Quick Information */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-1">
+          <div className="flex items-center gap-2.5 text-xs font-semibold text-slate-500 bg-white px-3.5 py-1.5 rounded-xl border border-slate-200/70 shadow-2xs w-fit">
+            <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Source:</span>
+            <span className="flex items-center gap-1.5">
+              <span className="text-[9.5px] font-black px-1.5 py-0.5 rounded bg-blue-50 text-[#0b5cbe] border border-blue-200/80 flex items-center gap-1">
+                <Sparkles size={9.5} className="shrink-0" /> AUTO
+              </span>
+              <span className="text-[11px] text-slate-600 font-medium hidden sm:inline">System generated</span>
+            </span>
+            <span className="text-slate-300">•</span>
+            <span className="flex items-center gap-1.5">
+              <span className="text-[9.5px] font-black px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-200/80 flex items-center gap-1">
+                <PenLine size={9.5} className="shrink-0" /> MANUAL
+              </span>
+              <span className="text-[11px] text-slate-600 font-medium hidden sm:inline">Staff created</span>
+            </span>
           </div>
 
-          {/* Date Picker */}
-          <div className="flex items-center gap-1.5 bg-slate-50 p-1 rounded-xl border border-slate-200">
-            <input 
-              type="date" 
-              value={filterStartDate}
-              onChange={(e) => { setFilterStartDate(e.target.value); setIsCustomDateFilterActive(true); }}
-              className="px-2.5 py-1 text-xs font-bold text-slate-700 bg-transparent outline-none cursor-pointer"
-            />
-            <span className="text-xs text-slate-400 font-bold">to</span>
-            <input 
-              type="date" 
-              value={filterEndDate}
-              onChange={(e) => { setFilterEndDate(e.target.value); setIsCustomDateFilterActive(true); }}
-              className="px-2.5 py-1 text-xs font-bold text-slate-700 bg-transparent outline-none cursor-pointer"
-            />
-            {isCustomDateFilterActive && (
-              <button
-                type="button"
-                onClick={() => {
-                  setIsCustomDateFilterActive(false);
-                  setFilterStartDate(todayDateStr);
-                  setFilterEndDate(todayDateStr);
-                }}
-                className="px-1.5 py-0.5 text-[10px] font-extrabold text-blue-600 hover:bg-blue-100 rounded-lg border-none cursor-pointer"
-                title="Reset to default"
-              >
-                Reset
-              </button>
-            )}
-          </div>
-
-          {/* Type Filter */}
-          <select 
-            className="px-3 py-2 text-xs font-bold text-slate-700 bg-slate-50 rounded-xl border border-slate-200 outline-none cursor-pointer focus:border-blue-600"
-            value={filterType} onChange={e => setFilterType(e.target.value)}
-          >
-            <option value="All">All Types</option>
-            <option value="GYM MEMBERSHIP RENEWAL">GYM MEMBERSHIP RENEWAL</option>
-            <option value="PT RENEWAL">PT RENEWAL</option>
-            <option value="PENDING BALANCE">PENDING BALANCE</option>
-            <option value="Enquiry">Enquiry</option>
-            <option value="General">General</option>
-            <option value="Custom">Custom</option>
-          </select>
-
-          {/* Staff Filter */}
-          <select 
-            className="px-3 py-2 text-xs font-bold text-slate-700 bg-slate-50 rounded-xl border border-slate-200 outline-none cursor-pointer focus:border-blue-600"
-            value={filterStaff} onChange={e => setFilterStaff(e.target.value)}
-          >
-            <option value="All">All Staff</option>
-            {employees.map(e => <option key={e.id} value={e.name}>{e.name || e.fullName}</option>)}
-          </select>
-
-          {/* Priority Filter */}
-          <select 
-            className="px-3 py-2 text-xs font-bold text-slate-700 bg-slate-50 rounded-xl border border-slate-200 outline-none cursor-pointer focus:border-blue-600"
-            value={filterPriority} onChange={e => setFilterPriority(e.target.value)}
-          >
-            <option value="All">All Priority</option>
-            <option value="High">High Priority</option>
-            <option value="Medium">Medium Priority</option>
-            <option value="Low">Low Priority</option>
-          </select>
+          <span className="text-xs text-slate-400 font-medium hidden md:inline">
+            Real-time synchronization with Alpha Zone Cloud Engine
+          </span>
         </div>
 
-        {(searchQuery || filterType !== 'All' || filterStaff !== 'All' || filterPriority !== 'All' || isCustomDateFilterActive) && (
-          <button 
-            onClick={resetFilters}
-            className="px-3 py-2 text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 rounded-xl transition-all border-none cursor-pointer"
-          >
-            Reset Filters
-          </button>
-        )}
+        {/* Filter Bar Controls */}
+        <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-3 flex-1">
+            {/* Search Box */}
+            <div className="relative min-w-[200px] flex-1">
+              <Search size={14} className="absolute left-3.5 top-3 text-slate-400" />
+              <input 
+                type="text" 
+                placeholder="Search member name, phone or reason..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-9 pr-4 py-2 text-xs font-semibold text-slate-800 rounded-xl border border-slate-200 outline-none focus:border-blue-600 transition-all placeholder-slate-400"
+              />
+            </div>
+
+            {/* Date Picker */}
+            <div className="flex items-center gap-1.5 bg-slate-50 p-1 rounded-xl border border-slate-200">
+              <input 
+                type="date" 
+                value={filterStartDate}
+                onChange={(e) => { setFilterStartDate(e.target.value); setIsCustomDateFilterActive(true); }}
+                className="px-2.5 py-1 text-xs font-bold text-slate-700 bg-transparent outline-none cursor-pointer"
+              />
+              <span className="text-xs text-slate-400 font-bold">to</span>
+              <input 
+                type="date" 
+                value={filterEndDate}
+                onChange={(e) => { setFilterEndDate(e.target.value); setIsCustomDateFilterActive(true); }}
+                className="px-2.5 py-1 text-xs font-bold text-slate-700 bg-transparent outline-none cursor-pointer"
+              />
+              {isCustomDateFilterActive && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsCustomDateFilterActive(false);
+                    setFilterStartDate(todayDateStr);
+                    setFilterEndDate(todayDateStr);
+                  }}
+                  className="px-1.5 py-0.5 text-[10px] font-extrabold text-blue-600 hover:bg-blue-100 rounded-lg border-none cursor-pointer"
+                  title="Reset to default"
+                >
+                  Reset
+                </button>
+              )}
+            </div>
+
+            {/* Source Filter Dropdown */}
+            <select 
+              className="px-3 py-2 text-xs font-bold text-slate-700 bg-slate-50 rounded-xl border border-slate-200 outline-none cursor-pointer focus:border-blue-600"
+              value={filterSource} onChange={e => setFilterSource(e.target.value)}
+            >
+              <option value="All">All Sources</option>
+              <option value="auto">✦ Auto Generated</option>
+              <option value="manual">✎ Staff Created</option>
+            </select>
+
+            {/* Type Filter */}
+            <select 
+              className="px-3 py-2 text-xs font-bold text-slate-700 bg-slate-50 rounded-xl border border-slate-200 outline-none cursor-pointer focus:border-blue-600"
+              value={filterType} onChange={e => setFilterType(e.target.value)}
+            >
+              <option value="All">All Types</option>
+              <option value="GYM MEMBERSHIP RENEWAL">GYM MEMBERSHIP RENEWAL</option>
+              <option value="PT RENEWAL">PT RENEWAL</option>
+              <option value="PENDING BALANCE">PENDING BALANCE</option>
+              <option value="Enquiry">Enquiry</option>
+              <option value="General">General</option>
+              <option value="Custom">Custom</option>
+            </select>
+
+            {/* Staff Filter */}
+            <select 
+              className="px-3 py-2 text-xs font-bold text-slate-700 bg-slate-50 rounded-xl border border-slate-200 outline-none cursor-pointer focus:border-blue-600"
+              value={filterStaff} onChange={e => setFilterStaff(e.target.value)}
+            >
+              <option value="All">All Staff</option>
+              {employees.map(e => <option key={e.id} value={e.name}>{e.name || e.fullName}</option>)}
+            </select>
+
+            {/* Priority Filter */}
+            <select 
+              className="px-3 py-2 text-xs font-bold text-slate-700 bg-slate-50 rounded-xl border border-slate-200 outline-none cursor-pointer focus:border-blue-600"
+              value={filterPriority} onChange={e => setFilterPriority(e.target.value)}
+            >
+              <option value="All">All Priority</option>
+              <option value="High">High Priority</option>
+              <option value="Medium">Medium Priority</option>
+              <option value="Low">Low Priority</option>
+            </select>
+          </div>
+
+          {(searchQuery || filterType !== 'All' || filterSource !== 'All' || filterStaff !== 'All' || filterPriority !== 'All' || isCustomDateFilterActive) && (
+            <button 
+              onClick={resetFilters}
+              className="px-3 py-2 text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 rounded-xl transition-all border-none cursor-pointer"
+            >
+              Reset Filters
+            </button>
+          )}
+        </div>
       </div>
 
       {/* 4. TASK CARDS LIST */}
@@ -617,33 +709,33 @@ export default function FollowUpManager() {
           filteredTasks.map((task) => {
             const client = getClientDetails(task);
             const isSelected = selectedTasks.includes(task.id);
-            const isAutomatic = task.source === 'automatic' || !!task.automationKey;
+            const sourceInfo = getFollowupSourceInfo(task);
             const prevNotes = task.notes || task.description || task.remarks || '';
 
-            let typeBadgeClass = 'bg-slate-100 text-slate-700';
+            let typeBadgeClass = 'bg-slate-100 text-slate-700 border border-slate-200/80 font-bold';
             let displayReason = task.reason || task.description || task.notes || task.title || '';
 
             if (task.type === 'GYM MEMBERSHIP RENEWAL' || task.type === 'Renewal') {
-              typeBadgeClass = 'bg-blue-100 text-blue-800 border border-blue-200';
+              typeBadgeClass = 'bg-blue-50 text-blue-800 border border-blue-200/80 font-black';
               displayReason = displayReason || 'Membership renewal due in 7 days';
             } else if (task.type === 'PT RENEWAL' || task.type === 'PT') {
-              typeBadgeClass = 'bg-purple-100 text-purple-800 border border-purple-200';
+              typeBadgeClass = 'bg-purple-50 text-purple-800 border border-purple-200/80 font-black';
               displayReason = displayReason || 'Personal Training renewal due in 4 days';
             } else if (task.type === 'PENDING BALANCE' || task.type === 'Payment') {
-              typeBadgeClass = 'bg-amber-100 text-amber-900 border border-amber-200';
+              typeBadgeClass = 'bg-amber-50 text-amber-900 border border-amber-200/80 font-black';
               const pendingAmtStr = task.pendingAmount ? `₹${Number(task.pendingAmount).toLocaleString('en-IN')}` : '';
               displayReason = pendingAmtStr ? `${pendingAmtStr} pending` : (displayReason || 'Pending membership balance');
             } else if (task.type === 'Enquiry') {
-              typeBadgeClass = 'bg-indigo-100 text-indigo-800 border border-indigo-200';
+              typeBadgeClass = 'bg-slate-100 text-slate-700 border border-slate-200/80 font-bold';
             }
 
             const normPriority = (task.priority || 'Medium').toLowerCase();
             const isHighPriority = normPriority === 'high' || normPriority === 'critical' || normPriority === 'urgent';
             const priorityBadgeClass = isHighPriority 
-              ? 'bg-red-100 text-red-700 font-bold border border-red-200' 
+              ? 'bg-rose-50 text-rose-700 font-bold border border-rose-200' 
               : normPriority === 'medium'
-              ? 'bg-blue-100 text-blue-700 font-bold border border-blue-200'
-              : 'bg-slate-100 text-slate-600 font-medium';
+              ? 'bg-blue-50 text-[#0b5cbe] font-bold border border-blue-200'
+              : 'bg-slate-100 text-slate-600 font-medium border border-slate-200';
 
             const cleanDueDate = (task.dueDate || task.scheduledDate || '').split('T')[0];
             const isDueToday = cleanDueDate === todayDateStr;
@@ -676,21 +768,31 @@ export default function FollowUpManager() {
                     </div>
 
                     <div className="min-w-0 flex-1">
+                      {/* Badge Hierarchy: [ TYPE ] [ ✦ AUTO / ✎ MANUAL ] [ PRIORITY ] */}
                       <div className="flex items-center gap-2 flex-wrap">
                         <h3 className="text-sm font-black text-slate-900 truncate">{client.name}</h3>
                         
+                        {/* 1. Follow-Up Type Badge */}
                         <span className={`text-[10px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider ${typeBadgeClass}`}>
                           {task.type || 'General'}
                         </span>
 
-                        {isAutomatic && (
-                          <span className="text-[9px] font-black px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-0.5 uppercase tracking-wider">
-                            ⚡ AUTO
-                          </span>
-                        )}
+                        {/* 2. Source Badge (✦ AUTO / ✎ MANUAL) */}
+                        <span 
+                          className={`text-[9.5px] font-black px-2 py-0.5 rounded-md flex items-center gap-1 uppercase tracking-wider ${sourceInfo.badgeClass}`}
+                          title={sourceInfo.title}
+                        >
+                          {sourceInfo.type === 'auto' ? (
+                            <Sparkles size={10} className="shrink-0 text-[#0b5cbe]" />
+                          ) : (
+                            <PenLine size={10} className="shrink-0 text-indigo-600" />
+                          )}
+                          <span>{sourceInfo.label}</span>
+                        </span>
 
+                        {/* 3. Priority Badge */}
                         <span className={`text-[10px] px-2 py-0.5 rounded-md flex items-center gap-1 uppercase tracking-wider ${priorityBadgeClass}`}>
-                          <span className={`w-1.5 h-1.5 rounded-full ${isHighPriority ? 'bg-red-500' : 'bg-blue-500'}`} />
+                          <span className={`w-1.5 h-1.5 rounded-full ${isHighPriority ? 'bg-rose-500' : 'bg-blue-500'}`} />
                           {task.priority || 'Medium'}
                         </span>
 
@@ -711,7 +813,7 @@ export default function FollowUpManager() {
                           📞 {client.phone}
                         </a>
                         <span>•</span>
-                        <span className={`flex items-center gap-1 font-bold ${isTaskOverdue ? 'text-red-600' : isDueToday ? 'text-blue-700 font-black' : 'text-slate-700'}`}>
+                        <span className={`flex items-center gap-1 font-bold ${isTaskOverdue ? 'text-rose-600' : isDueToday ? 'text-blue-700 font-black' : 'text-slate-700'}`}>
                           📅 {isDueToday ? 'Due Today' : `Due: ${formatIndianDate(cleanDueDate)}`} {task.scheduledTime ? `· ${task.scheduledTime}` : ''}
                         </span>
                         <span>•</span>
@@ -836,6 +938,31 @@ export default function FollowUpManager() {
                   ✕
                 </button>
               </div>
+
+              {/* Task Client & Source Summary */}
+              {(() => {
+                const client = getClientDetails(showCompleteModal);
+                const sourceInfo = getFollowupSourceInfo(showCompleteModal);
+                return (
+                  <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-2 text-xs">
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-500 font-semibold">Member / Lead:</span>
+                      <span className="font-extrabold text-slate-900">{client.name}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-500 font-semibold">Contact:</span>
+                      <span className="font-bold text-blue-700">{client.phone}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-500 font-semibold">Follow-Up Source:</span>
+                      <span className={`text-[9.5px] font-black px-2 py-0.5 rounded-md flex items-center gap-1 uppercase tracking-wider ${sourceInfo.badgeClass}`}>
+                        {sourceInfo.type === 'auto' ? <Sparkles size={10} className="shrink-0 text-[#0b5cbe]" /> : <PenLine size={10} className="shrink-0 text-indigo-600" />}
+                        {sourceInfo.label} · {sourceInfo.title}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })()}
 
               <form onSubmit={submitCompleteTask} className="space-y-4 text-left">
                 <div>

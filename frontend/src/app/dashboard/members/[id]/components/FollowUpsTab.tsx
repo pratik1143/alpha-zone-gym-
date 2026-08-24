@@ -2,8 +2,9 @@
 
 import React, { useMemo } from 'react';
 import { useFollowups } from '@/hooks/useFollowups';
-import { Phone, MessageCircle, CheckCircle2, Clock, Calendar, AlertCircle } from 'lucide-react';
+import { Phone, MessageCircle, CheckCircle2, Clock, Calendar, AlertCircle, Sparkles, PenLine } from 'lucide-react';
 import toast from '@/lib/toast';
+import { getFollowupSourceInfo } from '@/app/dashboard/follow-up/page';
 
 export default function FollowUpsTab({ member }: { member: any }) {
   const { followups, completeFollowup } = useFollowups();
@@ -51,18 +52,24 @@ export default function FollowUpsTab({ member }: { member: any }) {
       ) : (
         <div className="space-y-3">
           {memberFollowups.map(task => {
-            const isAutomatic = task.source === 'automatic' || !!task.automationKey;
+            const sourceInfo = getFollowupSourceInfo(task);
             const normPriority = (task.priority || 'Medium').toLowerCase();
             const isHighPriority = normPriority === 'high' || normPriority === 'critical' || normPriority === 'urgent';
 
-            let typeBadgeClass = 'bg-slate-100 text-slate-700';
+            let typeBadgeClass = 'bg-slate-100 text-slate-700 border border-slate-200/80 font-bold';
             if (task.type === 'GYM MEMBERSHIP RENEWAL' || task.type === 'Renewal') {
-              typeBadgeClass = 'bg-blue-100 text-blue-800 border border-blue-200';
+              typeBadgeClass = 'bg-blue-50 text-blue-800 border border-blue-200/80 font-black';
             } else if (task.type === 'PT RENEWAL' || task.type === 'PT') {
-              typeBadgeClass = 'bg-purple-100 text-purple-800 border border-purple-200';
+              typeBadgeClass = 'bg-purple-50 text-purple-800 border border-purple-200/80 font-black';
             } else if (task.type === 'PENDING BALANCE' || task.type === 'Payment') {
-              typeBadgeClass = 'bg-amber-100 text-amber-900 border border-amber-200';
+              typeBadgeClass = 'bg-amber-50 text-amber-900 border border-amber-200/80 font-black';
             }
+
+            const priorityBadgeClass = isHighPriority 
+              ? 'bg-rose-50 text-rose-700 font-bold border border-rose-200' 
+              : normPriority === 'medium'
+              ? 'bg-blue-50 text-[#0b5cbe] font-bold border border-blue-200'
+              : 'bg-slate-100 text-slate-600 font-medium border border-slate-200';
 
             return (
               <div 
@@ -76,19 +83,30 @@ export default function FollowUpsTab({ member }: { member: any }) {
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div className="space-y-1 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
+                      {/* 1. Type Badge */}
                       <span className={`text-[10px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider ${typeBadgeClass}`}>
                         {task.type || 'Follow-up'}
                       </span>
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
-                        isHighPriority ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'
-                      }`}>
+
+                      {/* 2. Source Badge */}
+                      <span 
+                        className={`text-[9.5px] font-black px-2 py-0.5 rounded-md flex items-center gap-1 uppercase tracking-wider ${sourceInfo.badgeClass}`}
+                        title={sourceInfo.title}
+                      >
+                        {sourceInfo.type === 'auto' ? (
+                          <Sparkles size={10} className="shrink-0 text-[#0b5cbe]" />
+                        ) : (
+                          <PenLine size={10} className="shrink-0 text-indigo-600" />
+                        )}
+                        <span>{sourceInfo.label}</span>
+                      </span>
+
+                      {/* 3. Priority Badge */}
+                      <span className={`text-[10px] px-2 py-0.5 rounded-md flex items-center gap-1 uppercase tracking-wider ${priorityBadgeClass}`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${isHighPriority ? 'bg-rose-500' : 'bg-blue-500'}`} />
                         {task.priority || 'Medium'}
                       </span>
-                      {isAutomatic && (
-                        <span className="text-[9px] font-extrabold px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
-                          ⚡ Auto
-                        </span>
-                      )}
+
                       <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
                         task.status === 'Completed' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
                       }`}>
