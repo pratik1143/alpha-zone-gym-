@@ -451,23 +451,36 @@ export default function ProfileTab({ member }: { member: any }) {
               <div className="w-full mt-4 p-3.5 bg-[#fdfdfd] border border-[#d9e7f7] rounded-2xl space-y-2 text-xs text-left">
                 <div className="flex justify-between items-center">
                   <span className="text-[10px] font-black text-slate-400 uppercase">PT Package</span>
-                  <span className="font-black text-slate-900">{member?.pt?.packageName || member?.pt?.duration || '3 Months'}</span>
+                  <span className="font-black text-slate-900">
+                    {member?.ptMembership?.packageName || 
+                     member?.pt?.packageName || 
+                     (member?.pt?.durationMonths ? `${member.pt.durationMonths} Month${member.pt.durationMonths > 1 ? 's' : ''}` : null) || 
+                     member?.ptDuration || 
+                     member?.pt?.duration || 
+                     'Assigned (No PT Package)'}
+                  </span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-[10px] font-black text-slate-400 uppercase">Validity</span>
-                  <span className="font-bold text-slate-700 text-[11px]">
-                    {member?.pt?.startDate || member.joinDate || 'N/A'} → {member?.pt?.expiryDate || 'N/A'}
+                  <span className="font-bold text-slate-700 text-[11px] font-mono">
+                    {(member?.ptMembership?.startDate || member?.pt?.startDate || member?.ptStartDate) && (member?.ptMembership?.expiryDate || member?.pt?.expiryDate || member?.ptExpiryDate)
+                      ? `${member?.ptMembership?.startDate || member?.pt?.startDate || member?.ptStartDate} → ${member?.ptMembership?.expiryDate || member?.pt?.expiryDate || member?.ptExpiryDate}`
+                      : '—'}
                   </span>
                 </div>
                 <div className="flex justify-between items-center pt-1 border-t border-slate-200">
                   <span className="text-[10px] font-black text-slate-400 uppercase">PT Amount</span>
-                  <span className="font-black font-mono text-[#0b5cbe]">₹{(member?.pt?.amount || 6000).toLocaleString('en-IN')}</span>
+                  <span className="font-black font-mono text-[#0066FF]">
+                    {member?.ptMembership?.amount !== undefined || member?.pt?.amount !== undefined || member?.ptAmount !== undefined
+                      ? `₹${Number(member?.ptMembership?.amount ?? member?.pt?.amount ?? member?.ptAmount ?? 0).toLocaleString('en-IN')}`
+                      : '₹0'}
+                  </span>
                 </div>
-                {member?.pt?.invoiceNo && (
+                {(member?.ptMembership?.invoiceNo || member?.pt?.invoiceNo || member?.pt?.billingId) && (
                   <div className="flex justify-between items-center">
                     <span className="text-[10px] font-black text-slate-400 uppercase">Invoice No</span>
-                    <span className="font-mono text-[10px] font-bold text-[#0b5cbe] bg-[#eaf3ff] px-1.5 py-0.5 rounded border border-[#b9d6f5]">
-                      {member?.pt?.invoiceNo}
+                    <span className="font-mono text-[10px] font-bold text-[#0066FF] bg-[#eaf3ff] px-1.5 py-0.5 rounded border border-[#b9d6f5]">
+                      {member?.ptMembership?.invoiceNo || member?.pt?.invoiceNo || member?.pt?.billingId}
                     </span>
                   </div>
                 )}
