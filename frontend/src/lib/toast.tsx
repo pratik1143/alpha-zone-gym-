@@ -12,12 +12,11 @@ import {
 
 /**
  * Global Premium Toast System — Alpha Zone OS
- * Standout SaaS UI with:
- * - High-visibility card with distinct borders & 3D shadow
- * - Left status accent indicator
- * - Icon badge containers with micro-animations
+ * Features:
+ * - Pixel-perfect layout with no clipped text or awkward overflows
+ * - Clean status badges with dedicated icons
  * - Ultra-high z-index ensuring visibility over all modals and drawers
- * - Shimmer sweep entry animation
+ * - Bottom-right positioning so top header and clock are never obscured
  */
 
 export interface ToastOptions extends ExternalToast {
@@ -51,7 +50,7 @@ function baseToast(message: string | React.ReactNode, options?: ToastOptions) {
     return sonnerToast.custom(message as any, options);
   }
   return sonnerToast(message, {
-    duration: options?.duration || 3800,
+    duration: options?.duration || 3500,
     ...options
   });
 }
@@ -61,10 +60,10 @@ baseToast.success = (message: string | React.ReactNode, options?: ToastOptions) 
     duration: options?.duration || 3500,
     id: options?.id,
     description: options?.description,
-    className: 'az-toast-success',
+    className: 'az-toast-card az-toast-success',
     icon: (
-      <div className="az-toast-icon-badge bg-emerald-50 border border-emerald-200 text-emerald-600 shadow-xs">
-        <CheckCircle2 className="w-5 h-5" />
+      <div className="az-toast-icon-badge az-badge-success">
+        <CheckCircle2 className="w-4.5 h-4.5 text-emerald-600" />
       </div>
     ),
     ...options
@@ -74,13 +73,13 @@ baseToast.success = (message: string | React.ReactNode, options?: ToastOptions) 
 baseToast.error = (message: string | React.ReactNode, options?: ToastOptions) => {
   const cleanMsg = typeof message === 'string' ? sanitizeErrorMessage(message) : message;
   return sonnerToast.error(cleanMsg, {
-    duration: options?.duration || 5000,
+    duration: options?.duration || 4500,
     id: options?.id,
     description: options?.description || (typeof message === 'object' && (message as any)?.message ? sanitizeErrorMessage(message) : undefined),
-    className: 'az-toast-error',
+    className: 'az-toast-card az-toast-error',
     icon: (
-      <div className="az-toast-icon-badge bg-rose-50 border border-rose-200 text-rose-600 shadow-xs">
-        <AlertCircle className="w-5 h-5" />
+      <div className="az-toast-icon-badge az-badge-error">
+        <AlertCircle className="w-4.5 h-4.5 text-rose-600" />
       </div>
     ),
     ...options
@@ -89,13 +88,13 @@ baseToast.error = (message: string | React.ReactNode, options?: ToastOptions) =>
 
 baseToast.warning = (message: string | React.ReactNode, options?: ToastOptions) => {
   return sonnerToast.warning(message, {
-    duration: options?.duration || 4200,
+    duration: options?.duration || 4000,
     id: options?.id,
     description: options?.description,
-    className: 'az-toast-warning',
+    className: 'az-toast-card az-toast-warning',
     icon: (
-      <div className="az-toast-icon-badge bg-amber-50 border border-amber-200 text-amber-600 shadow-xs">
-        <AlertTriangle className="w-5 h-5" />
+      <div className="az-toast-icon-badge az-badge-warning">
+        <AlertTriangle className="w-4.5 h-4.5 text-amber-600" />
       </div>
     ),
     ...options
@@ -107,10 +106,10 @@ baseToast.info = (message: string | React.ReactNode, options?: ToastOptions) => 
     duration: options?.duration || 3500,
     id: options?.id,
     description: options?.description,
-    className: 'az-toast-info',
+    className: 'az-toast-card az-toast-info',
     icon: (
-      <div className="az-toast-icon-badge bg-blue-50 border border-blue-200 text-[#0b5cbe] shadow-xs">
-        <Info className="w-5 h-5" />
+      <div className="az-toast-icon-badge az-badge-info">
+        <Info className="w-4.5 h-4.5 text-[#0b5cbe]" />
       </div>
     ),
     ...options
@@ -121,10 +120,10 @@ baseToast.loading = (message: string | React.ReactNode, options?: ToastOptions) 
   return sonnerToast.loading(message, {
     id: options?.id,
     description: options?.description,
-    className: 'az-toast-loading',
+    className: 'az-toast-card az-toast-loading',
     icon: (
-      <div className="az-toast-icon-badge bg-blue-50 border border-blue-200 text-[#0b5cbe] shadow-xs">
-        <Loader2 className="w-5 h-5 animate-spin" />
+      <div className="az-toast-icon-badge az-badge-info">
+        <Loader2 className="w-4.5 h-4.5 animate-spin text-[#0b5cbe]" />
       </div>
     ),
     ...options
@@ -163,37 +162,21 @@ export default toast;
 export function GlobalToaster() {
   return (
     <SonnerToaster
-      position="top-right"
+      position="bottom-right"
       expand={true}
       richColors={false}
       closeButton={true}
       theme="light"
-      gap={12}
+      gap={10}
       offset="24px"
+      visibleToasts={5}
       style={{
-        zIndex: 999999
+        zIndex: 9999999
       }}
       toastOptions={{
-        className: 'az-global-toast font-sans',
+        className: 'az-global-toast-container font-sans',
         style: {
-          background: '#ffffff',
-          color: '#0f172a',
-          border: '1.5px solid #cbd5e1',
-          borderRadius: '18px',
-          padding: '16px 18px',
-          boxShadow: '0 20px 40px -10px rgba(15, 23, 42, 0.16), 0 8px 16px -4px rgba(15, 23, 42, 0.08), 0 0 0 1px rgba(0, 0, 0, 0.02)',
-          fontSize: '14px',
-          fontWeight: 600,
-          minWidth: '360px',
-          maxWidth: '440px'
-        },
-        classNames: {
-          toast: 'group bg-white text-slate-900 border-2 border-slate-300 shadow-2xl rounded-2xl flex items-start gap-3.5 p-4.5 transition-all',
-          title: 'text-[14.5px] font-extrabold text-slate-900 tracking-tight leading-snug',
-          description: 'text-[12.5px] font-medium text-slate-600 mt-1 leading-normal',
-          closeButton: 'bg-white hover:bg-slate-100 text-slate-400 hover:text-slate-800 border border-slate-300 rounded-lg p-1.5 transition-all shadow-2xs',
-          actionButton: 'bg-[#0b5cbe] hover:bg-blue-700 text-white font-bold text-xs px-3.5 py-2 rounded-xl shadow-sm transition-all',
-          cancelButton: 'bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs px-3.5 py-2 rounded-xl'
+          zIndex: 9999999
         }
       }}
     />
