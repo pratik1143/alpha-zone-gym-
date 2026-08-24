@@ -125,6 +125,20 @@ export default function TrainersPage() {
     return () => unsub();
   }, [fetchMembers]);
 
+  // Deep-linking support from Universal Search (?id=...)
+  useEffect(() => {
+    if (typeof window === 'undefined' || trainers.length === 0) return;
+    const params = new URLSearchParams(window.location.search);
+    const targetId = params.get('id');
+    if (targetId) {
+      const match = trainers.find(t => t.id === targetId || t.employeeId === targetId || String(t.biometricId) === targetId);
+      if (match) {
+        setActiveTrainer(match);
+        setShowViewDrawer(true);
+      }
+    }
+  }, [trainers]);
+
   // Non-trainer employees available for promotion
   const availableEmployeesForTrainerRole = useMemo(() => {
     return allStaff.filter(s => {

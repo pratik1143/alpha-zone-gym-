@@ -84,6 +84,19 @@ export default function EmployeesPage() {
     };
   }, [actionsMenu]);
 
+  // Deep-linking support from Universal Search (?id=...)
+  useEffect(() => {
+    if (typeof window === 'undefined' || employees.length === 0) return;
+    const params = new URLSearchParams(window.location.search);
+    const targetId = params.get('id');
+    if (targetId) {
+      const match = employees.find(e => e.id === targetId || e.employeeId === targetId || String(e.biometricId) === targetId);
+      if (match) {
+        setActiveProfile(match);
+      }
+    }
+  }, [employees]);
+
   // Fetch & Realtime Firestore listeners
   const fetchEmployeesList = async () => {
     try {

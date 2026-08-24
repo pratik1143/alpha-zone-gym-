@@ -140,6 +140,17 @@ export default function FollowUpManager() {
   const [nextFollowupTime, setNextFollowupTime] = useState('10:00');
   const [openActionDropdown, setOpenActionDropdown] = useState<string | null>(null);
 
+  // Deep-linking support from Universal Search (?search=...)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const searchParam = params.get('search');
+    if (searchParam) {
+      setSearchQuery(searchParam);
+      setActiveTab('active');
+    }
+  }, []);
+
   // Fetch Dependencies
   useEffect(() => {
     fetchMembers();

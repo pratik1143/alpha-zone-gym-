@@ -150,6 +150,19 @@ export default function EnquiryGodLevelHub() {
     return () => unsubscribe();
   }, []);
 
+  // Deep-linking support from Universal Search (?id=...)
+  useEffect(() => {
+    if (typeof window === 'undefined' || enquiries.length === 0) return;
+    const params = new URLSearchParams(window.location.search);
+    const targetId = params.get('id');
+    if (targetId) {
+      const match = enquiries.find(e => e.id === targetId || e.phone === targetId);
+      if (match) {
+        setSelectedEnquiry(match);
+      }
+    }
+  }, [enquiries]);
+
   // Dynamic Representatives List from Database
   const dynamicStaffList = useMemo(() => {
     const fromData = enquiries

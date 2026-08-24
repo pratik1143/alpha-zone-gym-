@@ -23,6 +23,7 @@ import { nextBiometricId, migrateMembers, dryRunMigration, resumeMigration, rebu
 import { getSmtpConfig, saveSmtpConfig, getTemplates, saveTemplatesController, sendTestEmail, getInvoicePreview } from '../controllers/automation.controller';
 import { getPlansController, createPlanController, updatePlanController, deletePlanController } from '../controllers/plan.controller';
 import { getEmployees, createEmployee, updateEmployee, deleteEmployee, getEmployeeAttendance } from '../controllers/employee.controller';
+import { globalSearch } from '../controllers/search.controller';
 import { authenticateToken } from '../middleware/auth';
 
 
@@ -35,6 +36,9 @@ router.get('/system/health', getPythonStatus);
 
 // Protect all CRM / dashboard operations
 router.use(authenticateToken);
+
+// Universal Global Search API
+router.get('/search', globalSearch);
 
 router.use('/enquiries', enquiryRoutes);
 router.use('/whatsapp', whatsappRoutes);
