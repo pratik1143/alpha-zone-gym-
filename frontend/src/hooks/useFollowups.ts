@@ -158,9 +158,11 @@ export function useFollowups() {
       remarks: string,
       outcome: string,
       memberId?: string | null,
-      enquiryId?: string | null
+      enquiryId?: string | null,
+      taskObj?: FollowUpItem,
+      performedBy?: string
     ) => {
-      await followupService.complete(id, remarks, outcome, memberId, enquiryId);
+      await followupService.complete(id, remarks, outcome, memberId, enquiryId, taskObj, performedBy);
       setDbFollowups((prev) =>
         prev.map((f) =>
           f.id === id
@@ -169,6 +171,91 @@ export function useFollowups() {
                 status: 'Completed',
                 remarks,
                 outcome,
+                lastNote: remarks ? `Completed: ${remarks}` : (outcome || 'Completed'),
+                completedAt: new Date().toISOString(),
+              }
+            : f
+        )
+      );
+    },
+    []
+  );
+
+  const rescheduleFollowup = useCallback(
+    async (
+      task: FollowUpItem,
+      newDate: string,
+      newTime: string,
+      reason?: string,
+      note?: string,
+      performedBy?: string
+    ) => {
+      await followupService.reschedule(task, newDate, newTime, reason, note, performedBy);
+      const cleanDate = newDate.split('T')[0];
+      const cleanTime = newTime || '10:00';
+      setDbFollowups((prev) =>
+        prev.map((f) =>
+          f.id === task.id
+            ? {
+                ...f,
+                dueDate: cleanDate,
+                scheduledDate: cleanDate,
+                scheduledTime: cleanTime,
+                scheduledTimestamp: new Date(`${cleanDate}T${cleanTime}:00+05:30`).getTime() || Date.now(),
+                date: cleanDate,
+                status: 'Pending',
+                lastNote: note || reason || f.lastNote,
+                updatedAt: new Date().toISOString(),
+              }
+            : f
+        )
+      );
+    },
+    []
+  );
+
+  const addFollowupNote = useCallback(
+    async (
+      task: FollowUpItem,
+      noteText: string,
+      nextDate?: string,
+      nextTime?: string,
+      performedBy?: string
+    ) => {
+      await followupService.addNote(task, noteText, nextDate, nextTime, performedBy);
+      setDbFollowups((prev) =>
+        prev.map((f) =>
+          f.id === task.id
+            ? {
+                ...f,
+                lastNote: noteText.trim(),
+                ...(nextDate ? {
+                  dueDate: nextDate.split('T')[0],
+                  scheduledDate: nextDate.split('T')[0],
+                  scheduledTime: nextTime || f.scheduledTime,
+                  date: nextDate.split('T')[0],
+                } : {}),
+                updatedAt: new Date().toISOString(),
+              }
+            : f
+        )
+      );
+    },
+    []
+  );
+
+  const markFollowupLost = useCallback(
+    async (task: FollowUpItem, reason: string, performedBy?: string) => {
+      await followupService.markLost(task, reason, performedBy);
+      setDbFollowups((prev) =>
+        prev.map((f) =>
+          f.id === task.id
+            ? {
+                ...f,
+                status: 'Lost',
+                remarks: reason.trim(),
+                outcome: 'Lost',
+                lastNote: `Marked Lost: ${reason.trim()}`,
                 completedAt: new Date().toISOString(),
               }
             : f
@@ -225,6 +312,9 @@ export function useFollowups() {
     getTodayPendingFollowUps: () => todaysFollowups,
     createFollowup,
     completeFollowup,
+    rescheduleFollowup,
+    addFollowupNote,
+    markFollowupLost,
     snoozeFollowup,
     cancelFollowup,
     removeFollowup,

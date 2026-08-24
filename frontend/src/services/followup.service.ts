@@ -3,6 +3,17 @@ import { collection, onSnapshot, query, doc, updateDoc, setDoc, addDoc, deleteDo
 import API from '@/services/api';
 import { getTodayInIndia, getCalendarDaysDiff, isTodayInIndia } from '@/lib/dateUtils';
 
+export interface FollowUpHistoryEvent {
+  id?: string;
+  eventType: 'CREATED' | 'RESCHEDULED' | 'NOTE_ADDED' | 'ASSIGNED' | 'REASSIGNED' | 'COMPLETED' | 'LOST' | 'REOPENED' | string;
+  timestamp: string;
+  performedBy?: string;
+  oldValue?: string;
+  newValue?: string;
+  note?: string;
+  reason?: string;
+}
+
 export interface FollowUpItem {
   id: string;
   memberId?: string | null;
@@ -15,7 +26,7 @@ export interface FollowUpItem {
   assignedTo?: string;
   priority: 'Critical' | 'High' | 'Medium' | 'Low' | string;
   type: 'GYM MEMBERSHIP RENEWAL' | 'PT RENEWAL' | 'PENDING BALANCE' | 'Renewal' | 'PT' | 'Payment' | 'Enquiry' | 'General' | 'Diet' | 'Trainer' | 'Attendance' | 'Birthday' | 'Custom' | string;
-  status: 'Pending' | 'In Progress' | 'Completed' | 'Missed' | 'Cancelled' | string;
+  status: 'Pending' | 'In Progress' | 'Completed' | 'Missed' | 'Cancelled' | 'Lost' | string;
   createdAt: string;
   createdBy?: string;
   dueDate: string;
@@ -28,7 +39,7 @@ export interface FollowUpItem {
   title?: string;
   reason?: string;
   communicationType?: 'call' | 'whatsapp' | 'visit' | 'email';
-  source?: 'automatic' | 'manual' | 'enquiry' | 'renewal' | 'system';
+  source?: 'automatic' | 'manual' | 'enquiry' | 'renewal' | 'system' | 'auto';
   automationKey?: string | null;
   pendingAmount?: number | null;
   plan?: string;
@@ -38,6 +49,8 @@ export interface FollowUpItem {
   outcome?: string;
   remarks?: string;
   date?: string;
+  lastNote?: string;
+  history?: FollowUpHistoryEvent[];
 }
 
 export const followupService = {
@@ -329,7 +342,9 @@ export const followupService = {
             ptExpiryDate: d.ptExpiryDate || '',
             paymentDueDate: d.paymentDueDate || '',
             outcome: d.outcome || '',
-            remarks: d.remarks || ''
+            remarks: d.remarks || '',
+            lastNote: d.lastNote || d.remarks || d.notes || d.description || '',
+            history: Array.isArray(d.history) ? d.history : []
           };
 
           itemMap.set(docSnap.id, item);
@@ -421,15 +436,194 @@ export const followupService = {
     return { id: createdId, ...payload } as FollowUpItem;
   },
 
-  // Update follow-up status & log communication
-  complete: async (id: string, remarks: string, outcome: string, memberId?: string | null, enquiryId?: string | null): Promise<void> => {
+  // Reschedule existing follow-up task (updates SAME document and appends to history)
+  reschedule: async (
+    task: FollowUpItem,
+    newDate: string,
+    newTime: string,
+    reason?: string,
+    note?: string,
+    performedBy?: string
+  ): Promise<void> => {
     const now = new Date().toISOString();
+    const cleanDate = newDate.split('T')[0];
+    const cleanTime = newTime || '10:00';
+    const scheduledTimestamp = new Date(`${cleanDate}T${cleanTime}:00+05:30`).getTime() || Date.now();
+
+    const oldDateStr = `${task.scheduledDate || task.dueDate} · ${task.scheduledTime || '10:00'}`;
+    const newDateStr = `${cleanDate} · ${cleanTime}`;
+
+    const newHistoryEvent: FollowUpHistoryEvent = {
+      id: `evt_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      eventType: 'RESCHEDULED',
+      timestamp: now,
+      performedBy: performedBy || 'Staff',
+      oldValue: oldDateStr,
+      newValue: newDateStr,
+      reason: reason || 'Rescheduled callback',
+      note: note || ''
+    };
+
+    const existingHistory = Array.isArray(task.history) ? [...task.history] : [];
+    // If no initial CREATED event exists, prepend synthetic created event
+    if (existingHistory.length === 0) {
+      existingHistory.push({
+        id: `evt_init_${task.id}`,
+        eventType: 'CREATED',
+        timestamp: task.createdAt || now,
+        performedBy: task.createdBy || (task.source === 'auto' || task.source === 'automatic' ? 'System Engine' : 'Staff'),
+        note: task.notes || task.description || task.reason || 'Follow-up created'
+      });
+    }
+    existingHistory.push(newHistoryEvent);
+
+    const updates: any = {
+      dueDate: cleanDate,
+      scheduledDate: cleanDate,
+      scheduledTime: cleanTime,
+      scheduledTimestamp,
+      date: cleanDate,
+      status: 'Pending',
+      updatedAt: now,
+      history: existingHistory
+    };
+
+    if (note && note.trim()) {
+      updates.lastNote = note.trim();
+    } else if (reason && reason.trim()) {
+      updates.lastNote = reason.trim();
+    }
+
+    try {
+      await updateDoc(doc(db, 'followups', task.id), updates);
+    } catch (_) {
+      try {
+        await API.put(`/followups/${task.id}`, updates);
+      } catch (_) {}
+    }
+  },
+
+  // Add conversation note to follow-up task
+  addNote: async (
+    task: FollowUpItem,
+    noteText: string,
+    nextDate?: string,
+    nextTime?: string,
+    performedBy?: string
+  ): Promise<void> => {
+    const now = new Date().toISOString();
+    const newHistoryEvent: FollowUpHistoryEvent = {
+      id: `evt_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      eventType: 'NOTE_ADDED',
+      timestamp: now,
+      performedBy: performedBy || 'Staff',
+      note: noteText.trim()
+    };
+
+    const existingHistory = Array.isArray(task.history) ? [...task.history] : [];
+    if (existingHistory.length === 0) {
+      existingHistory.push({
+        id: `evt_init_${task.id}`,
+        eventType: 'CREATED',
+        timestamp: task.createdAt || now,
+        performedBy: task.createdBy || 'Staff',
+        note: task.notes || task.description || task.reason || 'Follow-up created'
+      });
+    }
+    existingHistory.push(newHistoryEvent);
+
+    const updates: any = {
+      lastNote: noteText.trim(),
+      updatedAt: now,
+      history: existingHistory
+    };
+
+    if (nextDate) {
+      const cleanDate = nextDate.split('T')[0];
+      const cleanTime = nextTime || task.scheduledTime || '10:00';
+      updates.dueDate = cleanDate;
+      updates.scheduledDate = cleanDate;
+      updates.scheduledTime = cleanTime;
+      updates.scheduledTimestamp = new Date(`${cleanDate}T${cleanTime}:00+05:30`).getTime() || Date.now();
+      updates.date = cleanDate;
+    }
+
+    try {
+      await updateDoc(doc(db, 'followups', task.id), updates);
+    } catch (_) {
+      try {
+        await API.put(`/followups/${task.id}`, updates);
+      } catch (_) {}
+    }
+  },
+
+  // Mark task as Lost
+  markLost: async (
+    task: FollowUpItem,
+    reason: string,
+    performedBy?: string
+  ): Promise<void> => {
+    const now = new Date().toISOString();
+    const newHistoryEvent: FollowUpHistoryEvent = {
+      id: `evt_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      eventType: 'LOST',
+      timestamp: now,
+      performedBy: performedBy || 'Staff',
+      reason: reason.trim()
+    };
+
+    const existingHistory = Array.isArray(task.history) ? [...task.history] : [];
+    existingHistory.push(newHistoryEvent);
+
+    const updates: any = {
+      status: 'Lost',
+      completedAt: now,
+      remarks: reason.trim(),
+      outcome: 'Lost',
+      lastNote: `Marked Lost: ${reason.trim()}`,
+      updatedAt: now,
+      history: existingHistory
+    };
+
+    try {
+      await updateDoc(doc(db, 'followups', task.id), updates);
+    } catch (_) {
+      try {
+        await API.put(`/followups/${task.id}`, updates);
+      } catch (_) {}
+    }
+  },
+
+  // Update follow-up status to Completed & log history event & communication record
+  complete: async (
+    id: string,
+    remarks: string,
+    outcome: string,
+    memberId?: string | null,
+    enquiryId?: string | null,
+    taskObj?: FollowUpItem,
+    performedBy?: string
+  ): Promise<void> => {
+    const now = new Date().toISOString();
+    const existingHistory = taskObj && Array.isArray(taskObj.history) ? [...taskObj.history] : [];
+    
+    existingHistory.push({
+      id: `evt_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      eventType: 'COMPLETED',
+      timestamp: now,
+      performedBy: performedBy || 'Staff',
+      note: remarks || '',
+      reason: outcome || 'Completed'
+    });
+
     const updates = {
       status: 'Completed',
       completedAt: now,
       remarks,
       outcome,
-      updatedAt: now
+      lastNote: remarks ? `Completed: ${remarks}` : (outcome || 'Completed'),
+      updatedAt: now,
+      history: existingHistory
     };
 
     try {
@@ -449,7 +643,7 @@ export const followupService = {
           content: remarks || 'Completed follow-up task',
           outcome: outcome || 'Connected',
           timestamp: new Date().toISOString(),
-          author: 'Receptionist Desk'
+          author: performedBy || 'Receptionist Desk'
         });
       } catch (_) {}
     }
@@ -459,10 +653,24 @@ export const followupService = {
   snooze: async (task: FollowUpItem): Promise<{ nextHourStr: string }> => {
     const nextHour = new Date(Date.now() + 60 * 60 * 1000);
     const nextHourStr = nextHour.toLocaleTimeString('en-US', { hour12: false }).substring(0, 5);
+    const now = new Date().toISOString();
+
+    const existingHistory = Array.isArray(task.history) ? [...task.history] : [];
+    existingHistory.push({
+      id: `evt_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      eventType: 'RESCHEDULED',
+      timestamp: now,
+      performedBy: 'Staff',
+      oldValue: `${task.scheduledTime}`,
+      newValue: nextHourStr,
+      reason: 'Snoozed by 1 hour'
+    });
+
     const updates = {
       scheduledTime: nextHourStr,
       scheduledTimestamp: nextHour.getTime(),
-      updatedAt: new Date().toISOString()
+      updatedAt: now,
+      history: existingHistory
     };
 
     try {
@@ -477,7 +685,7 @@ export const followupService = {
   },
 
   // Cancel task
-  cancel: async (id: string): Promise<void> => {
+  cancel: async (id: string, performedBy?: string): Promise<void> => {
     const now = new Date().toISOString();
     const updates = { status: 'Cancelled', completedAt: now, updatedAt: now };
 
