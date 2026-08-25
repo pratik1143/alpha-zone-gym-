@@ -76,7 +76,11 @@ export default function EditBillingModal({
   const [tax, setTax] = useState<number>(initialTaxAmt);
   const [amountPaid, setAmountPaid] = useState<number>(initialPaidAmt);
   const [paymentMethod, setPaymentMethod] = useState(invoice?.method || invoice?.paymentMethod || 'UPI');
-  const [paymentDate, setPaymentDate] = useState(invoice?.date || invoice?.createdAt?.split('T')[0] || new Date().toISOString().split('T')[0]);
+  const initialDate = invoice?.transactionDate || invoice?.paymentDate || invoice?.date || invoice?.createdAt?.split('T')[0] || new Date().toISOString().split('T')[0];
+  const initialTime = invoice?.transactionTime || invoice?.paymentTime || invoice?.time || '05:30 PM';
+
+  const [paymentDate, setPaymentDate] = useState(initialDate);
+  const [paymentTime, setPaymentTime] = useState(initialTime);
   const [invoiceNumber, setInvoiceNumber] = useState(invoice?.invoiceNumber || invoice?.invoice || 'INV-0001');
   const [notes, setNotes] = useState(invoice?.notes || '');
 
@@ -202,7 +206,14 @@ export default function EditBillingModal({
         pendingAmount: pendingAmount,
         method: paymentMethod,
         status: calculatedStatus,
+        transactionDate: paymentDate,
+        transactionTime: paymentTime,
+        paymentDate: paymentDate,
+        paymentTime: paymentTime,
         date: paymentDate,
+        time: paymentTime,
+        updatedAt: new Date().toISOString(),
+        isRealTimeToday: false,
         notes: notes || 'Updated via Edit Billing Modal',
         changedBy: 'Gym Owner'
       };
@@ -694,11 +705,22 @@ export default function EditBillingModal({
               </div>
 
               <div>
-                <label className="font-extrabold text-slate-700 block mb-1">Payment Date</label>
+                <label className="font-extrabold text-slate-700 block mb-1">Transaction Date *</label>
                 <input
                   type="date"
                   value={paymentDate}
                   onChange={e => setPaymentDate(e.target.value)}
+                  className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl font-bold text-slate-800 focus:border-indigo-500 focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="font-extrabold text-slate-700 block mb-1">Transaction Time *</label>
+                <input
+                  type="text"
+                  placeholder="e.g. 05:30 PM"
+                  value={paymentTime}
+                  onChange={e => setPaymentTime(e.target.value)}
                   className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl font-bold text-slate-800 focus:border-indigo-500 focus:outline-none"
                 />
               </div>

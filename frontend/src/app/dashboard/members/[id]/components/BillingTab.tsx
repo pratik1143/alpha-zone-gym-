@@ -130,10 +130,16 @@ export default function BillingTab({ member: initialMember }: { member: any }) {
         combinedMap.set(autoInv.id, autoInv);
       }
 
-      const sorted = Array.from(combinedMap.values()).sort((a: any, b: any) =>
-        new Date(b.date || b.createdAt || b.startDate || 0).getTime() -
-        new Date(a.date || a.createdAt || a.startDate || 0).getTime()
-      );
+      const sorted = Array.from(combinedMap.values()).sort((a: any, b: any) => {
+        const dateA = String(a.transactionDate || a.paymentDate || a.date || a.createdAt || '');
+        const timeA = String(a.transactionTime || a.paymentTime || a.time || '');
+        const dateB = String(b.transactionDate || b.paymentDate || b.date || b.createdAt || '');
+        const timeB = String(b.transactionTime || b.paymentTime || b.time || '');
+
+        const dtA = dateA.includes('T') ? new Date(dateA).getTime() : new Date(`${dateA} ${timeA}`.trim()).getTime();
+        const dtB = dateB.includes('T') ? new Date(dateB).getTime() : new Date(`${dateB} ${timeB}`.trim()).getTime();
+        return (isNaN(dtB) ? 0 : dtB) - (isNaN(dtA) ? 0 : dtA);
+      });
 
       setInvoices(sorted);
       setLoading(false);
@@ -500,9 +506,12 @@ export default function BillingTab({ member: initialMember }: { member: any }) {
 
                   return (
                     <tr key={inv.id || idx} className="hover:bg-blue-50/60 transition-colors border-b border-slate-100">
-                      {/* Date */}
+                      {/* Date & Time */}
                       <td className="px-4 py-4 whitespace-nowrap font-mono text-slate-700 font-bold">
-                        {inv.date || formatDate(member.joinDate)}
+                        <div>{formatDate(inv.transactionDate || inv.paymentDate || inv.date || member.joinDate)}</div>
+                        {(inv.transactionTime || inv.paymentTime || inv.time) && (
+                          <div className="text-[10px] text-slate-400 font-semibold mt-0.5">{inv.transactionTime || inv.paymentTime || inv.time}</div>
+                        )}
                       </td>
 
                       {/* Invoice No */}

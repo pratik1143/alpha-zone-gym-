@@ -244,9 +244,9 @@ export default function DashboardPage() {
         const status = String(p.status || p.paymentStatus || 'paid').toLowerCase();
         if (status !== 'paid' && status !== 'partial') return;
 
-        // Payment date must match today IST (NEVER fall back to createdAt)
-        const pDate = String(p.paymentDate || p.date || '').split('T')[0];
-        if (pDate !== todayStr && !p.isRealTimeToday) return;
+        // Payment date must match today IST on transactionDate / paymentDate / date
+        const pDate = String(p.transactionDate || p.paymentDate || p.date || '').split('T')[0];
+        if (pDate !== todayStr) return;
 
         const key = String(p.id || p.invoiceNumber || p.invoice || p.idempotencyKey || '').trim();
         if (key && seen.has(key)) return;

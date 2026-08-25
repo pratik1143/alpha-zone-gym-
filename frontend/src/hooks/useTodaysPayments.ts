@@ -31,9 +31,15 @@ export interface PaymentRecord {
   paymentStatus?: string;
   method?: string;
   paymentMethod?: string;
+  transactionDate?: string;
+  transactionTime?: string;
   date?: string;
   paymentDate?: string;
+  time?: string;
+  paymentTime?: string;
   createdAt?: string;
+  updatedAt?: string;
+  editedBy?: string;
   isHistorical?: boolean;
   imported?: boolean;
   isLegacyImport?: boolean;
@@ -74,6 +80,8 @@ export interface UseTodaysPaymentsResult {
   loading: boolean;
   /** Soft-delete a payment. Returns true on success. */
   deletePayment: (payment: PaymentRecord) => Promise<boolean>;
+  /** Update transaction date and time for a payment record. */
+  updatePaymentDateTime: (paymentId: string, transactionDate: string, transactionTime: string) => Promise<boolean>;
 }
 
 /**
@@ -150,7 +158,7 @@ export function useTodaysPayments(): UseTodaysPaymentsResult {
     [rawPayments]
   );
 
-  // Today's valid paid payments (IST date, non-historical, non-sample)
+  // Today's valid paid payments (IST transactionDate, non-historical, non-sample)
   const todaysPayments = useMemo<PaymentRecord[]>(() => {
     const seen = new Set<string>();
     return allPayments.filter((p) => {
@@ -160,9 +168,9 @@ export function useTodaysPayments(): UseTodaysPaymentsResult {
       const status = String(p.status || p.paymentStatus || '').toLowerCase();
       if (status !== 'paid' && status !== 'partial') return false;
 
-      // Strict IST date match — never fall back to createdAt
-      const pDate = String(p.paymentDate || p.date || '').split('T')[0];
-      if (pDate !== todayStr && !p.isRealTimeToday) return false;
+      // Strict IST date match on transactionDate / paymentDate / date
+      const pDate = String(p.transactionDate || p.paymentDate || p.date || '').split('T')[0];
+      if (pDate !== todayStr) return false;
 
       // Deduplicate by ID
       const key = String(p.id || p.invoice || p.invoiceNumber || '').trim();
@@ -224,6 +232,27 @@ export function useTodaysPayments(): UseTodaysPaymentsResult {
     }
   };
 
+  // ── Update Payment Date & Time ─────────────────────────────────────────────
+  const updatePaymentDateTime = async (paymentId: string, transactionDate: string, transactionTime: string): Promise<boolean> => {
+    if (!paymentId || !transactionDate) return false;
+    try {
+      await updateDoc(doc(db, 'payments', paymentId), {
+        transactionDate,
+        transactionTime,
+        paymentDate: transactionDate,
+        paymentTime: transactionTime,
+        date: transactionDate,
+        time: transactionTime,
+        updatedAt: new Date().toISOString(),
+        editedBy: user?.uid || user?.email || 'admin',
+      });
+      return true;
+    } catch (err) {
+      console.error('[useTodaysPayments] updatePaymentDateTime failed:', err);
+      return false;
+    }
+  };
+
   return {
     allPayments,
     todaysPayments,
@@ -234,5 +263,6 @@ export function useTodaysPayments(): UseTodaysPaymentsResult {
     todayStr,
     loading,
     deletePayment,
+    updatePaymentDateTime,
   };
 }

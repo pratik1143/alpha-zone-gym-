@@ -18,7 +18,10 @@ export default function OfficialInvoiceReceipt({ invoice, member, onPrint, onWha
   const memberName = member?.name || invoice?.memberName || 'Charu Sharma';
   const memberPhone = member?.phone || invoice?.memberPhone || '9896240939';
   
-  const billDate = invoice?.date ? formatDate(invoice.date) : formatDate(member?.joinDate || new Date().toISOString());
+  const rawDateStr = invoice?.transactionDate || invoice?.paymentDate || invoice?.date;
+  const billDate = rawDateStr ? formatDate(rawDateStr) : formatDate(member?.joinDate || new Date().toISOString());
+  const billTime = invoice?.transactionTime || invoice?.paymentTime || invoice?.time || '';
+  const createdDateStr = invoice?.createdAt ? formatDate(invoice.createdAt) : null;
   const planName = invoice?.plan || member?.plan || '3 Months';
   const startDate = invoice?.startDate ? formatDate(invoice.startDate) : formatDate(member?.joinDate || new Date().toISOString());
   const endDate = invoice?.expiryDate ? formatDate(invoice.expiryDate) : formatDate(member?.expiryDate || new Date(Date.now() + 90*24*60*60*1000).toISOString());
@@ -93,8 +96,12 @@ export default function OfficialInvoiceReceipt({ invoice, member, onPrint, onWha
             <p><span className="font-bold">Name:</span> {memberName}</p>
             <p><span className="font-bold">Phone:</span> {memberPhone}</p>
           </div>
-          <div className="text-right">
-            <p><span className="font-bold">Billing date:</span> {billDate}</p>
+          <div className="text-right space-y-0.5">
+            <p><span className="font-bold">Payment date:</span> {billDate}</p>
+            {billTime && <p><span className="font-bold">Payment time:</span> {billTime}</p>}
+            {createdDateStr && createdDateStr !== billDate && (
+              <p className="text-[10px] text-slate-500 font-mono mt-1"><span className="font-bold">Created in system:</span> {createdDateStr}</p>
+            )}
           </div>
         </div>
       </div>

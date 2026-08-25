@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   CreditCard, IndianRupee, Receipt, AlertCircle, Plus, Download, Search, 
   TrendingUp, X, RefreshCw, Printer, Share2, 
-  CheckCircle2, Smartphone, Banknote, Landmark, Clock, Eye, Trash2
+  CheckCircle2, Smartphone, Banknote, Landmark, Clock, Eye, Trash2, Edit3
 } from 'lucide-react';
 import { db } from '@/lib/firebase';
 import { updateDoc, doc } from 'firebase/firestore';
@@ -13,6 +13,7 @@ import { formatDate, getInitials } from '@/lib/utils';
 import { useGymStore } from '@/store';
 import toast from '@/lib/toast';
 import InvoiceBuilderModal from './components/InvoiceBuilderModal';
+import EditPaymentModal from './components/EditPaymentModal';
 import OfficialInvoiceReceipt from '../components/OfficialInvoiceReceipt';
 import { useTodaysPayments, PaymentRecord } from '@/hooks/useTodaysPayments';
 
@@ -45,12 +46,17 @@ export default function BillingPage() {
     deletePayment,
   } = useTodaysPayments();
 
-  // payments list used for table = all non-deleted payments (sorted newest first)
+  // payments list used for table = all non-deleted payments (sorted by transactionDate + transactionTime newest first)
   const payments = useMemo(
     () => [...allPayments].sort((a, b) => {
-      const ta = new Date(a.createdAt || a.date || 0).getTime();
-      const tb = new Date(b.createdAt || b.date || 0).getTime();
-      return tb - ta;
+      const dateA = String(a.transactionDate || a.paymentDate || a.date || a.createdAt || '');
+      const timeA = String(a.transactionTime || a.paymentTime || a.time || '');
+      const dateB = String(b.transactionDate || b.paymentDate || b.date || b.createdAt || '');
+      const timeB = String(b.transactionTime || b.paymentTime || b.time || '');
+
+      const dtA = dateA.includes('T') ? new Date(dateA).getTime() : new Date(`${dateA} ${timeA}`.trim()).getTime();
+      const dtB = dateB.includes('T') ? new Date(dateB).getTime() : new Date(`${dateB} ${timeB}`.trim()).getTime();
+      return (isNaN(dtB) ? 0 : dtB) - (isNaN(dtA) ? 0 : dtA);
     }),
     [allPayments]
   );
@@ -64,6 +70,9 @@ export default function BillingPage() {
   const [selectedReceipt, setSelectedReceipt] = useState<PaymentRecord | null>(null);
   const [showInvoiceModal, setShowInvoiceModal] = useState<string | null>(null);
   const [markingPaid, setMarkingPaid] = useState<string | null>(null);
+
+  // Edit Payment state
+  const [editTarget, setEditTarget] = useState<PaymentRecord | null>(null);
 
   // Delete confirmation state
   const [deleteTarget, setDeleteTarget] = useState<PaymentRecord | null>(null);
@@ -96,7 +105,6 @@ export default function BillingPage() {
         status: 'paid',
         paid: total,
         pendingAmount: 0,
-        isRealTimeToday: true
       });
       if (p.memberId) {
         await updateDoc(doc(db, 'members', p.memberId), {
@@ -138,8 +146,10 @@ export default function BillingPage() {
       return;
     }
     const total = Number(p.amount) || 0;
+    const pDate = p.transactionDate || p.paymentDate || p.date || todayStr;
+    const pTime = p.transactionTime || p.paymentTime || p.time || '';
     const msg = encodeURIComponent(
-      `🏋️ Alpha Zone Gym — Official Payment Receipt\n\nInvoice No: ${p.invoice || p.invoiceNumber || 'N/A'}\nClient Name: ${p.memberName}\nPlan: ${p.plan || 'Membership'}\nAmount Billed: ₹${total.toLocaleString('en-IN')}\nPayment Method: ${p.method || p.paymentMethod || 'UPI'}\nStatus: ${(p.status || 'paid').toUpperCase()} ✅\nDate: ${p.date || todayStr}\n\nThank you for training with Alpha Zone Gym! 💪`
+      `🏋️ Alpha Zone Gym — Official Payment Receipt\n\nInvoice No: ${p.invoice || p.invoiceNumber || 'N/A'}\nClient Name: ${p.memberName}\nPlan: ${p.plan || 'Membership'}\nAmount Billed: ₹${total.toLocaleString('en-IN')}\nPayment Method: ${p.method || p.paymentMethod || 'UPI'}\nStatus: ${(p.status || 'paid').toUpperCase()} ✅\nDate: ${pDate} ${pTime}\n\nThank you for training with Alpha Zone Gym! 💪`
     );
     window.open(`https://wa.me/91${phone}?text=${msg}`, '_blank');
   };
@@ -150,7 +160,7 @@ export default function BillingPage() {
       toast.error('No payment records to export.');
       return;
     }
-    const headers = ['Invoice #', 'Member Name', 'Phone', 'Plan', 'Amount Billed', 'Amount Paid', 'Pending', 'Payment Method', 'Date', 'Status'];
+    const headers = ['Invoice #', 'Member Name', 'Phone', 'Plan', 'Amount Billed', 'Amount Paid', 'Pending', 'Payment Method', 'Transaction Date', 'Transaction Time', 'Status'];
     const rows = filteredPayments.map(p => [
       `"${p.invoice || p.invoiceNumber || ''}"`,
       `"${p.memberName || ''}"`,
@@ -160,7 +170,8 @@ export default function BillingPage() {
       p.paid || 0,
       p.pendingAmount || 0,
       `"${p.method || p.paymentMethod || ''}"`,
-      `"${p.date || p.createdAt || ''}"`,
+      `"${p.transactionDate || p.paymentDate || p.date || ''}"`,
+      `"${p.transactionTime || p.paymentTime || p.time || ''}"`,
       `"${(p.status || 'paid').toUpperCase()}"`
     ]);
 
@@ -195,12 +206,13 @@ export default function BillingPage() {
         ? true
         : pMethod.toLowerCase().includes(methodFilter.toLowerCase());
 
-      // Date Range Filter
+      // Date Range Filter based on transactionDate
       let matchesDate = true;
       if (dateFilter !== 'all') {
-        const pDate = new Date(p.date || p.createdAt || 0);
+        const pDateStr = String(p.transactionDate || p.paymentDate || p.date || p.createdAt || '').split('T')[0];
+        const pDate = new Date(pDateStr);
         const diffDays = (now.getTime() - pDate.getTime()) / (1000 * 3600 * 24);
-        if (dateFilter === 'today') matchesDate = (p.date || '').split('T')[0] === todayStr || diffDays <= 1;
+        if (dateFilter === 'today') matchesDate = pDateStr === todayStr;
         else if (dateFilter === '7days') matchesDate = diffDays <= 7;
         else if (dateFilter === '30days') matchesDate = diffDays <= 30;
       }
@@ -483,6 +495,9 @@ export default function BillingPage() {
                     const methodNorm = String(p.method || p.paymentMethod || 'UPI');
                     const MethodIcon = methodNorm.includes('Cash') ? Banknote : methodNorm.includes('Card') ? CreditCard : methodNorm.includes('Net') ? Landmark : Smartphone;
 
+                    const dateDisplay = formatDate(p.transactionDate || p.paymentDate || p.date || p.createdAt || todayStr);
+                    const timeDisplay = p.transactionTime || p.paymentTime || p.time || '';
+
                     return (
                       <tr key={p.id || idx} className="hover:bg-slate-50/80 transition-colors">
                         {/* Invoice # */}
@@ -524,7 +539,10 @@ export default function BillingPage() {
 
                         {/* Date & Time */}
                         <td className="py-3.5 px-4 font-mono text-slate-700">
-                          <div className="font-bold text-slate-900">{formatDate(p.date || p.createdAt || todayStr)}</div>
+                          <div className="font-bold text-slate-900">{dateDisplay}</div>
+                          {timeDisplay && (
+                            <div className="text-[10px] text-slate-400 font-semibold mt-0.5">{timeDisplay}</div>
+                          )}
                         </td>
 
                         {/* Status */}
@@ -541,7 +559,7 @@ export default function BillingPage() {
                           </span>
                         </td>
 
-                        {/* Actions */}
+                        {/* Actions (View, Edit, Share, Delete) */}
                         <td className="py-3.5 px-5 text-right">
                           <div className="flex items-center justify-end gap-1.5">
                             {!isPaid && (
@@ -559,6 +577,13 @@ export default function BillingPage() {
                               title="View Invoice"
                             >
                               <Eye size={12} /> View
+                            </button>
+                            <button
+                              onClick={() => setEditTarget(p)}
+                              className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-[#0B5CBE] border border-blue-200 rounded-lg font-bold text-[11px] cursor-pointer transition-colors flex items-center gap-1"
+                              title="Edit Bill Date & Time"
+                            >
+                              Edit
                             </button>
                             <button
                               onClick={() => handleShareWhatsApp(p)}
@@ -591,6 +616,9 @@ export default function BillingPage() {
                 const methodNorm = String(p.method || p.paymentMethod || 'UPI');
                 const MethodIcon = methodNorm.includes('Cash') ? Banknote : methodNorm.includes('Card') ? CreditCard : methodNorm.includes('Net') ? Landmark : Smartphone;
 
+                const dateDisplay = formatDate(p.transactionDate || p.paymentDate || p.date || p.createdAt || todayStr);
+                const timeDisplay = p.transactionTime || p.paymentTime || p.time || '';
+
                 return (
                   <div key={p.id || idx} className="p-4 space-y-2.5">
                     <div className="flex items-center justify-between">
@@ -615,7 +643,7 @@ export default function BillingPage() {
                       </div>
                       <div className="text-right">
                         <div className="text-base font-black text-slate-900">₹{(Number(p.paid) || Number(p.amount) || 0).toLocaleString('en-IN')}</div>
-                        <div className="text-[11px] text-slate-400 font-mono">{formatDate(p.date || p.createdAt || todayStr)}</div>
+                        <div className="text-[11px] text-slate-400 font-mono">{dateDisplay} {timeDisplay}</div>
                       </div>
                     </div>
 
@@ -629,6 +657,12 @@ export default function BillingPage() {
                           className="px-3 py-1 bg-[#0B5CBE] text-white rounded-lg font-bold text-xs border-none cursor-pointer"
                         >
                           View
+                        </button>
+                        <button
+                          onClick={() => setEditTarget(p)}
+                          className="px-3 py-1 bg-blue-50 text-[#0B5CBE] border border-blue-200 rounded-lg font-bold text-xs cursor-pointer"
+                        >
+                          Edit
                         </button>
                         <button
                           onClick={() => handleShareWhatsApp(p)}
@@ -682,6 +716,13 @@ export default function BillingPage() {
           </div>
         )}
       </motion.div>
+
+      {/* ── EDIT PAYMENT DATE & TIME MODAL ── */}
+      <EditPaymentModal
+        isOpen={!!editTarget}
+        payment={editTarget}
+        onClose={() => setEditTarget(null)}
+      />
 
       {/* ── COLLECT PAYMENT MODAL ── */}
       <InvoiceBuilderModal 
