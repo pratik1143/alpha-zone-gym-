@@ -127,7 +127,7 @@ export async function generateAutomatedFollowups(todayStrOverride?: string): Pro
     if (membershipExpiry && (memberStatus === 'active' || memberStatus === 'upcoming' || memberStatus === 'frozen')) {
       const daysToExpiry = getCalendarDaysDiff(membershipExpiry, todayStr);
 
-      if (daysToExpiry === 7) {
+      if (daysToExpiry <= 7 && daysToExpiry >= 1) {
         const automationKey = `AUTO_RENEWAL_${memberId}_${membershipExpiry}`;
 
         if (existingKeyMap.has(automationKey)) {

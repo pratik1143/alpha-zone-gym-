@@ -801,23 +801,17 @@ export default function FollowUpManager() {
             const client = getClientDetails(task);
             const isSelected = selectedTasks.includes(task.id);
             const sourceInfo = getFollowupSourceInfo(task);
-            const isManualCard = sourceInfo.type === 'manual';
+            const typeStyle = getFollowUpTypeStyle(task);
 
-            let typeBadgeClass = 'bg-slate-100 text-slate-700 border border-slate-200/80 font-bold';
             let displayReason = task.reason || task.description || task.notes || task.title || '';
 
-            if (task.type === 'GYM MEMBERSHIP RENEWAL' || task.type === 'Renewal') {
-              typeBadgeClass = 'bg-blue-50 text-blue-800 border border-blue-200/80 font-black';
-              displayReason = displayReason || 'Membership renewal due in 7 days';
-            } else if (task.type === 'PT RENEWAL' || task.type === 'PT') {
-              typeBadgeClass = 'bg-purple-50 text-purple-800 border border-purple-200/80 font-black';
-              displayReason = displayReason || 'Personal Training renewal due in 4 days';
-            } else if (task.type === 'PENDING BALANCE' || task.type === 'Payment') {
-              typeBadgeClass = 'bg-amber-50 text-amber-900 border border-amber-200/80 font-black';
+            if (typeStyle.key === 'renewal' && (!task.reason || task.reason === 'Membership Renewal')) {
+              displayReason = 'Membership renewal due in 7 days';
+            } else if (typeStyle.key === 'expired' && (!task.reason || task.reason === 'Membership Expired')) {
+              displayReason = 'Membership expired — renewal recovery required';
+            } else if (typeStyle.key === 'balance' && (!task.reason || task.reason === 'Pending Balance')) {
               const pendingAmtStr = task.pendingAmount ? `₹${Number(task.pendingAmount).toLocaleString('en-IN')}` : '';
-              displayReason = pendingAmtStr ? `${pendingAmtStr} pending` : (displayReason || 'Pending membership balance');
-            } else if (task.type === 'Enquiry') {
-              typeBadgeClass = 'bg-slate-100 text-slate-700 border border-slate-200/80 font-bold';
+              displayReason = pendingAmtStr ? `${pendingAmtStr} pending` : 'Pending membership balance';
             }
 
             const normPriority = (task.priority || 'Medium').toLowerCase();
@@ -839,11 +833,7 @@ export default function FollowUpManager() {
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -8 }}
-                className={`rounded-2xl p-5 border transition-all shadow-xs hover:shadow-md relative ${
-                  isManualCard
-                    ? 'bg-[#F4F8FF] border-[#BFDBFE] border-l-4 border-l-[#0b5cbe]'
-                    : 'bg-white border-slate-200/80 hover:border-slate-300'
-                } ${isSelected ? 'ring-2 ring-blue-500' : ''}`}
+                className={`rounded-2xl p-5 border transition-all shadow-xs hover:shadow-md relative ${typeStyle.bgClass} ${typeStyle.borderClass} ${typeStyle.leftBorderClass} ${isSelected ? 'ring-2 ring-blue-500' : ''}`}
               >
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                   
@@ -856,11 +846,7 @@ export default function FollowUpManager() {
                       className="w-4 h-4 mt-1 md:mt-0 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer shrink-0"
                     />
 
-                    <div className={`w-10 h-10 rounded-2xl flex items-center justify-center font-bold text-xs shrink-0 ${
-                      isManualCard 
-                        ? 'bg-blue-100 text-[#0b5cbe] border border-blue-200' 
-                        : 'bg-slate-100 text-slate-700 border border-slate-200'
-                    }`}>
+                    <div className={`w-10 h-10 rounded-2xl flex items-center justify-center font-bold text-xs shrink-0 ${typeStyle.avatarBg}`}>
                       {client.name.substring(0, 2).toUpperCase()}
                     </div>
 
@@ -870,8 +856,8 @@ export default function FollowUpManager() {
                         <h3 className="text-sm font-black text-slate-900 truncate">{client.name}</h3>
                         
                         {/* 1. Follow-Up Type Badge */}
-                        <span className={`text-[10px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider ${typeBadgeClass}`}>
-                          {task.type || 'General'}
+                        <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-md uppercase tracking-wider ${typeStyle.badgeClass}`}>
+                          {typeStyle.badgeText}
                         </span>
 
                         {/* 2. Source Badge (✦ AUTO / ✎ MANUAL) */}
@@ -926,7 +912,7 @@ export default function FollowUpManager() {
                       {/* Last Note Display on Card */}
                       {task.lastNote && (
                         <div className="mt-2.5 bg-white/90 p-2.5 rounded-xl border border-slate-200/80 text-xs text-slate-700 font-medium flex items-start gap-2 shadow-2xs">
-                          <FileText size={13} className="text-blue-600 shrink-0 mt-0.5" />
+                          <FileText size={13} className={`${typeStyle.iconColor} shrink-0 mt-0.5`} />
                           <div>
                             <span className="font-bold text-slate-800">Last Note:</span> "{task.lastNote}"
                           </div>

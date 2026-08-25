@@ -101,17 +101,17 @@ export function getFollowUpTypeStyle(task: any): FollowUpTypeStyle {
     };
   }
 
-  // 5. Default General
+  // 5. Default Other / General → PURPLE (#9333EA)
   return {
     key: 'general',
-    label: String(task?.type || 'GENERAL').toUpperCase(),
-    bgClass: 'bg-white hover:bg-slate-50',
-    borderClass: 'border-slate-200',
-    leftBorderClass: 'border-l-4 border-l-slate-400',
-    badgeClass: 'bg-slate-700 text-white font-bold',
-    dotClass: 'bg-slate-500',
-    avatarBg: 'bg-slate-100 text-slate-700 border border-slate-200',
-    iconColor: 'text-slate-600',
-    badgeText: String(task?.type || 'GENERAL').toUpperCase(),
+    label: String(task?.type || 'OTHER').toUpperCase(),
+    bgClass: 'bg-[#F3E8FF] hover:bg-[#EDE9FE]',
+    borderClass: 'border-[#E9D5FF]',
+    leftBorderClass: 'border-l-4 border-l-[#9333EA]',
+    badgeClass: 'bg-[#9333EA] text-white shadow-2xs font-extrabold',
+    dotClass: 'bg-[#9333EA]',
+    avatarBg: 'bg-purple-100 text-[#9333EA] border border-purple-200',
+    iconColor: 'text-[#9333EA]',
+    badgeText: String(task?.type || 'OTHER').toUpperCase(),
   };
 }

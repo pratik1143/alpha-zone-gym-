@@ -95,7 +95,7 @@ export const followupService = {
         const membershipExpiry = member.expiryDate ? member.expiryDate.split('T')[0] : null;
         if (membershipExpiry && (memberStatus === 'active' || memberStatus === 'upcoming' || memberStatus === 'frozen')) {
           const daysToExpiry = getCalendarDaysDiff(membershipExpiry, todayStr);
-          if (daysToExpiry === 7) {
+          if (daysToExpiry <= 7 && daysToExpiry >= 1) {
             const key = `AUTO_RENEWAL_${memberId}_${membershipExpiry}`;
             if (!existingKeySet.has(key)) {
               existingKeySet.add(key);
@@ -111,6 +111,42 @@ export const followupService = {
                 description: 'Membership renewal due in 7 days',
                 notes: 'Membership renewal due in 7 days',
                 priority: 'Medium',
+                dueDate: todayStr,
+                scheduledDate: todayStr,
+                scheduledTime: '10:00',
+                scheduledTimestamp: new Date(`${todayStr}T10:00:00+05:30`).getTime() || Date.now(),
+                assignedTo: assignedStaff,
+                status: 'Pending',
+                source: 'auto',
+                plan: member.plan || 'Monthly Standard',
+                expiryDate: membershipExpiry,
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString()
+              };
+              await setDoc(doc(db, 'followups', key), payload, { merge: true }).catch(() => {});
+            }
+          }
+        }
+
+        // RULE 5: EXPIRED MEMBERSHIP RECOVERY (expired in past 30 days)
+        if (membershipExpiry && (memberStatus === 'expired' || memberStatus === 'inactive' || getCalendarDaysDiff(membershipExpiry, todayStr) <= 0)) {
+          const daysExpired = Math.abs(getCalendarDaysDiff(membershipExpiry, todayStr));
+          if (daysExpired <= 30) {
+            const key = `AUTO_EXPIRED_${memberId}_${membershipExpiry}`;
+            if (!existingKeySet.has(key)) {
+              existingKeySet.add(key);
+              const payload = {
+                id: key,
+                automationKey: key,
+                memberId,
+                memberName,
+                phone: memberPhone,
+                type: 'EXPIRED',
+                reason: `Membership expired ${daysExpired === 0 ? 'today' : `${daysExpired} days ago`}`,
+                title: 'EXPIRED MEMBERSHIP',
+                description: `Membership expired ${daysExpired === 0 ? 'today' : `${daysExpired} days ago`}`,
+                notes: 'Membership expired — renewal recovery required',
+                priority: 'High',
                 dueDate: todayStr,
                 scheduledDate: todayStr,
                 scheduledTime: '10:00',
