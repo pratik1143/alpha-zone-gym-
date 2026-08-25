@@ -128,42 +128,6 @@ export const followupService = {
           }
         }
 
-        // RULE 5: EXPIRED MEMBERSHIP RECOVERY (expired in past 30 days)
-        if (membershipExpiry && (memberStatus === 'expired' || memberStatus === 'inactive' || getCalendarDaysDiff(membershipExpiry, todayStr) <= 0)) {
-          const daysExpired = Math.abs(getCalendarDaysDiff(membershipExpiry, todayStr));
-          if (daysExpired <= 30) {
-            const key = `AUTO_EXPIRED_${memberId}_${membershipExpiry}`;
-            if (!existingKeySet.has(key)) {
-              existingKeySet.add(key);
-              const payload = {
-                id: key,
-                automationKey: key,
-                memberId,
-                memberName,
-                phone: memberPhone,
-                type: 'EXPIRED',
-                reason: `Membership expired ${daysExpired === 0 ? 'today' : `${daysExpired} days ago`}`,
-                title: 'EXPIRED MEMBERSHIP',
-                description: `Membership expired ${daysExpired === 0 ? 'today' : `${daysExpired} days ago`}`,
-                notes: 'Membership expired — renewal recovery required',
-                priority: 'High',
-                dueDate: todayStr,
-                scheduledDate: todayStr,
-                scheduledTime: '10:00',
-                scheduledTimestamp: new Date(`${todayStr}T10:00:00+05:30`).getTime() || Date.now(),
-                assignedTo: assignedStaff,
-                status: 'Pending',
-                source: 'auto',
-                plan: member.plan || 'Monthly Standard',
-                expiryDate: membershipExpiry,
-                createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString()
-              };
-              await setDoc(doc(db, 'followups', key), payload, { merge: true }).catch(() => {});
-            }
-          }
-        }
-
         // RULE 2: PT RENEWAL (4 days before PT expiry)
         const ptExpiryDate = (member.ptExpiryDate || member.ptEndDate || '').split('T')[0];
         if (ptExpiryDate) {
@@ -742,6 +706,61 @@ export const followupService = {
       try {
         await API.delete(`/followups/${id}`);
       } catch (_) {}
+    }
+  },
+
+  // Archive old automatic expired membership follow-up tasks so they only belong to Expired page
+  cleanupAutoExpiredFollowups: async (): Promise<number> => {
+    try {
+      const snap = await getDocs(collection(db, 'followups'));
+      if (!snap || snap.empty) return 0;
+
+      const { writeBatch, doc } = await import('firebase/firestore');
+      let batch = writeBatch(db);
+      let count = 0;
+      let batchOps = 0;
+
+      for (const d of snap.docs) {
+        const data = d.data();
+        const status = data.status || '';
+        if (status === 'archived' || status === 'Completed' || status === 'Lost') continue;
+
+        const sourceLower = String(data.source || '').toLowerCase();
+        const typeLower = String(data.type || '').toLowerCase();
+        const reasonLower = String(data.reason || data.description || data.notes || '').toLowerCase();
+        const key = String(data.automationKey || d.id || '');
+
+        const isAuto = sourceLower === 'auto' || sourceLower === 'automatic' || key.startsWith('AUTO_');
+        const isExpiredTask = typeLower === 'expired' || key.startsWith('AUTO_EXPIRED_') || reasonLower.includes('membership expired');
+
+        if (isAuto && isExpiredTask) {
+          batch.update(doc(db, 'followups', d.id), {
+            status: 'archived',
+            isActive: false,
+            archivedReason: 'Cleaned up automatic expired membership task',
+            updatedAt: new Date().toISOString()
+          });
+          count++;
+          batchOps++;
+          if (batchOps >= 400) {
+            await batch.commit();
+            batch = writeBatch(db);
+            batchOps = 0;
+          }
+        }
+      }
+
+      if (batchOps > 0) {
+        await batch.commit();
+      }
+
+      if (count > 0) {
+        console.log(`[Followup Cleanup] Archived ${count} automatic expired follow-up tasks from database.`);
+      }
+      return count;
+    } catch (err) {
+      console.warn('[Followup Cleanup] Error during auto-expired cleanup:', err);
+      return 0;
     }
   }
 };

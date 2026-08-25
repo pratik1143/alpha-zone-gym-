@@ -646,30 +646,37 @@ export default function FollowUpManager() {
         </div>
       </div>
 
-      {/* 3. CLEAN FILTER BAR & SOURCE LEGEND */}
+      {/* 3. CLEAN FILTER BAR & FOLLOW-UP TYPE LEGEND */}
       <div className="space-y-3">
-        {/* Source Legend */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-1">
-          <div className="flex items-center gap-2.5 text-xs font-semibold text-slate-500 bg-white px-3.5 py-1.5 rounded-xl border border-slate-200/70 shadow-2xs w-fit">
-            <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Source:</span>
-            <span className="flex items-center gap-1.5">
-              <span className="text-[9.5px] font-black px-1.5 py-0.5 rounded bg-blue-50 text-[#0b5cbe] border border-blue-200/80 flex items-center gap-1">
-                <Sparkles size={9.5} className="shrink-0" /> AUTO
+        {/* Follow-up Type & Source Legend */}
+        <div className="bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-2xs flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">FOLLOW-UP TYPES:</span>
+            <div className="flex items-center gap-2 flex-wrap font-bold text-[11px]">
+              <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#EFF6FF] text-[#2563EB] border border-[#BFDBFE]">
+                <span className="w-2.5 h-2.5 rounded-full bg-[#2563EB]" /> Enquiry
               </span>
-              <span className="text-[11px] text-slate-600 font-medium hidden sm:inline">White Card · System generated</span>
-            </span>
-            <span className="text-slate-300">•</span>
-            <span className="flex items-center gap-1.5">
-              <span className="text-[9.5px] font-black px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-200/80 flex items-center gap-1">
-                <PenLine size={9.5} className="shrink-0" /> MANUAL
+              <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#F0FDF4] text-[#16A34A] border border-[#BBF7D0]">
+                <span className="w-2.5 h-2.5 rounded-full bg-[#16A34A]" /> Membership Renewal
               </span>
-              <span className="text-[11px] text-slate-600 font-medium hidden sm:inline">Light Blue Card · Staff created</span>
-            </span>
+              <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#FFFBEB] text-[#D97706] border border-[#FDE68A]">
+                <span className="w-2.5 h-2.5 rounded-full bg-[#D97706]" /> Balance
+              </span>
+              <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#F3E8FF] text-[#9333EA] border border-[#E9D5FF]">
+                <span className="w-2.5 h-2.5 rounded-full bg-[#9333EA]" /> Other
+              </span>
+            </div>
           </div>
 
-          <span className="text-xs text-slate-400 font-medium hidden md:inline">
-            Real-time synchronization with Alpha Zone Cloud Engine
-          </span>
+          <div className="flex items-center gap-2 border-t md:border-t-0 pt-2 md:pt-0 border-slate-100">
+            <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">SOURCE:</span>
+            <span className="text-[9.5px] font-black px-2 py-0.5 rounded bg-blue-50 text-[#0b5cbe] border border-blue-200 flex items-center gap-1">
+              <Sparkles size={9.5} className="shrink-0" /> AUTO
+            </span>
+            <span className="text-[9.5px] font-black px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-200 flex items-center gap-1">
+              <PenLine size={9.5} className="shrink-0" /> MANUAL
+            </span>
+          </div>
         </div>
 
         {/* Filter Bar Controls */}
