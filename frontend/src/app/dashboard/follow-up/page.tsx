@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
+import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Phone, 
@@ -39,6 +40,36 @@ import { useFollowups } from '@/hooks/useFollowups';
 import { followupService, FollowUpItem, FollowUpHistoryEvent } from '@/services/followup.service';
 import { getTodayInIndia, isTodayInIndia, isOverdueInIndia, isUpcomingInIndia, formatIndianDate } from '@/lib/dateUtils';
 import { getFollowUpTypeStyle } from '@/lib/followupUtils';
+
+// Helper: Resolve memberId safely for navigation (Data Safety enforced)
+export function getValidMemberId(task: FollowUpItem | any, membersList: any[] = []): string | null {
+  if (!task) return null;
+  const rawId = task.memberId || task.member_id || task.clientId || task.client_id;
+  if (!rawId) {
+    if (process.env.NODE_ENV !== 'production' && task.id) {
+      console.warn(`[Follow-Up Manager] Task "${task.id}" (${task.memberName || task.name || 'Unnamed'}) has no valid memberId.`);
+    }
+    return null;
+  }
+  
+  const strId = String(rawId).trim();
+  if (!strId || strId === 'null' || strId === 'undefined') {
+    if (process.env.NODE_ENV !== 'production' && task.id) {
+      console.warn(`[Follow-Up Manager] Task "${task.id}" has invalid memberId value:`, rawId);
+    }
+    return null;
+  }
+
+  // Check against gym store members if available to resolve exact primary key
+  if (Array.isArray(membersList) && membersList.length > 0) {
+    const matched = membersList.find((m: any) => String(m.id).trim() === strId || String(m.memberId || '').trim() === strId);
+    if (matched && matched.id) {
+      return String(matched.id).trim();
+    }
+  }
+
+  return strId;
+}
 
 // Helper: Normalize & classify Follow-up Source from real database record
 export function getFollowupSourceInfo(task: FollowUpItem | any) {
@@ -184,16 +215,109 @@ export default function FollowUpManager() {
     return () => document.removeEventListener('mousedown', handleClose);
   }, [openActionDropdown]);
 
-  // Deep-linking support from Universal Search (?search=...)
+  // Deep-linking & State Restoration support (from URL params or sessionStorage)
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const params = new URLSearchParams(window.location.search);
+    
+    const tabParam = params.get('tab');
+    if (tabParam && ['today', 'active', 'overdue', 'history'].includes(tabParam)) {
+      setActiveTab(tabParam as any);
+    }
+
     const searchParam = params.get('search');
-    if (searchParam) {
-      setSearchQuery(searchParam);
-      setActiveTab('active');
+    if (searchParam !== null) setSearchQuery(searchParam);
+
+    const typeParam = params.get('type');
+    if (typeParam !== null) setFilterType(typeParam);
+
+    const sourceParam = params.get('source');
+    if (sourceParam !== null) setFilterSource(sourceParam);
+
+    const staffParam = params.get('staff');
+    if (staffParam !== null) setFilterStaff(staffParam);
+
+    const priorityParam = params.get('priority');
+    if (priorityParam !== null) setFilterPriority(priorityParam);
+
+    const startDateParam = params.get('startDate');
+    const endDateParam = params.get('endDate');
+    if (startDateParam && endDateParam) {
+      setFilterStartDate(startDateParam);
+      setFilterEndDate(endDateParam);
+      setIsCustomDateFilterActive(true);
+    }
+
+    // Fallback: Read from sessionStorage if URL has no specific filter parameters
+    if (!window.location.search) {
+      try {
+        const saved = sessionStorage.getItem('followup_page_filters');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed.activeTab && ['today', 'active', 'overdue', 'history'].includes(parsed.activeTab)) {
+            setActiveTab(parsed.activeTab);
+          }
+          if (typeof parsed.searchQuery === 'string') setSearchQuery(parsed.searchQuery);
+          if (parsed.filterType) setFilterType(parsed.filterType);
+          if (parsed.filterSource) setFilterSource(parsed.filterSource);
+          if (parsed.filterStaff) setFilterStaff(parsed.filterStaff);
+          if (parsed.filterPriority) setFilterPriority(parsed.filterPriority);
+          if (parsed.filterStartDate && parsed.filterEndDate) {
+            setFilterStartDate(parsed.filterStartDate);
+            setFilterEndDate(parsed.filterEndDate);
+            if (typeof parsed.isCustomDateFilterActive === 'boolean') {
+              setIsCustomDateFilterActive(parsed.isCustomDateFilterActive);
+            }
+          }
+        }
+      } catch (_) {}
     }
   }, []);
+
+  // State Synchronization Effect: Sync current filters to sessionStorage & URL search string
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const stateToSave = {
+      activeTab,
+      searchQuery,
+      filterType,
+      filterSource,
+      filterStaff,
+      filterPriority,
+      filterStartDate,
+      filterEndDate,
+      isCustomDateFilterActive
+    };
+
+    try {
+      sessionStorage.setItem('followup_page_filters', JSON.stringify(stateToSave));
+    } catch (_) {}
+
+    const params = new URLSearchParams();
+    if (activeTab !== 'today') params.set('tab', activeTab);
+    if (searchQuery) params.set('search', searchQuery);
+    if (filterType !== 'All') params.set('type', filterType);
+    if (filterSource !== 'All') params.set('source', filterSource);
+    if (filterStaff !== 'All') params.set('staff', filterStaff);
+    if (filterPriority !== 'All') params.set('priority', filterPriority);
+    if (isCustomDateFilterActive) {
+      params.set('startDate', filterStartDate);
+      params.set('endDate', filterEndDate);
+    }
+    const queryString = params.toString();
+    const newUrl = `${window.location.pathname}${queryString ? `?${queryString}` : ''}`;
+    window.history.replaceState(null, '', newUrl);
+  }, [
+    activeTab, 
+    searchQuery, 
+    filterType, 
+    filterSource, 
+    filterStaff, 
+    filterPriority, 
+    filterStartDate, 
+    filterEndDate, 
+    isCustomDateFilterActive
+  ]);
 
   // Fetch Dependencies
   useEffect(() => {
@@ -806,6 +930,7 @@ export default function FollowUpManager() {
         ) : (
           filteredTasks.map((task) => {
             const client = getClientDetails(task);
+            const validMemberId = getValidMemberId(task, members);
             const isSelected = selectedTasks.includes(task.id);
             const sourceInfo = getFollowupSourceInfo(task);
             const typeStyle = getFollowUpTypeStyle(task);
@@ -860,7 +985,19 @@ export default function FollowUpManager() {
                     <div className="min-w-0 flex-1">
                       {/* Badge Hierarchy: [ TYPE ] [ ✦ AUTO / ✎ MANUAL ] [ PRIORITY ] */}
                       <div className="flex items-center gap-2 flex-wrap">
-                        <h3 className="text-sm font-black text-slate-900 truncate">{client.name}</h3>
+                        {validMemberId ? (
+                          <Link
+                            href={`/dashboard/members/${encodeURIComponent(validMemberId)}`}
+                            className="text-sm font-black text-slate-900 hover:text-[#0b5cbe] hover:underline underline-offset-2 decoration-blue-500/50 transition-colors cursor-pointer truncate no-underline"
+                            title={`View profile of ${client.name}`}
+                          >
+                            {client.name}
+                          </Link>
+                        ) : (
+                          <h3 className="text-sm font-black text-slate-900 truncate">
+                            {client.name}
+                          </h3>
+                        )}
                         
                         {/* 1. Follow-Up Type Badge */}
                         <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-md uppercase tracking-wider ${typeStyle.badgeClass}`}>
@@ -1519,7 +1656,21 @@ export default function FollowUpManager() {
               <div className="p-6 pb-2">
                 <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
                   <div className="flex items-center justify-between">
-                    <h3 className="text-sm font-black text-slate-900">{getClientDetails(showHistoryDrawer).name}</h3>
+                    {(() => {
+                      const drawerClient = getClientDetails(showHistoryDrawer);
+                      const validDrawerMemberId = getValidMemberId(showHistoryDrawer, members);
+                      return validDrawerMemberId ? (
+                        <Link
+                          href={`/dashboard/members/${encodeURIComponent(validDrawerMemberId)}`}
+                          className="text-sm font-black text-slate-900 hover:text-[#0b5cbe] hover:underline underline-offset-2 decoration-blue-500/50 transition-colors cursor-pointer truncate no-underline"
+                          title={`View profile of ${drawerClient.name}`}
+                        >
+                          {drawerClient.name}
+                        </Link>
+                      ) : (
+                        <h3 className="text-sm font-black text-slate-900">{drawerClient.name}</h3>
+                      );
+                    })()}
                     <span className={`text-[10px] font-black px-2 py-0.5 rounded-md border ${
                       showHistoryDrawer.status === 'Completed' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
                       showHistoryDrawer.status === 'Lost' ? 'bg-rose-50 text-rose-700 border-rose-200' :
