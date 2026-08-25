@@ -6,6 +6,7 @@ import { Calendar, Clock, X, Save, RefreshCw, Receipt, CheckCircle2, User, Credi
 import { db } from '@/lib/firebase';
 import { doc, updateDoc } from 'firebase/firestore';
 import { PaymentRecord, getISTDateStr } from '@/hooks/useTodaysPayments';
+import { paymentEngine } from '@/lib/engines/paymentEngine';
 import { formatDate } from '@/lib/utils';
 import toast from '@/lib/toast';
 
@@ -69,31 +70,13 @@ export default function EditPaymentModal({
     setErrorMsg('');
 
     try {
-      const updates = {
+      await paymentEngine.updateTransactionDateAtomic({
+        paymentId: payment.id,
+        memberId: payment.memberId || (payment as any).memberUid,
+        invoiceNumber: payment.invoiceNumber || payment.invoice,
         transactionDate,
         transactionTime,
-        paymentDate: transactionDate,
-        paymentTime: transactionTime,
-        date: transactionDate,
-        time: transactionTime,
-        updatedAt: new Date().toISOString(),
-        isRealTimeToday: false, // Ensure date filtering relies strictly on transactionDate
-      };
-
-      // 1. Update Firestore payments document
-      if (payment.id) {
-        await updateDoc(doc(db, 'payments', payment.id), updates);
-      }
-
-      // 2. Also sync to invoices collection if present
-      const invoiceId = payment.id || payment.invoiceNumber || payment.invoice;
-      if (invoiceId) {
-        try {
-          await updateDoc(doc(db, 'invoices', String(invoiceId)), updates);
-        } catch (e) {
-          // Invoice doc might not exist under this exact ID, non-fatal
-        }
-      }
+      });
 
       toast.success('Bill date & time updated successfully! 🎉');
       if (onSaved) onSaved();

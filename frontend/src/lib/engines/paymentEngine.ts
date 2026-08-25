@@ -112,5 +112,120 @@ export const paymentEngine = {
         seenMap.set(key, inv);
       }
     }
+  },
+
+  updateTransactionDateAtomic: async ({
+    paymentId,
+    memberId,
+    invoiceNumber,
+    transactionDate,
+    transactionTime,
+    editedBy,
+  }: {
+    paymentId: string;
+    memberId?: string;
+    invoiceNumber?: string;
+    transactionDate: string;
+    transactionTime: string;
+    editedBy?: string;
+  }) => {
+    if (!paymentId || !transactionDate) return false;
+
+    const { writeBatch, doc, getDoc } = await import('firebase/firestore');
+    const batch = writeBatch(db);
+    const nowIso = new Date().toISOString();
+
+    const paymentUpdates = {
+      transactionDate,
+      transactionTime,
+      paymentDate: transactionDate,
+      paymentTime: transactionTime,
+      date: transactionDate,
+      time: transactionTime,
+      updatedAt: nowIso,
+      isRealTimeToday: false, // forces date filter to strictly check transactionDate
+      ...(editedBy ? { editedBy } : {}),
+    };
+
+    // 1. Update payments collection
+    const payRef = doc(db, 'payments', paymentId);
+    batch.update(payRef, paymentUpdates);
+
+    // 2. Update invoices collection if present
+    const invRef = doc(db, 'invoices', paymentId);
+    batch.set(invRef, paymentUpdates, { merge: true });
+
+    // 3. Find and update embedded array in members document if memberId exists
+    let mId = memberId;
+    if (!mId) {
+      try {
+        const paySnap = await getDoc(payRef);
+        if (paySnap.exists()) {
+          const data = paySnap.data();
+          mId = data.memberId || data.memberUid;
+        }
+      } catch (e) {
+        // ignore
+      }
+    }
+
+    if (mId) {
+      try {
+        const memRef = doc(db, 'members', mId);
+        const memSnap = await getDoc(memRef);
+        if (memSnap.exists()) {
+          const mData = memSnap.data();
+          let memberUpdated = false;
+          const memUpdates: any = { updatedAt: nowIso };
+
+          const targetInvNum = invoiceNumber || paymentId;
+
+          const updateArray = (arr: any[]) => {
+            if (!Array.isArray(arr)) return arr;
+            return arr.map((item: any) => {
+              if (!item) return item;
+              const itemInvNum = item.invoiceNumber || item.invoice || item.id;
+              if (item.id === paymentId || (targetInvNum && itemInvNum === targetInvNum)) {
+                memberUpdated = true;
+                return {
+                  ...item,
+                  transactionDate,
+                  transactionTime,
+                  paymentDate: transactionDate,
+                  paymentTime: transactionTime,
+                  date: transactionDate,
+                  time: transactionTime,
+                  updatedAt: nowIso,
+                };
+              }
+              return item;
+            });
+          };
+
+          if (Array.isArray(mData.billingHistory)) {
+            memUpdates.billingHistory = updateArray(mData.billingHistory);
+          }
+          if (Array.isArray(mData.ptHistory)) {
+            memUpdates.ptHistory = updateArray(mData.ptHistory);
+          }
+          if (Array.isArray(mData.membershipHistory)) {
+            memUpdates.membershipHistory = updateArray(mData.membershipHistory);
+          }
+          if (Array.isArray(mData.payments)) {
+            memUpdates.payments = updateArray(mData.payments);
+          }
+
+          if (memberUpdated) {
+            batch.update(memRef, memUpdates);
+          }
+        }
+      } catch (err) {
+        console.warn('[paymentEngine] Member embedded array update notice:', err);
+      }
+    }
+
+    await batch.commit();
+    console.log(`[paymentEngine] Atomic date update committed for payment ${paymentId} -> ${transactionDate} ${transactionTime}`);
+    return true;
   }
 };

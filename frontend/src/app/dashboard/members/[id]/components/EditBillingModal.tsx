@@ -218,12 +218,28 @@ export default function EditBillingModal({
         changedBy: 'Gym Owner'
       };
 
-      // 1. Send update to Backend API
+      // 1. Execute Atomic Multi-document Date & Transaction Sync
+      const payId = invoice.id || targetInvoiceId;
+      if (payId) {
+        try {
+          await paymentEngine.updateTransactionDateAtomic({
+            paymentId: payId,
+            memberId: member.id || member.uid || invoice.memberId,
+            invoiceNumber,
+            transactionDate: paymentDate,
+            transactionTime: paymentTime,
+            editedBy: 'Gym Owner',
+          });
+        } catch (atomicErr) {
+          console.warn('Atomic date update warning:', atomicErr);
+        }
+      }
+
+      // 2. Send update to Backend API fallback
       try {
         await API.put(`/billing/${targetInvoiceId}`, payload);
       } catch (apiErr) {
         console.warn('API update failed, updating Firestore directly:', apiErr);
-        // Direct Firestore fallback
         if (invoice.id) {
           const payDocRef = doc(db, 'payments', invoice.id);
           await updateDoc(payDocRef, payload);

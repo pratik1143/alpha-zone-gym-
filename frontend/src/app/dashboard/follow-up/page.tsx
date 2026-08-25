@@ -38,6 +38,7 @@ import { useGymStore } from '@/store';
 import { useFollowups } from '@/hooks/useFollowups';
 import { followupService, FollowUpItem, FollowUpHistoryEvent } from '@/services/followup.service';
 import { getTodayInIndia, isTodayInIndia, isOverdueInIndia, isUpcomingInIndia, formatIndianDate } from '@/lib/dateUtils';
+import { getFollowUpTypeStyle } from '@/lib/followupUtils';
 
 // Helper: Normalize & classify Follow-up Source from real database record
 export function getFollowupSourceInfo(task: FollowUpItem | any) {
@@ -286,7 +287,15 @@ export default function FollowUpManager() {
     }
 
     if (filterType !== 'All') {
-      result = result.filter(f => f.type === filterType);
+      result = result.filter(f => {
+        const style = getFollowUpTypeStyle(f);
+        const ft = filterType.toLowerCase();
+        if (ft.includes('enquiry')) return style.key === 'enquiry';
+        if (ft.includes('renewal') || ft.includes('membership')) return style.key === 'renewal';
+        if (ft.includes('expired')) return style.key === 'expired';
+        if (ft.includes('balance') || ft.includes('pending') || ft.includes('payment')) return style.key === 'balance';
+        return f.type === filterType;
+      });
     }
 
     if (filterSource !== 'All') {
