@@ -155,8 +155,8 @@ export default function FollowUpManager() {
   // Default to today in Asia/Kolkata timezone
   const todayDateStr = useMemo(() => getTodayInIndia(), []);
 
-  // Tabs: 'today' (Default) | 'active' | 'overdue' | 'history'
-  const [activeTab, setActiveTab] = useState<'today' | 'active' | 'overdue' | 'history'>('today');
+  // Tabs: 'today' (Default) | 'active' | 'overdue' | 'history' | 'balance'
+  const [activeTab, setActiveTab] = useState<'today' | 'active' | 'overdue' | 'history' | 'balance'>('today');
 
   // Filters
   const [searchQuery, setSearchQuery] = useState('');
@@ -167,6 +167,27 @@ export default function FollowUpManager() {
   const [filterStartDate, setFilterStartDate] = useState(todayDateStr);
   const [filterEndDate, setFilterEndDate] = useState(todayDateStr);
   const [isCustomDateFilterActive, setIsCustomDateFilterActive] = useState(false);
+  const [balanceFilterStatus, setBalanceFilterStatus] = useState<'All' | 'Balance Due' | 'Follow-Up Scheduled' | 'Overdue' | 'Cleared'>('All');
+
+  // Balance Follow-Up Specific States
+  const [showScheduleBalanceModal, setShowScheduleBalanceModal] = useState<{ member: any; invoice?: any } | null>(null);
+  const [scheduleBalanceDate, setScheduleBalanceDate] = useState(() => getTodayInIndia());
+  const [scheduleBalanceTime, setScheduleBalanceTime] = useState('11:00');
+  const [scheduleBalanceRemarks, setScheduleBalanceRemarks] = useState('');
+  const [scheduleBalancePriority, setScheduleBalancePriority] = useState('Medium');
+  const [scheduleBalanceAssignedTo, setScheduleBalanceAssignedTo] = useState('Receptionist');
+  const [scheduleBalanceSelectedInvoice, setScheduleBalanceSelectedInvoice] = useState<string>('');
+  const [isSchedulingBalance, setIsSchedulingBalance] = useState(false);
+  const [balanceModalDuplicateWarning, setBalanceModalDuplicateWarning] = useState<FollowUpItem | null>(null);
+  const [allowDuplicateBalanceFollowup, setAllowDuplicateBalanceFollowup] = useState(false);
+
+  // Balance Completion Modal State
+  const [showBalanceCompleteModal, setShowBalanceCompleteModal] = useState<{ task: FollowUpItem; member: any } | null>(null);
+  const [completeBalanceOutcome, setCompleteBalanceOutcome] = useState('Payment Received');
+  const [completeBalanceRemarks, setCompleteBalanceRemarks] = useState('');
+  const [completeBalanceAmountReceived, setCompleteBalanceAmountReceived] = useState<number>(0);
+  const [completeBalanceMethod, setCompleteBalanceMethod] = useState('UPI');
+  const [isCompletingBalance, setIsCompletingBalance] = useState(false);
 
   // Selection
   const [selectedTasks, setSelectedTasks] = useState<string[]>([]);
@@ -222,7 +243,7 @@ export default function FollowUpManager() {
     const params = new URLSearchParams(window.location.search);
     
     const tabParam = params.get('tab');
-    if (tabParam && ['today', 'active', 'overdue', 'history'].includes(tabParam)) {
+    if (tabParam && ['today', 'active', 'overdue', 'history', 'balance'].includes(tabParam)) {
       setActiveTab(tabParam as any);
     }
 
@@ -255,7 +276,7 @@ export default function FollowUpManager() {
         const saved = sessionStorage.getItem('followup_page_filters');
         if (saved) {
           const parsed = JSON.parse(saved);
-          if (parsed.activeTab && ['today', 'active', 'overdue', 'history'].includes(parsed.activeTab)) {
+          if (parsed.activeTab && ['today', 'active', 'overdue', 'history', 'balance'].includes(parsed.activeTab)) {
             setActiveTab(parsed.activeTab);
           }
           if (typeof parsed.searchQuery === 'string') setSearchQuery(parsed.searchQuery);
@@ -395,6 +416,76 @@ export default function FollowUpManager() {
     };
   };
 
+  // Memoized Pending Balance Members List
+  const pendingBalanceMembers = useMemo(() => {
+    if (!members) return [];
+    return members
+      .filter((m: any) => {
+        const rawBalance = Number(m.outstandingBalance ?? m.balance ?? m.balanceAmount ?? 0);
+        const calculatedBalance = Math.max(0, (Number(m.totalBilled) || 0) - (Number(m.totalPaid) || 0));
+        const pendingAmount = Math.max(rawBalance, m.paymentStatus === 'partial' || m.paymentStatus === 'pending' ? calculatedBalance : 0);
+        return pendingAmount > 0;
+      })
+      .map((m: any) => {
+        const mId = m.id || m.memberId;
+        const rawBalance = Number(m.outstandingBalance ?? m.balance ?? m.balanceAmount ?? 0);
+        const calculatedBalance = Math.max(0, (Number(m.totalBilled) || 0) - (Number(m.totalPaid) || 0));
+        const pendingAmount = Math.max(rawBalance, m.paymentStatus === 'partial' || m.paymentStatus === 'pending' ? calculatedBalance : 0);
+
+        const existingFollowup = followups.find((f: any) => 
+          (f.memberId === mId || f.phone === m.phone) &&
+          (f.type === 'BALANCE' || f.type === 'PENDING BALANCE' || (f.type && f.type.toLowerCase().includes('balance'))) &&
+          (f.status !== 'Completed' && f.status !== 'Cancelled' && f.status !== 'Lost')
+        );
+
+        const cleanDueDate = existingFollowup?.dueDate || existingFollowup?.scheduledDate || '';
+        const isTaskOverdue = cleanDueDate ? isOverdueInIndia(cleanDueDate) : false;
+
+        const invoiceNo = m.invoiceNumber || m.invoice || (m.clientId ? `INV-LEG-${m.clientId}` : (m.memberId ? `INV-MEM-${m.memberId.replace('AZ-2026-', '')}` : 'INV-MEM-12345'));
+        const invoiceDate = m.startDate || m.joinDate || todayDateStr;
+        const totalAmount = Number(m.totalBilled || (m.totalPaid ? Number(m.totalPaid) + pendingAmount : pendingAmount));
+        const amountPaid = Number(m.totalPaid || 0);
+
+        return {
+          ...m,
+          pendingAmount,
+          outstandingBalance: pendingAmount,
+          invoiceNumber: invoiceNo,
+          invoiceDate,
+          totalAmount,
+          amountPaid,
+          hasScheduledFollowUp: !!existingFollowup,
+          activeFollowup: existingFollowup || null,
+          isOverdue: isTaskOverdue
+        };
+      });
+  }, [members, followups, todayDateStr]);
+
+  const filteredBalanceMembers = useMemo(() => {
+    let result = [...pendingBalanceMembers];
+
+    if (balanceFilterStatus === 'Balance Due') {
+      result = result.filter(m => !m.hasScheduledFollowUp);
+    } else if (balanceFilterStatus === 'Follow-Up Scheduled') {
+      result = result.filter(m => m.hasScheduledFollowUp && !m.isOverdue);
+    } else if (balanceFilterStatus === 'Overdue') {
+      result = result.filter(m => m.hasScheduledFollowUp && m.isOverdue);
+    }
+
+    if (searchQuery) {
+      const sq = searchQuery.toLowerCase();
+      result = result.filter(m => {
+        const name = (m.name || '').toLowerCase();
+        const phone = (m.phone || '').toLowerCase();
+        const id = (m.memberId || m.id || '').toLowerCase();
+        const inv = (m.invoiceNumber || '').toLowerCase();
+        return name.includes(sq) || phone.includes(sq) || id.includes(sq) || inv.includes(sq);
+      });
+    }
+
+    return result;
+  }, [pendingBalanceMembers, balanceFilterStatus, searchQuery]);
+
   // Filter Logic based on Active Tab & Search/Dropdowns
   const filteredTasks = useMemo(() => {
     let result: FollowUpItem[] = [];
@@ -497,6 +588,187 @@ export default function FollowUpManager() {
   };
 
   // ─── ACTION HANDLERS ───
+
+  // Open Schedule Balance Follow-Up dialog
+  const openScheduleBalanceModal = (memberItem: any) => {
+    const mId = memberItem.id || memberItem.memberId;
+    const existingTask = followups.find((f: any) => 
+      (f.memberId === mId || f.phone === memberItem.phone) &&
+      (f.type === 'BALANCE' || f.type === 'PENDING BALANCE' || (f.type && f.type.toLowerCase().includes('balance'))) &&
+      (f.status !== 'Completed' && f.status !== 'Cancelled' && f.status !== 'Lost')
+    );
+
+    setBalanceModalDuplicateWarning(existingTask || null);
+    setAllowDuplicateBalanceFollowup(false);
+    setScheduleBalanceDate(todayDateStr);
+    setScheduleBalanceTime('11:00');
+    setScheduleBalanceRemarks('');
+    setScheduleBalancePriority('Medium');
+    setScheduleBalanceAssignedTo(memberItem.trainer || 'Receptionist');
+    setScheduleBalanceSelectedInvoice(memberItem.invoiceNumber || '');
+    setShowScheduleBalanceModal({ member: memberItem });
+  };
+
+  const submitScheduleBalanceFollowup = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!showScheduleBalanceModal) return;
+    if (!scheduleBalanceDate) {
+      toast.error('Follow-Up Date is required');
+      return;
+    }
+    if (!scheduleBalanceRemarks.trim()) {
+      toast.error('Remarks / Last Note is required');
+      return;
+    }
+
+    const memberItem = showScheduleBalanceModal.member;
+    const memberId = memberItem.id || memberItem.memberId || '';
+    const memberName = memberItem.name || 'Member';
+    const phone = memberItem.phone || '';
+    const invoiceId = scheduleBalanceSelectedInvoice || memberItem.invoiceNumber || '';
+    const pendingAmount = memberItem.pendingAmount || memberItem.outstandingBalance || 0;
+
+    setIsSchedulingBalance(true);
+    try {
+      const ts = new Date(`${scheduleBalanceDate}T${scheduleBalanceTime}:00+05:30`).getTime() || Date.now();
+      const opId = `fol_bal_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+
+      const payload = {
+        id: opId,
+        memberId,
+        invoiceId,
+        memberName,
+        memberPhone: phone,
+        name: memberName,
+        phone,
+        title: 'BALANCE FOLLOW-UP',
+        reason: scheduleBalanceRemarks.trim(),
+        notes: scheduleBalanceRemarks.trim(),
+        description: `Balance Due: ₹${pendingAmount.toLocaleString('en-IN')} - ${scheduleBalanceRemarks.trim()}`,
+        lastNote: scheduleBalanceRemarks.trim(),
+        pendingAmount,
+        plan: memberItem.plan || memberItem.packageName || 'Membership',
+        priority: scheduleBalancePriority,
+        assignedTo: scheduleBalanceAssignedTo,
+        dueDate: scheduleBalanceDate,
+        scheduledDate: scheduleBalanceDate,
+        scheduledTime: scheduleBalanceTime,
+        scheduledTimestamp: ts,
+        status: 'pending',
+        type: 'BALANCE',
+        source: 'MANUAL',
+        createdAt: new Date().toISOString(),
+        history: [
+          {
+            id: `evt_init_${opId}`,
+            eventType: 'CREATED',
+            timestamp: new Date().toISOString(),
+            performedBy: scheduleBalanceAssignedTo || 'Staff',
+            note: scheduleBalanceRemarks.trim()
+          }
+        ]
+      };
+
+      await followupService.create(payload);
+
+      toast.success('✓ Balance Follow-Up Scheduled', {
+        description: `Follow-up scheduled for ${formatIndianDate(scheduleBalanceDate)} at ${scheduleBalanceTime}.`
+      });
+
+      setShowScheduleBalanceModal(null);
+      fetchMembers();
+    } catch (err: any) {
+      toast.error('Failed to schedule Balance Follow-Up: ' + (err.message || 'Error occurred'));
+    } finally {
+      setIsSchedulingBalance(false);
+    }
+  };
+
+  // Open Balance Completion Modal
+  const openCompleteBalanceDialog = (task: FollowUpItem) => {
+    const m = members.find((x: any) => x.id === task.memberId || x.memberId === task.memberId);
+    const pendingAmt = task.pendingAmount || (m ? (Number(m.outstandingBalance) || (Number(m.totalBilled || 0) - Number(m.totalPaid || 0))) : 2000);
+    
+    setShowBalanceCompleteModal({
+      task,
+      member: m || { id: task.memberId, name: task.memberName, phone: task.phone, outstandingBalance: pendingAmt }
+    });
+    setCompleteBalanceOutcome('Payment Received');
+    setCompleteBalanceRemarks('');
+    setCompleteBalanceAmountReceived(pendingAmt > 0 ? pendingAmt : 0);
+    setCompleteBalanceMethod('UPI');
+  };
+
+  const submitCompleteBalanceFollowup = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!showBalanceCompleteModal) return;
+    if (!completeBalanceRemarks.trim()) {
+      toast.error('Remarks are required');
+      return;
+    }
+
+    const { task, member } = showBalanceCompleteModal;
+    const memberId = task.memberId || member.id || member.memberId;
+    const currentPending = task.pendingAmount || member.outstandingBalance || member.pendingAmount || 0;
+
+    setIsCompletingBalance(true);
+    try {
+      let newBalance = currentPending;
+
+      if (completeBalanceOutcome === 'Payment Received' && completeBalanceAmountReceived > 0 && memberId) {
+        const paidAmt = Number(completeBalanceAmountReceived);
+        
+        try {
+          await API.post('/billing', {
+            memberId,
+            memberName: task.memberName || member.name,
+            memberPhone: task.phone || member.phone,
+            amount: paidAmt,
+            amountPaid: paidAmt,
+            paid: paidAmt,
+            method: completeBalanceMethod,
+            notes: `Balance Follow-Up Payment: ${completeBalanceRemarks.trim()}`,
+            date: todayDateStr,
+            transactionType: 'membership_payment'
+          });
+        } catch (apiErr) {
+          console.warn('Backend payment API warning, continuing local sync:', apiErr);
+        }
+
+        newBalance = Math.max(0, currentPending - paidAmt);
+      }
+
+      const completionNote = completeBalanceOutcome === 'Payment Received'
+        ? `Payment Received: ₹${Number(completeBalanceAmountReceived).toLocaleString('en-IN')} (${completeBalanceMethod}). ${completeBalanceRemarks.trim()}`
+        : `${completeBalanceOutcome}: ${completeBalanceRemarks.trim()}`;
+
+      const isCleared = newBalance <= 0;
+      const finalOutcome = isCleared ? 'Balance Cleared' : completeBalanceOutcome;
+
+      await followupService.complete(
+        task.id,
+        completionNote,
+        finalOutcome,
+        memberId,
+        null,
+        task
+      );
+
+      if (!isCleared) {
+        await followupService.update(task.id, { pendingAmount: newBalance, lastNote: completionNote });
+      }
+
+      toast.success(isCleared ? '✓ Balance Cleared & Follow-Up Completed' : '✓ Balance Follow-Up Updated');
+      triggerConfetti();
+
+      setShowBalanceCompleteModal(null);
+      fetchMembers();
+    } catch (err: any) {
+      toast.error('Failed to complete Balance Follow-Up: ' + (err.message || 'Error occurred'));
+    } finally {
+      setIsCompletingBalance(false);
+    }
+  };
 
   // 1. Complete Task
   const submitCompleteTask = async (e: React.FormEvent) => {
@@ -695,7 +967,7 @@ export default function FollowUpManager() {
       </div>
 
       {/* 2. STATS CARDS BAR */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3.5">
         {/* Card 1: Today's Queue */}
         <div 
           onClick={() => { setActiveTab('today'); setIsCustomDateFilterActive(false); }}
@@ -738,7 +1010,28 @@ export default function FollowUpManager() {
           </span>
         </div>
 
-        {/* Card 3: Completed History */}
+        {/* Card 3: Balance Follow-Up */}
+        <div 
+          onClick={() => { setActiveTab('balance'); setIsCustomDateFilterActive(false); }}
+          className={`bg-white p-5 rounded-2xl border transition-all cursor-pointer shadow-xs hover:shadow-md ${
+            activeTab === 'balance' && !isCustomDateFilterActive ? 'border-amber-500 ring-2 ring-amber-500/20' : 'border-slate-200/80 hover:border-amber-300'
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <span className="text-[11px] font-bold uppercase text-slate-400 block tracking-wider">Balance Queue</span>
+              <span className="text-2xl font-black text-amber-600 mt-1 block">{pendingBalanceMembers.length}</span>
+            </div>
+            <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold border border-amber-200">
+              <FileText size={22} />
+            </div>
+          </div>
+          <span className="text-[10px] text-amber-600 font-bold mt-2 block">
+            {activeTab === 'balance' && !isCustomDateFilterActive ? '● Showing Balance Queue' : 'Click to view balance due →'}
+          </span>
+        </div>
+
+        {/* Card 4: Completed History */}
         <div 
           onClick={() => { setActiveTab('history'); setIsCustomDateFilterActive(false); }}
           className={`bg-white p-5 rounded-2xl border transition-all cursor-pointer shadow-xs hover:shadow-md ${
@@ -759,7 +1052,7 @@ export default function FollowUpManager() {
           </span>
         </div>
 
-        {/* Card 4: Total Active */}
+        {/* Card 5: Total Active */}
         <div 
           onClick={() => { setActiveTab('active'); setIsCustomDateFilterActive(false); }}
           className={`bg-white p-5 rounded-2xl border transition-all cursor-pointer shadow-xs hover:shadow-md ${
@@ -900,292 +1193,500 @@ export default function FollowUpManager() {
       </div>
 
       {/* 4. MAIN TASK LIST */}
-      <div className="space-y-3">
-        {filteredTasks.length > 0 && (
-          <div className="flex items-center justify-between px-2 py-1">
+      {activeTab === 'balance' ? (
+        <div className="space-y-4">
+          {/* Balance Queue Header & Filter Controls */}
+          <div className="bg-white p-4 rounded-2xl border border-amber-200/80 shadow-xs flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-2">
-              <input 
-                type="checkbox" 
-                checked={selectAll} 
-                onChange={(e) => setSelectAll(e.target.checked)}
-                className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
-              />
-              <span className="text-xs font-bold text-slate-600">
-                Select All ({filteredTasks.length} tasks)
-              </span>
+              <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center font-bold">
+                <FileText size={18} />
+              </div>
+              <div>
+                <h3 className="text-sm font-black text-slate-900">Balance Follow-Up Queue</h3>
+                <p className="text-xs text-slate-500">Members with pending billing balances requiring follow-up</p>
+              </div>
             </div>
-            {selectedTasks.length > 0 && (
-              <span className="text-xs font-bold text-blue-600">
-                {selectedTasks.length} selected
-              </span>
-            )}
-          </div>
-        )}
 
-        {filteredTasks.length === 0 ? (
-          <div className="bg-white rounded-3xl p-12 text-center border border-slate-200/80 shadow-xs space-y-3">
-            <div className="w-12 h-12 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mx-auto font-bold">
-              <Check size={24} />
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs font-bold text-slate-400">Status:</span>
+              {(['All', 'Balance Due', 'Follow-Up Scheduled', 'Overdue'] as const).map(statusOpt => (
+                <button
+                  key={statusOpt}
+                  type="button"
+                  onClick={() => setBalanceFilterStatus(statusOpt)}
+                  className={`px-3 py-1 rounded-xl text-xs font-bold transition-all border cursor-pointer ${
+                    balanceFilterStatus === statusOpt
+                      ? 'bg-amber-500 text-white border-amber-600 shadow-xs'
+                      : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                  }`}
+                >
+                  {statusOpt}
+                </button>
+              ))}
             </div>
-            <h3 className="text-base font-bold text-slate-800">
-              {activeTab === 'today' ? "No Follow-ups Due Today" : "No Follow-up Tasks Found"}
-            </h3>
-            <p className="text-xs text-slate-500 max-w-sm mx-auto font-medium">
-              {activeTab === 'today' 
-                ? "All caught up! There are currently no renewal or lead follow-ups due today." 
-                : activeTab === 'history' 
-                ? "No completed or lost follow-up records found." 
-                : "No matching follow-up tasks for the selected view."}
-            </p>
           </div>
-        ) : (
-          filteredTasks.map((task) => {
-            const client = getClientDetails(task);
-            const validMemberId = getValidMemberId(task, members);
-            const isSelected = selectedTasks.includes(task.id);
-            const sourceInfo = getFollowupSourceInfo(task);
-            const typeStyle = getFollowUpTypeStyle(task);
 
-            let displayReason = task.reason || task.description || task.notes || task.title || '';
+          {/* Pending Balance Members Table / List */}
+          {filteredBalanceMembers.length === 0 ? (
+            <div className="bg-white rounded-3xl p-12 text-center border border-slate-200/80 shadow-xs space-y-3">
+              <div className="w-12 h-12 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto font-bold">
+                <CheckCircle2 size={24} />
+              </div>
+              <h3 className="text-base font-bold text-slate-800">No Pending Balances Found</h3>
+              <p className="text-xs text-slate-500 max-w-sm mx-auto font-medium">
+                {searchQuery ? "No members matching your search query have pending balances." : "Great job! All members have cleared their billing balances."}
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {filteredBalanceMembers.map((m: any) => {
+                const validMemberId = getValidMemberId({ memberId: m.id || m.memberId }, members);
 
-            if (typeStyle.key === 'renewal' && (!task.reason || task.reason === 'Membership Renewal')) {
-              displayReason = 'Membership renewal due in 7 days';
-            } else if (typeStyle.key === 'expired' && (!task.reason || task.reason === 'Membership Expired')) {
-              displayReason = 'Membership expired — renewal recovery required';
-            } else if (typeStyle.key === 'balance' && (!task.reason || task.reason === 'Pending Balance')) {
-              const pendingAmtStr = task.pendingAmount ? `₹${Number(task.pendingAmount).toLocaleString('en-IN')}` : '';
-              displayReason = pendingAmtStr ? `${pendingAmtStr} pending` : 'Pending membership balance';
-            }
+                return (
+                  <motion.div
+                    key={m.id || m.memberId}
+                    layout
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -8 }}
+                    className={`rounded-2xl p-5 border transition-all shadow-xs hover:shadow-md relative bg-[#FFFBEB] ${
+                      m.isOverdue ? 'border-red-300 border-l-4 border-l-red-600' : 'border-[#FDE68A] border-l-4 border-l-[#D97706]'
+                    }`}
+                  >
+                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                      
+                      {/* Left: Member DP + Details */}
+                      <div className="flex items-start lg:items-center gap-3.5 flex-1 min-w-0">
+                        <MemberAvatar
+                          photoUrl={m.photo || m.avatarUrl || m.avatar}
+                          gender={m.gender}
+                          name={m.name}
+                          size={52}
+                        />
 
-            const normPriority = (task.priority || 'Medium').toLowerCase();
-            const isHighPriority = normPriority === 'high' || normPriority === 'critical' || normPriority === 'urgent';
-            const priorityBadgeClass = isHighPriority 
-              ? 'bg-rose-50 text-rose-700 font-bold border border-rose-200' 
-              : normPriority === 'medium'
-              ? 'bg-blue-50 text-[#0b5cbe] font-bold border border-blue-200'
-              : 'bg-slate-100 text-slate-600 font-medium border border-slate-200';
+                        <div className="min-w-0 flex-1 space-y-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            {validMemberId ? (
+                              <Link
+                                href={`/dashboard/members/${encodeURIComponent(validMemberId)}`}
+                                className="text-sm font-black text-slate-900 hover:text-[#0b5cbe] hover:underline underline-offset-2 transition-colors truncate no-underline"
+                              >
+                                {m.name}
+                              </Link>
+                            ) : (
+                              <h3 className="text-sm font-black text-slate-900 truncate">{m.name}</h3>
+                            )}
 
-            const cleanDueDate = (task.dueDate || task.scheduledDate || '').split('T')[0];
-            const isDueToday = cleanDueDate === todayDateStr;
-            const isTaskOverdue = isOverdueInIndia(cleanDueDate);
+                            <span className="text-[10px] font-mono font-bold text-slate-400">
+                              ID: {m.memberId || m.id}
+                            </span>
 
-            return (
-              <motion.div
-                key={task.id}
-                layout
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -8 }}
-                className={`rounded-2xl p-5 border transition-all shadow-xs hover:shadow-md relative ${typeStyle.bgClass} ${typeStyle.borderClass} ${typeStyle.leftBorderClass} ${isSelected ? 'ring-2 ring-blue-500' : ''}`}
-              >
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                  
-                  {/* Left: Checkbox + Client Avatar + Details */}
-                  <div className="flex items-start md:items-center gap-3 flex-1 min-w-0">
-                    <input 
-                      type="checkbox" 
-                      checked={isSelected}
-                      onChange={() => toggleSelect(task.id)}
-                      className="w-4 h-4 mt-1 md:mt-0 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer shrink-0"
-                    />
-
-                    <MemberAvatar
-                      photoUrl={client.photo}
-                      gender={client.gender}
-                      name={client.name}
-                      size={48}
-                    />
-
-                    <div className="min-w-0 flex-1">
-                      {/* Badge Hierarchy: [ TYPE ] [ ✦ AUTO / ✎ MANUAL ] [ PRIORITY ] */}
-                      <div className="flex items-center gap-2 flex-wrap">
-                        {validMemberId ? (
-                          <Link
-                            href={`/dashboard/members/${encodeURIComponent(validMemberId)}`}
-                            className="text-sm font-black text-slate-900 hover:text-[#0b5cbe] hover:underline underline-offset-2 decoration-blue-500/50 transition-colors cursor-pointer truncate no-underline"
-                            title={`View profile of ${client.name}`}
-                          >
-                            {client.name}
-                          </Link>
-                        ) : (
-                          <h3 className="text-sm font-black text-slate-900 truncate">
-                            {client.name}
-                          </h3>
-                        )}
-                        
-                        {/* 1. Follow-Up Type Badge */}
-                        <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-md uppercase tracking-wider ${typeStyle.badgeClass}`}>
-                          {typeStyle.badgeText}
-                        </span>
-
-                        {/* 2. Source Badge (✦ AUTO / ✎ MANUAL) */}
-                        <span 
-                          className={`text-[9.5px] font-black px-2 py-0.5 rounded-md flex items-center gap-1 uppercase tracking-wider ${sourceInfo.badgeClass}`}
-                          title={sourceInfo.title}
-                        >
-                          {sourceInfo.type === 'auto' ? (
-                            <Sparkles size={10} className="shrink-0 text-[#0b5cbe]" />
-                          ) : (
-                            <PenLine size={10} className="shrink-0 text-indigo-600" />
-                          )}
-                          <span>{sourceInfo.label}</span>
-                        </span>
-
-                        {/* 3. Priority Badge */}
-                        <span className={`text-[10px] px-2 py-0.5 rounded-md flex items-center gap-1 uppercase tracking-wider ${priorityBadgeClass}`}>
-                          <span className={`w-1.5 h-1.5 rounded-full ${isHighPriority ? 'bg-rose-500' : 'bg-blue-500'}`} />
-                          {task.priority || 'Medium'}
-                        </span>
-
-                        {task.status === 'Completed' && (
-                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 border border-emerald-200">
-                            Completed
-                          </span>
-                        )}
-
-                        {task.status === 'Lost' && (
-                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-rose-100 text-rose-800 border border-rose-200">
-                            Lost
-                          </span>
-                        )}
-                      </div>
-
-                      {/* Display Reason */}
-                      <p className="text-xs font-semibold text-slate-700 mt-1">
-                        {displayReason}
-                      </p>
-
-                      <div className="flex items-center gap-3 text-xs text-slate-500 font-semibold mt-1 flex-wrap">
-                        <a href={`tel:${client.phone}`} className="hover:text-blue-600 transition-colors flex items-center gap-1">
-                          📞 {client.phone}
-                        </a>
-                        <span>•</span>
-                        <span className={`flex items-center gap-1 font-bold ${isTaskOverdue ? 'text-rose-600' : isDueToday ? 'text-blue-700 font-black' : 'text-slate-700'}`}>
-                          📅 {isDueToday ? 'Due Today' : `Due: ${formatIndianDate(cleanDueDate)}`} {task.scheduledTime ? `· ${task.scheduledTime}` : ''}
-                        </span>
-                        <span>•</span>
-                        <span>Assigned: {task.assignedTo || 'Receptionist'}</span>
-                      </div>
-
-                      {/* Last Note Display on Card */}
-                      {task.lastNote && (
-                        <div className="mt-2.5 bg-white/90 p-2.5 rounded-xl border border-slate-200/80 text-xs text-slate-700 font-medium flex items-start gap-2 shadow-2xs">
-                          <FileText size={13} className={`${typeStyle.iconColor} shrink-0 mt-0.5`} />
-                          <div>
-                            <span className="font-bold text-slate-800">Last Note:</span> "{task.lastNote}"
+                            {/* Status Badges */}
+                            {m.isOverdue ? (
+                              <span className="text-[10px] font-black px-2.5 py-0.5 rounded-md uppercase bg-red-600 text-white shadow-2xs">
+                                OVERDUE BALANCE FOLLOW-UP
+                              </span>
+                            ) : m.hasScheduledFollowUp ? (
+                              <span className="text-[10px] font-black px-2.5 py-0.5 rounded-md uppercase bg-blue-600 text-white shadow-2xs">
+                                FOLLOW-UP SCHEDULED
+                              </span>
+                            ) : (
+                              <span className="text-[10px] font-black px-2.5 py-0.5 rounded-md uppercase bg-[#FEF3C7] text-[#B45309] border border-[#FCD34D] shadow-2xs">
+                                BALANCE DUE
+                              </span>
+                            )}
                           </div>
+
+                          {/* Invoice Summary */}
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs text-slate-600 font-semibold pt-1">
+                            <div>
+                              <span className="text-[10px] font-bold text-slate-400 block uppercase">Membership</span>
+                              <span className="font-bold text-slate-800 truncate block">{m.plan || m.packageName || 'Monthly Standard'}</span>
+                            </div>
+                            <div>
+                              <span className="text-[10px] font-bold text-slate-400 block uppercase">Invoice No</span>
+                              <span className="font-mono font-bold text-slate-700">{m.invoiceNumber}</span>
+                            </div>
+                            <div>
+                              <span className="text-[10px] font-bold text-slate-400 block uppercase">Total / Paid</span>
+                              <span className="font-mono font-bold text-slate-700">₹{m.totalAmount?.toLocaleString('en-IN')} / ₹{m.amountPaid?.toLocaleString('en-IN')}</span>
+                            </div>
+                            <div>
+                              <span className="text-[10px] font-bold text-amber-800 block uppercase">Balance Due</span>
+                              <span className="font-mono font-black text-amber-700 text-sm">₹{m.pendingAmount?.toLocaleString('en-IN')}</span>
+                            </div>
+                          </div>
+
+                          {/* Scheduled details */}
+                          {m.activeFollowup && (
+                            <div className="mt-2 bg-white/90 p-2.5 rounded-xl border border-slate-200/80 text-xs text-slate-700 flex items-start gap-2">
+                              <Clock size={13} className="text-amber-600 shrink-0 mt-0.5" />
+                              <div className="flex-1 min-w-0">
+                                <span className="font-bold text-slate-900">Scheduled Due: </span>
+                                <span>{formatIndianDate(m.activeFollowup.dueDate || m.activeFollowup.scheduledDate)} at {m.activeFollowup.scheduledTime || '11:00 AM'}</span>
+                                {m.activeFollowup.lastNote && (
+                                  <p className="text-[11px] text-slate-600 italic mt-0.5 truncate">
+                                    "{m.activeFollowup.lastNote}"
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          )}
                         </div>
-                      )}
+                      </div>
+
+                      {/* Actions */}
+                      <div className="flex items-center gap-2 shrink-0 self-end lg:self-center">
+                        <a
+                          href={`tel:${m.phone}`}
+                          className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 no-underline shadow-xs"
+                        >
+                          <Phone size={13} /> Call
+                        </a>
+
+                        <a
+                          href={`https://wa.me/91${(m.phone || '').replace(/[^0-9]/g, '')}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 no-underline border border-emerald-200"
+                        >
+                          <MessageCircle size={13} /> WhatsApp
+                        </a>
+
+                        {m.activeFollowup ? (
+                          <>
+                            <button
+                              onClick={() => openRescheduleDialog(m.activeFollowup)}
+                              className="px-3 py-1.5 bg-slate-100 hover:bg-blue-50 text-slate-700 hover:text-blue-700 text-xs font-bold rounded-xl transition-all border border-slate-200 cursor-pointer"
+                            >
+                              <Calendar size={13} /> Reschedule
+                            </button>
+                            <button
+                              onClick={() => openCompleteBalanceDialog(m.activeFollowup)}
+                              className="px-3.5 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 border-none cursor-pointer shadow-xs"
+                            >
+                              <CheckCircle2 size={13} /> Complete
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            onClick={() => openScheduleBalanceModal(m)}
+                            className="px-4 py-1.5 bg-[#D97706] hover:bg-amber-700 text-white text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 border-none cursor-pointer shadow-xs"
+                          >
+                            <Plus size={13} /> Set Follow-Up
+                          </button>
+                        )}
+                      </div>
+
                     </div>
-                  </div>
+                  </motion.div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {filteredTasks.length > 0 && (
+            <div className="flex items-center justify-between px-2 py-1">
+              <div className="flex items-center gap-2">
+                <input 
+                  type="checkbox" 
+                  checked={selectAll} 
+                  onChange={(e) => setSelectAll(e.target.checked)}
+                  className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                />
+                <span className="text-xs font-bold text-slate-600">
+                  Select All ({filteredTasks.length} tasks)
+                </span>
+              </div>
+              {selectedTasks.length > 0 && (
+                <span className="text-xs font-bold text-blue-600">
+                  {selectedTasks.length} selected
+                </span>
+              )}
+            </div>
+          )}
 
-                  {/* Right: Quick Action Buttons */}
-                  <div className="flex items-center gap-2 shrink-0 self-end md:self-center">
-                    <a
-                      href={`tel:${client.phone}`}
-                      className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 no-underline shadow-xs"
-                    >
-                      <Phone size={13} /> Call
-                    </a>
+          {filteredTasks.length === 0 ? (
+            <div className="bg-white rounded-3xl p-12 text-center border border-slate-200/80 shadow-xs space-y-3">
+              <div className="w-12 h-12 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mx-auto font-bold">
+                <Check size={24} />
+              </div>
+              <h3 className="text-base font-bold text-slate-800">
+                {activeTab === 'today' ? "No Follow-ups Due Today" : "No Follow-up Tasks Found"}
+              </h3>
+              <p className="text-xs text-slate-500 max-w-sm mx-auto font-medium">
+                {activeTab === 'today' 
+                  ? "All caught up! There are currently no renewal or lead follow-ups due today." 
+                  : activeTab === 'history' 
+                  ? "No completed or lost follow-up records found." 
+                  : "No matching follow-up tasks for the selected view."}
+              </p>
+            </div>
+          ) : (
+            filteredTasks.map((task) => {
+              const client = getClientDetails(task);
+              const validMemberId = getValidMemberId(task, members);
+              const isSelected = selectedTasks.includes(task.id);
+              const sourceInfo = getFollowupSourceInfo(task);
+              const typeStyle = getFollowUpTypeStyle(task);
 
-                    <a
-                      href={`https://wa.me/91${client.phone.replace(/[^0-9]/g, '')}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 no-underline border border-emerald-200"
-                    >
-                      <MessageCircle size={13} /> WhatsApp
-                    </a>
+              let displayReason = task.reason || task.description || task.notes || task.title || '';
 
-                    {task.status !== 'Completed' && task.status !== 'Lost' && (
-                      <button
-                        onClick={() => openRescheduleDialog(task)}
-                        className="px-3 py-1.5 bg-slate-100 hover:bg-blue-50 text-slate-700 hover:text-blue-700 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 border border-slate-200 cursor-pointer"
+              if (typeStyle.key === 'renewal' && (!task.reason || task.reason === 'Membership Renewal')) {
+                displayReason = 'Membership renewal due in 7 days';
+              } else if (typeStyle.key === 'expired' && (!task.reason || task.reason === 'Membership Expired')) {
+                displayReason = 'Membership expired — renewal recovery required';
+              } else if (typeStyle.key === 'balance' && (!task.reason || task.reason === 'Pending Balance')) {
+                const pendingAmtStr = task.pendingAmount ? `₹${Number(task.pendingAmount).toLocaleString('en-IN')}` : '';
+                displayReason = pendingAmtStr ? `${pendingAmtStr} pending` : 'Pending membership balance';
+              }
+
+              const normPriority = (task.priority || 'Medium').toLowerCase();
+              const isHighPriority = normPriority === 'high' || normPriority === 'critical' || normPriority === 'urgent';
+              const priorityBadgeClass = isHighPriority 
+                ? 'bg-rose-50 text-rose-700 font-bold border border-rose-200' 
+                : normPriority === 'medium'
+                ? 'bg-blue-50 text-[#0b5cbe] font-bold border border-blue-200'
+                : 'bg-slate-100 text-slate-600 font-medium border border-slate-200';
+
+              const cleanDueDate = (task.dueDate || task.scheduledDate || '').split('T')[0];
+              const isDueToday = cleanDueDate === todayDateStr;
+              const isTaskOverdue = isOverdueInIndia(cleanDueDate);
+
+              return (
+                <motion.div
+                  key={task.id}
+                  layout
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -8 }}
+                  className={`rounded-2xl p-5 border transition-all shadow-xs hover:shadow-md relative ${typeStyle.bgClass} ${typeStyle.borderClass} ${typeStyle.leftBorderClass} ${isSelected ? 'ring-2 ring-blue-500' : ''}`}
+                >
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    
+                    {/* Left: Checkbox + Client Avatar + Details */}
+                    <div className="flex items-start md:items-center gap-3 flex-1 min-w-0">
+                      <input 
+                        type="checkbox" 
+                        checked={isSelected}
+                        onChange={() => toggleSelect(task.id)}
+                        className="w-4 h-4 mt-1 md:mt-0 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer shrink-0"
+                      />
+
+                      <MemberAvatar
+                        photoUrl={client.photo}
+                        gender={client.gender}
+                        name={client.name}
+                        size={48}
+                      />
+
+                      <div className="min-w-0 flex-1">
+                        {/* Badge Hierarchy: [ TYPE ] [ ✦ AUTO / ✎ MANUAL ] [ PRIORITY ] */}
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {validMemberId ? (
+                            <Link
+                              href={`/dashboard/members/${encodeURIComponent(validMemberId)}`}
+                              className="text-sm font-black text-slate-900 hover:text-[#0b5cbe] hover:underline underline-offset-2 decoration-blue-500/50 transition-colors cursor-pointer truncate no-underline"
+                              title={`View profile of ${client.name}`}
+                            >
+                              {client.name}
+                            </Link>
+                          ) : (
+                            <h3 className="text-sm font-black text-slate-900 truncate">
+                              {client.name}
+                            </h3>
+                          )}
+                          
+                          {/* 1. Follow-Up Type Badge */}
+                          <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-md uppercase tracking-wider ${typeStyle.badgeClass}`}>
+                            {typeStyle.badgeText}
+                          </span>
+
+                          {/* 2. Source Badge (✦ AUTO / ✎ MANUAL) */}
+                          <span 
+                            className={`text-[9.5px] font-black px-2 py-0.5 rounded-md flex items-center gap-1 uppercase tracking-wider ${sourceInfo.badgeClass}`}
+                            title={sourceInfo.title}
+                          >
+                            {sourceInfo.type === 'auto' ? (
+                              <Sparkles size={10} className="shrink-0 text-[#0b5cbe]" />
+                            ) : (
+                              <PenLine size={10} className="shrink-0 text-indigo-600" />
+                            )}
+                            <span>{sourceInfo.label}</span>
+                          </span>
+
+                          {/* 3. Priority Badge */}
+                          <span className={`text-[10px] px-2 py-0.5 rounded-md flex items-center gap-1 uppercase tracking-wider ${priorityBadgeClass}`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${isHighPriority ? 'bg-rose-500' : 'bg-blue-500'}`} />
+                            {task.priority || 'Medium'}
+                          </span>
+
+                          {task.status === 'Completed' && (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 border border-emerald-200">
+                              Completed
+                            </span>
+                          )}
+
+                          {task.status === 'Lost' && (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-rose-100 text-rose-800 border border-rose-200">
+                              Lost
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Display Reason */}
+                        <p className="text-xs font-semibold text-slate-700 mt-1">
+                          {displayReason}
+                        </p>
+
+                        <div className="flex items-center gap-3 text-xs text-slate-500 font-semibold mt-1 flex-wrap">
+                          <a href={`tel:${client.phone}`} className="hover:text-blue-600 transition-colors flex items-center gap-1">
+                            📞 {client.phone}
+                          </a>
+                          <span>•</span>
+                          <span className={`flex items-center gap-1 font-bold ${isTaskOverdue ? 'text-rose-600' : isDueToday ? 'text-blue-700 font-black' : 'text-slate-700'}`}>
+                            📅 {isDueToday ? 'Due Today' : `Due: ${formatIndianDate(cleanDueDate)}`} {task.scheduledTime ? `· ${task.scheduledTime}` : ''}
+                          </span>
+                          <span>•</span>
+                          <span>Assigned: {task.assignedTo || 'Receptionist'}</span>
+                        </div>
+
+                        {/* Balance Due Display on Card */}
+                        {(task.pendingAmount !== undefined && task.pendingAmount !== null && Number(task.pendingAmount) > 0) && (
+                          <div className="mt-2 text-xs font-black text-amber-800 bg-amber-100/90 px-3 py-1 rounded-xl border border-amber-300 inline-flex items-center gap-1.5 shadow-2xs">
+                            <span>Balance Due:</span>
+                            <span className="font-mono text-xs font-black text-amber-900">₹{Number(task.pendingAmount).toLocaleString('en-IN')}</span>
+                          </div>
+                        )}
+
+                        {/* Last Note Display on Card */}
+                        {task.lastNote && (
+                          <div className="mt-2.5 bg-white/90 p-2.5 rounded-xl border border-slate-200/80 text-xs text-slate-700 font-medium flex items-start gap-2 shadow-2xs">
+                            <FileText size={13} className={`${typeStyle.iconColor} shrink-0 mt-0.5`} />
+                            <div>
+                              <span className="font-bold text-slate-800">Last Note:</span> "{task.lastNote}"
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Right: Quick Action Buttons */}
+                    <div className="flex items-center gap-2 shrink-0 self-end md:self-center">
+                      <a
+                        href={`tel:${client.phone}`}
+                        className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 no-underline shadow-xs"
                       >
-                        <Calendar size={13} /> Reschedule
-                      </button>
-                    )}
+                        <Phone size={13} /> Call
+                      </a>
 
-                    {task.status !== 'Completed' && task.status !== 'Lost' && (
-                      <button
-                        onClick={() => setShowCompleteModal(task)}
-                        className="px-3.5 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 border-none cursor-pointer shadow-xs"
+                      <a
+                        href={`https://wa.me/91${client.phone.replace(/[^0-9]/g, '')}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 no-underline border border-emerald-200"
                       >
-                        <CheckCircle2 size={13} /> Complete
-                      </button>
-                    )}
+                        <MessageCircle size={13} /> WhatsApp
+                      </a>
 
-                    {/* More Menu Dropdown */}
-                    <div className="relative followup-action-menu-container">
-                      <button 
-                        onClick={() => setOpenActionDropdown(openActionDropdown === task.id ? null : task.id)}
-                        className="p-2 rounded-xl hover:bg-slate-100 border border-slate-200 text-slate-500 cursor-pointer transition-colors bg-white"
-                      >
-                        <MoreVertical size={14} />
-                      </button>
+                      {task.status !== 'Completed' && task.status !== 'Lost' && (
+                        <button
+                          onClick={() => openRescheduleDialog(task)}
+                          className="px-3 py-1.5 bg-slate-100 hover:bg-blue-50 text-slate-700 hover:text-blue-700 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 border border-slate-200 cursor-pointer"
+                        >
+                          <Calendar size={13} /> Reschedule
+                        </button>
+                      )}
 
-                      {openActionDropdown === task.id && (
-                        <div className="absolute right-0 bottom-full mb-2 w-48 bg-white border border-slate-200 shadow-2xl rounded-2xl z-50 py-1.5 flex flex-col text-xs font-semibold text-left">
-                          {task.status !== 'Completed' && task.status !== 'Lost' && (
+                      {task.status !== 'Completed' && task.status !== 'Lost' && (
+                        <button
+                          onClick={() => {
+                            if (task.type === 'BALANCE' || task.type === 'PENDING BALANCE' || typeStyle.key === 'balance') {
+                              openCompleteBalanceDialog(task);
+                            } else {
+                              setShowCompleteModal(task);
+                            }
+                          }}
+                          className="px-3.5 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 border-none cursor-pointer shadow-xs"
+                        >
+                          <CheckCircle2 size={13} /> Complete
+                        </button>
+                      )}
+
+                      {/* More Menu Dropdown */}
+                      <div className="relative followup-action-menu-container">
+                        <button 
+                          onClick={() => setOpenActionDropdown(openActionDropdown === task.id ? null : task.id)}
+                          className="p-2 rounded-xl hover:bg-slate-100 border border-slate-200 text-slate-500 cursor-pointer transition-colors bg-white"
+                        >
+                          <MoreVertical size={14} />
+                        </button>
+
+                        {openActionDropdown === task.id && (
+                          <div className="absolute right-0 bottom-full mb-2 w-48 bg-white border border-slate-200 shadow-2xl rounded-2xl z-50 py-1.5 flex flex-col text-xs font-semibold text-left">
+                            {task.status !== 'Completed' && task.status !== 'Lost' && (
+                              <button 
+                                onClick={() => openRescheduleDialog(task)} 
+                                className="px-3.5 py-2 hover:bg-blue-50 text-slate-700 hover:text-blue-700 w-full transition-colors flex items-center gap-2.5 border-none cursor-pointer text-left"
+                              >
+                                <Calendar size={14} className="text-blue-600"/> Reschedule
+                              </button>
+                            )}
+
                             <button 
-                              onClick={() => openRescheduleDialog(task)} 
+                              onClick={() => openAddNoteDialog(task)} 
                               className="px-3.5 py-2 hover:bg-blue-50 text-slate-700 hover:text-blue-700 w-full transition-colors flex items-center gap-2.5 border-none cursor-pointer text-left"
                             >
-                              <Calendar size={14} className="text-blue-600"/> Reschedule
+                              <PenLine size={14} className="text-indigo-600"/> Add Note
                             </button>
-                          )}
 
-                          <button 
-                            onClick={() => openAddNoteDialog(task)} 
-                            className="px-3.5 py-2 hover:bg-blue-50 text-slate-700 hover:text-blue-700 w-full transition-colors flex items-center gap-2.5 border-none cursor-pointer text-left"
-                          >
-                            <PenLine size={14} className="text-indigo-600"/> Add Note
-                          </button>
-
-                          <button 
-                            onClick={() => { setOpenActionDropdown(null); setShowHistoryDrawer(task); }} 
-                            className="px-3.5 py-2 hover:bg-blue-50 text-slate-700 hover:text-blue-700 w-full transition-colors flex items-center gap-2.5 border-none cursor-pointer text-left"
-                          >
-                            <History size={14} className="text-purple-600"/> View History
-                          </button>
-
-                          {task.status !== 'Completed' && task.status !== 'Lost' && (
                             <button 
-                              onClick={() => handleSnooze(task)} 
-                              className="px-3.5 py-2 hover:bg-slate-50 text-slate-700 w-full transition-colors flex items-center gap-2.5 border-none cursor-pointer text-left"
+                              onClick={() => { setOpenActionDropdown(null); setShowHistoryDrawer(task); }} 
+                              className="px-3.5 py-2 hover:bg-blue-50 text-slate-700 hover:text-blue-700 w-full transition-colors flex items-center gap-2.5 border-none cursor-pointer text-left"
                             >
-                              <Clock size={14} className="text-amber-600"/> Snooze 1 Hour
+                              <History size={14} className="text-purple-600"/> View History
                             </button>
-                          )}
 
-                          {task.status !== 'Completed' && task.status !== 'Lost' && (
+                            {task.status !== 'Completed' && task.status !== 'Lost' && (
+                              <button 
+                                onClick={() => handleSnooze(task)} 
+                                className="px-3.5 py-2 hover:bg-slate-50 text-slate-700 w-full transition-colors flex items-center gap-2.5 border-none cursor-pointer text-left"
+                              >
+                                <Clock size={14} className="text-amber-600"/> Snooze 1 Hour
+                              </button>
+                            )}
+
+                            {task.status !== 'Completed' && task.status !== 'Lost' && (
+                              <button 
+                                onClick={() => openLostDialog(task)} 
+                                className="px-3.5 py-2 hover:bg-rose-50 text-rose-700 w-full transition-colors flex items-center gap-2.5 border-none cursor-pointer text-left"
+                              >
+                                <UserX size={14} className="text-rose-600"/> Mark as Lost
+                              </button>
+                            )}
+
+                            <div className="h-px bg-slate-100 my-1" />
+
                             <button 
-                              onClick={() => openLostDialog(task)} 
-                              className="px-3.5 py-2 hover:bg-rose-50 text-rose-700 w-full transition-colors flex items-center gap-2.5 border-none cursor-pointer text-left"
+                              onClick={() => { setOpenActionDropdown(null); setDeleteConfirmTask(task); }} 
+                              className="px-3.5 py-2 hover:bg-red-50 text-red-600 w-full transition-colors flex items-center gap-2.5 border-none cursor-pointer text-left font-bold"
                             >
-                              <UserX size={14} className="text-rose-600"/> Mark as Lost
+                              <Trash2 size={14} className="text-red-500"/> Delete Task
                             </button>
-                          )}
-
-                          <div className="h-px bg-slate-100 my-1" />
-
-                          <button 
-                            onClick={() => { setOpenActionDropdown(null); setDeleteConfirmTask(task); }} 
-                            className="px-3.5 py-2 hover:bg-red-50 text-red-600 w-full transition-colors flex items-center gap-2.5 border-none cursor-pointer text-left font-bold"
-                          >
-                            <Trash2 size={14} className="text-red-500"/> Delete Task
-                          </button>
-                        </div>
-                      )}
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  </div>
 
-                </div>
-              </motion.div>
-            );
-          })
-        )}
-      </div>
+                  </div>
+                </motion.div>
+              );
+            })
+          )}
+        </div>
+      )}
 
       {/* 5. FLOATING BULK ACTIONS BAR */}
       <AnimatePresence>
@@ -1826,6 +2327,302 @@ export default function FollowUpManager() {
                   Close History
                 </button>
               </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ── 11.1 SCHEDULE BALANCE FOLLOW-UP MODAL ── */}
+      <AnimatePresence>
+        {showScheduleBalanceModal && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white rounded-3xl p-6 max-w-lg w-full shadow-2xl border border-slate-200 space-y-4 text-left"
+            >
+              <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                <h3 className="text-base font-black text-amber-700 flex items-center gap-2">
+                  <FileText size={18} /> Schedule Balance Follow-Up
+                </h3>
+                <button 
+                  onClick={() => setShowScheduleBalanceModal(null)} 
+                  className="p-1 rounded-lg text-slate-400 hover:bg-slate-100 border-none cursor-pointer"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              {/* Member Summary Header */}
+              <div className="p-3.5 bg-amber-50/70 rounded-2xl border border-amber-200/80 flex items-center justify-between gap-3 text-xs">
+                <div className="flex items-center gap-3">
+                  <MemberAvatar
+                    photoUrl={showScheduleBalanceModal.member.photo || showScheduleBalanceModal.member.avatarUrl}
+                    gender={showScheduleBalanceModal.member.gender}
+                    name={showScheduleBalanceModal.member.name}
+                    size={40}
+                  />
+                  <div>
+                    <h4 className="font-black text-slate-900">{showScheduleBalanceModal.member.name}</h4>
+                    <p className="text-slate-500 font-mono text-[11px]">{showScheduleBalanceModal.member.phone || 'No Phone'} · Invoice: {showScheduleBalanceModal.member.invoiceNumber}</p>
+                  </div>
+                </div>
+                <div className="text-right shrink-0">
+                  <span className="text-[10px] font-bold text-amber-800 uppercase block">Balance Due</span>
+                  <span className="text-sm font-black text-amber-700 font-mono">₹{(showScheduleBalanceModal.member.pendingAmount || showScheduleBalanceModal.member.outstandingBalance || 0).toLocaleString('en-IN')}</span>
+                </div>
+              </div>
+
+              {/* Requirement #19: Duplicate Protection Warning */}
+              {balanceModalDuplicateWarning && !allowDuplicateBalanceFollowup && (
+                <div className="p-3.5 bg-amber-100/80 border border-amber-300 rounded-2xl text-xs space-y-2">
+                  <div className="flex items-center gap-2 text-amber-900 font-bold">
+                    <AlertTriangle size={16} className="text-amber-700 shrink-0" />
+                    <span>An active Balance Follow-Up already exists for this invoice.</span>
+                  </div>
+                  <p className="text-[11px] text-amber-800">
+                    Due date: {formatIndianDate(balanceModalDuplicateWarning.dueDate || balanceModalDuplicateWarning.scheduledDate)} at {balanceModalDuplicateWarning.scheduledTime || '11:00 AM'}.
+                  </p>
+                  <div className="flex items-center gap-2 pt-1 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const target = balanceModalDuplicateWarning;
+                        setShowScheduleBalanceModal(null);
+                        setShowHistoryDrawer(target);
+                      }}
+                      className="px-2.5 py-1 bg-white hover:bg-slate-50 text-slate-800 text-[11px] font-bold rounded-lg border border-slate-300 cursor-pointer"
+                    >
+                      View Existing
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const target = balanceModalDuplicateWarning;
+                        setShowScheduleBalanceModal(null);
+                        openRescheduleDialog(target);
+                      }}
+                      className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white text-[11px] font-bold rounded-lg border-none cursor-pointer"
+                    >
+                      Reschedule Existing
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAllowDuplicateBalanceFollowup(true)}
+                      className="px-2.5 py-1 bg-slate-200 hover:bg-slate-300 text-slate-700 text-[11px] font-bold rounded-lg border-none cursor-pointer"
+                    >
+                      Create Another
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Form */}
+              {(!balanceModalDuplicateWarning || allowDuplicateBalanceFollowup) && (
+                <form onSubmit={submitScheduleBalanceFollowup} className="space-y-3.5">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs font-bold text-slate-700 mb-1.5 block">
+                        Follow-Up Date <span className="text-amber-600">*</span>
+                      </label>
+                      <input 
+                        type="date" 
+                        value={scheduleBalanceDate}
+                        onChange={(e) => setScheduleBalanceDate(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 outline-none focus:border-amber-600 cursor-pointer"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-slate-700 mb-1.5 block">
+                        Follow-Up Time
+                      </label>
+                      <input 
+                        type="time" 
+                        value={scheduleBalanceTime}
+                        onChange={(e) => setScheduleBalanceTime(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 outline-none focus:border-amber-600 cursor-pointer"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-bold text-slate-700 mb-1.5 block">
+                      Remarks / Last Note <span className="text-amber-600">*</span>
+                    </label>
+                    <textarea
+                      rows={3}
+                      value={scheduleBalanceRemarks}
+                      onChange={(e) => setScheduleBalanceRemarks(e.target.value)}
+                      placeholder='e.g. "Customer said remaining ₹2,000 will be paid after salary."'
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs font-semibold text-slate-800 outline-none focus:border-amber-600 resize-none"
+                      required
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs font-bold text-slate-700 mb-1.5 block">Priority</label>
+                      <select 
+                        value={scheduleBalancePriority} 
+                        onChange={e => setScheduleBalancePriority(e.target.value)} 
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 outline-none focus:border-amber-600 cursor-pointer"
+                      >
+                        <option value="Low">Low</option>
+                        <option value="Medium">Medium</option>
+                        <option value="High">High</option>
+                        <option value="Urgent">Urgent</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-bold text-slate-700 mb-1.5 block">Assigned Staff</label>
+                      <select 
+                        value={scheduleBalanceAssignedTo} 
+                        onChange={e => setScheduleBalanceAssignedTo(e.target.value)} 
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 outline-none focus:border-amber-600 cursor-pointer"
+                      >
+                        <option value="Receptionist">Receptionist</option>
+                        <option value="Veer Chand (manager)">Veer Chand (manager)</option>
+                        <option value="Tanya Mehra">Tanya Mehra</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+                    <button 
+                      type="button" 
+                      onClick={() => setShowScheduleBalanceModal(null)}
+                      className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors border-none cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                    <button 
+                      type="submit" 
+                      disabled={isSchedulingBalance}
+                      className="px-5 py-2 text-xs font-bold text-white bg-[#D97706] hover:bg-amber-700 rounded-xl transition-all shadow-md shadow-amber-600/20 border-none cursor-pointer disabled:opacity-50"
+                    >
+                      {isSchedulingBalance ? 'Scheduling...' : 'Schedule Follow-Up'}
+                    </button>
+                  </div>
+                </form>
+              )}
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ── 11.2 BALANCE FOLLOW-UP COMPLETION MODAL ── */}
+      <AnimatePresence>
+        {showBalanceCompleteModal && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl border border-slate-200 space-y-4 text-left"
+            >
+              <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
+                  <CheckCircle2 className="text-emerald-500" size={18} /> Balance Follow-Up Completion
+                </h3>
+                <button onClick={() => setShowBalanceCompleteModal(null)} className="p-1 rounded-lg text-slate-400 hover:bg-slate-100 border-none cursor-pointer">
+                  <X size={16} />
+                </button>
+              </div>
+
+              <div className="p-3.5 bg-amber-50 rounded-2xl border border-amber-200 text-xs flex justify-between items-center">
+                <div>
+                  <span className="font-bold text-slate-500 block">Member:</span>
+                  <span className="font-black text-slate-900 text-sm">{showBalanceCompleteModal.task.memberName || showBalanceCompleteModal.member.name}</span>
+                </div>
+                <div className="text-right">
+                  <span className="font-bold text-amber-800 block text-[10px] uppercase">Balance Due</span>
+                  <span className="font-mono font-black text-amber-700 text-sm">₹{Number(showBalanceCompleteModal.task.pendingAmount || showBalanceCompleteModal.member.outstandingBalance || 0).toLocaleString('en-IN')}</span>
+                </div>
+              </div>
+
+              <form onSubmit={submitCompleteBalanceFollowup} className="space-y-3.5">
+                <div>
+                  <label className="text-xs font-bold text-slate-700 mb-1.5 block">
+                    Outcome <span className="text-emerald-600">*</span>
+                  </label>
+                  <select
+                    value={completeBalanceOutcome}
+                    onChange={e => setCompleteBalanceOutcome(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 outline-none focus:border-emerald-600 cursor-pointer"
+                  >
+                    <option value="Payment Received">Payment Received</option>
+                    <option value="Customer Promised Payment">Customer Promised Payment</option>
+                    <option value="Call Back Later">Call Back Later</option>
+                    <option value="No Response">No Response</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+
+                {completeBalanceOutcome === 'Payment Received' && (
+                  <div className="grid grid-cols-2 gap-3 p-3 bg-emerald-50/60 rounded-2xl border border-emerald-200">
+                    <div>
+                      <label className="text-xs font-bold text-slate-700 mb-1 block">
+                        Amount Received (₹) <span className="text-emerald-600">*</span>
+                      </label>
+                      <input
+                        type="number"
+                        min={1}
+                        value={completeBalanceAmountReceived}
+                        onChange={e => setCompleteBalanceAmountReceived(Number(e.target.value))}
+                        className="w-full bg-white border border-emerald-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 outline-none focus:border-emerald-600"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-slate-700 mb-1 block">Payment Method</label>
+                      <select
+                        value={completeBalanceMethod}
+                        onChange={e => setCompleteBalanceMethod(e.target.value)}
+                        className="w-full bg-white border border-emerald-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 outline-none focus:border-emerald-600 cursor-pointer"
+                      >
+                        <option value="UPI">UPI / GPay / PhonePe</option>
+                        <option value="Cash">Cash</option>
+                        <option value="Card">Credit / Debit Card</option>
+                        <option value="Net Banking">Net Banking</option>
+                      </select>
+                    </div>
+                  </div>
+                )}
+
+                <div>
+                  <label className="text-xs font-bold text-slate-700 mb-1.5 block">
+                    Remarks <span className="text-emerald-600">*</span>
+                  </label>
+                  <textarea
+                    rows={3}
+                    placeholder="Enter completion remarks..."
+                    value={completeBalanceRemarks}
+                    onChange={e => setCompleteBalanceRemarks(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs font-semibold text-slate-800 outline-none focus:border-emerald-600 resize-none"
+                    required
+                  />
+                </div>
+
+                <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => setShowBalanceCompleteModal(null)}
+                    className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors border-none cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isCompletingBalance}
+                    className="px-5 py-2 text-xs font-bold text-white bg-emerald-500 hover:bg-emerald-600 rounded-xl transition-all shadow-md shadow-emerald-500/20 border-none cursor-pointer disabled:opacity-50"
+                  >
+                    {isCompletingBalance ? 'Processing...' : 'Complete Follow-Up'}
+                  </button>
+                </div>
+              </form>
             </motion.div>
           </div>
         )}

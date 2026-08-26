@@ -17,6 +17,7 @@ export interface FollowUpHistoryEvent {
 export interface FollowUpItem {
   id: string;
   memberId?: string | null;
+  invoiceId?: string | null;
   memberName?: string;
   phone?: string;
   enquiryId?: string | null;

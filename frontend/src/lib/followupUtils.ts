@@ -65,17 +65,34 @@ export function getFollowUpTypeStyle(task: any): FollowUpTypeStyle {
     rawReason.includes('balance') ||
     rawReason.includes('pending')
   ) {
+    const isOverdue = Boolean(task?.isOverdue) || (task?.dueDate && task.dueDate < new Date().toISOString().split('T')[0] && task.status !== 'Completed' && task.status !== 'completed');
+
+    if (isOverdue) {
+      return {
+        key: 'balance',
+        label: 'BALANCE FOLLOW-UP',
+        bgClass: 'bg-[#FEF2F2] hover:bg-[#FDE8E8]',
+        borderClass: 'border-[#FECACA]',
+        leftBorderClass: 'border-l-4 border-l-[#DC2626]',
+        badgeClass: 'bg-[#DC2626] text-white shadow-2xs font-extrabold',
+        dotClass: 'bg-[#DC2626]',
+        avatarBg: 'bg-rose-100 text-[#DC2626] border border-rose-200',
+        iconColor: 'text-[#DC2626]',
+        badgeText: 'OVERDUE BALANCE FOLLOW-UP',
+      };
+    }
+
     return {
       key: 'balance',
-      label: String(task?.type || '').toUpperCase() === 'PENDING BALANCE' ? 'BALANCE' : (String(task?.type || '').toUpperCase() || 'BALANCE'),
+      label: 'BALANCE FOLLOW-UP',
       bgClass: 'bg-[#FFFBEB] hover:bg-[#FEF3C7]',
       borderClass: 'border-[#FDE68A]',
       leftBorderClass: 'border-l-4 border-l-[#D97706]',
-      badgeClass: 'bg-[#D97706] text-white shadow-2xs font-extrabold',
+      badgeClass: 'bg-[#FEF3C7] text-[#B45309] border border-[#FCD34D] shadow-2xs font-extrabold',
       dotClass: 'bg-[#D97706]',
       avatarBg: 'bg-amber-100 text-[#D97706] border border-amber-200',
       iconColor: 'text-[#D97706]',
-      badgeText: 'BALANCE',
+      badgeText: 'BALANCE FOLLOW-UP',
     };
   }
 

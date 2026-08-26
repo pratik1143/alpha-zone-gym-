@@ -418,9 +418,37 @@ export default function BillingTab({ member: initialMember }: { member: any }) {
           >
             <Plus size={14} /> + New Bill
           </button>
-        </div>
-
       </div>
+
+      {/* Outstanding Balance Banner with + Balance Follow-Up button */}
+      {((memStats.outstanding + ptStats.outstanding) > 0 || Number(member.outstandingBalance || 0) > 0) && (
+        <div className="bg-[#FFFBEB] p-4 rounded-3xl border border-[#FDE68A] border-l-4 border-l-[#D97706] flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-amber-100 text-[#D97706] flex items-center justify-center font-black border border-amber-200 shrink-0">
+              <AlertTriangle size={20} />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-black uppercase text-[#D97706] tracking-wider">BALANCE DUE</span>
+                <span className="text-base font-black text-slate-900 font-mono">
+                  ₹{Math.max(memStats.outstanding + ptStats.outstanding, Number(member.outstandingBalance || 0)).toLocaleString('en-IN')}
+                </span>
+              </div>
+              <p className="text-xs text-slate-600 font-medium mt-0.5">
+                Member has an outstanding billing balance. Schedule a balance follow-up to ensure timely payment collection.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => {
+              window.location.href = `/dashboard/follow-up?tab=balance&search=${encodeURIComponent(member.name || '')}`;
+            }}
+            className="px-4 py-2 bg-[#D97706] hover:bg-amber-700 text-white text-xs font-black rounded-xl transition-all shadow-md shadow-amber-600/20 flex items-center justify-center gap-1.5 shrink-0 border-none cursor-pointer"
+          >
+            <Plus size={14} /> + Balance Follow-Up
+          </button>
+        </div>
+      )}
 
       {/* ── Official Billing History Table Module (Spacious & Clean Layout) ── */}
       <div className="bg-white rounded-3xl border border-slate-300 shadow-md relative min-h-[480px] overflow-hidden">
