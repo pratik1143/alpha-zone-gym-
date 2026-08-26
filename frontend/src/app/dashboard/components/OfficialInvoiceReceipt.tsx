@@ -19,7 +19,7 @@ export default function OfficialInvoiceReceipt({ invoice, member, onPrint, onWha
   const rawPhone = member?.phone || member?.mobile || invoice?.memberPhone || '';
   const memberPhone = formatPhoneNumber(rawPhone);
   
-  const rawDateStr = invoice?.transactionDate || invoice?.paymentDate || invoice?.date;
+  const rawDateStr = invoice?.invoiceDate || invoice?.billingDate || invoice?.date || invoice?.paymentDate || invoice?.transactionDate;
   const billDate = rawDateStr ? formatDate(rawDateStr) : formatDate(member?.joinDate || new Date().toISOString());
   const billTime = invoice?.transactionTime || invoice?.paymentTime || invoice?.time || '';
   const createdDateStr = invoice?.createdAt ? formatDate(invoice.createdAt) : null;

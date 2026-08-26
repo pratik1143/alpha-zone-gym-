@@ -46,12 +46,12 @@ export default function BillingPage() {
     deletePayment,
   } = useTodaysPayments();
 
-  // payments list used for table = all non-deleted payments (sorted by transactionDate + transactionTime newest first)
+  // payments list used for table = all non-deleted payments (sorted by invoiceDate + transactionTime newest first)
   const payments = useMemo(
     () => [...allPayments].sort((a, b) => {
-      const dateA = String(a.transactionDate || a.paymentDate || a.date || a.createdAt || '');
+      const dateA = String(a.invoiceDate || a.billingDate || a.date || a.paymentDate || a.transactionDate || a.createdAt || '');
       const timeA = String(a.transactionTime || a.paymentTime || a.time || '');
-      const dateB = String(b.transactionDate || b.paymentDate || b.date || b.createdAt || '');
+      const dateB = String(b.invoiceDate || b.billingDate || b.date || b.paymentDate || b.transactionDate || b.createdAt || '');
       const timeB = String(b.transactionTime || b.paymentTime || b.time || '');
 
       const dtA = dateA.includes('T') ? new Date(dateA).getTime() : new Date(`${dateA} ${timeA}`.trim()).getTime();
@@ -238,10 +238,10 @@ export default function BillingPage() {
         ? true
         : pMethod.toLowerCase().includes(methodFilter.toLowerCase());
 
-      // Date Range Filter based on transactionDate
+      // Date Range Filter based on canonical invoiceDate
       let matchesDate = true;
       if (dateFilter !== 'all') {
-        const pDateStr = String(p.transactionDate || p.paymentDate || p.date || p.createdAt || '').split('T')[0];
+        const pDateStr = String(p.invoiceDate || p.billingDate || p.date || p.paymentDate || p.transactionDate || p.createdAt || '').split('T')[0];
         const pDate = new Date(pDateStr);
         const diffDays = (now.getTime() - pDate.getTime()) / (1000 * 3600 * 24);
         if (dateFilter === 'today') matchesDate = pDateStr === todayStr;

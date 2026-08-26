@@ -1279,7 +1279,7 @@ export const db = {
 
     const isHistorical = payment.isHistorical ?? (payment.transactionType === 'historical_import' || payment.imported || payment.isLegacyImport || false);
     const txType = payment.transactionType || (isHistorical ? 'historical_import' : (payment.billingType === 'PT' || payment.invoiceType === 'PT' ? 'pt_payment' : 'membership_payment'));
-    const paymentDate = payment.paymentDate || payment.date || todayStr;
+    const canonicalInvoiceDate = payment.invoiceDate || payment.billingDate || payment.date || payment.paymentDate || payment.transactionDate || todayStr;
 
     const processPayment = async () => {
       const newPayment = {
@@ -1287,8 +1287,11 @@ export const db = {
         idempotencyKey,
         invoice: payment.invoiceNumber || payment.invoice || ('INV-' + Math.floor(100000 + Math.random() * 900000)),
         invoiceNumber: payment.invoiceNumber || payment.invoice || ('INV-' + Math.floor(100000 + Math.random() * 900000)),
-        date: payment.date || todayStr,
-        paymentDate: paymentDate,
+        invoiceDate: canonicalInvoiceDate,
+        billingDate: canonicalInvoiceDate,
+        date: canonicalInvoiceDate,
+        paymentDate: canonicalInvoiceDate,
+        transactionDate: canonicalInvoiceDate,
         transactionType: txType,
         isHistorical: isHistorical,
         imported: Boolean(payment.imported || isHistorical),
@@ -1375,8 +1378,17 @@ export const db = {
     const outstanding = Math.max(0, netPayable - amountPaid);
     const status = updates.status || (outstanding <= 0 ? 'paid' : (amountPaid > 0 ? 'partial' : 'pending'));
 
+    const targetInvDate = updates.invoiceDate || updates.billingDate || updates.date || updates.paymentDate || updates.transactionDate;
+
     const sanitizedUpdates: any = {
       ...updates,
+      ...(targetInvDate ? {
+        invoiceDate: targetInvDate,
+        billingDate: targetInvDate,
+        date: targetInvDate,
+        paymentDate: targetInvDate,
+        transactionDate: targetInvDate
+      } : {}),
       originalAmount: origAmt,
       discountAmount: discAmt,
       discount: discAmt,

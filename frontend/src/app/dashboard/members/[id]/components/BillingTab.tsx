@@ -508,7 +508,7 @@ export default function BillingTab({ member: initialMember }: { member: any }) {
                     <tr key={inv.id || idx} className="hover:bg-blue-50/60 transition-colors border-b border-slate-100">
                       {/* Date & Time */}
                       <td className="px-4 py-4 whitespace-nowrap font-mono text-slate-700 font-bold">
-                        <div>{formatDate(inv.transactionDate || inv.paymentDate || inv.date || member.joinDate)}</div>
+                        <div>{formatDate(inv.invoiceDate || inv.billingDate || inv.date || inv.paymentDate || inv.transactionDate || member.joinDate)}</div>
                         {(inv.transactionTime || inv.paymentTime || inv.time) && (
                           <div className="text-[10px] text-slate-400 font-semibold mt-0.5">{inv.transactionTime || inv.paymentTime || inv.time}</div>
                         )}

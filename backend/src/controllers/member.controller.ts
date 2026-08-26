@@ -161,6 +161,7 @@ export const createMember = async (req: Request, res: Response) => {
     }
 
     const todayStr = new Date().toISOString().split('T')[0];
+    const invoiceDate = req.body.invoiceDate || req.body.billingDate || req.body.date || todayStr;
     const startJoinDate = joinDate || todayStr;
     const memStartDate = req.body.startDate || startJoinDate;
     const plansList = await db.getPlans();
@@ -179,6 +180,8 @@ export const createMember = async (req: Request, res: Response) => {
 
     const origAmount = Number(req.body.originalAmount !== undefined ? req.body.originalAmount : (price || amount || (matchedPlan ? matchedPlan.price : 2500)));
     const discAmount = Number(req.body.discountAmount !== undefined ? req.body.discountAmount : (req.body.discount || 0));
+    const discType = req.body.discountType || 'amount';
+    const discVal = Number(req.body.discountValue !== undefined ? req.body.discountValue : discAmount);
     const taxAmount = Number(req.body.taxAmount !== undefined ? req.body.taxAmount : (req.body.tax || req.body.gst || 0));
     const othCharges = Number(req.body.otherCharges || 0);
 
@@ -189,7 +192,7 @@ export const createMember = async (req: Request, res: Response) => {
     const finalPaymentStatus = paymentStatus || (outstandingAmount <= 0 ? 'paid' : (amountPaid > 0 ? 'partial' : 'pending'));
     const initialStatus = memStartDate > todayStr ? 'upcoming' : (req.body.status || 'active');
 
-    const idempotencyKey = req.body.idempotencyKey || `mem_${phone}_${plan || 'Monthly'}_${startJoinDate}`;
+    const idempotencyKey = req.body.idempotencyKey || `mem_${phone}_${plan || 'Monthly'}_${invoiceDate}`;
 
     const member = await db.addMember({
       uid, // align document ID with Auth UID
@@ -197,12 +200,17 @@ export const createMember = async (req: Request, res: Response) => {
       price: origAmount,
       amount: netPayable,
       originalAmount: origAmount,
+      discountType: discType,
+      discountValue: discVal,
       discountAmount: discAmount,
       discount: discAmount,
+      taxAmount: taxAmount,
+      tax: taxAmount,
       netPayable: netPayable,
       totalBilled: netPayable,
       totalPaid: amountPaid,
       outstandingBalance: outstandingAmount,
+      invoiceDate: invoiceDate,
       joinDate: startJoinDate,
       startDate: memStartDate,
       createdAt: new Date().toISOString(),
@@ -237,6 +245,8 @@ export const createMember = async (req: Request, res: Response) => {
       packageName: plan || 'Monthly Standard',
       packagePrice: origAmount,
       originalAmount: origAmount,
+      discountType: discType,
+      discountValue: discVal,
       discountAmount: discAmount,
       discount: discAmount,
       taxAmount: taxAmount,
@@ -254,12 +264,12 @@ export const createMember = async (req: Request, res: Response) => {
       transactionType: 'membership_payment',
       isHistorical: false,
       imported: false,
-      paymentDate: startJoinDate,
+      paymentDate: invoiceDate,
       status: finalPaymentStatus,
       invoiceNumber: invoiceNumber,
       invoice: invoiceNumber,
-      billingDate: startJoinDate,
-      date: startJoinDate,
+      billingDate: invoiceDate,
+      date: invoiceDate,
       startDate: memStartDate,
       endDate: finalExpiry,
       expiryDate: finalExpiry,

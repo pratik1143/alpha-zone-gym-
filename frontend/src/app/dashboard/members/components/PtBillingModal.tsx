@@ -8,7 +8,7 @@ import {
   ChevronDown
 } from 'lucide-react';
 import toast from '@/lib/toast';
-import { db } from '@/lib/firebase';
+import { db, auth } from '@/lib/firebase';
 import { doc, updateDoc, addDoc, collection, query, onSnapshot } from 'firebase/firestore';
 import { useGymStore } from '@/store';
 import API from '@/services/api';
@@ -261,8 +261,13 @@ export default function PtBillingModal({
     if (!member || !member.id || submitting) return;
     if (!validateForm()) {
       setStep(1);
+      toast.error('Please complete all required PT membership details.');
       return;
     }
+
+    // Authenticated check
+    const hasClientUser = Boolean(auth.currentUser);
+    const storedUserStr = typeof window !== 'undefined' ? localStorage.getItem('alpha_zone_user') : null;
 
     setSubmitting(true);
     try {
@@ -280,6 +285,19 @@ export default function PtBillingModal({
       const trainerRole = selectedTrainer?.specialization || selectedTrainer?.role || 'Personal Trainer & Strength';
       const trainerAvatar = resolveAvatarUrl(selectedTrainer || { name: trainerName });
       const trainerPhone = selectedTrainer?.phone || '';
+
+      console.log('[PT Billing DevLog] Step 1: Initiating PT Creation', {
+        memberId: member.id,
+        memberName: member.name,
+        trainerId,
+        trainerName,
+        numAmount,
+        startDate,
+        expiryDate,
+        paymentMode,
+        hasClientUser,
+        hasStoredAuth: Boolean(storedUserStr),
+      });
 
       // 1. Create PT Payment / Billing Record in `payments` collection
       const ptPaymentPayload = {
@@ -314,13 +332,24 @@ export default function PtBillingModal({
         status: 'PAID',
         createdAt: new Date().toISOString(),
         isRealTimeToday: true,
+        idempotencyKey: `pt_${member.id}_${invoiceNo}`,
       };
 
+      let paymentSaved = false;
       try {
+        console.log('[PT Billing DevLog] Attempting direct Firestore payment creation...');
         await addDoc(collection(db, 'payments'), ptPaymentPayload);
-      } catch (payErr) {
-        console.warn('Direct Firestore payment creation warning, attempting API:', payErr);
-        await API.post('/payments', ptPaymentPayload).catch(() => {});
+        paymentSaved = true;
+        console.log('[PT Billing DevLog] Direct Firestore payment creation successful.');
+      } catch (payErr: any) {
+        console.warn('[PT Billing DevLog] Direct Firestore payment creation failed, executing REST API fallback:', payErr?.message || payErr);
+        try {
+          await API.post('/payments', ptPaymentPayload);
+          paymentSaved = true;
+          console.log('[PT Billing DevLog] REST API payment creation successful.');
+        } catch (apiPayErr: any) {
+          console.error('[PT Billing DevLog] REST API payment creation also failed:', apiPayErr?.response?.data || apiPayErr?.message);
+        }
       }
 
       // 2. Canonical PT Object Definition
@@ -382,7 +411,26 @@ export default function PtBillingModal({
         updatedAt: new Date().toISOString(),
       };
 
-      await updateDoc(doc(db, 'members', member.id), memberUpdateData);
+      let memberUpdated = false;
+      try {
+        console.log('[PT Billing DevLog] Attempting direct Firestore updateDoc to members collection...');
+        await updateDoc(doc(db, 'members', member.id), memberUpdateData);
+        memberUpdated = true;
+        console.log('[PT Billing DevLog] Direct Firestore member update successful.');
+      } catch (memErr: any) {
+        console.warn('[PT Billing DevLog] Direct Firestore member update failed, executing REST API fallback:', memErr?.message || memErr);
+        try {
+          await API.put(`/members/${member.id}`, memberUpdateData);
+          memberUpdated = true;
+          console.log('[PT Billing DevLog] REST API member update successful.');
+        } catch (apiMemErr: any) {
+          console.error('[PT Billing DevLog] REST API member update also failed:', apiMemErr?.response?.data || apiMemErr?.message);
+        }
+      }
+
+      if (!memberUpdated && !paymentSaved) {
+        throw new Error('PERMISSION_DENIED_BOTH');
+      }
 
       // 4. Update local in-memory reference
       Object.assign(member, memberUpdateData);
@@ -398,8 +446,15 @@ export default function PtBillingModal({
       toast.success(`PT membership created successfully! (${durationLabel} with ${trainerName})`);
       onClose();
     } catch (err: any) {
-      console.error('Failed to create PT bill:', err);
-      toast.error('Failed to create PT membership: ' + (err.message || err));
+      console.error('[PT Billing DevLog] Failed to create PT bill:', err);
+      const errStr = String(err?.message || err || '').toLowerCase();
+      if (errStr.includes('permission') || errStr.includes('denied') || err === 'PERMISSION_DENIED_BOTH') {
+        toast.error("Unable to create PT membership. You don't have permission for this action.");
+      } else if (errStr.includes('auth') || errStr.includes('unauthenticated') || errStr.includes('expired')) {
+        toast.error("Your session has expired. Please sign in again.");
+      } else {
+        toast.error("Unable to create PT membership. Please try again.");
+      }
     } finally {
       setSubmitting(false);
     }

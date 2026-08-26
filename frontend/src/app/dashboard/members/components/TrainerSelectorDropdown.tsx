@@ -167,7 +167,11 @@ export default function TrainerSelectorDropdown({
         updatedAt: new Date().toISOString(),
       };
 
-      await updateDoc(doc(db, 'members', member.id), updateData);
+      try {
+        await updateDoc(doc(db, 'members', member.id), updateData);
+      } catch (memErr) {
+        await API.put(`/members/${member.id}`, updateData);
+      }
 
       member.trainerId = null;
       member.trainerName = 'Unassigned';
@@ -212,7 +216,11 @@ export default function TrainerSelectorDropdown({
         updatedAt: new Date().toISOString(),
       };
 
-      await updateDoc(doc(db, 'members', member.id), updateData);
+      try {
+        await updateDoc(doc(db, 'members', member.id), updateData);
+      } catch (memErr) {
+        await API.put(`/members/${member.id}`, updateData);
+      }
 
       Object.assign(member, updateData);
       if (member.pt) {

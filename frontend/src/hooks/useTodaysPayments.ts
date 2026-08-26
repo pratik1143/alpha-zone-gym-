@@ -174,8 +174,8 @@ export function useTodaysPayments(): UseTodaysPaymentsResult {
       const status = String(p.status || p.paymentStatus || '').toLowerCase();
       if (status !== 'paid' && status !== 'partial') return false;
 
-      // Strict IST date match on transactionDate / paymentDate / date
-      const pDate = String(p.transactionDate || p.paymentDate || p.date || '').split('T')[0];
+      // Strict IST date match on canonical invoiceDate (invoiceDate / billingDate / date / paymentDate / transactionDate)
+      const pDate = String(p.invoiceDate || p.billingDate || p.date || p.paymentDate || p.transactionDate || '').split('T')[0];
       if (pDate !== todayStr) return false;
 
       // Deduplicate by ID
@@ -243,12 +243,14 @@ export function useTodaysPayments(): UseTodaysPaymentsResult {
     if (!paymentId || !transactionDate) return false;
     try {
       await updateDoc(doc(db, 'payments', paymentId), {
-        transactionDate,
-        transactionTime,
-        paymentDate: transactionDate,
-        paymentTime: transactionTime,
+        invoiceDate: transactionDate,
+        billingDate: transactionDate,
         date: transactionDate,
-        time: transactionTime,
+        paymentDate: transactionDate,
+        transactionDate: transactionDate,
+        transactionTime: transactionTime || '12:00 PM',
+        paymentTime: transactionTime || '12:00 PM',
+        time: transactionTime || '12:00 PM',
         updatedAt: new Date().toISOString(),
         editedBy: user?.uid || user?.email || 'admin',
       });

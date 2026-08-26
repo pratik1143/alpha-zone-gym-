@@ -43,8 +43,6 @@ const step1Schema = z.object({
       message: 'Enter a valid email address',
     }),
   gender: z.enum(['Male', 'Female', 'Other']).default('Male'),
-  membershipPackageId: z.string().min(1, 'Please select a membership package'),
-  startDate: z.string().min(1, 'Please select a start date'),
 });
 
 const step2Schema = z.object({
@@ -138,11 +136,11 @@ export default function AddMemberModal({ isOpen, onClose }: AddMemberModalProps)
   const [ptErrors, setPtErrors] = useState<Record<string, string>>({});
   const [photoError, setPhotoError] = useState<string | null>(null);
 
-  // Step 1: Basic Info & Package
+  // Step 1: Basic Bio Information (NO payment/billing fields here!)
   const [fullName, setFullName] = useState('');
   const [mobile, setMobile] = useState('');
   const [email, setEmail] = useState('');
-  const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
+  const [gender, setGender] = useState('Male');
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
 
   // Live Camera Capture Modal State
@@ -205,8 +203,7 @@ export default function AddMemberModal({ isOpen, onClose }: AddMemberModalProps)
 
   const hasPt = Boolean(selectedTrainerId);
 
-  // Step 2: Personal & Health
-  const [gender, setGender] = useState('Male');
+  // Step 2: Personal & Health Details
   const [age, setAge] = useState('');
   const [height, setHeight] = useState('');
   const [weight, setWeight] = useState('');
@@ -222,10 +219,19 @@ export default function AddMemberModal({ isOpen, onClose }: AddMemberModalProps)
   const [enrollStatus, setEnrollStatus] = useState<'idle' | 'enrolling' | 'success' | 'failed'>('idle');
   const [enrollMsg, setEnrollMsg] = useState('');
 
-  // Step 4: Membership Billing & Payment Method
-  const [discount, setDiscount] = useState('0');
+  // Step 4: Membership Billing & Payment Section
+  const [invoiceDate, setInvoiceDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
+  const [startDate, setStartDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
+  const [expiryDate, setExpiryDate] = useState<string>('');
+  const [isExpiryManuallyEdited, setIsExpiryManuallyEdited] = useState(false);
+
+  const [originalAmount, setOriginalAmount] = useState<string>('3000');
+  const [discountType, setDiscountType] = useState<'amount' | 'percentage'>('amount');
+  const [discountValue, setDiscountValue] = useState<string>('0');
+  const [taxAmount, setTaxAmount] = useState<string>('0');
   const [paymentMethod, setPaymentMethod] = useState<'Cash' | 'UPI' | 'Card' | 'NetBanking'>('UPI');
-  const [amountPaid, setAmountPaid] = useState('');
+  const [paymentStatus, setPaymentStatus] = useState<'paid' | 'partial' | 'pending'>('paid');
+  const [amountPaid, setAmountPaid] = useState<string>('3000');
 
   // Step 5 (If PT Selected): PT Billing Details
   const [ptDuration, setPtDuration] = useState('3 Months');
@@ -248,6 +254,42 @@ export default function AddMemberModal({ isOpen, onClose }: AddMemberModalProps)
       document.body.style.overflow = '';
     };
   }, [isOpen]);
+
+  // Update default package pricing & auto-calculate expiry date when plan or start date changes
+  useEffect(() => {
+    if (selectedPlan) {
+      const pPrice = (Number(selectedPlan.price) || 3000).toString();
+      setOriginalAmount(pPrice);
+
+      if (!isExpiryManuallyEdited) {
+        const calculatedExp = membershipEngine.calculateMembershipExpiry(startDate, selectedPlan.duration || selectedPlan.name || '1 Month');
+        setExpiryDate(calculatedExp);
+      }
+    }
+  }, [selectedPlan, startDate, isExpiryManuallyEdited]);
+
+  // Calculate dynamic discount, tax, net payable and pending amounts
+  const basePriceNum = Number(originalAmount) || 0;
+  const discValNum = Number(discountValue) || 0;
+  const computedDiscAmt = discountType === 'percentage'
+    ? Math.min(basePriceNum, (basePriceNum * discValNum) / 100)
+    : Math.min(basePriceNum, discValNum);
+  const taxAmtNum = Number(taxAmount) || 0;
+  const finalPayableNum = Math.max(0, basePriceNum - computedDiscAmt + taxAmtNum);
+
+  // Sync amountPaid when paymentStatus or finalPayableNum changes
+  useEffect(() => {
+    if (paymentStatus === 'paid') {
+      setAmountPaid(finalPayableNum.toString());
+    } else if (paymentStatus === 'pending') {
+      setAmountPaid('0');
+    }
+  }, [paymentStatus, finalPayableNum]);
+
+  const paidAmtNum = paymentStatus === 'paid'
+    ? finalPayableNum
+    : (paymentStatus === 'pending' ? (amountPaid ? Number(amountPaid) : 0) : Number(amountPaid) || 0);
+  const pendingAmtNum = Math.max(0, finalPayableNum - paidAmtNum);
 
   // Auto-calculate PT Expiry Date
   useEffect(() => {
@@ -312,16 +354,6 @@ export default function AddMemberModal({ isOpen, onClose }: AddMemberModalProps)
       }
     }
   }, [isOpen, members.length]);
-
-  // Update Membership amount paid when plan or discount changes
-  useEffect(() => {
-    if (selectedPlan) {
-      const basePrice = Number(selectedPlan.price) || 2500;
-      const disc = Number(discount) || 0;
-      const finalAmt = Math.max(0, basePrice - disc);
-      setAmountPaid(finalAmt.toString());
-    }
-  }, [selectedPlan, discount]);
 
   // Check duplicate phone
   const duplicateMember = useMemo(() => {
@@ -409,8 +441,6 @@ export default function AddMemberModal({ isOpen, onClose }: AddMemberModalProps)
       gender: gender as any,
       mobile,
       email: email || undefined,
-      membershipPackageId: selectedPlan?.id || selectedPlan?.name || '',
-      startDate,
     });
 
     if (!parseRes.success) {
@@ -451,6 +481,46 @@ export default function AddMemberModal({ isOpen, onClose }: AddMemberModalProps)
     }
 
     setStep2Errors({});
+    return true;
+  };
+
+  // Step 4 Membership & Billing Validation Trigger
+  const validateStep4 = () => {
+    if (!selectedPlan) {
+      toast.error('Please select a membership package');
+      return false;
+    }
+    if (!invoiceDate) {
+      toast.error('Invoice Date is required');
+      return false;
+    }
+    if (!startDate) {
+      toast.error('Membership Start Date is required');
+      return false;
+    }
+    if (!expiryDate) {
+      toast.error('Membership Expiry Date is required');
+      return false;
+    } else if (startDate && new Date(expiryDate) < new Date(startDate)) {
+      toast.error('Expiry date cannot be before start date');
+      return false;
+    }
+    if (discValNum < 0) {
+      toast.error('Discount value cannot be negative');
+      return false;
+    }
+    if (computedDiscAmt > basePriceNum) {
+      toast.error('Discount cannot exceed original package amount');
+      return false;
+    }
+    if (paidAmtNum > finalPayableNum) {
+      toast.error('Amount paid cannot exceed final payable amount');
+      return false;
+    }
+    if (paidAmtNum < 0) {
+      toast.error('Amount paid cannot be negative');
+      return false;
+    }
     return true;
   };
 
@@ -509,7 +579,7 @@ export default function AddMemberModal({ isOpen, onClose }: AddMemberModalProps)
   const handleNextStep = () => {
     if (step === 1) {
       if (!validateStep1()) {
-        toast.error('Please complete all required fields on Step 1');
+        toast.error('Please complete required demographic details');
         return;
       }
       setStep(2);
@@ -531,6 +601,9 @@ export default function AddMemberModal({ isOpen, onClose }: AddMemberModalProps)
     }
 
     if (step === 4) {
+      if (!validateStep4()) {
+        return;
+      }
       if (hasPt) {
         setStep(5);
       } else {
@@ -564,21 +637,17 @@ export default function AddMemberModal({ isOpen, onClose }: AddMemberModalProps)
       const normalizedEmail = (email || `${normalizedPhone}@alphagym.com`).toLowerCase().trim();
 
       const todayStr = new Date().toISOString().split('T')[0];
+      const invDate = invoiceDate || todayStr;
       const memStartDate = startDate || todayStr;
       const planName = selectedPlan?.name || '1 Month';
       const planDuration = selectedPlan?.duration || planName;
-      const expiryStr = membershipEngine.calculateMembershipExpiry(memStartDate, planDuration);
-
-      const basePrice = Number(selectedPlan?.price) || 2500;
-      const disc = Number(discount) || 0;
-      const finalBilled = Math.max(0, basePrice - disc);
-      const paidAmt = Number(amountPaid) || finalBilled;
+      const expiryStr = expiryDate || membershipEngine.calculateMembershipExpiry(memStartDate, planDuration);
 
       const computedStatus = membershipEngine.calculateMembershipStatus(expiryStr, memStartDate);
 
       const memInvoiceNo = `INV-MEM-${Date.now().toString().slice(-6)}`;
       const ptInvoiceNo = hasPt ? `INV-PT-${Date.now().toString().slice(-6)}` : '';
-      const onboardingUuid = `add_mem_${normalizedPhone}_${todayStr}_${Math.floor(1000 + Math.random() * 9000)}`;
+      const onboardingUuid = `add_mem_${normalizedPhone}_${invDate}_${Math.floor(1000 + Math.random() * 9000)}`;
       const trnName = selectedTrainerObj?.name || (selectedTrainerId ? 'Assigned Trainer' : 'Unassigned');
 
       const memberPayload: any = {
@@ -587,23 +656,30 @@ export default function AddMemberModal({ isOpen, onClose }: AddMemberModalProps)
         email: normalizedEmail,
         photo: photoPreview || '',
         plan: planName,
-        price: basePrice,
-        originalAmount: basePrice,
-        packagePrice: basePrice,
-        discountAmount: disc,
-        discount: disc,
-        netPayable: finalBilled,
-        amount: finalBilled,
-        amountPaid: paidAmt,
-        paid: paidAmt,
-        joinDate: todayStr,
+        price: basePriceNum,
+        originalAmount: basePriceNum,
+        packagePrice: basePriceNum,
+        discountType: discountType,
+        discountValue: discValNum,
+        discountAmount: computedDiscAmt,
+        discount: computedDiscAmt,
+        taxAmount: taxAmtNum,
+        tax: taxAmtNum,
+        netPayable: finalPayableNum,
+        amount: finalPayableNum,
+        amountPaid: paidAmtNum,
+        paid: paidAmtNum,
+        pendingAmount: pendingAmtNum,
+        outstandingBalance: pendingAmtNum,
+        invoiceDate: invDate,
+        joinDate: invDate,
         startDate: memStartDate,
         createdAt: new Date().toISOString(),
         expiryDate: expiryStr,
         status: computedStatus,
-        paymentStatus: paidAmt >= finalBilled ? 'paid' : 'partial',
-        totalBilled: finalBilled,
-        totalPaid: paidAmt,
+        paymentStatus: paymentStatus === 'paid' ? 'paid' : (paidAmtNum > 0 ? 'partial' : 'pending'),
+        totalBilled: finalPayableNum,
+        totalPaid: paidAmtNum,
         biometricId: biometricId,
         deviceUserId: biometricId,
         trainerId: selectedTrainerId || 'null',
@@ -674,19 +750,24 @@ export default function AddMemberModal({ isOpen, onClose }: AddMemberModalProps)
         billingType: 'MEMBERSHIP',
         packageName: planName,
         plan: planName,
-        originalAmount: basePrice,
-        packagePrice: basePrice,
-        discountAmount: disc,
-        discount: disc,
-        netPayable: finalBilled,
-        amount: finalBilled,
-        amountPaid: paidAmt,
-        paid: paidAmt,
-        pendingAmount: Math.max(0, finalBilled - paidAmt),
+        originalAmount: basePriceNum,
+        packagePrice: basePriceNum,
+        discountType: discountType,
+        discountValue: discValNum,
+        discountAmount: computedDiscAmt,
+        discount: computedDiscAmt,
+        taxAmount: taxAmtNum,
+        tax: taxAmtNum,
+        netPayable: finalPayableNum,
+        amount: finalPayableNum,
+        amountPaid: paidAmtNum,
+        paid: paidAmtNum,
+        pendingAmount: pendingAmtNum,
         method: paymentMethod,
         paymentMethod: paymentMethod,
-        status: paidAmt >= finalBilled ? 'paid' : 'partial',
-        date: todayStr,
+        status: paymentStatus === 'paid' ? 'paid' : (paidAmtNum > 0 ? 'partial' : 'pending'),
+        date: invDate,
+        invoiceDate: invDate,
         startDate: memStartDate,
         expiryDate: expiryStr
       };
@@ -702,16 +783,17 @@ export default function AddMemberModal({ isOpen, onClose }: AddMemberModalProps)
         const pAmtPaid = Number(ptAmountPaid) || netNum;
 
         const ptInv = resData?.ptInvoice || {
-          invoiceNumber: memberPayload.ptBilling?.invoiceNo || ptInvoiceNo,
+          invoiceNumber: ptInvoiceNo,
           invoiceType: 'PT',
           billingType: 'PT',
           packageName: `Personal Training (${ptDuration})`,
-          plan: `Personal Training (${ptDuration})`,
-          trainerName: selectedTrainerObj.name,
+          plan: `PT - ${ptDuration}`,
           originalAmount: amtNum,
           packagePrice: amtNum,
           discountAmount: discNum,
           discount: discNum,
+          taxAmount: taxNum,
+          tax: taxNum,
           netPayable: netNum,
           amount: netNum,
           amountPaid: pAmtPaid,
@@ -719,20 +801,24 @@ export default function AddMemberModal({ isOpen, onClose }: AddMemberModalProps)
           pendingAmount: Math.max(0, netNum - pAmtPaid),
           method: ptPaymentMethod,
           paymentMethod: ptPaymentMethod,
-          status: (netNum - pAmtPaid) <= 0 ? 'paid' : 'partial',
-          date: todayStr,
+          status: pAmtPaid >= netNum ? 'paid' : 'partial',
+          date: invDate,
+          invoiceDate: invDate,
           startDate: ptStartDate,
           expiryDate: ptExpiryDate
         };
         setCreatedPtInvoice(ptInv);
       }
 
+      await fetchPayments();
+
+      // Advance step to receipt screen
       setStep(hasPt ? 6 : 5);
-      toast.success('Member created successfully 🎉');
+      toast.success(`Member onboarding complete for ${fullName.trim()}!`);
     } catch (err: any) {
-      const errMsg = err.message || 'Failed to complete member registration. Please try again.';
-      setBackendError(errMsg);
-      toast.error(errMsg);
+      console.error('Member creation failed:', err);
+      setBackendError(err.message || 'Failed to create member record. Please try again.');
+      toast.error(err.message || 'Failed to complete member onboarding.');
     } finally {
       setIsSubmitting(false);
     }
@@ -864,7 +950,7 @@ export default function AddMemberModal({ isOpen, onClose }: AddMemberModalProps)
           {/* Scrollable Form Body */}
           <div className="flex-1 overflow-y-auto p-6 sm:p-8">
             
-            {/* ── STEP 1: Profile Photo & Basic Information & Plan ── */}
+            {/* ── STEP 1: Profile Photo & Demographic Bio Info ONLY ── */}
             {step === 1 && (
               <motion.div 
                 initial={{ opacity: 0, x: 15 }} 
@@ -903,7 +989,7 @@ export default function AddMemberModal({ isOpen, onClose }: AddMemberModalProps)
                       id="member-photo-file-input"
                     />
 
-                    {/* Unified Actions: Either Upload/Camera buttons OR Change/Remove buttons */}
+                    {/* Unified Actions: Upload / Camera */}
                     <div className="w-full space-y-2">
                       {!photoPreview ? (
                         <div className="grid grid-cols-2 gap-2 w-full">
@@ -957,9 +1043,13 @@ export default function AddMemberModal({ isOpen, onClose }: AddMemberModalProps)
                     )}
                   </div>
 
-                  {/* ── RIGHT COLUMN: BASIC INFO & MEMBERSHIP PACKAGE ── */}
+                  {/* ── RIGHT COLUMN: DEMOGRAPHIC / PERSONAL BIO DATA ── */}
                   <div className="md:col-span-2 space-y-4">
-                    
+                    <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200/80 mb-2">
+                      <h4 className="text-xs font-black uppercase text-slate-700 tracking-wider">Demographic Profile Information</h4>
+                      <p className="text-[11px] text-slate-500 font-medium mt-0.5">Basic member bio details. Membership & Billing details are configured in Step 4.</p>
+                    </div>
+
                     {/* Full Name & Gender */}
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                       <div className="sm:col-span-2">
@@ -1067,75 +1157,21 @@ export default function AddMemberModal({ isOpen, onClose }: AddMemberModalProps)
                       </div>
                     </div>
 
-                    {/* Membership Packages Selection Grid */}
+                    {/* Optional Personal Trainer Selection */}
                     <div>
-                      <label className="block text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1.5">Select Membership Package *</label>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        {activePlans.map((p: any) => {
-                          const isSelected = selectedPlan?.name === p.name || selectedPlan?.id === p.id;
-                          return (
-                            <div 
-                              key={p.id || p.name}
-                              onClick={() => {
-                                setSelectedPlan(p);
-                                if (step1Errors.membershipPackageId) setStep1Errors(prev => ({ ...prev, membershipPackageId: '' }));
-                              }}
-                              className={`p-3.5 rounded-2xl border-2 cursor-pointer transition-all ${
-                                isSelected 
-                                  ? 'bg-blue-50/90 border-blue-600 text-blue-900 shadow-md ring-2 ring-blue-600/20' 
-                                  : 'bg-white border-slate-200 hover:border-slate-300 text-slate-700 hover:bg-slate-50'
-                              }`}
-                            >
-                              <div className="flex justify-between items-start">
-                                <span className="text-xs font-black uppercase">{p.name}</span>
-                                <span className="text-xs font-mono font-black text-blue-700">₹{(p.price || 0).toLocaleString('en-IN')}</span>
-                              </div>
-                              <div className="flex justify-between items-center mt-2">
-                                <span className="text-[10px] text-slate-500 font-bold">{p.duration || '30 Days'} Validity</span>
-                                {isSelected && (
-                                  <span className="text-[9px] font-black uppercase bg-blue-600 text-white px-2 py-0.5 rounded-full flex items-center gap-1">
-                                    ✓ Selected
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                      {step1Errors.membershipPackageId && (
-                        <p className="text-[10px] font-bold text-red-500 mt-1 flex items-center gap-1">
-                          <AlertCircle size={11} /> {step1Errors.membershipPackageId}
-                        </p>
-                      )}
-                    </div>
-
-                    {/* Start Date & Optional Trainer */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1">Membership Start Date *</label>
-                        <input 
-                          type="date"
-                          value={startDate}
-                          onChange={(e) => setStartDate(e.target.value)}
-                          className="w-full h-11 bg-slate-50 border border-slate-300 rounded-xl px-4 text-xs font-bold text-slate-900 focus:outline-none focus:border-blue-600 focus:bg-white transition-all cursor-pointer"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1">Personal Trainer (Optional)</label>
-                        <select 
-                          value={selectedTrainerId} 
-                          onChange={(e) => setSelectedTrainerId(e.target.value)}
-                          className="w-full h-11 bg-slate-50 border border-slate-300 rounded-xl px-4 text-xs font-bold text-slate-900 focus:outline-none focus:border-blue-600 focus:bg-white transition-all cursor-pointer"
-                        >
-                          <option value="">No PT Assigned</option>
-                          {trainersList.map((t: any) => (
-                            <option key={t.employeeId || t.id} value={t.employeeId || t.id}>
-                              {t.name} ({t.employeeId || (t.biometricId ? `#${t.biometricId}` : 'EMP-TRN')}) — {t.specialization || t.role || 'Trainer'}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
+                      <label className="block text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1">Personal Trainer (Optional)</label>
+                      <select 
+                        value={selectedTrainerId} 
+                        onChange={(e) => setSelectedTrainerId(e.target.value)}
+                        className="w-full h-11 bg-slate-50 border border-slate-300 rounded-xl px-4 text-xs font-bold text-slate-900 focus:outline-none focus:border-blue-600 focus:bg-white transition-all cursor-pointer"
+                      >
+                        <option value="">No Personal Trainer Assigned</option>
+                        {trainersList.map((t: any) => (
+                          <option key={t.employeeId || t.id} value={t.employeeId || t.id}>
+                            {t.name} ({t.employeeId || (t.biometricId ? `#${t.biometricId}` : 'EMP-TRN')}) — {t.specialization || t.role || 'Trainer'}
+                          </option>
+                        ))}
+                      </select>
                     </div>
 
                   </div>
@@ -1366,86 +1402,303 @@ export default function AddMemberModal({ isOpen, onClose }: AddMemberModalProps)
               </motion.div>
             )}
 
-            {/* ── STEP 4: Membership Payment ── */}
+            {/* ── STEP 4: Membership Package, Billing & Payment ── */}
             {step === 4 && (
               <motion.div 
                 initial={{ opacity: 0, x: 15 }} 
                 animate={{ opacity: 1, x: 0 }} 
                 exit={{ opacity: 0, x: -15 }}
-                className="max-w-xl mx-auto space-y-6"
+                className="max-w-3xl mx-auto space-y-6"
               >
                 <div className="text-center mb-2">
-                  <h3 className="text-xl font-black text-slate-900 tracking-tight">Membership Payment Details</h3>
-                  <p className="text-xs text-slate-500">Confirm price breakdown and select payment method for Gym Membership</p>
+                  <span className="px-3 py-1 bg-blue-50 border border-blue-200 text-blue-700 text-[10px] font-extrabold uppercase tracking-widest rounded-full inline-block mb-1">
+                    Step 4 of {totalStepCount}
+                  </span>
+                  <h3 className="text-xl font-black text-slate-900 tracking-tight">Membership Package & Billing Details</h3>
+                  <p className="text-xs text-slate-500">Configure membership duration, invoice date, discounts, and payment settlement</p>
                 </div>
 
-                {/* Package Summary Card */}
-                <div className="bg-gradient-to-br from-slate-900 to-indigo-950 text-white p-5 rounded-3xl border border-slate-800 shadow-xl space-y-3">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <span className="text-[10px] font-black uppercase tracking-widest text-indigo-300">Selected Package</span>
-                      <h4 className="text-lg font-black">{selectedPlan?.name || '1 MONTH'}</h4>
-                    </div>
-                    <span className="text-xl font-mono font-black text-emerald-400">
-                      ₹{(selectedPlan?.price || 3000).toLocaleString('en-IN')}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center text-xs text-slate-300 pt-2 border-t border-white/10">
-                    <span>Duration: {selectedPlan?.duration || '30 Days'}</span>
-                    <span>Start Date: {startDate}</span>
-                  </div>
-                </div>
-
-                {/* Pricing Calculation Form */}
+                {/* ── SECTION 1: MEMBERSHIP PACKAGE & DATES ── */}
                 <div className="bg-slate-50 p-6 rounded-3xl border border-slate-200/80 space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
+                  <h4 className="text-xs font-black uppercase tracking-wider text-slate-700">1. Select Membership Package</h4>
+
+                  {/* Package Cards Selector Grid */}
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    {activePlans.map((p: any) => {
+                      const isSelected = selectedPlan?.name === p.name || selectedPlan?.id === p.id;
+                      return (
+                        <div 
+                          key={p.id || p.name}
+                          onClick={() => {
+                            setSelectedPlan(p);
+                          }}
+                          className={`p-3.5 rounded-2xl border-2 cursor-pointer transition-all ${
+                            isSelected 
+                              ? 'bg-blue-50 border-blue-600 text-blue-900 shadow-md ring-2 ring-blue-600/20' 
+                              : 'bg-white border-slate-200 hover:border-slate-300 text-slate-700 hover:bg-slate-100'
+                          }`}
+                        >
+                          <div className="flex justify-between items-start">
+                            <span className="text-xs font-black uppercase">{p.name}</span>
+                          </div>
+                          <div className="text-sm font-mono font-black text-blue-700 mt-1">
+                            ₹{(p.price || 0).toLocaleString('en-IN')}
+                          </div>
+                          <div className="flex justify-between items-center mt-2">
+                            <span className="text-[10px] text-slate-500 font-bold">{p.duration || '30 Days'} Validity</span>
+                            {isSelected && (
+                              <span className="text-[9px] font-black uppercase bg-blue-600 text-white px-2 py-0.5 rounded-full">
+                                ✓ Active
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Dates Configuration Grid: Invoice Date, Start Date, Expiry Date */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
                     <div>
-                      <label className="block text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1">Discount (₹)</label>
+                      <label className="block text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1">
+                        Invoice Date *
+                      </label>
+                      <input 
+                        type="date"
+                        value={invoiceDate}
+                        onChange={(e) => setInvoiceDate(e.target.value)}
+                        className="w-full h-11 bg-white border border-slate-300 rounded-xl px-3 text-xs font-bold text-slate-900 focus:outline-none focus:border-blue-600 cursor-pointer"
+                      />
+                      <span className="text-[9px] text-slate-400 font-bold mt-1 block">Date invoice is generated</span>
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1">
+                        Membership Start Date *
+                      </label>
+                      <input 
+                        type="date"
+                        value={startDate}
+                        onChange={(e) => setStartDate(e.target.value)}
+                        className="w-full h-11 bg-white border border-slate-300 rounded-xl px-3 text-xs font-bold text-slate-900 focus:outline-none focus:border-blue-600 cursor-pointer"
+                      />
+                      <span className="text-[9px] text-slate-400 font-bold mt-1 block">Date access begins</span>
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1">
+                        Membership Expiry Date *
+                      </label>
+                      <input 
+                        type="date"
+                        value={expiryDate}
+                        onChange={(e) => {
+                          setExpiryDate(e.target.value);
+                          setIsExpiryManuallyEdited(true);
+                        }}
+                        className="w-full h-11 bg-white border border-slate-300 rounded-xl px-3 text-xs font-bold text-slate-900 focus:outline-none focus:border-blue-600 cursor-pointer"
+                      />
+                      <span className="text-[9px] text-slate-400 font-bold mt-1 block">
+                        {isExpiryManuallyEdited ? 'Manually modified' : 'Auto-calculated'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* ── SECTION 2: BILLING & PAYMENT CALCULATIONS ── */}
+                <div className="bg-slate-50 p-6 rounded-3xl border border-slate-200/80 space-y-4">
+                  <h4 className="text-xs font-black uppercase tracking-wider text-slate-700">2. Billing & Discount Calculation</h4>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {/* Original Package Price */}
+                    <div>
+                      <label className="block text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1">Original Package Amount (₹)</label>
                       <input 
                         type="number"
                         min="0"
-                        value={discount}
-                        onChange={(e) => setDiscount(e.target.value)}
+                        value={originalAmount}
+                        onChange={(e) => setOriginalAmount(e.target.value)}
                         className="w-full h-11 bg-white border border-slate-300 rounded-xl px-4 font-mono font-bold text-xs text-slate-900 focus:outline-none focus:border-blue-600"
                       />
                     </div>
 
+                    {/* Discount Type & Value */}
                     <div>
-                      <label className="block text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1">Net Billed Amount (₹)</label>
-                      <input 
-                        type="number"
-                        readOnly
-                        value={amountPaid}
-                        className="w-full h-11 bg-slate-100 border border-slate-300 rounded-xl px-4 font-mono font-black text-xs text-blue-700"
-                      />
+                      <div className="flex justify-between items-center mb-1">
+                        <label className="text-[10px] font-black uppercase tracking-wider text-slate-500">Discount</label>
+                        <div className="flex bg-slate-200/70 p-0.5 rounded-lg gap-0.5">
+                          <button
+                            type="button"
+                            onClick={() => setDiscountType('amount')}
+                            className={`px-2 py-0.5 text-[9px] font-black rounded-md transition-all border-none cursor-pointer ${
+                              discountType === 'amount' ? 'bg-blue-600 text-white' : 'bg-transparent text-slate-600'
+                            }`}
+                          >
+                            ₹ Amount
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setDiscountType('percentage')}
+                            className={`px-2 py-0.5 text-[9px] font-black rounded-md transition-all border-none cursor-pointer ${
+                              discountType === 'percentage' ? 'bg-blue-600 text-white' : 'bg-transparent text-slate-600'
+                            }`}
+                          >
+                            % Percent
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="relative">
+                        <input 
+                          type="number"
+                          min="0"
+                          value={discountValue}
+                          onChange={(e) => setDiscountValue(e.target.value)}
+                          placeholder={discountType === 'percentage' ? 'e.g. 10' : 'e.g. 500'}
+                          className="w-full h-11 bg-white border border-slate-300 rounded-xl px-4 font-mono font-bold text-xs text-slate-900 focus:outline-none focus:border-blue-600"
+                        />
+                      </div>
+                      <span className="text-[9px] font-bold text-slate-500 mt-1 block">
+                        Discount Applied: - ₹{computedDiscAmt.toLocaleString('en-IN')} {discountType === 'percentage' ? `(${discValNum}%)` : ''}
+                      </span>
                     </div>
                   </div>
 
-                  {/* Payment Mode Selection */}
-                  <div>
-                    <label className="block text-[10px] font-black uppercase tracking-wider text-slate-500 mb-2">Select Payment Method *</label>
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                      {(['UPI', 'Cash', 'Card', 'NetBanking'] as const).map((method) => (
-                        <button
-                          key={method}
-                          type="button"
-                          onClick={() => setPaymentMethod(method)}
-                          className={`py-3 px-3 rounded-2xl text-xs font-black transition-all flex flex-col items-center gap-1 border cursor-pointer ${
-                            paymentMethod === method
-                              ? 'bg-blue-600 text-white border-blue-600 shadow-md scale-[1.02]'
-                              : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
-                          }`}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {/* Tax / GST */}
+                    <div>
+                      <label className="block text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1">Tax / GST (₹)</label>
+                      <input 
+                        type="number"
+                        min="0"
+                        value={taxAmount}
+                        onChange={(e) => setTaxAmount(e.target.value)}
+                        placeholder="0"
+                        className="w-full h-11 bg-white border border-slate-300 rounded-xl px-4 font-mono font-bold text-xs text-slate-900 focus:outline-none focus:border-blue-600"
+                      />
+                    </div>
+
+                    {/* Final Net Payable */}
+                    <div>
+                      <label className="block text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1">Final Payable Amount (₹)</label>
+                      <div className="w-full h-11 bg-blue-50 border border-blue-300 rounded-xl px-4 font-mono font-black text-sm text-blue-700 flex items-center justify-between">
+                        <span>₹{finalPayableNum.toLocaleString('en-IN')}</span>
+                        <span className="text-[9px] font-black uppercase tracking-widest text-blue-600 bg-blue-100 px-2 py-0.5 rounded-md">Calculated Net</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* ── SECTION 3: PAYMENT METHOD & STATUS ── */}
+                  <div className="pt-2 border-t border-slate-200/80">
+                    <h4 className="text-xs font-black uppercase tracking-wider text-slate-700 mb-3">3. Payment Settlement</h4>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                      {/* Payment Method */}
+                      <div>
+                        <label className="block text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1">Payment Method *</label>
+                        <select
+                          value={paymentMethod}
+                          onChange={(e) => setPaymentMethod(e.target.value as any)}
+                          className="w-full h-11 bg-white border border-slate-300 rounded-xl px-3 text-xs font-bold text-slate-900 focus:outline-none focus:border-blue-600 cursor-pointer"
                         >
-                          {method === 'UPI' && <Smartphone size={16} />}
-                          {method === 'Cash' && <Banknote size={16} />}
-                          {method === 'Card' && <CreditCard size={16} />}
-                          {method === 'NetBanking' && <Wallet size={16} />}
-                          <span>{method}</span>
-                        </button>
-                      ))}
+                          <option value="UPI">UPI</option>
+                          <option value="Cash">Cash</option>
+                          <option value="Card">Card</option>
+                          <option value="NetBanking">Net Banking</option>
+                        </select>
+                      </div>
+
+                      {/* Payment Status */}
+                      <div>
+                        <label className="block text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1">Payment Status *</label>
+                        <select
+                          value={paymentStatus}
+                          onChange={(e) => setPaymentStatus(e.target.value as any)}
+                          className="w-full h-11 bg-white border border-slate-300 rounded-xl px-3 text-xs font-bold text-slate-900 focus:outline-none focus:border-blue-600 cursor-pointer"
+                        >
+                          <option value="paid">Paid (Fully Paid)</option>
+                          <option value="partial">Partial Payment</option>
+                          <option value="pending">Pending (Unpaid)</option>
+                        </select>
+                      </div>
+
+                      {/* Amount Paid */}
+                      <div>
+                        <label className="block text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1">Amount Paid (₹)</label>
+                        <input 
+                          type="number"
+                          min="0"
+                          max={finalPayableNum}
+                          value={amountPaid}
+                          disabled={paymentStatus === 'paid'}
+                          onChange={(e) => setAmountPaid(e.target.value)}
+                          className={`w-full h-11 border rounded-xl px-4 font-mono font-bold text-xs text-slate-900 focus:outline-none ${
+                            paymentStatus === 'paid' ? 'bg-slate-100 border-slate-300 text-slate-500' : 'bg-white border-slate-300 focus:border-blue-600'
+                          }`}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex justify-between items-center mt-3 pt-2 border-t border-slate-200 text-xs font-bold text-slate-600">
+                      <span>Pending Balance: <strong className="font-mono text-red-600">₹{pendingAmtNum.toLocaleString('en-IN')}</strong></span>
+                      <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                        paymentStatus === 'paid' ? 'bg-emerald-100 text-emerald-800' : paymentStatus === 'partial' ? 'bg-amber-100 text-amber-800' : 'bg-red-100 text-red-800'
+                      }`}>
+                        Status: {paymentStatus.toUpperCase()}
+                      </span>
                     </div>
                   </div>
                 </div>
+
+                {/* ── LIVE INVOICE SUMMARY PREVIEW BOX ── */}
+                <div className="bg-gradient-to-br from-slate-900 via-slate-900 to-indigo-950 text-white p-5 rounded-3xl border border-slate-800 shadow-xl space-y-4">
+                  <div className="flex justify-between items-center border-b border-white/10 pb-3">
+                    <div>
+                      <span className="text-[10px] font-black uppercase tracking-widest text-blue-400">Live Billing Summary</span>
+                      <h4 className="text-sm font-black text-white">{selectedPlan?.name || '1 MONTH'}</h4>
+                    </div>
+                    <span className={`text-[10px] font-black uppercase px-2.5 py-1 rounded-full ${
+                      paymentStatus === 'paid' ? 'bg-emerald-500 text-white' : paymentStatus === 'partial' ? 'bg-amber-500 text-white' : 'bg-red-500 text-white'
+                    }`}>
+                      {paymentStatus.toUpperCase()}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                    <div>
+                      <span className="text-[9px] uppercase tracking-wider text-slate-400 block">Invoice Date</span>
+                      <span className="font-mono font-bold text-slate-200">{invoiceDate}</span>
+                    </div>
+                    <div>
+                      <span className="text-[9px] uppercase tracking-wider text-slate-400 block">Start Date</span>
+                      <span className="font-mono font-bold text-slate-200">{startDate}</span>
+                    </div>
+                    <div>
+                      <span className="text-[9px] uppercase tracking-wider text-slate-400 block">Expiry Date</span>
+                      <span className="font-mono font-bold text-slate-200">{expiryDate}</span>
+                    </div>
+                    <div>
+                      <span className="text-[9px] uppercase tracking-wider text-slate-400 block">Method</span>
+                      <span className="font-bold text-slate-200">{paymentMethod}</span>
+                    </div>
+                  </div>
+
+                  <div className="pt-2 border-t border-white/10 flex flex-wrap justify-between items-center gap-2 text-xs">
+                    <div className="flex gap-4">
+                      <span>Package: <strong className="font-mono">₹{basePriceNum.toLocaleString('en-IN')}</strong></span>
+                      <span>Discount: <strong className="font-mono text-emerald-400">-₹{computedDiscAmt.toLocaleString('en-IN')}</strong></span>
+                      {taxAmtNum > 0 && <span>Tax: <strong className="font-mono">₹{taxAmtNum.toLocaleString('en-IN')}</strong></span>}
+                    </div>
+
+                    <div className="text-right">
+                      <span className="text-[10px] uppercase text-slate-400 block">Final Payable</span>
+                      <span className="text-lg font-mono font-black text-emerald-400">
+                        ₹{finalPayableNum.toLocaleString('en-IN')}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
               </motion.div>
             )}
 

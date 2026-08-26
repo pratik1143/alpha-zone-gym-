@@ -109,6 +109,10 @@ router.post('/billing', createInvoice);
 router.put('/billing/:id', updateInvoice);
 router.post('/billing/pay/:memberId', markPaymentPaid);
 
+// Payments Aliases (compatibility with REST API client calls)
+router.get('/payments', getInvoices);
+router.post('/payments', createInvoice);
+
 // Trainer Workout & Diet Builders
 router.get('/trainers/workouts/:memberId', getWorkoutPlan);
 router.post('/trainers/workouts', saveWorkoutPlan);
