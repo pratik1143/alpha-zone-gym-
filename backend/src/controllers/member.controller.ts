@@ -485,3 +485,180 @@ export const sendMemberCredentials = async (req: Request, res: Response) => {
     res.status(500).json({ error: error.message });
   }
 };
+
+/**
+ * POST /members/:id/renew
+ * Atomic membership renewal: writes billing record FIRST, then updates member.
+ * If billing write fails, the member record is never touched → no half-state.
+ * invoiceDate is the staff-selected business date (≠ createdAt which is DB timestamp).
+ */
+export const renewMembership = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    const {
+      plan,
+      startDate,
+      expiryDate,
+      baseAmount,
+      discountAmount,
+      taxAmount,
+      netPayable,
+      amountPaid,
+      pendingAmount,
+      paymentMethod,
+      paymentStatus,
+      invoiceDate,
+      notes,
+      invoiceNumber: providedInvoiceNumber,
+    } = req.body;
+
+    // ── Validation ──────────────────────────────────────────────
+    if (!plan) return res.status(400).json({ error: 'Plan is required' });
+    if (!startDate) return res.status(400).json({ error: 'Start date is required' });
+    if (!expiryDate) return res.status(400).json({ error: 'Expiry date is required' });
+    if (!paymentMethod) return res.status(400).json({ error: 'Payment method is required' });
+    if (!paymentStatus) return res.status(400).json({ error: 'Payment status is required' });
+    if (expiryDate <= startDate) return res.status(400).json({ error: 'Expiry date must be after start date' });
+
+    const numBase = Math.max(0, Number(baseAmount) || 0);
+    const numDiscount = Math.max(0, Number(discountAmount) || 0);
+    const numTax = Math.max(0, Number(taxAmount) || 0);
+    const numNetPayable = Math.max(0, Number(netPayable) || numBase - numDiscount + numTax);
+    const numAmountPaid = Math.min(Math.max(0, Number(amountPaid) || 0), numNetPayable);
+    const numPending = Math.max(0, numNetPayable - numAmountPaid);
+
+    const canonicalInvoiceDate = invoiceDate || new Date().toISOString().split('T')[0];
+    const invoiceNumber = providedInvoiceNumber || `INV-${Math.floor(100000 + Math.random() * 900000)}`;
+    const nowIso = new Date().toISOString();
+
+    // ── Fetch existing member ────────────────────────────────────
+    const existingMember = await db.getMemberById(id);
+    if (!existingMember) {
+      return res.status(404).json({ error: 'Member not found' });
+    }
+
+    // ── STEP 1: Create billing/payment record ────────────────────
+    // This MUST succeed before we touch the member record.
+    let paymentRecord: any;
+    try {
+      paymentRecord = await db.addPayment({
+        memberId: id,
+        memberName: existingMember.name,
+        memberPhone: existingMember.phone || '',
+        invoiceType: 'MEMBERSHIP',
+        billingType: 'MEMBERSHIP',
+        transactionType: 'membership_renewal',
+        plan,
+        packageName: plan,
+        originalAmount: numBase,
+        baseAmount: numBase,
+        discountAmount: numDiscount,
+        discount: numDiscount,
+        taxAmount: numTax,
+        tax: numTax,
+        netPayable: numNetPayable,
+        amount: numNetPayable,
+        amountPaid: numAmountPaid,
+        paid: numAmountPaid,
+        pendingAmount: numPending,
+        outstandingAmount: numPending,
+        paymentMethod,
+        method: paymentMethod,
+        paymentStatus,
+        status: paymentStatus,
+        // Canonical date fields — invoiceDate is the business date
+        invoiceDate: canonicalInvoiceDate,
+        billingDate: canonicalInvoiceDate,
+        date: canonicalInvoiceDate,
+        paymentDate: canonicalInvoiceDate,
+        transactionDate: canonicalInvoiceDate,
+        membershipStartDate: startDate,
+        startDate,
+        membershipExpiryDate: expiryDate,
+        expiryDate,
+        invoiceNumber,
+        invoice: invoiceNumber,
+        notes: notes || '',
+        isHistorical: false,
+        imported: false,
+        isRenewal: true,
+        createdAt: nowIso,
+      });
+    } catch (billingErr: any) {
+      console.error('[Renewal] Billing write failed — member NOT updated:', billingErr.message);
+      return res.status(500).json({
+        error: 'Renewal could not be completed. No changes were saved. (Billing write failed: ' + billingErr.message + ')',
+      });
+    }
+
+    // ── STEP 2: Update member record (only runs if billing succeeded) ──
+    const existingHistory = Array.isArray(existingMember.membershipHistory)
+      ? existingMember.membershipHistory
+      : [];
+
+    const historyEntry = {
+      packageName: plan,
+      startDate,
+      expiryDate,
+      amount: numNetPayable,
+      amountPaid: numAmountPaid,
+      pendingAmount: numPending,
+      paymentMethod,
+      paymentStatus,
+      discount: numDiscount,
+      tax: numTax,
+      invoiceNumber,
+      invoiceDate: canonicalInvoiceDate,
+      renewedAt: nowIso,
+      notes: notes || '',
+    };
+
+    const updatedHistory = [historyEntry, ...existingHistory];
+
+    let updatedMember: any;
+    try {
+      updatedMember = await db.updateMember(id, {
+        plan,
+        price: numBase,
+        amount: numNetPayable,
+        totalBilled: (Number(existingMember.totalBilled) || 0) + numNetPayable,
+        totalPaid: (Number(existingMember.totalPaid) || 0) + numAmountPaid,
+        outstandingBalance: numPending,
+        startDate,
+        expiryDate,
+        status: 'active',
+        paymentStatus,
+        membershipHistory: updatedHistory,
+        updatedAt: nowIso,
+      });
+    } catch (memberErr: any) {
+      // Billing was written but member update failed — log for manual reconciliation
+      console.error('[Renewal] Member update failed after billing write. Invoice:', invoiceNumber, memberErr.message);
+      return res.status(500).json({
+        error: 'Billing record was created but member profile update failed. Please contact support. Invoice: ' + invoiceNumber,
+        invoiceNumber,
+        partialSuccess: true,
+      });
+    }
+
+    // ── STEP 3: Side-effects (non-blocking) ──────────────────────
+    resolveStaleRenewalFollowups(id, 'MEMBERSHIP', expiryDate).catch(() => {});
+    if (numPending <= 0) {
+      resolveStaleRenewalFollowups(id, 'BALANCE').catch(() => {});
+    }
+    triggerPaymentEmail(paymentRecord).catch((err: any) => {
+      console.error('[Renewal] Payment email trigger failed:', err.message);
+    });
+
+    res.json({
+      success: true,
+      member: updatedMember,
+      payment: paymentRecord,
+      invoiceNumber,
+    });
+  } catch (error: any) {
+    console.error('[Renewal] Unexpected error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+};
