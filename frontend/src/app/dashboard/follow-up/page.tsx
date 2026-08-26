@@ -40,6 +40,7 @@ import { useFollowups } from '@/hooks/useFollowups';
 import { followupService, FollowUpItem, FollowUpHistoryEvent } from '@/services/followup.service';
 import { getTodayInIndia, isTodayInIndia, isOverdueInIndia, isUpcomingInIndia, formatIndianDate } from '@/lib/dateUtils';
 import { getFollowUpTypeStyle } from '@/lib/followupUtils';
+import MemberAvatar from './components/MemberAvatar';
 
 // Helper: Resolve memberId safely for navigation (Data Safety enforced)
 export function getValidMemberId(task: FollowUpItem | any, membersList: any[] = []): string | null {
@@ -356,6 +357,9 @@ export default function FollowUpManager() {
     let name = task.name || task.memberName || task.clientName || '';
     let phone = task.phone || task.memberPhone || task.clientPhone || '';
     let plan = task.plan || 'Standard';
+    // Photo: try task-level first, will be overwritten by live member record if found
+    let photo: string | null = task.photo || task.photoURL || task.avatarUrl || task.avatar || null;
+    let gender: string | null = task.gender || null;
 
     if (task.memberId) {
       const m = members.find((x: any) => x.id === task.memberId || x.memberId === task.memberId);
@@ -363,6 +367,9 @@ export default function FollowUpManager() {
         name = m.name || name;
         phone = m.phone || phone;
         plan = m.plan || plan;
+        // Always resolve photo and gender live from the current member record for sync
+        photo = m.photo || m.avatarUrl || m.avatar || m.photoURL || photo;
+        gender = m.gender || gender;
       }
     } else if (task.enquiryId) {
       const e = enquiries.find((x: any) => x.id === task.enquiryId);
@@ -370,6 +377,8 @@ export default function FollowUpManager() {
         name = e.name || name;
         phone = e.phone || phone;
         plan = e.plan || plan;
+        photo = e.photo || e.avatarUrl || photo;
+        gender = e.gender || gender;
       }
     }
 
@@ -380,7 +389,9 @@ export default function FollowUpManager() {
     return { 
       name: name || 'Gym Member', 
       phone: phone && phone !== 'N/A' ? phone : '9876543210', 
-      plan: plan || 'Standard' 
+      plan: plan || 'Standard',
+      photo: photo || null,
+      gender: gender || null,
     };
   };
 
@@ -978,9 +989,12 @@ export default function FollowUpManager() {
                       className="w-4 h-4 mt-1 md:mt-0 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer shrink-0"
                     />
 
-                    <div className={`w-10 h-10 rounded-2xl flex items-center justify-center font-bold text-xs shrink-0 ${typeStyle.avatarBg}`}>
-                      {client.name.substring(0, 2).toUpperCase()}
-                    </div>
+                    <MemberAvatar
+                      photoUrl={client.photo}
+                      gender={client.gender}
+                      name={client.name}
+                      size={48}
+                    />
 
                     <div className="min-w-0 flex-1">
                       {/* Badge Hierarchy: [ TYPE ] [ ✦ AUTO / ✎ MANUAL ] [ PRIORITY ] */}
