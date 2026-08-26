@@ -40,7 +40,7 @@ export interface FollowUpItem {
   title?: string;
   reason?: string;
   communicationType?: 'call' | 'whatsapp' | 'visit' | 'email';
-  source?: 'automatic' | 'manual' | 'enquiry' | 'renewal' | 'system' | 'auto';
+  source?: 'automatic' | 'manual' | 'enquiry' | 'renewal' | 'system' | 'auto' | string;
   automationKey?: string | null;
   pendingAmount?: number | null;
   plan?: string;
@@ -435,6 +435,21 @@ export const followupService = {
     } catch (_) {}
 
     return { id: createdId, ...payload } as FollowUpItem;
+  },
+
+  // Update generic properties of a follow-up document
+  update: async (id: string, updates: Partial<FollowUpItem>): Promise<void> => {
+    const patchData = {
+      ...updates,
+      updatedAt: new Date().toISOString()
+    };
+    try {
+      await updateDoc(doc(db, 'followups', id), patchData as any);
+    } catch (_) {
+      try {
+        await API.put(`/followups/${id}`, patchData);
+      } catch (_) {}
+    }
   },
 
   // Reschedule existing follow-up task (updates SAME document and appends to history)

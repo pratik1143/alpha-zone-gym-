@@ -418,6 +418,8 @@ export default function BillingTab({ member: initialMember }: { member: any }) {
           >
             <Plus size={14} /> + New Bill
           </button>
+        </div>
+
       </div>
 
       {/* Outstanding Balance Banner with + Balance Follow-Up button */}
@@ -425,7 +427,7 @@ export default function BillingTab({ member: initialMember }: { member: any }) {
         <div className="bg-[#FFFBEB] p-4 rounded-3xl border border-[#FDE68A] border-l-4 border-l-[#D97706] flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-2xl bg-amber-100 text-[#D97706] flex items-center justify-center font-black border border-amber-200 shrink-0">
-              <AlertTriangle size={20} />
+              <AlertCircle size={20} />
             </div>
             <div>
               <div className="flex items-center gap-2">

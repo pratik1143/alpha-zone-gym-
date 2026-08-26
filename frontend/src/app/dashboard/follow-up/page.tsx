@@ -656,7 +656,7 @@ export default function FollowUpManager() {
         scheduledTimestamp: ts,
         status: 'pending',
         type: 'BALANCE',
-        source: 'MANUAL',
+        source: 'manual',
         createdAt: new Date().toISOString(),
         history: [
           {
