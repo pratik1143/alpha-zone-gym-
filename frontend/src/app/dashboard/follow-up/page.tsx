@@ -957,13 +957,29 @@ export default function FollowUpManager() {
           </p>
         </div>
 
-        {/* Schedule New Follow-up Button */}
-        <button
-          onClick={() => setShowAddModal(true)}
-          className="px-5 py-2.5 bg-[#0b5cbe] hover:bg-blue-700 text-white text-xs font-bold rounded-2xl transition-all shadow-md shadow-blue-500/20 flex items-center gap-2 border-none cursor-pointer shrink-0 self-start md:self-auto"
-        >
-          <Plus size={16} /> Schedule Follow-Up
-        </button>
+        {/* Action Buttons: Schedule Balance Follow-Up & General Follow-Up */}
+        <div className="flex items-center gap-2.5 shrink-0 self-start md:self-auto flex-wrap">
+          <button
+            onClick={() => {
+              const firstPending = pendingBalanceMembers[0] || members.find((m: any) => Number(m.outstandingBalance) > 0) || members[0];
+              if (firstPending) {
+                openScheduleBalanceModal(firstPending);
+              } else {
+                setShowAddModal(true);
+              }
+            }}
+            className="px-4.5 py-2.5 bg-[#D97706] hover:bg-amber-700 text-white text-xs font-bold rounded-2xl transition-all shadow-md shadow-amber-600/20 flex items-center gap-2 border-none cursor-pointer"
+          >
+            <FileText size={16} /> + Schedule Balance Follow-Up
+          </button>
+
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="px-4.5 py-2.5 bg-[#0b5cbe] hover:bg-blue-700 text-white text-xs font-bold rounded-2xl transition-all shadow-md shadow-blue-500/20 flex items-center gap-2 border-none cursor-pointer"
+          >
+            <Plus size={16} /> Schedule General Follow-Up
+          </button>
+        </div>
       </div>
 
       {/* 2. STATS CARDS BAR */}
@@ -2354,6 +2370,20 @@ export default function FollowUpManager() {
                 </button>
               </div>
 
+              {/* Select Member Dropdown */}
+              <div>
+                <label className="text-xs font-bold text-slate-700 mb-1.5 block">
+                  Select Member <span className="text-amber-600">*</span>
+                </label>
+                <SearchableMemberSelect
+                  members={pendingBalanceMembers.length > 0 ? pendingBalanceMembers : members}
+                  selectedMemberId={showScheduleBalanceModal.member.id || showScheduleBalanceModal.member.memberId}
+                  onSelect={(m) => {
+                    openScheduleBalanceModal(m);
+                  }}
+                />
+              </div>
+
               {/* Member Summary Header */}
               <div className="p-3.5 bg-amber-50/70 rounded-2xl border border-amber-200/80 flex items-center justify-between gap-3 text-xs">
                 <div className="flex items-center gap-3">
@@ -2733,6 +2763,7 @@ function SearchableMemberSelect({ members, selectedMemberId, onSelect }: { membe
 
 // ── Add Follow-up Form Subcomponent ──
 const REASON_OPTIONS = [
+  'Balance Follow-Up (Billing Amount)',
   'Membership Renewal',
   'Pending Balance Collection',
   'Personal Training Inquiry / Renewal',
@@ -2806,13 +2837,15 @@ function AddFollowUpWizardForm({
       const operationId = `fol_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
 
       let followUpType = 'General';
-      if (finalReason === 'Membership Renewal' || finalReason.includes('Renewal') || finalReason.includes('Membership')) {
+      if (finalReason.includes('Balance') || finalReason.includes('Payment')) {
+        followUpType = 'BALANCE';
+      } else if (finalReason === 'Membership Renewal' || finalReason.includes('Renewal') || finalReason.includes('Membership')) {
         followUpType = 'GYM MEMBERSHIP RENEWAL';
       } else if (finalReason.includes('Personal Training') || finalReason.includes('PT')) {
         followUpType = 'PT RENEWAL';
-      } else if (finalReason.includes('Balance') || finalReason.includes('Payment')) {
-        followUpType = 'PENDING BALANCE';
       }
+
+      const pendingAmt = selectedMember ? (Number(selectedMember.outstandingBalance) || Number(selectedMember.pendingAmount) || null) : null;
 
       const payload = {
         id: operationId,
@@ -2832,6 +2865,7 @@ function AddFollowUpWizardForm({
         scheduledTimestamp: ts,
         status: 'Pending' as const,
         type: followUpType,
+        pendingAmount: pendingAmt,
         source: 'manual' as const,
         createdAt: new Date().toISOString(),
         history: [
