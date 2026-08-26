@@ -202,7 +202,7 @@ export default function InvoiceBuilderModal({ isOpen, type, onClose, members }: 
         invoiceNumber: invoiceNumber,
         memberId: memberId,
         memberName: selectedMember?.name || 'Member',
-        memberPhone: selectedMember?.phone || '',
+        memberPhone: selectedMember?.phone || selectedMember?.mobile || '',
         plan: rawData.plan,
         baseAmount: baseNum,
         gstPercent: gstPct,

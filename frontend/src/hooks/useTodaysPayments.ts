@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { db } from '@/lib/firebase';
 import { collection, onSnapshot, doc, updateDoc } from 'firebase/firestore';
 import { useAuthStore } from '@/store';
+import { migrateMissingBillingPhones } from '@/lib/migrations/migrateBillingPhones';
 
 // ─── IST-aware today string (YYYY-MM-DD in Asia/Kolkata timezone) ───────────
 export function getISTDateStr(date: Date = new Date()): string {
@@ -98,8 +99,13 @@ export function useTodaysPayments(): UseTodaysPaymentsResult {
   // Stable IST today string — computed once per mount (refreshes on page load)
   const todayStr = useMemo(() => getISTDateStr(), []);
 
-  // ── Live Firestore listener ───────────────────────────────────────────────
+  // ── Live Firestore listener & automatic data relation repair ──────────────
   useEffect(() => {
+    // Run safe migration once in background to repair any existing records missing memberPhone
+    migrateMissingBillingPhones().catch((err) => {
+      console.warn('[useTodaysPayments] background phone migration notice:', err);
+    });
+
     let unsub: (() => void) | undefined;
     try {
       unsub = onSnapshot(

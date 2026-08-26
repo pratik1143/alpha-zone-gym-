@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { formatDate } from '@/lib/utils';
+import { formatDate, formatPhoneNumber } from '@/lib/utils';
 
 interface OfficialInvoiceProps {
   invoice: any;
@@ -15,8 +15,9 @@ export default function OfficialInvoiceReceipt({ invoice, member, onPrint, onWha
 
   const invNumber = invoice?.invoiceNumber || invoice?.invoice || member?.memberId || '00664';
   const memberId = member?.biometricId || member?.deviceUserId || member?.clientId || member?.customId || member?.memberId || '431';
-  const memberName = member?.name || invoice?.memberName || 'Charu Sharma';
-  const memberPhone = member?.phone || invoice?.memberPhone || '9896240939';
+  const memberName = member?.name || invoice?.memberName || (invoice?.memberId ? 'Unknown / Deleted Member' : 'Member');
+  const rawPhone = member?.phone || member?.mobile || invoice?.memberPhone || '';
+  const memberPhone = formatPhoneNumber(rawPhone);
   
   const rawDateStr = invoice?.transactionDate || invoice?.paymentDate || invoice?.date;
   const billDate = rawDateStr ? formatDate(rawDateStr) : formatDate(member?.joinDate || new Date().toISOString());

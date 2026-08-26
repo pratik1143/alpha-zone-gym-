@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import { db } from '@/lib/firebase';
 import { updateDoc, doc } from 'firebase/firestore';
-import { formatDate, getInitials } from '@/lib/utils';
+import { formatDate, getInitials, formatPhoneNumber } from '@/lib/utils';
 import { useGymStore } from '@/store';
 import toast from '@/lib/toast';
 import InvoiceBuilderModal from './components/InvoiceBuilderModal';
@@ -138,9 +138,37 @@ export default function BillingPage() {
     setDeleting(false);
   };
 
+  // ── Helper: Resolve member profile data via memberId (Primary Relationship) ────────
+  const resolveTransactionMember = (p: PaymentRecord) => {
+    const targetId = String(p.memberId || '').trim();
+    const foundMember = targetId
+      ? members.find((m: any) => String(m.id).trim() === targetId || String(m.memberId || '').trim() === targetId || String(m.uid || '').trim() === targetId)
+      : null;
+
+    let memberName = '';
+    if (foundMember && foundMember.name) {
+      memberName = foundMember.name;
+    } else if (p.memberName && p.memberName.trim()) {
+      memberName = targetId ? (p.memberName.includes('Deleted') ? p.memberName : `${p.memberName} (Deleted Member)`) : p.memberName;
+    } else {
+      memberName = targetId ? 'Unknown / Deleted Member' : 'Member';
+    }
+
+    const rawPhone = (foundMember?.phone || foundMember?.mobile || p.memberPhone || '').trim();
+    const phoneDisplay = formatPhoneNumber(rawPhone);
+
+    return {
+      memberName,
+      phoneDisplay,
+      member: foundMember,
+      rawPhone,
+    };
+  };
+
   const handleShareWhatsApp = (p: any) => {
-    const member = members.find((m: any) => m.id === p.memberId);
-    const phone = (member?.phone || p.memberPhone || '').replace(/\D/g, '');
+    const { memberName, rawPhone } = resolveTransactionMember(p);
+    const cleanDigits = rawPhone.replace(/\D/g, '');
+    const phone = cleanDigits.length === 12 && cleanDigits.startsWith('91') ? cleanDigits.slice(2) : cleanDigits;
     if (!phone || phone.length < 10) {
       toast.error('No valid phone number found for this member.');
       return;
@@ -149,7 +177,7 @@ export default function BillingPage() {
     const pDate = p.transactionDate || p.paymentDate || p.date || todayStr;
     const pTime = p.transactionTime || p.paymentTime || p.time || '';
     const msg = encodeURIComponent(
-      `🏋️ Alpha Zone Gym — Official Payment Receipt\n\nInvoice No: ${p.invoice || p.invoiceNumber || 'N/A'}\nClient Name: ${p.memberName}\nPlan: ${p.plan || 'Membership'}\nAmount Billed: ₹${total.toLocaleString('en-IN')}\nPayment Method: ${p.method || p.paymentMethod || 'UPI'}\nStatus: ${(p.status || 'paid').toUpperCase()} ✅\nDate: ${pDate} ${pTime}\n\nThank you for training with Alpha Zone Gym! 💪`
+      `🏋️ Alpha Zone Gym — Official Payment Receipt\n\nInvoice No: ${p.invoice || p.invoiceNumber || 'N/A'}\nClient Name: ${memberName}\nPlan: ${p.plan || 'Membership'}\nAmount Billed: ₹${total.toLocaleString('en-IN')}\nPayment Method: ${p.method || p.paymentMethod || 'UPI'}\nStatus: ${(p.status || 'paid').toUpperCase()} ✅\nDate: ${pDate} ${pTime}\n\nThank you for training with Alpha Zone Gym! 💪`
     );
     window.open(`https://wa.me/91${phone}?text=${msg}`, '_blank');
   };
@@ -161,19 +189,22 @@ export default function BillingPage() {
       return;
     }
     const headers = ['Invoice #', 'Member Name', 'Phone', 'Plan', 'Amount Billed', 'Amount Paid', 'Pending', 'Payment Method', 'Transaction Date', 'Transaction Time', 'Status'];
-    const rows = filteredPayments.map(p => [
-      `"${p.invoice || p.invoiceNumber || ''}"`,
-      `"${p.memberName || ''}"`,
-      `"${p.memberPhone || ''}"`,
-      `"${p.plan || ''}"`,
-      p.amount || 0,
-      p.paid || 0,
-      p.pendingAmount || 0,
-      `"${p.method || p.paymentMethod || ''}"`,
-      `"${p.transactionDate || p.paymentDate || p.date || ''}"`,
-      `"${p.transactionTime || p.paymentTime || p.time || ''}"`,
-      `"${(p.status || 'paid').toUpperCase()}"`
-    ]);
+    const rows = filteredPayments.map(p => {
+      const { memberName, phoneDisplay } = resolveTransactionMember(p);
+      return [
+        `"${p.invoice || p.invoiceNumber || ''}"`,
+        `"${memberName}"`,
+        `"${phoneDisplay}"`,
+        `"${p.plan || ''}"`,
+        p.amount || 0,
+        p.paid || 0,
+        p.pendingAmount || 0,
+        `"${p.method || p.paymentMethod || ''}"`,
+        `"${p.transactionDate || p.paymentDate || p.date || ''}"`,
+        `"${p.transactionTime || p.paymentTime || p.time || ''}"`,
+        `"${(p.status || 'paid').toUpperCase()}"`
+      ];
+    });
 
     const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
     const encodedUri = encodeURI(csvContent);
@@ -190,9 +221,10 @@ export default function BillingPage() {
   const filteredPayments = useMemo(() => {
     const now = new Date();
     return payments.filter(p => {
-      const name = (p.memberName || '').toLowerCase();
+      const { memberName, phoneDisplay } = resolveTransactionMember(p);
+      const name = memberName.toLowerCase();
       const inv  = (p.invoice || p.invoiceNumber || '').toLowerCase();
-      const phone = (p.memberPhone || '').toLowerCase();
+      const phone = phoneDisplay.toLowerCase();
       const q    = search.toLowerCase();
       const matchesSearch = name.includes(q) || inv.includes(q) || phone.includes(q);
 
@@ -219,7 +251,7 @@ export default function BillingPage() {
 
       return matchesSearch && matchesStatus && matchesMethod && matchesDate;
     });
-  }, [payments, search, statusFilter, methodFilter, dateFilter, todayStr]);
+  }, [payments, members, search, statusFilter, methodFilter, dateFilter, todayStr]);
 
   const totalPages = Math.max(1, Math.ceil(filteredPayments.length / pageSize));
   const currentPage = Math.min(page, totalPages);
@@ -490,6 +522,7 @@ export default function BillingPage() {
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-xs font-semibold text-slate-700">
                   {paginatedPayments.map((p, idx) => {
+                    const { memberName, phoneDisplay } = resolveTransactionMember(p);
                     const isPaid = (p.status || 'paid').toLowerCase() === 'paid';
                     const isPending = (p.status || '').toLowerCase() === 'pending';
                     const methodNorm = String(p.method || p.paymentMethod || 'UPI');
@@ -511,11 +544,11 @@ export default function BillingPage() {
                         <td className="py-3.5 px-4">
                           <div className="flex items-center gap-2.5">
                             <div className="w-8 h-8 rounded-full bg-blue-100 text-[#0B5CBE] font-black flex items-center justify-center text-xs shrink-0">
-                              {getInitials(p.memberName || 'M')}
+                              {getInitials(memberName || 'M')}
                             </div>
                             <div>
-                              <div className="font-extrabold text-slate-900">{p.memberName || 'Member'}</div>
-                              <div className="text-[10px] text-slate-400 font-medium">{p.memberPhone || 'No Phone'}</div>
+                              <div className="font-extrabold text-slate-900">{memberName}</div>
+                              <div className="text-[10px] text-slate-400 font-medium">{phoneDisplay}</div>
                             </div>
                           </div>
                         </td>
@@ -611,6 +644,7 @@ export default function BillingPage() {
             {/* MOBILE COMPACT CARDS VIEW */}
             <div className="block md:hidden divide-y divide-slate-100">
               {paginatedPayments.map((p, idx) => {
+                const { memberName, phoneDisplay } = resolveTransactionMember(p);
                 const isPaid = (p.status || 'paid').toLowerCase() === 'paid';
                 const isPending = (p.status || '').toLowerCase() === 'pending';
                 const methodNorm = String(p.method || p.paymentMethod || 'UPI');
@@ -638,8 +672,8 @@ export default function BillingPage() {
 
                     <div className="flex items-center justify-between">
                       <div>
-                        <div className="font-extrabold text-sm text-slate-900">{p.memberName || 'Member'}</div>
-                        <div className="text-xs text-slate-500 font-medium">{p.plan || 'Membership'}</div>
+                        <div className="font-extrabold text-sm text-slate-900">{memberName}</div>
+                        <div className="text-xs text-slate-500 font-medium">{phoneDisplay} • {p.plan || 'Membership'}</div>
                       </div>
                       <div className="text-right">
                         <div className="text-base font-black text-slate-900">₹{(Number(p.paid) || Number(p.amount) || 0).toLocaleString('en-IN')}</div>

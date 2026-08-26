@@ -285,6 +285,7 @@ export default function PtBillingModal({
       const ptPaymentPayload = {
         memberId: member.id,
         memberName: member.name,
+        memberPhone: member.phone || member.mobile || '',
         trainerId,
         trainerName,
         trainerRole,

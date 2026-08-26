@@ -11,7 +11,7 @@ import { db } from '@/lib/firebase';
 import { collection, query, where, onSnapshot, updateDoc, doc, setDoc, deleteDoc, writeBatch } from 'firebase/firestore';
 import { membershipEngine } from '@/lib/engines/membershipEngine';
 import { paymentEngine } from '@/lib/engines/paymentEngine';
-import { cleanPlanName, formatDate } from '@/lib/utils';
+import { cleanPlanName, formatDate, formatPhoneNumber } from '@/lib/utils';
 import { useGymStore } from '@/store';
 import toast from '@/lib/toast';
 import API from '@/services/api';

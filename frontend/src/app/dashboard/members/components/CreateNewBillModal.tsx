@@ -220,7 +220,7 @@ export default function CreateNewBillModal({
       const newBill = {
         memberId: member.id,
         memberName: member.name,
-        memberPhone: member.phone || '',
+        memberPhone: member.phone || member.mobile || '',
         invoiceNumber: invNum,
         invoice: invNum,
         plan: data.plan,
