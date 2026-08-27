@@ -2072,6 +2072,20 @@ export default function EnquiryGodLevelHub() {
                   </div>
                 </div>
 
+                {/* 4. Follow-up Time & Representative */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">
+                      Follow-up Time
+                    </label>
+                    <input
+                      type="time"
+                      value={followupTime}
+                      onChange={e => setFollowupTime(e.target.value)}
+                      className="w-full bg-[#fdfdfd] border border-slate-200 focus:border-[#0b5cbe] rounded-xl px-3.5 py-2.5 text-xs font-bold text-slate-800 outline-none transition-colors cursor-pointer"
+                    />
+                  </div>
+
                   <div>
                     <label className="font-bold text-slate-700 block mb-1">
                       Representative <span className="text-rose-500 font-black">*</span>
