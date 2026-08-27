@@ -373,32 +373,53 @@ export default function FollowUpManager() {
     fetchEmployees();
   }, [fetchMembers]);
 
-  // Client Details Resolver
+  // Client Details Resolver (Maps memberId → member.photo)
   const getClientDetails = (task: any) => {
     let name = task.name || task.memberName || task.clientName || '';
     let phone = task.phone || task.memberPhone || task.clientPhone || '';
     let plan = task.plan || 'Standard';
-    // Photo: try task-level first, will be overwritten by live member record if found
-    let photo: string | null = task.photo || task.photoURL || task.avatarUrl || task.avatar || null;
+    let photo: string | null = task.photo || task.photoURL || task.avatarUrl || task.avatar || task.profilePhotoUrl || task.profilePhoto || null;
     let gender: string | null = task.gender || null;
 
-    if (task.memberId) {
-      const m = members.find((x: any) => x.id === task.memberId || x.memberId === task.memberId);
-      if (m) {
-        name = m.name || name;
-        phone = m.phone || phone;
-        plan = m.plan || plan;
-        // Always resolve photo and gender live from the current member record for sync
-        photo = m.photo || m.avatarUrl || m.avatar || m.photoURL || photo;
-        gender = m.gender || gender;
+    const targetMemberId = task.memberId || task.member_id;
+    let matchedMember: any = null;
+
+    if (targetMemberId) {
+      const cleanId = String(targetMemberId).trim();
+      matchedMember = members.find((x: any) => 
+        String(x.id).trim() === cleanId || 
+        (x.memberId && String(x.memberId).trim() === cleanId) ||
+        (x.clientId && String(x.clientId).trim() === cleanId)
+      );
+    }
+
+    if (!matchedMember && phone && phone !== 'N/A') {
+      const cleanPhone = String(phone).replace(/\D/g, '');
+      if (cleanPhone.length >= 10) {
+        matchedMember = members.find((x: any) => x.phone && String(x.phone).replace(/\D/g, '').includes(cleanPhone.slice(-10)));
       }
+    }
+
+    if (!matchedMember && name) {
+      const cleanName = name.trim().toLowerCase();
+      matchedMember = members.find((x: any) => x.name && x.name.trim().toLowerCase() === cleanName);
+    }
+
+    if (matchedMember) {
+      name = matchedMember.name || name;
+      phone = matchedMember.phone || phone;
+      plan = matchedMember.plan || plan;
+      // Always resolve member's profile photo directly from their member profile record
+      photo = matchedMember.photo || matchedMember.avatarUrl || matchedMember.avatar || matchedMember.photoURL || matchedMember.profilePhotoUrl || matchedMember.profilePhoto || photo;
+      gender = matchedMember.gender || gender;
     } else if (task.enquiryId) {
-      const e = enquiries.find((x: any) => x.id === task.enquiryId);
+      const cleanEnqId = String(task.enquiryId).trim();
+      const e = enquiries.find((x: any) => String(x.id).trim() === cleanEnqId);
       if (e) {
         name = e.name || name;
         phone = e.phone || phone;
         plan = e.plan || plan;
-        photo = e.photo || e.avatarUrl || photo;
+        photo = e.photo || e.avatarUrl || e.avatar || e.photoURL || e.profilePhotoUrl || e.profilePhoto || photo;
         gender = e.gender || gender;
       }
     }
@@ -411,7 +432,7 @@ export default function FollowUpManager() {
       name: name || 'Gym Member', 
       phone: phone && phone !== 'N/A' ? phone : '9876543210', 
       plan: plan || 'Standard',
-      photo: photo || null,
+      photo: (photo && typeof photo === 'string' && photo.trim() !== '') ? photo.trim() : null,
       gender: gender || null,
     };
   };

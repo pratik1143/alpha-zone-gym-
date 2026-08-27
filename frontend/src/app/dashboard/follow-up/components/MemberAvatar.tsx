@@ -20,24 +20,11 @@ interface MemberAvatarProps {
  */
 function getFallbackAvatar(gender?: string | null): string {
   const g = (gender || '').toLowerCase().trim();
-  if (g === 'male' || g === 'm') return '/avatar-male.jpg';
-  if (g === 'female' || g === 'f') return '/avatar-female.jpg';
-  return '/avatar-neutral.jpg';
+  if (g === 'female' || g === 'f' || g === 'woman') return '/avatar-female.jpg';
+  if (g === 'male' || g === 'm' || g === 'man') return '/avatar-male.jpg';
+  return '/avatar-male.jpg';
 }
 
-/**
- * MemberAvatar — shows real profile photo with gender-based fallback.
- *
- * Priority:
- *  1. photoUrl (real profile photo) — shown if valid / loads successfully
- *  2. Gender fallback (male / female / neutral illustration)
- *
- * Features:
- *  - Circular, object-fit cover, no stretching
- *  - Handles broken / invalid URLs automatically (onerror → fallback)
- *  - Fallback itself also has a secondary onError chain to neutral
- *  - Clean border matching Alpha Zone blue/green theme
- */
 export default function MemberAvatar({
   photoUrl,
   gender,
@@ -46,25 +33,25 @@ export default function MemberAvatar({
   className = '',
 }: MemberAvatarProps) {
   const fallback = getFallbackAvatar(gender);
-  const [src, setSrc] = useState<string>(
-    photoUrl && photoUrl.trim() !== '' ? photoUrl : fallback
-  );
+  const isValidPhoto = photoUrl && typeof photoUrl === 'string' && photoUrl.trim() !== '' && !photoUrl.includes('dicebear.com');
+  const initialSrc = isValidPhoto ? photoUrl.trim() : fallback;
+
+  const [src, setSrc] = useState<string>(initialSrc);
   const [hasFailed, setHasFailed] = useState(false);
 
   useEffect(() => {
     const newFallback = getFallbackAvatar(gender);
-    const newSrc = photoUrl && photoUrl.trim() !== '' ? photoUrl : newFallback;
+    const valid = photoUrl && typeof photoUrl === 'string' && photoUrl.trim() !== '' && !photoUrl.includes('dicebear.com');
+    const newSrc = valid ? photoUrl.trim() : newFallback;
     setSrc(newSrc);
     setHasFailed(false);
   }, [photoUrl, gender]);
 
   const handleError = () => {
     if (!hasFailed) {
-      // First failure: try gender fallback
       setHasFailed(true);
       setSrc(fallback);
     } else {
-      // Second failure (fallback itself broken): use neutral
       setSrc('/avatar-neutral.jpg');
     }
   };
