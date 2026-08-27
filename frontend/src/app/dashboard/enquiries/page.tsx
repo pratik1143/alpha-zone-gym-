@@ -91,6 +91,7 @@ export default function EnquiryGodLevelHub() {
   const [email, setEmail] = useState('');
   const [gender, setGender] = useState('Male');
   const [address, setAddress] = useState('');
+  const [enquiryDate, setEnquiryDate] = useState(() => todayStr);
   const [followupDate, setFollowupDate] = useState(() => getTomorrowInIndia());
   const [followupTime, setFollowupTime] = useState('05:00');
   const [status, setStatus] = useState<'Pending' | 'Closed'>('Pending');
@@ -254,6 +255,10 @@ export default function EnquiryGodLevelHub() {
       const staffMatch = staffFilter === 'All' || item.assignedTo === staffFilter;
 
       return nameMatch && staffMatch;
+    }).sort((a, b) => {
+      const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      return timeB - timeA;
     });
   }, [enquiries, activeFilterTab, searchQuery, statusFilter, staffFilter, priorityFilter, planFilter]);
 
@@ -302,6 +307,7 @@ export default function EnquiryGodLevelHub() {
       gender,
       address,
       inquiryFor,
+      enquiryDate,
       followupDate,
       followupTime,
       attendedBy,
@@ -344,6 +350,7 @@ export default function EnquiryGodLevelHub() {
     setEmail('');
     setGender('Male');
     setAddress('');
+    setEnquiryDate(todayStr);
     setFollowupDate(getTomorrowInIndia());
     setFollowupTime('05:00');
     setStatus('Pending');
@@ -367,6 +374,7 @@ export default function EnquiryGodLevelHub() {
       lastName: true,
       contact: true,
       inquiryFor: true,
+      enquiryDate: true,
       followupDate: true,
       attendedBy: true,
       remarks: true
@@ -397,6 +405,7 @@ export default function EnquiryGodLevelHub() {
         email: data.email || '',
         gender: data.gender,
         address: data.address || '',
+        enquiryDate: data.enquiryDate || todayStr,
         nextFollowUpDate: data.followupDate,
         nextFollowUp: data.followupDate,
         followUpTime: data.followupTime || '05:00',
@@ -411,9 +420,11 @@ export default function EnquiryGodLevelHub() {
       };
 
       const created = await enquiryService.create(payload);
+      const newRecord = created || { id: payload.id || `enq_${Date.now()}`, ...payload } as EnquiryItem;
+
       if (data.followupDate) {
         const normDate = data.followupDate.trim().split('T')[0];
-        const enqId = created?.id || payload.id;
+        const enqId = newRecord.id;
         const followUpKey = `ENQUIRY_FOLLOWUP_${enqId}_${normDate}`;
         await followupService.create({
           id: followUpKey,
@@ -437,6 +448,9 @@ export default function EnquiryGodLevelHub() {
           plan: data.inquiryFor
         });
       }
+
+      setEnquiries(prev => [newRecord, ...prev.filter(e => e.id !== newRecord.id)]);
+      setSelectedEnquiry(newRecord);
 
       toast.success('✓ Enquiry lead & follow-up created successfully');
       setShowCreateModal(false);
@@ -943,13 +957,13 @@ export default function EnquiryGodLevelHub() {
                 <table className="w-full text-left text-xs whitespace-nowrap">
                   <thead className="bg-[#0b5cbe] text-[#fdfdfd] font-extrabold uppercase tracking-wider text-[9.5px] border-b border-[#084a99]">
                     <tr>
-                      <th className="px-5 py-4 w-[24%] text-[#fdfdfd]">LEAD</th>
+                      <th className="px-5 py-4 w-[26%] text-[#fdfdfd]">LEAD</th>
                       <th className="px-5 py-4 w-[18%] text-[#fdfdfd]">CONTACT</th>
-                      <th className="px-5 py-4 w-[14%] text-[#fdfdfd]">PLAN</th>
+                      <th className="px-5 py-4 w-[14%] text-[#fdfdfd]">ENQUIRY DATE</th>
                       <th className="px-5 py-4 w-[16%] text-[#fdfdfd]">REPRESENTATIVE</th>
                       <th className="px-5 py-4 w-[14%] text-[#fdfdfd]">FOLLOW-UP</th>
-                      <th className="px-5 py-4 w-[9%] text-center text-[#fdfdfd]">STATUS</th>
-                      <th className="px-5 py-4 w-[5%] text-right text-[#fdfdfd]">ACTIONS</th>
+                      <th className="px-5 py-4 w-[8%] text-center text-[#fdfdfd]">STATUS</th>
+                      <th className="px-5 py-4 w-[4%] text-right text-[#fdfdfd]">ACTIONS</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 font-medium">
@@ -972,6 +986,7 @@ export default function EnquiryGodLevelHub() {
                         const repInfo = formatRepInfo(enq.assignedTo);
                         const avatar = resolveAvatarUrl(enq);
                         const enqCode = String((enq as any).enquiryId || enq.id || '').slice(-4).toUpperCase();
+                        const enqRemark = enq.remarks || (enq as any).remark || '';
 
                         return (
                           <tr
@@ -981,10 +996,10 @@ export default function EnquiryGodLevelHub() {
                               isSelected ? 'bg-blue-50/40' : ''
                             }`}
                           >
-                            {/* 1. LEAD: Merged Avatar + Name + Enquiry ID */}
+                            {/* 1. LEAD: Merged Avatar + Name + Enquiry ID + Remark */}
                             <td className="px-5 py-3.5">
-                              <div className="flex items-center gap-3">
-                                <div className="relative shrink-0">
+                              <div className="flex items-start gap-3">
+                                <div className="relative shrink-0 mt-0.5">
                                   <img 
                                     src={avatar} 
                                     onError={(e) => {
@@ -992,17 +1007,23 @@ export default function EnquiryGodLevelHub() {
                                       const g = String(enq.gender || '').trim().toLowerCase();
                                       target.src = (g === 'female' || g === 'f') ? FEMALE_DEFAULT_AVATAR : MALE_DEFAULT_AVATAR;
                                     }}
-                                    className="w-11 h-11 rounded-full bg-slate-100 border-2 border-white shadow-xs object-cover" 
+                                    className="w-10 h-10 rounded-full bg-slate-100 border-2 border-white shadow-xs object-cover" 
                                     alt={enq.name} 
                                   />
                                 </div>
-                                <div className="min-w-0">
+                                <div className="min-w-0 flex-1">
                                   <div className="font-extrabold text-slate-900 text-sm leading-tight truncate">
                                     {enq.name}
                                   </div>
                                   <div className="text-[10px] text-slate-400 font-mono font-bold mt-0.5">
                                     ENQ-{enqCode}
                                   </div>
+                                  {enqRemark && enqRemark.trim() !== '' && (
+                                    <div className="mt-1 text-[11px] text-slate-600 bg-amber-50/90 border border-amber-200/80 px-2 py-0.5 rounded-lg inline-flex items-center gap-1.5 max-w-[240px] truncate" title={enqRemark}>
+                                      <span className="font-bold text-amber-800 text-[9.5px] uppercase tracking-wider shrink-0">Remark:</span>
+                                      <span className="truncate italic text-slate-700 font-medium">{enqRemark}</span>
+                                    </div>
+                                  )}
                                 </div>
                               </div>
                             </td>
@@ -1019,10 +1040,11 @@ export default function EnquiryGodLevelHub() {
                               )}
                             </td>
 
-                            {/* 3. PLAN / DURATION */}
-                            <td className="px-5 py-3.5">
-                              <span className="px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider bg-blue-50 text-[#0b5cbe] border border-blue-200/60 inline-block font-sans">
-                                {enq.duration || enq.interestedPlan || '1 MONTH'}
+                            {/* 3. ENQUIRY DATE */}
+                            <td className="px-5 py-3.5 font-bold text-slate-800 text-xs">
+                              <span className="inline-flex items-center gap-1 text-slate-700">
+                                <span>📅</span>
+                                <span>{formatIndianDate(enq.enquiryDate || enq.createdAt || todayStr)}</span>
                               </span>
                             </td>
 
@@ -1216,13 +1238,25 @@ export default function EnquiryGodLevelHub() {
                 {/* Representative & Follow-Up Date */}
                 <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200/70 space-y-2 text-xs">
                   <div className="flex justify-between">
-                    <span className="text-slate-500 font-medium">Representative:</span>
-                    <span className="font-bold text-slate-800">{selectedEnquiry.assignedTo || 'Veer Chand (manager)'}</span>
+                    <span className="text-slate-500 font-medium">Enquiry Date:</span>
+                    <span className="font-bold text-slate-800">{formatIndianDate(selectedEnquiry.enquiryDate || selectedEnquiry.createdAt || '')}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-slate-500 font-medium">Follow-up Date:</span>
                     <span className="font-bold text-[#0b5cbe]">{formatIndianDate(selectedEnquiry.nextFollowUpDate || selectedEnquiry.nextFollowUp || '')}</span>
                   </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500 font-medium">Representative:</span>
+                    <span className="font-bold text-slate-800">{selectedEnquiry.assignedTo || 'Veer Chand (manager)'}</span>
+                  </div>
+                  {(selectedEnquiry.remarks || (selectedEnquiry as any).remark) && (
+                    <div className="pt-2 border-t border-slate-200/60">
+                      <span className="text-slate-500 font-medium block mb-0.5">Remark:</span>
+                      <p className="text-slate-800 font-semibold italic bg-amber-50/70 p-2 rounded-xl border border-amber-200/60 text-[11.5px]">
+                        {selectedEnquiry.remarks || (selectedEnquiry as any).remark}
+                      </p>
+                    </div>
+                  )}
                 </div>
 
                 {/* Timeline History */}
@@ -1971,8 +2005,40 @@ export default function EnquiryGodLevelHub() {
                   </div>
                 </div>
 
-                {/* 3. Follow-up Date & Representative */}
+                {/* 3. Enquiry Date & Follow-up Date */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">
+                      Enquiry Date <span className="text-rose-500 font-black">*</span>
+                    </label>
+                    <input
+                      type="date"
+                      value={enquiryDate}
+                      onChange={e => {
+                        const val = e.target.value;
+                        setEnquiryDate(val);
+                        if (touched.enquiryDate) {
+                          setFormErrors(prev => ({ ...prev, enquiryDate: validateField('enquiryDate', val) }));
+                        }
+                      }}
+                      onBlur={() => {
+                        setTouched(prev => ({ ...prev, enquiryDate: true }));
+                        setFormErrors(prev => ({ ...prev, enquiryDate: validateField('enquiryDate', enquiryDate) }));
+                      }}
+                      className={`w-full bg-[#fdfdfd] border ${
+                        touched.enquiryDate && formErrors.enquiryDate 
+                          ? 'border-rose-400 focus:border-rose-500 bg-rose-50/20' 
+                          : 'border-slate-200 focus:border-[#0b5cbe]'
+                      } rounded-xl px-3.5 py-2.5 text-xs font-bold text-slate-800 outline-none transition-colors cursor-pointer`}
+                    />
+                    {touched.enquiryDate && formErrors.enquiryDate && (
+                      <p className="text-[10.5px] text-rose-600 font-bold mt-1 flex items-center gap-1">
+                        <AlertCircle size={11} className="shrink-0" />
+                        <span>{formErrors.enquiryDate}</span>
+                      </p>
+                    )}
+                  </div>
+
                   <div>
                     <label className="font-bold text-slate-700 block mb-1">
                       Follow-up Date <span className="text-rose-500 font-black">*</span>
@@ -2004,6 +2070,7 @@ export default function EnquiryGodLevelHub() {
                       </p>
                     )}
                   </div>
+                </div>
 
                   <div>
                     <label className="font-bold text-slate-700 block mb-1">

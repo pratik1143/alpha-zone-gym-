@@ -27,7 +27,8 @@ export const getEnquiries = async (req: Request, res: Response) => {
       const list = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       return res.json(list);
     }
-    return res.json(mockEnquiries);
+    const sorted = [...mockEnquiries].sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+    return res.json(sorted);
   } catch (error: any) {
     console.error('Error fetching enquiries:', error);
     res.json(mockEnquiries);
@@ -73,6 +74,9 @@ export const createEnquiry = async (req: Request, res: Response) => {
     const rawDate = data.nextFollowUpDate || data.nextFollowUp || data.followupDate;
     const nextDate = (rawDate && typeof rawDate === 'string' && rawDate.trim() !== '') ? rawDate.split('T')[0] : getTomorrowKolkata();
     const followUpTime = data.followUpTime || data.followupTime || '05:00';
+    const rawEnqDate = data.enquiryDate || data.createdAt;
+    const enquiryDate = (rawEnqDate && typeof rawEnqDate === 'string' && rawEnqDate.trim() !== '') ? rawEnqDate.split('T')[0] : getKolkataDateString();
+    const savedRemarks = data.remarks || data.remark || '';
 
     const initialHistory = [{
       id: `hist_${Date.now()}`,
@@ -94,6 +98,7 @@ export const createEnquiry = async (req: Request, res: Response) => {
       email: data.email || '',
       gender: data.gender || 'Male',
       address: data.address || '',
+      enquiryDate: enquiryDate,
       nextFollowUpDate: nextDate,
       nextFollowUp: nextDate,
       followUpTime: followUpTime,
@@ -104,7 +109,8 @@ export const createEnquiry = async (req: Request, res: Response) => {
       source: data.source || 'Walk-in',
       interestedPlan: data.interestedPlan || data.inquiryFor || 'Monthly Access',
       duration: data.duration || data.interestedPlan || '1 month',
-      remarks: data.remarks || '',
+      remarks: savedRemarks,
+      remark: savedRemarks,
       history: initialHistory,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()

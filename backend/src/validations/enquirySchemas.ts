@@ -14,6 +14,7 @@ export const createEnquiryBackendSchema = z.object({
   email: z.string().trim().optional().refine(val => !val || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val), 'Invalid email format'),
   gender: z.string().optional().default('Male'),
   address: z.string().trim().max(300).optional(),
+  enquiryDate: z.string().trim().optional(),
   nextFollowUpDate: z.string().trim().optional(),
   nextFollowUp: z.string().trim().optional(),
   followupDate: z.string().trim().optional(),

@@ -28,6 +28,7 @@ export interface EnquiryItem {
   address?: string;
   nextFollowUp?: string;
   nextFollowUpDate?: string;
+  enquiryDate?: string;
   followUpTime?: string;
   trialDate?: string;
   status: 'Pending' | 'Closed' | 'Contacted' | 'Trial Scheduled' | 'Converted' | 'Lost' | string;
@@ -55,6 +56,7 @@ export const enquiryService = {
             const rawStatus = (d.status || 'Pending').trim().toLowerCase();
             const normStatus = rawStatus === 'close' || rawStatus === 'closed' ? 'Closed' : rawStatus === 'converted' ? 'Converted' : 'Pending';
             const cleanDate = (d.nextFollowUpDate || d.nextFollowUp || d.followupDate || '').split('T')[0];
+            const cleanEnqDate = d.enquiryDate || (d.createdAt ? d.createdAt.split('T')[0] : '');
 
             return {
               ...d,
@@ -66,8 +68,14 @@ export const enquiryService = {
               interestedPlan: d.interestedPlan || d.duration || '1 month',
               nextFollowUpDate: cleanDate,
               nextFollowUp: cleanDate,
+              enquiryDate: cleanEnqDate,
               history: Array.isArray(d.history) ? d.history : []
             };
+          });
+          list.sort((a, b) => {
+            const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+            const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+            return timeB - timeA;
           });
           onData(list);
         }
@@ -86,6 +94,7 @@ export const enquiryService = {
           const rawStatus = (d.status || 'Pending').trim().toLowerCase();
           const normStatus = rawStatus === 'close' || rawStatus === 'closed' ? 'Closed' : rawStatus === 'converted' ? 'Converted' : 'Pending';
           const cleanDate = (d.nextFollowUpDate || d.nextFollowUp || d.followupDate || '').split('T')[0];
+          const cleanEnqDate = d.enquiryDate || (d.createdAt ? d.createdAt.split('T')[0] : '');
 
           const item: EnquiryItem = {
             id: docSnap.id,
@@ -99,6 +108,7 @@ export const enquiryService = {
             address: d.address || '',
             nextFollowUp: cleanDate,
             nextFollowUpDate: cleanDate,
+            enquiryDate: cleanEnqDate,
             followUpTime: d.followUpTime || d.followupTime || '05:00',
             trialDate: d.trialDate || '',
             status: normStatus,
@@ -107,7 +117,7 @@ export const enquiryService = {
             source: d.source || 'Walk-in',
             interestedPlan: d.interestedPlan || d.duration || d.inquiryFor || '1 month',
             duration: d.duration || d.interestedPlan || '1 month',
-            remarks: d.remarks || '',
+            remarks: d.remarks || d.remark || '',
             history: Array.isArray(d.history) ? d.history : [],
             createdAt: d.createdAt || new Date().toISOString(),
             updatedAt: d.updatedAt || d.createdAt || new Date().toISOString()
@@ -117,6 +127,11 @@ export const enquiryService = {
         });
 
         const list = Array.from(itemMap.values());
+        list.sort((a, b) => {
+          const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+          const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+          return timeB - timeA;
+        });
         onData(list);
       },
       (err) => {
