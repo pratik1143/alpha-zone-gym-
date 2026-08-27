@@ -17,7 +17,7 @@ export const createEnquiryBackendSchema = z.object({
   nextFollowUpDate: z.string().trim().optional(),
   nextFollowUp: z.string().trim().optional(),
   followupDate: z.string().trim().optional(),
-  followUpTime: z.string().trim().optional().default('11:00'),
+  followUpTime: z.string().trim().optional().default('05:00'),
   status: z.string().optional().default('Pending'),
   assignedTo: z.string().trim().optional(),
   attendedBy: z.string().trim().optional(),

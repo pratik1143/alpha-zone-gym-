@@ -20,6 +20,17 @@ export function getKolkataDateString(date: Date = new Date()): string {
   }
 }
 
+export function getTomorrowKolkataDateString(date: Date = new Date()): string {
+  const todayStr = getKolkataDateString(date);
+  const [y, m, d] = todayStr.split('-').map(Number);
+  if (!y || !m || !d) return todayStr;
+  const nextDate = new Date(Date.UTC(y, m - 1, d + 1));
+  const year = nextDate.getUTCFullYear();
+  const month = String(nextDate.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(nextDate.getUTCDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 /**
  * Calculates calendar days difference between targetDate and baseDate (targetDate - baseDate).
  * Handles month boundaries, leap years, and year boundaries accurately.
@@ -362,8 +373,8 @@ export async function generateAutomatedFollowups(todayStrOverride?: string): Pro
           priority: enquiry.priority === 'Hot' ? 'High' : 'Medium',
           dueDate: cleanEnqDate,
           scheduledDate: cleanEnqDate,
-          scheduledTime: enquiry.followUpTime || '11:00',
-          scheduledTimestamp: new Date(`${cleanEnqDate}T${enquiry.followUpTime || '11:00'}:00+05:30`).getTime() || Date.now(),
+          scheduledTime: enquiry.followUpTime || '05:00',
+          scheduledTimestamp: new Date(`${cleanEnqDate}T${enquiry.followUpTime || '05:00'}:00+05:30`).getTime() || Date.now(),
           assignedTo: enquiry.assignedTo || enquiry.attendedBy || 'Veer Chand (manager)',
           status: 'pending',
           source: 'auto',

@@ -134,7 +134,7 @@ export const createEnquirySchema = z.object({
       message: 'Enter a valid calendar date (YYYY-MM-DD)'
     }),
 
-  followupTime: z.string().trim().default('11:00'),
+  followupTime: z.string().trim().default('05:00'),
 
   attendedBy: z
     .string()

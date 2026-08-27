@@ -16,7 +16,7 @@ import confetti from 'canvas-confetti';
 import { z } from 'zod';
 import { enquiryService, EnquiryItem, EnquiryHistoryItem } from '@/services/enquiry.service';
 import { followupService } from '@/services/followup.service';
-import { getTodayInIndia, isTodayInIndia, isOverdueInIndia, isUpcomingInIndia, formatIndianDate } from '@/lib/dateUtils';
+import { getTodayInIndia, getTomorrowInIndia, isTodayInIndia, isOverdueInIndia, isUpcomingInIndia, formatIndianDate } from '@/lib/dateUtils';
 import { resolveAvatarUrl, MALE_DEFAULT_AVATAR, FEMALE_DEFAULT_AVATAR } from '@/lib/avatar';
 import {
   createEnquirySchema,
@@ -91,8 +91,8 @@ export default function EnquiryGodLevelHub() {
   const [email, setEmail] = useState('');
   const [gender, setGender] = useState('Male');
   const [address, setAddress] = useState('');
-  const [followupDate, setFollowupDate] = useState(todayStr);
-  const [followupTime, setFollowupTime] = useState('11:00');
+  const [followupDate, setFollowupDate] = useState(() => getTomorrowInIndia());
+  const [followupTime, setFollowupTime] = useState('05:00');
   const [status, setStatus] = useState<'Pending' | 'Closed'>('Pending');
   const [attendedBy, setAttendedBy] = useState('');
   const [priority, setPriority] = useState<'Hot' | 'Warm' | 'Cold'>('Warm');
@@ -344,8 +344,8 @@ export default function EnquiryGodLevelHub() {
     setEmail('');
     setGender('Male');
     setAddress('');
-    setFollowupDate(todayStr);
-    setFollowupTime('11:00');
+    setFollowupDate(getTomorrowInIndia());
+    setFollowupTime('05:00');
     setStatus('Pending');
     setAttendedBy('');
     setPriority('Warm');
@@ -399,7 +399,7 @@ export default function EnquiryGodLevelHub() {
         address: data.address || '',
         nextFollowUpDate: data.followupDate,
         nextFollowUp: data.followupDate,
-        followUpTime: data.followupTime || '11:00',
+        followUpTime: data.followupTime || '05:00',
         status: 'Pending',
         assignedTo: data.attendedBy,
         priority: data.priority,
@@ -430,7 +430,7 @@ export default function EnquiryGodLevelHub() {
           priority: data.priority === 'Hot' ? 'High' : 'Medium',
           dueDate: normDate,
           scheduledDate: normDate,
-          scheduledTime: data.followupTime || '11:00',
+          scheduledTime: data.followupTime || '05:00',
           assignedTo: data.attendedBy || 'Reception Desk',
           status: 'Pending',
           source: 'manual',

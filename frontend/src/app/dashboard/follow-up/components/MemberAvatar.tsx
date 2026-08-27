@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 interface MemberAvatarProps {
   /** Actual photo URL from member profile (photo / avatarUrl / avatar field) */
@@ -50,6 +50,13 @@ export default function MemberAvatar({
     photoUrl && photoUrl.trim() !== '' ? photoUrl : fallback
   );
   const [hasFailed, setHasFailed] = useState(false);
+
+  useEffect(() => {
+    const newFallback = getFallbackAvatar(gender);
+    const newSrc = photoUrl && photoUrl.trim() !== '' ? photoUrl : newFallback;
+    setSrc(newSrc);
+    setHasFailed(false);
+  }, [photoUrl, gender]);
 
   const handleError = () => {
     if (!hasFailed) {

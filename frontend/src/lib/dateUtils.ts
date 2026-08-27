@@ -18,6 +18,17 @@ export function getTodayInIndia(date: Date = new Date()): string {
   }
 }
 
+export function getTomorrowInIndia(date: Date = new Date()): string {
+  const todayStr = getTodayInIndia(date);
+  const [y, m, d] = todayStr.split('-').map(Number);
+  if (!y || !m || !d) return todayStr;
+  const nextDate = new Date(Date.UTC(y, m - 1, d + 1));
+  const year = nextDate.getUTCFullYear();
+  const month = String(nextDate.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(nextDate.getUTCDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 export function getCalendarDaysDiff(targetDateStr: string, baseDateStr?: string): number {
   if (!targetDateStr) return NaN;
   const base = baseDateStr || getTodayInIndia();

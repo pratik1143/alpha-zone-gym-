@@ -99,7 +99,7 @@ export const enquiryService = {
             address: d.address || '',
             nextFollowUp: cleanDate,
             nextFollowUpDate: cleanDate,
-            followUpTime: d.followUpTime || d.followupTime || '11:00',
+            followUpTime: d.followUpTime || d.followupTime || '05:00',
             trialDate: d.trialDate || '',
             status: normStatus,
             assignedTo: d.assignedTo || d.attendedBy || 'Reception Desk',

@@ -2399,24 +2399,43 @@ export default function FollowUpManager() {
               </div>
 
               {/* Member Summary Header */}
-              <div className="p-3.5 bg-amber-50/70 rounded-2xl border border-amber-200/80 flex items-center justify-between gap-3 text-xs">
-                <div className="flex items-center gap-3">
-                  <MemberAvatar
-                    photoUrl={showScheduleBalanceModal.member.photo || showScheduleBalanceModal.member.avatarUrl}
-                    gender={showScheduleBalanceModal.member.gender}
-                    name={showScheduleBalanceModal.member.name}
-                    size={40}
-                  />
-                  <div>
-                    <h4 className="font-black text-slate-900">{showScheduleBalanceModal.member.name}</h4>
-                    <p className="text-slate-500 font-mono text-[11px]">{showScheduleBalanceModal.member.phone || 'No Phone'} · Invoice: {showScheduleBalanceModal.member.invoiceNumber}</p>
+              {(() => {
+                const modalMember = showScheduleBalanceModal.member;
+                const mId = modalMember?.id || modalMember?.memberId || modalMember?.member_id;
+                const matchedStoreMember = members.find((x: any) => 
+                  (mId && (String(x.id).trim() === String(mId).trim() || String(x.memberId || '').trim() === String(mId).trim())) ||
+                  (x.phone && modalMember.phone && x.phone === modalMember.phone)
+                );
+                const liveMember = matchedStoreMember || modalMember;
+                const photo = liveMember?.photo || liveMember?.avatarUrl || liveMember?.avatar || liveMember?.photoURL || modalMember?.photo || modalMember?.avatarUrl || null;
+                const gender = liveMember?.gender || modalMember?.gender || null;
+                const name = liveMember?.name || modalMember?.name || 'Member';
+                const phone = liveMember?.phone || modalMember?.phone || 'No Phone';
+                const invoiceNumber = modalMember?.invoiceNumber || liveMember?.invoiceNumber || 'N/A';
+                const pendingAmt = Number(modalMember?.pendingAmount || modalMember?.outstandingBalance || liveMember?.outstandingBalance || 0);
+
+                return (
+                  <div className="p-3.5 bg-amber-50/70 rounded-2xl border border-amber-200/80 flex items-center justify-between gap-3 text-xs">
+                    <div className="flex items-center gap-3">
+                      <MemberAvatar
+                        key={String(mId || name)}
+                        photoUrl={photo}
+                        gender={gender}
+                        name={name}
+                        size={40}
+                      />
+                      <div>
+                        <h4 className="font-black text-slate-900">{name}</h4>
+                        <p className="text-slate-500 font-mono text-[11px]">{phone} · Invoice: {invoiceNumber}</p>
+                      </div>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <span className="text-[10px] font-bold text-amber-800 uppercase block">Balance Due</span>
+                      <span className="text-sm font-black text-amber-700 font-mono">₹{pendingAmt.toLocaleString('en-IN')}</span>
+                    </div>
                   </div>
-                </div>
-                <div className="text-right shrink-0">
-                  <span className="text-[10px] font-bold text-amber-800 uppercase block">Balance Due</span>
-                  <span className="text-sm font-black text-amber-700 font-mono">₹{(showScheduleBalanceModal.member.pendingAmount || showScheduleBalanceModal.member.outstandingBalance || 0).toLocaleString('en-IN')}</span>
-                </div>
-              </div>
+                );
+              })()}
 
               {/* Requirement #19: Duplicate Protection Warning */}
               {balanceModalDuplicateWarning && !allowDuplicateBalanceFollowup && (
