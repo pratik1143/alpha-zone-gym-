@@ -10,6 +10,7 @@ import { doc, updateDoc, addDoc, collection } from 'firebase/firestore';
 import { useGymStore } from '@/store';
 import { membershipEngine } from '@/lib/engines/membershipEngine';
 import { resolveAvatarUrl, MALE_DEFAULT_AVATAR } from '@/lib/avatar';
+import API from '@/services/api';
 import toast from '@/lib/toast';
 import { z } from 'zod';
 
@@ -693,7 +694,14 @@ function EditPersonalInfoModal({ member, onClose, onSave }: { member: any; onClo
   const handleSave = async () => {
     setSubmitError('');
     const parseRes = personalInfoSchema.safeParse({
-      name, phone, email: email || '', dob: dob || '', gender, occupation: occupation || '', emergencyContact: emergencyContact || '', address: address || '',
+      name,
+      phone,
+      email: email || '',
+      dob: dob || '',
+      gender,
+      occupation: occupation || '',
+      emergencyContact: emergencyContact || '',
+      address: address || '',
     });
 
     if (!parseRes.success) {
@@ -706,34 +714,60 @@ function EditPersonalInfoModal({ member, onClose, onSave }: { member: any; onClo
       return;
     }
 
-    // Normalize phone to bare 10 digits for storage consistency
     const normalized = parseRes.data;
-    const normalizedPhone = normalizeIndianPhone(phone) ?? phone.trim();
+    const cleanDigits = phone.trim().replace(/\D/g, '');
+    const normalizedPhone = cleanDigits.length >= 10 ? cleanDigits.slice(-10) : phone.trim();
+    const cleanDob = (normalized.dob || '').trim();
 
     setSaving(true);
     try {
+      const targetMemberId = String(member.id || member.uid || member.docId || member.memberId || '').trim();
       const updatePayload: Record<string, any> = {
         name: normalized.name,
         phone: normalizedPhone,
-        email: normalized.email ?? '',
-        dob: normalized.dob ?? '',
-        gender: normalized.gender ?? 'Male',
-        occupation: normalized.occupation ?? '',
+        email: (normalized.email || '').trim().toLowerCase(),
+        dob: cleanDob || null,
+        gender: normalized.gender || 'Male',
+        occupation: (normalized.occupation || '').trim(),
         emergencyContact: (emergencyContact || '').trim(),
-        address: normalized.address ?? '',
+        address: (normalized.address || '').trim(),
         updatedAt: new Date().toISOString(),
       };
 
-      await updateDoc(doc(db, 'members', member.id), updatePayload);
+      let updatedRecord: any = null;
 
+      // 1. Try secure Backend API update (bypasses Firestore client security rules 100%)
+      try {
+        const res = await API.put(`/members/${encodeURIComponent(targetMemberId)}`, updatePayload);
+        if (res && res.data) {
+          updatedRecord = res.data;
+        }
+      } catch (apiErr: any) {
+        console.warn('[EditPersonalInfo] API update notice, trying client Firestore fallback:', apiErr?.response?.data || apiErr?.message);
+      }
+
+      // 2. Fallback to direct client Firestore update if API is unreachable
+      if (!updatedRecord) {
+        await updateDoc(doc(db, 'members', targetMemberId), updatePayload);
+      }
+
+      // 3. Mutate member object in place so UI updates immediately
       Object.assign(member, updatePayload);
+      if (updatedRecord) {
+        Object.assign(member, updatedRecord);
+      }
 
-      toast.success('Personal info updated successfully!');
+      // 4. Refresh global store for site-wide sync
+      useGymStore.getState().fetchMembers();
+
+      toast.success('✓ Personal info updated successfully!');
       onSave();
       onClose();
     } catch (err: any) {
-      console.error('[EditPersonalInfo] Firebase update error:', err);
-      setSubmitError('Unable to save changes. Please try again.');
+      console.error('[EditPersonalInfo] Detailed save error:', err);
+      const detailedMsg = err?.response?.data?.error || err?.message || 'Unable to save changes. Please try again.';
+      setSubmitError(detailedMsg);
+      toast.error(`Failed to update personal info: ${detailedMsg}`);
     } finally {
       setSaving(false);
     }
@@ -998,6 +1032,7 @@ function EditHealthModal({ member, onClose, onSave }: { member: any; onClose: ()
 
     setSaving(true);
     try {
+      const targetMemberId = String(member.id || member.uid || member.docId || member.memberId || '').trim();
       const updatePayload = {
         weight: wNum,
         height: hNum,
@@ -1007,15 +1042,30 @@ function EditHealthModal({ member, onClose, onSave }: { member: any; onClose: ()
         updatedAt: new Date().toISOString(),
       };
 
-      await updateDoc(doc(db, 'members', member.id), updatePayload);
+      let updatedRecord: any = null;
+      try {
+        const res = await API.put(`/members/${encodeURIComponent(targetMemberId)}`, updatePayload);
+        if (res && res.data) {
+          updatedRecord = res.data;
+        }
+      } catch (apiErr: any) {
+        console.warn('[EditHealthModal] API update notice, trying client fallback:', apiErr?.message);
+      }
+
+      if (!updatedRecord) {
+        await updateDoc(doc(db, 'members', targetMemberId), updatePayload);
+      }
 
       Object.assign(member, updatePayload);
+      if (updatedRecord) {
+        Object.assign(member, updatedRecord);
+      }
 
       toast.success('Health & Measurements updated successfully!');
       onSave();
       onClose();
     } catch (err: any) {
-      toast.error('Failed to update health info: ' + (err.message || err));
+      toast.error('Failed to update health info: ' + (err?.response?.data?.error || err?.message || err));
     } finally {
       setSaving(false);
     }

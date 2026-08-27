@@ -817,7 +817,7 @@ export const db = {
     };
 
     if (firestore) {
-      const docId = member.uid || firestore.collection('members').doc().id;
+      const docId = member.id || member.uid || firestore.collection('members').doc().id;
       await firestore.collection('members').doc(docId).set(newMember);
       const added = { id: docId, ...newMember };
       if (membersCache) {
@@ -828,7 +828,7 @@ export const db = {
       return added;
     }
 
-    const docId = member.uid || ('m' + (mockMembers.length + 1));
+    const docId = member.id || member.uid || ('m' + (mockMembers.length + 1));
     const finalMember = { id: docId, ...newMember };
     mockMembers.push(finalMember);
     return finalMember;
@@ -853,16 +853,51 @@ export const db = {
     }
 
     if (firestore) {
-      await firestore.collection('members').doc(id).update(updates);
-      const doc = await firestore.collection('members').doc(id).get();
-      const updated = { id: doc.id, ...doc.data() };
+      let docRef = firestore.collection('members').doc(id);
+      let docSnap = await docRef.get();
+
+      // If document not found by direct ID, search members collection by id, memberId, uid, or phone
+      if (!docSnap.exists) {
+        const cleanId = String(id || '').trim().toLowerCase();
+        const querySnap = await firestore.collection('members').get();
+        const foundDoc = querySnap.docs.find(d => {
+          const data = d.data();
+          const dId = String(d.id).trim().toLowerCase();
+          const mId = String(data.id || '').trim().toLowerCase();
+          const memId = String(data.memberId || '').trim().toLowerCase();
+          const uid = String(data.uid || '').trim().toLowerCase();
+          const phone = String(data.phone || '').replace(/\D/g, '');
+          const searchPhone = cleanId.replace(/\D/g, '');
+
+          return (
+            dId === cleanId || 
+            mId === cleanId || 
+            memId === cleanId || 
+            uid === cleanId || 
+            (searchPhone.length >= 10 && phone.endsWith(searchPhone.slice(-10)))
+          );
+        });
+
+        if (foundDoc) {
+          docRef = firestore.collection('members').doc(foundDoc.id);
+          docSnap = await docRef.get();
+        }
+      }
+
+      // Merge updates safely
+      await docRef.set(updates, { merge: true });
+      const updatedDocSnap = await docRef.get();
+      const updated = { id: docRef.id, ...updatedDocSnap.data() };
+      
       if (membersCache) {
-        membersCache = membersCache.map(m => m.id === id ? updated : m);
+        membersCache = membersCache.map(m => (m.id === docRef.id || m.id === id) ? updated : m);
+      } else {
+        membersCache = null;
       }
       return updated;
     }
 
-    const idx = mockMembers.findIndex(m => m.id === id);
+    const idx = mockMembers.findIndex(m => m.id === id || m.memberId === id);
     if (idx !== -1) {
       mockMembers[idx] = { ...mockMembers[idx], ...updates };
       return mockMembers[idx];
