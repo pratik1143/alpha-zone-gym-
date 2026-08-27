@@ -68,39 +68,48 @@ async function runAcceptanceTest() {
   // 3. TEST BACKEND GENERATION ENGINE INTEGRATION
   console.log('\n--- 3. Testing Backend Automation Engine Generation ---');
 
-  const mA = await db.addMember({
-    id: 'test_acc_mem_A',
-    name: 'Acceptance Member A',
-    phone: '9900000001',
-    status: 'active',
-    expiryDate: '2026-08-29'
-  });
+  let mA: any = null;
+  let mE: any = null;
 
-  const mE = await db.addMember({
-    id: 'test_acc_mem_E',
-    name: 'Acceptance Member E',
-    phone: '9900000005',
-    status: 'active',
-    expiryDate: '2026-08-27'
-  });
+  try {
+    mA = await db.addMember({
+      id: 'test_acc_mem_A',
+      name: 'Acceptance Member A',
+      phone: '9900000001',
+      status: 'active',
+      expiryDate: '2026-08-29'
+    });
 
-  await db.deleteFollowup(`AUTO_RENEWAL_${mA.id}_2026-08-29`);
-  await db.deleteFollowup(`AUTO_RENEWAL_${mE.id}_2026-08-27`);
+    mE = await db.addMember({
+      id: 'test_acc_mem_E',
+      name: 'Acceptance Member E',
+      phone: '9900000005',
+      status: 'active',
+      expiryDate: '2026-08-27'
+    });
 
-  const genResult = await generateAutomatedFollowups('2026-08-27');
-  assert(genResult.generatedKeys.includes(`AUTO_RENEWAL_${mA.id}_2026-08-29`), 'Member A auto renewal created');
-  assert(genResult.generatedKeys.includes(`AUTO_RENEWAL_${mE.id}_2026-08-27`), 'Member E (expires today) auto renewal created');
+    await db.deleteFollowup(`AUTO_RENEWAL_${mA.id}_2026-08-29`);
+    await db.deleteFollowup(`AUTO_RENEWAL_${mE.id}_2026-08-27`);
 
-  const allFollowups = await db.getFollowups();
-  const folA = allFollowups.find((f: any) => f.id === `AUTO_RENEWAL_${mA.id}_2026-08-29`);
-  assert(folA?.reason === 'GYM MEMBERSHIP RENEWAL', 'Follow-up reason is clean generic GYM MEMBERSHIP RENEWAL without hardcoded 7 days text');
-  assert(folA?.expiryDate === '2026-08-29', 'Follow-up stores single source of truth expiryDate');
+    const genResult = await generateAutomatedFollowups('2026-08-27');
+    assert(genResult.generatedKeys.includes(`AUTO_RENEWAL_${mA.id}_2026-08-29`), 'Member A auto renewal created');
+    assert(genResult.generatedKeys.includes(`AUTO_RENEWAL_${mE.id}_2026-08-27`), 'Member E (expires today) auto renewal created');
 
-  // Cleanup
-  await db.deleteMember(mA.id);
-  await db.deleteMember(mE.id);
-  await db.deleteFollowup(`AUTO_RENEWAL_${mA.id}_2026-08-29`);
-  await db.deleteFollowup(`AUTO_RENEWAL_${mE.id}_2026-08-27`);
+    const allFollowups = await db.getFollowups();
+    const folA = allFollowups.find((f: any) => f.id === `AUTO_RENEWAL_${mA.id}_2026-08-29`);
+    assert(folA?.reason === 'GYM MEMBERSHIP RENEWAL', 'Follow-up reason is clean generic GYM MEMBERSHIP RENEWAL without hardcoded 7 days text');
+    assert(folA?.expiryDate === '2026-08-29', 'Follow-up stores single source of truth expiryDate');
+  } finally {
+    // Guaranteed Cleanup
+    if (mA?.id) {
+      await db.deleteMember(mA.id);
+      await db.deleteFollowup(`AUTO_RENEWAL_${mA.id}_2026-08-29`);
+    }
+    if (mE?.id) {
+      await db.deleteMember(mE.id);
+      await db.deleteFollowup(`AUTO_RENEWAL_${mE.id}_2026-08-27`);
+    }
+  }
 
   console.log('\n====================================================');
   console.log('  🎉 ALL ACCEPTANCE TESTS PASSED SUCCESSFULLY!');
