@@ -126,6 +126,7 @@ async function runAutomatedFollowupsTestSuite() {
   await db.deleteFollowup(`AUTO_RENEWAL_${memberA.id}_2026-08-30`);
   await db.deleteFollowup(`AUTO_PT_RENEWAL_${memberB.id}_2026-08-27`);
   await db.deleteFollowup(`AUTO_BALANCE_${memberC.id}_2026-08-25`);
+  await db.deleteFollowup(`AUTO_RENEWAL_${memberF.id}_2026-08-28`);
 
   // Run engine with base date 2026-08-23
   const runResult1 = await generateAutomatedFollowups('2026-08-23');
@@ -136,26 +137,26 @@ async function runAutomatedFollowupsTestSuite() {
   assert(runResult1.generatedKeys.includes(`AUTO_BALANCE_${memberC.id}_2026-08-25`), 'Member C Pending Balance Follow-up created');
   assert(!runResult1.generatedKeys.some(k => k.includes(memberD.id)), 'Member D (Zero balance) NOT created');
   assert(!runResult1.generatedKeys.some(k => k.includes(memberE.id)), 'Member E (Expired) NOT created');
-  assert(!runResult1.generatedKeys.some(k => k.includes(memberF.id)), 'Member F (5 days expiry) NOT created');
+  assert(runResult1.generatedKeys.includes(`AUTO_RENEWAL_${memberF.id}_2026-08-28`), 'Member F (5 days expiry) renewal follow-up created immediately for today');
 
   // Verify created follow-up fields
   const allFls = await db.getFollowups();
   const dataA = allFls.find(f => f.id === `AUTO_RENEWAL_${memberA.id}_2026-08-30` || f.automationKey === `AUTO_RENEWAL_${memberA.id}_2026-08-30`);
   assert(dataA?.type === 'GYM MEMBERSHIP RENEWAL', 'Member A type is GYM MEMBERSHIP RENEWAL');
   assert(dataA?.priority === 'Medium', 'Member A priority is Medium');
-  assert(dataA?.source === 'automatic', 'Member A source is automatic');
+  assert(dataA?.source === 'auto' || dataA?.source === 'automatic', 'Member A source is auto');
   assert(dataA?.dueDate === '2026-08-23', 'Member A due date is Today (2026-08-23)');
 
   const dataB = allFls.find(f => f.id === `AUTO_PT_RENEWAL_${memberB.id}_2026-08-27` || f.automationKey === `AUTO_PT_RENEWAL_${memberB.id}_2026-08-27`);
   assert(dataB?.type === 'PT RENEWAL', 'Member B type is PT RENEWAL');
   assert(dataB?.priority === 'High', 'Member B priority is High');
-  assert(dataB?.source === 'automatic', 'Member B source is automatic');
+  assert(dataB?.source === 'auto' || dataB?.source === 'automatic', 'Member B source is auto');
 
   const dataC = allFls.find(f => f.id === `AUTO_BALANCE_${memberC.id}_2026-08-25` || f.automationKey === `AUTO_BALANCE_${memberC.id}_2026-08-25`);
   assert(dataC?.type === 'PENDING BALANCE', 'Member C type is PENDING BALANCE');
   assert(dataC?.priority === 'High', 'Member C priority is High');
   assert(dataC?.pendingAmount === 2000, 'Member C pending amount is 2000');
-  assert(dataC?.source === 'automatic', 'Member C source is automatic');
+  assert(dataC?.source === 'auto' || dataC?.source === 'automatic', 'Member C source is auto');
 
   // TEST 3: Idempotency & Duplicate Prevention (Run 2 on same day)
   console.log('\n--- 3. Testing Idempotency & Duplicate Prevention ---');
@@ -208,6 +209,7 @@ async function runAutomatedFollowupsTestSuite() {
   await db.deleteFollowup(`AUTO_RENEWAL_${memberA.id}_2026-08-30`);
   await db.deleteFollowup(`AUTO_PT_RENEWAL_${memberB.id}_2026-08-27`);
   await db.deleteFollowup(`AUTO_BALANCE_${memberC.id}_2026-08-25`);
+  await db.deleteFollowup(`AUTO_RENEWAL_${memberF.id}_2026-08-28`);
 
   console.log('\n====================================================');
   console.log('  🎉 ALL AUTOMATED FOLLOW-UP TESTS PASSED SUCCESSFULLY');

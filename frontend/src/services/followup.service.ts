@@ -96,7 +96,7 @@ export const followupService = {
         const membershipExpiry = member.expiryDate ? member.expiryDate.split('T')[0] : null;
         if (membershipExpiry && (memberStatus === 'active' || memberStatus === 'upcoming' || memberStatus === 'frozen')) {
           const daysToExpiry = getCalendarDaysDiff(membershipExpiry, todayStr);
-          if (daysToExpiry <= 7 && daysToExpiry >= 1) {
+          if (daysToExpiry <= 7 && daysToExpiry >= 0) {
             const key = `AUTO_RENEWAL_${memberId}_${membershipExpiry}`;
             if (!existingKeySet.has(key)) {
               existingKeySet.add(key);
@@ -107,10 +107,10 @@ export const followupService = {
                 memberName,
                 phone: memberPhone,
                 type: 'GYM MEMBERSHIP RENEWAL',
-                reason: 'Membership renewal due in 7 days',
+                reason: 'GYM MEMBERSHIP RENEWAL',
                 title: 'GYM MEMBERSHIP RENEWAL',
-                description: 'Membership renewal due in 7 days',
-                notes: 'Membership renewal due in 7 days',
+                description: 'Gym membership renewal due',
+                notes: 'Gym membership renewal due',
                 priority: 'Medium',
                 dueDate: todayStr,
                 scheduledDate: todayStr,

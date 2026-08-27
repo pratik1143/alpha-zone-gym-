@@ -62,3 +62,32 @@ export function formatIndianDate(dateStr: string): string {
   const mm = months[m - 1] || String(m).padStart(2, '0');
   return `${dd}-${mm}-${y}`;
 }
+
+export function formatRenewalCountdown(expiryDateStr: string, baseDateStr?: string): {
+  daysRemaining: number;
+  displayText: string;
+  isExpired: boolean;
+} {
+  if (!expiryDateStr) {
+    return { daysRemaining: NaN, displayText: 'Membership renewal due', isExpired: false };
+  }
+  const cleanExpiry = expiryDateStr.split('T')[0];
+  const days = getCalendarDaysDiff(cleanExpiry, baseDateStr);
+
+  if (isNaN(days)) {
+    return { daysRemaining: NaN, displayText: 'Membership renewal due', isExpired: false };
+  }
+
+  if (days > 1) {
+    return { daysRemaining: days, displayText: `Membership renewal due in ${days} days`, isExpired: false };
+  } else if (days === 1) {
+    return { daysRemaining: 1, displayText: 'Membership renewal due tomorrow', isExpired: false };
+  } else if (days === 0) {
+    return { daysRemaining: 0, displayText: 'Membership expires today', isExpired: false };
+  } else {
+    const expiredDays = Math.abs(days);
+    const dayLabel = expiredDays === 1 ? '1 day' : `${expiredDays} days`;
+    return { daysRemaining: days, displayText: `Membership expired ${dayLabel} ago`, isExpired: true };
+  }
+}
+

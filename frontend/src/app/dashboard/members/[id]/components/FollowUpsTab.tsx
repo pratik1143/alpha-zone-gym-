@@ -4,6 +4,7 @@ import React, { useMemo } from 'react';
 import { useFollowups } from '@/hooks/useFollowups';
 import { Phone, MessageCircle, CheckCircle2, Clock, Calendar, AlertCircle, Sparkles, PenLine } from 'lucide-react';
 import toast from '@/lib/toast';
+import { formatRenewalCountdown } from '@/lib/dateUtils';
 import { getFollowupSourceInfo } from '@/app/dashboard/follow-up/page';
 
 export default function FollowUpsTab({ member }: { member: any }) {
@@ -114,9 +115,18 @@ export default function FollowUpsTab({ member }: { member: any }) {
                       </span>
                     </div>
 
-                    <p className="text-xs font-bold text-slate-800">
-                      {task.reason || task.notes || task.description || task.title}
-                    </p>
+                    {(() => {
+                      let textDisplay = task.reason || task.notes || task.description || task.title;
+                      const expiry = task.expiryDate || member?.expiryDate;
+                      if ((task.type === 'GYM MEMBERSHIP RENEWAL' || task.type === 'Renewal' || task.automationKey?.startsWith('AUTO_RENEWAL_')) && expiry) {
+                        textDisplay = formatRenewalCountdown(expiry).displayText;
+                      }
+                      return (
+                        <p className="text-xs font-bold text-slate-800">
+                          {textDisplay}
+                        </p>
+                      );
+                    })()}
 
                     <div className="flex items-center gap-3 text-xs text-slate-500 font-medium">
                       <span>📅 Due: {task.dueDate || task.scheduledDate}</span>

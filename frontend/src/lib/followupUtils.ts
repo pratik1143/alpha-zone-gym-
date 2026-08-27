@@ -1,3 +1,5 @@
+import { getCalendarDaysDiff } from './dateUtils';
+
 export interface FollowUpTypeStyle {
   key: 'enquiry' | 'renewal' | 'expired' | 'balance' | 'general';
   label: string;
@@ -15,6 +17,26 @@ export function getFollowUpTypeStyle(task: any): FollowUpTypeStyle {
   const rawType = String(task?.type || '').trim().toLowerCase();
   const rawTitle = String(task?.title || '').trim().toLowerCase();
   const rawReason = String(task?.reason || task?.description || '').trim().toLowerCase();
+
+  // 0. EXPIRED MEMBERSHIP CHECK based on task expiryDate
+  const taskExpiry = task?.expiryDate || task?.membershipExpiry;
+  if (taskExpiry && !rawType.includes('enquiry')) {
+    const days = getCalendarDaysDiff(taskExpiry);
+    if (!isNaN(days) && days < 0) {
+      return {
+        key: 'expired',
+        label: 'EXPIRED',
+        bgClass: 'bg-[#FEF2F2] hover:bg-[#FDE8E8]',
+        borderClass: 'border-[#FECACA]',
+        leftBorderClass: 'border-l-4 border-l-[#DC2626]',
+        badgeClass: 'bg-[#DC2626] text-white shadow-2xs font-extrabold',
+        dotClass: 'bg-[#DC2626]',
+        avatarBg: 'bg-rose-100 text-[#DC2626] border border-rose-200',
+        iconColor: 'text-[#DC2626]',
+        badgeText: 'EXPIRED',
+      };
+    }
+  }
 
   // 1. ENQUIRY → BLUE (#2563EB)
   if (

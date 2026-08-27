@@ -41,6 +41,36 @@ export function getCalendarDaysDiff(targetDateStr: string, baseDateStr: string):
   return Math.round((targetUtc - baseUtc) / (1000 * 60 * 60 * 24));
 }
 
+export function formatRenewalCountdown(expiryDateStr: string, baseDateStr?: string): {
+  daysRemaining: number;
+  displayText: string;
+  isExpired: boolean;
+} {
+  if (!expiryDateStr) {
+    return { daysRemaining: NaN, displayText: 'Membership renewal due', isExpired: false };
+  }
+  const cleanExpiry = expiryDateStr.split('T')[0];
+  const base = baseDateStr || getKolkataDateString();
+  const days = getCalendarDaysDiff(cleanExpiry, base);
+
+  if (isNaN(days)) {
+    return { daysRemaining: NaN, displayText: 'Membership renewal due', isExpired: false };
+  }
+
+  if (days > 1) {
+    return { daysRemaining: days, displayText: `Membership renewal due in ${days} days`, isExpired: false };
+  } else if (days === 1) {
+    return { daysRemaining: 1, displayText: 'Membership renewal due tomorrow', isExpired: false };
+  } else if (days === 0) {
+    return { daysRemaining: 0, displayText: 'Membership expires today', isExpired: false };
+  } else {
+    const expiredDays = Math.abs(days);
+    const dayLabel = expiredDays === 1 ? '1 day' : `${expiredDays} days`;
+    return { daysRemaining: days, displayText: `Membership expired ${dayLabel} ago`, isExpired: true };
+  }
+}
+
+
 export interface AutomatedFollowupResult {
   generatedCount: number;
   skippedCount: number;
@@ -127,7 +157,7 @@ export async function generateAutomatedFollowups(todayStrOverride?: string): Pro
     if (membershipExpiry && (memberStatus === 'active' || memberStatus === 'upcoming' || memberStatus === 'frozen')) {
       const daysToExpiry = getCalendarDaysDiff(membershipExpiry, todayStr);
 
-      if (daysToExpiry <= 7 && daysToExpiry >= 1) {
+      if (daysToExpiry <= 7 && daysToExpiry >= 0) {
         const automationKey = `AUTO_RENEWAL_${memberId}_${membershipExpiry}`;
 
         if (existingKeyMap.has(automationKey)) {
@@ -141,10 +171,10 @@ export async function generateAutomatedFollowups(todayStrOverride?: string): Pro
             phone: memberPhone,
             memberPhone,
             type: 'GYM MEMBERSHIP RENEWAL',
-            reason: 'Membership renewal due in 7 days',
+            reason: 'GYM MEMBERSHIP RENEWAL',
             title: 'GYM MEMBERSHIP RENEWAL',
-            description: 'Membership renewal due in 7 days',
-            notes: 'Membership renewal due in 7 days',
+            description: 'Gym membership renewal due',
+            notes: 'Gym membership renewal due',
             priority: 'Medium',
             dueDate: todayStr,
             scheduledDate: todayStr,

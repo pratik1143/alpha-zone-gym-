@@ -38,7 +38,7 @@ import API from '@/services/api';
 import { useGymStore } from '@/store';
 import { useFollowups } from '@/hooks/useFollowups';
 import { followupService, FollowUpItem, FollowUpHistoryEvent } from '@/services/followup.service';
-import { getTodayInIndia, isTodayInIndia, isOverdueInIndia, isUpcomingInIndia, formatIndianDate } from '@/lib/dateUtils';
+import { getTodayInIndia, isTodayInIndia, isOverdueInIndia, isUpcomingInIndia, formatIndianDate, formatRenewalCountdown } from '@/lib/dateUtils';
 import { getFollowUpTypeStyle } from '@/lib/followupUtils';
 import MemberAvatar from './components/MemberAvatar';
 
@@ -1450,10 +1450,21 @@ export default function FollowUpManager() {
 
               let displayReason = task.reason || task.description || task.notes || task.title || '';
 
-              if (typeStyle.key === 'renewal' && (!task.reason || task.reason === 'Membership Renewal')) {
-                displayReason = 'Membership renewal due in 7 days';
-              } else if (typeStyle.key === 'expired' && (!task.reason || task.reason === 'Membership Expired')) {
-                displayReason = 'Membership expired — renewal recovery required';
+              const expiryDate = task.expiryDate || (client as any)?.expiryDate || (client as any)?.membershipExpiry;
+
+              if (
+                typeStyle.key === 'renewal' ||
+                typeStyle.key === 'expired' ||
+                task.type === 'GYM MEMBERSHIP RENEWAL' ||
+                task.type === 'Renewal' ||
+                task.automationKey?.startsWith('AUTO_RENEWAL_')
+              ) {
+                if (expiryDate) {
+                  const countdown = formatRenewalCountdown(expiryDate, todayDateStr);
+                  displayReason = countdown.displayText;
+                } else if (!task.reason || task.reason === 'Membership Renewal' || task.reason === 'GYM MEMBERSHIP RENEWAL') {
+                  displayReason = 'Membership renewal due';
+                }
               } else if (typeStyle.key === 'balance' && (!task.reason || task.reason === 'Pending Balance')) {
                 const pendingAmtStr = task.pendingAmount ? `₹${Number(task.pendingAmount).toLocaleString('en-IN')}` : '';
                 displayReason = pendingAmtStr ? `${pendingAmtStr} pending` : 'Pending membership balance';
@@ -1578,7 +1589,10 @@ export default function FollowUpManager() {
                         )}
 
                         {/* Last Note Display on Card */}
-                        {task.lastNote && (
+                        {task.lastNote && 
+                          !task.lastNote.includes('Membership renewal due in 7 days') &&
+                          !task.lastNote.includes('Gym membership renewal due') &&
+                          task.lastNote !== 'GYM MEMBERSHIP RENEWAL' && (
                           <div className="mt-2.5 bg-white/90 p-2.5 rounded-xl border border-slate-200/80 text-xs text-slate-700 font-medium flex items-start gap-2 shadow-2xs">
                             <FileText size={13} className={`${typeStyle.iconColor} shrink-0 mt-0.5`} />
                             <div>
