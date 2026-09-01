@@ -41,6 +41,7 @@ import { followupService, FollowUpItem, FollowUpHistoryEvent } from '@/services/
 import { getTodayInIndia, isTodayInIndia, isOverdueInIndia, isUpcomingInIndia, formatIndianDate, formatRenewalCountdown } from '@/lib/dateUtils';
 import { getFollowUpTypeStyle } from '@/lib/followupUtils';
 import MemberAvatar from './components/MemberAvatar';
+import FollowUpPhoneNumber from './components/FollowUpPhoneNumber';
 
 // Helper: Resolve memberId safely for navigation (Data Safety enforced)
 export function getValidMemberId(task: FollowUpItem | any, membersList: any[] = []): string | null {
@@ -1318,6 +1319,10 @@ export default function FollowUpManager() {
                               ID: {m.memberId || m.id}
                             </span>
 
+                            {m.phone && (
+                              <FollowUpPhoneNumber phone={m.phone} />
+                            )}
+
                             {/* Status Badges */}
                             {m.isOverdue ? (
                               <span className="text-[10px] font-black px-2.5 py-0.5 rounded-md uppercase bg-red-600 text-white shadow-2xs">
@@ -1590,9 +1595,7 @@ export default function FollowUpManager() {
                         </p>
 
                         <div className="flex items-center gap-3 text-xs text-slate-500 font-semibold mt-1 flex-wrap">
-                          <a href={`tel:${client.phone}`} className="hover:text-blue-600 transition-colors flex items-center gap-1">
-                            📞 {client.phone}
-                          </a>
+                          <FollowUpPhoneNumber phone={client.phone} />
                           <span>•</span>
                           <span className={`flex items-center gap-1 font-bold ${isTaskOverdue ? 'text-rose-600' : isDueToday ? 'text-blue-700 font-black' : 'text-slate-700'}`}>
                             📅 {isDueToday ? 'Due Today' : `Due: ${formatIndianDate(cleanDueDate)}`} {task.scheduledTime ? `· ${task.scheduledTime}` : ''}
