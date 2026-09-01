@@ -129,6 +129,13 @@ export function useTodaysPayments(): UseTodaysPaymentsResult {
 
   // ── Helpers ───────────────────────────────────────────────────────────────
   const resolveAmount = (p: PaymentRecord): number => {
+    if (p.isUpgrade || p.transactionType === 'membership_upgrade') {
+      const val = p.additionalAmountPaid !== undefined
+        ? p.additionalAmountPaid
+        : (p.amountPaid !== undefined ? p.amountPaid : 0);
+      const n = Number(val);
+      return isNaN(n) ? 0 : n;
+    }
     const val =
       p.amountPaid !== undefined ? p.amountPaid :
       p.paid      !== undefined ? p.paid :

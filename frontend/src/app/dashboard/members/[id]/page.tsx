@@ -6,7 +6,7 @@ import {
   ArrowLeft, Edit3, Shield, Activity, Droplets, Calendar,
   Clock, DollarSign, MessageSquare, Phone, Mail, Printer, Download,
   Trash2, Snowflake, Repeat, Sparkles, AlertCircle, Bell, ChevronRight, Camera, User, Dumbbell,
-  MoreVertical, CheckCircle2, MapPin, Heart, Timer, CreditCard
+  MoreVertical, CheckCircle2, MapPin, Heart, Timer, CreditCard, TrendingUp
 } from 'lucide-react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { db } from '@/lib/firebase';
@@ -22,6 +22,7 @@ import SmartPhotoCapture from '../../components/SmartPhotoCapture';
 import RenewalWizardModal from '../components/RenewalWizardModal';
 import TrainerSelectorDropdown from '../components/TrainerSelectorDropdown';
 import PtBillingModal from '../components/PtBillingModal';
+import UpgradeModal from '../components/UpgradeModal';
 
 // Tabs
 import ProfileTab from './components/ProfileTab';
@@ -47,6 +48,7 @@ export default function ClientProfileSystem() {
   const [showPhotoModal, setShowPhotoModal] = useState(false);
   const [showRenewalModal, setShowRenewalModal] = useState(false);
   const [showPtModal, setShowPtModal] = useState(false);
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [showQuickMenu, setShowQuickMenu] = useState(false);
   const quickMenuRef = useRef<HTMLDivElement>(null);
 
@@ -416,13 +418,20 @@ export default function ClientProfileSystem() {
                 </div>
 
                 <div className="flex items-baseline justify-between gap-2 mt-0.5">
-                  <div className="flex items-baseline gap-2">
+                  <div className="flex items-baseline gap-2 flex-wrap">
                     <span className="text-base sm:text-lg font-black text-slate-900 tracking-tight">{member.plan || 'Standard Plan'}</span>
                     {(member.amount || member.price || member.totalBilled) && (
                       <span className="text-sm font-extrabold text-[#0066FF]">
                         ₹{Number(member.amount || member.price || member.totalBilled || 0).toLocaleString('en-IN')}
                       </span>
                     )}
+                    <button
+                      onClick={() => setShowUpgradeModal(true)}
+                      className="ml-1 px-2.5 py-0.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-md text-[10px] font-black uppercase tracking-wider flex items-center gap-1 transition-all shadow-2xs border-none cursor-pointer"
+                      title="Upgrade Package"
+                    >
+                      <TrendingUp size={11} /> Upgrade
+                    </button>
                   </div>
                   <span className="text-xs sm:text-sm font-bold text-slate-800 shrink-0">
                     {member.expiryDate
@@ -514,6 +523,14 @@ export default function ClientProfileSystem() {
             {/* Action Buttons Group */}
             <div className="flex items-center gap-2 shrink-0 flex-wrap sm:flex-nowrap">
               <button
+                onClick={() => setShowUpgradeModal(true)}
+                className="flex-1 sm:flex-none h-11 px-4 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-xl flex items-center justify-center gap-1.5 text-xs font-black transition-all cursor-pointer shadow-xs hover:shadow-[0_4px_12px_rgba(139,92,246,0.3)] active:scale-[0.98] border-none"
+                title="Upgrade Membership Package"
+              >
+                <TrendingUp size={14} /> Upgrade
+              </button>
+
+              <button
                 onClick={() => setShowPtModal(true)}
                 className="flex-1 sm:flex-none h-11 px-4 bg-[#0066FF] hover:bg-blue-700 text-white rounded-xl flex items-center justify-center gap-1.5 text-xs font-black transition-all cursor-pointer shadow-xs hover:shadow-[0_4px_12px_rgba(0,102,255,0.3)] active:scale-[0.98] border-none"
                 title="Add Personal Training Bill"
@@ -562,6 +579,12 @@ export default function ClientProfileSystem() {
                       className="w-full px-3 py-2 text-left hover:bg-slate-50 rounded-xl flex items-center gap-2 text-xs font-bold text-slate-700 transition-colors border-none bg-transparent cursor-pointer"
                     >
                       <Camera size={13} className="text-slate-400" /> Change Photo
+                    </button>
+                    <button
+                      onClick={() => { setShowQuickMenu(false); setShowUpgradeModal(true); }}
+                      className="w-full px-3 py-2 text-left hover:bg-purple-50 text-purple-700 rounded-xl flex items-center gap-2 text-xs font-bold transition-colors border-none bg-transparent cursor-pointer"
+                    >
+                      <TrendingUp size={13} className="text-purple-600" /> Upgrade Package
                     </button>
                     <button
                       onClick={() => { setShowQuickMenu(false); setShowRenewalModal(true); }}
@@ -687,6 +710,18 @@ export default function ClientProfileSystem() {
         isOpen={showPtModal}
         member={member}
         onClose={() => setShowPtModal(false)}
+        onSuccess={(updatedMem: any) => {
+          if (updatedMem) setMember({ ...updatedMem });
+          useGymStore.getState().fetchMembers();
+          useGymStore.getState().fetchPayments();
+        }}
+      />
+
+      {/* ── UPGRADE MEMBERSHIP MODAL ── */}
+      <UpgradeModal
+        isOpen={showUpgradeModal}
+        member={member}
+        onClose={() => setShowUpgradeModal(false)}
         onSuccess={(updatedMem: any) => {
           if (updatedMem) setMember({ ...updatedMem });
           useGymStore.getState().fetchMembers();

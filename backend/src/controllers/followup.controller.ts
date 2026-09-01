@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { getFirestoreDb } from '../firebase';
+import { db, getFirestoreDb } from '../firebase';
 import { generateAutomatedFollowups } from '../services/followupAutomation.service';
 
 export const getFollowups = async (req: Request, res: Response) => {

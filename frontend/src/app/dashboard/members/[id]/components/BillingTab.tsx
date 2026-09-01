@@ -5,7 +5,8 @@ import { createPortal } from 'react-dom';
 import {
   Receipt, CreditCard, AlertCircle, CheckCircle, Clock, Download, MessageSquare,
   RefreshCw, Plus, Eye, Printer, Mail, ArrowUpRight, Edit3, X, Calendar, Shield,
-  FileText, Sparkles, Check, ChevronDown, FileSpreadsheet, FileCode, Trash2
+  FileText, Sparkles, Check, ChevronDown, FileSpreadsheet, FileCode, Trash2,
+  TrendingUp
 } from 'lucide-react';
 import { db } from '@/lib/firebase';
 import { collection, query, where, onSnapshot, updateDoc, doc, setDoc, deleteDoc, writeBatch } from 'firebase/firestore';
@@ -19,6 +20,7 @@ import RenewalWizardModal from '../../components/RenewalWizardModal';
 import OfficialInvoiceReceipt from '@/app/dashboard/components/OfficialInvoiceReceipt';
 import EditBillingModal from './EditBillingModal';
 import CreateNewBillModal from '../../components/CreateNewBillModal';
+import UpgradeModal from '../../components/UpgradeModal';
 
 export default function BillingTab({ member: initialMember }: { member: any }) {
   const { fetchMembers } = useGymStore();
@@ -37,6 +39,7 @@ export default function BillingTab({ member: initialMember }: { member: any }) {
   const [invoiceToDelete, setInvoiceToDelete] = useState<any | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [selectedInvoiceForUpgrade, setSelectedInvoiceForUpgrade] = useState<any | null>(null);
   const [showNewBillModal, setShowNewBillModal] = useState(false);
 
   useEffect(() => {
@@ -410,14 +413,25 @@ export default function BillingTab({ member: initialMember }: { member: any }) {
         <div className="lg:col-span-1 bg-gradient-to-br from-[#0b5cbe] to-[#2876d0] rounded-3xl p-3.5 text-white shadow-md flex flex-col justify-between">
           <div>
             <span className="text-[9px] font-black uppercase tracking-widest text-blue-100 block">ACTIONS</span>
-            <p className="text-xs font-black mt-0.5">New Invoice</p>
+            <p className="text-xs font-black mt-0.5">Billing Actions</p>
           </div>
-          <button
-            onClick={() => setShowNewBillModal(true)}
-            className="mt-2 py-2 px-3 bg-white text-[#0b5cbe] hover:bg-[#eaf3ff] rounded-xl text-[11px] font-black transition-all flex items-center justify-center gap-1 shadow-xs border-none cursor-pointer"
-          >
-            <Plus size={14} /> + New Bill
-          </button>
+          <div className="flex flex-col gap-1.5 mt-2">
+            <button
+              onClick={() => setShowNewBillModal(true)}
+              className="py-1.5 px-3 bg-white text-[#0b5cbe] hover:bg-[#eaf3ff] rounded-xl text-[11px] font-black transition-all flex items-center justify-center gap-1 shadow-xs border-none cursor-pointer"
+            >
+              <Plus size={13} /> + New Bill
+            </button>
+            <button
+              onClick={() => {
+                setSelectedInvoiceForUpgrade(null);
+                setShowUpgradeModal(true);
+              }}
+              className="py-1.5 px-3 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-[11px] font-black transition-all flex items-center justify-center gap-1 shadow-xs border-none cursor-pointer"
+            >
+              <TrendingUp size={13} /> Upgrade Package
+            </button>
+          </div>
         </div>
 
       </div>
@@ -552,13 +566,26 @@ export default function BillingTab({ member: initialMember }: { member: any }) {
                       {/* Item Description & Validity Period */}
                       <td className="px-4 py-4 min-w-[250px]">
                         <div className="flex items-center gap-1.5 mb-1 flex-wrap">
-                          <span className={`text-[9px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider border ${
-                            isPt
-                              ? 'bg-amber-100 text-amber-900 border-amber-300'
-                              : 'bg-blue-100 text-blue-800 border-blue-300'
-                          }`}>
-                            {isPt ? 'PERSONAL TRAINING' : 'MEMBERSHIP'}
-                          </span>
+                          {inv.isUpgrade || inv.transactionType === 'membership_upgrade' || String(inv.invoiceNumber || '').startsWith('INV-UPG') ? (
+                            <span className="text-[9px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider border bg-purple-100 text-purple-800 border-purple-300 flex items-center gap-1">
+                              <TrendingUp size={10} /> UPGRADED BILL
+                            </span>
+                          ) : (
+                            <span className={`text-[9px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider border ${
+                              isPt
+                                ? 'bg-amber-100 text-amber-900 border-amber-300'
+                                : 'bg-blue-100 text-blue-800 border-blue-300'
+                            }`}>
+                              {isPt ? 'PERSONAL TRAINING' : 'MEMBERSHIP'}
+                            </span>
+                          )}
+
+                          {inv.isUpgraded && (
+                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-200">
+                              Upgraded to {inv.upgradedToInvoice || 'New Bill'}
+                            </span>
+                          )}
+
                           {isPt && (inv.trainerName || member.trainer) && (
                             <span className="text-[10px] font-extrabold text-amber-800 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
                               Trainer: {inv.trainerName || member.trainer}
@@ -566,6 +593,12 @@ export default function BillingTab({ member: initialMember }: { member: any }) {
                           )}
                         </div>
                         <div className="font-extrabold text-slate-900">{planTitle}</div>
+                        {(inv.adjustedAmount || inv.previousPaidAmount) && (
+                          <div className="text-[10px] text-purple-700 font-semibold mt-0.5">
+                            Previous payment adjusted: ₹{(inv.adjustedAmount || inv.previousPaidAmount).toLocaleString('en-IN')}
+                            {inv.additionalAmountPaid !== undefined ? ` • Additional: ₹${Number(inv.additionalAmountPaid).toLocaleString('en-IN')}` : ''}
+                          </div>
+                        )}
                         <div className="text-[11px] text-slate-500 font-mono mt-0.5">({startDate} to {expiryDate})</div>
                       </td>
 
@@ -759,6 +792,19 @@ export default function BillingTab({ member: initialMember }: { member: any }) {
           <button
             type="button"
             onClick={() => {
+              setSelectedInvoiceForUpgrade(openDropdown.invoice);
+              setShowUpgradeModal(true);
+              setOpenDropdown(null);
+            }}
+            className="w-full px-4 py-2.5 hover:bg-purple-50 hover:text-purple-800 flex items-center gap-2.5 text-left border-none bg-transparent cursor-pointer text-purple-700 transition-colors font-extrabold"
+          >
+            <TrendingUp size={15} className="text-purple-600" />
+            <span>Upgrade Package</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
               handlePrint(openDropdown.invoice);
               setOpenDropdown(null);
             }}
@@ -907,6 +953,24 @@ export default function BillingTab({ member: initialMember }: { member: any }) {
             if (shouldGenerateReceipt) {
               setViewInvoice(updatedInv);
             }
+            fetchMembers(true);
+          }}
+        />
+      )}
+
+      {/* ── 6. UPGRADE MEMBERSHIP MODAL ────────────────────────────────────── */}
+      {showUpgradeModal && (
+        <UpgradeModal
+          isOpen={showUpgradeModal}
+          member={member}
+          preselectedPayment={selectedInvoiceForUpgrade}
+          onClose={() => {
+            setShowUpgradeModal(false);
+            setSelectedInvoiceForUpgrade(null);
+          }}
+          onSuccess={(updatedMem, newInv) => {
+            if (updatedMem) setMember((prev: any) => ({ ...prev, ...updatedMem }));
+            if (newInv) setInvoices((prev: any[]) => [newInv, ...prev]);
             fetchMembers(true);
           }}
         />

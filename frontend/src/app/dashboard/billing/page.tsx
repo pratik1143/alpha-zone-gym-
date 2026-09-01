@@ -522,22 +522,46 @@ export default function BillingPage() {
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-xs font-semibold text-slate-700">
                   {paginatedPayments.map((p, idx) => {
-                    const { memberName, phoneDisplay } = resolveTransactionMember(p);
-                    const isPaid = (p.status || 'paid').toLowerCase() === 'paid';
-                    const isPending = (p.status || '').toLowerCase() === 'pending';
-                    const methodNorm = String(p.method || p.paymentMethod || 'UPI');
+                    const payment = p as any;
+                    const { memberName, phoneDisplay } = resolveTransactionMember(payment);
+                    const isPaid = (payment.status || 'paid').toLowerCase() === 'paid';
+                    const isPending = (payment.status || '').toLowerCase() === 'pending';
+                    const methodNorm = String(payment.method || payment.paymentMethod || 'UPI');
                     const MethodIcon = methodNorm.includes('Cash') ? Banknote : methodNorm.includes('Card') ? CreditCard : methodNorm.includes('Net') ? Landmark : Smartphone;
 
-                    const dateDisplay = formatDate(p.transactionDate || p.paymentDate || p.date || p.createdAt || todayStr);
-                    const timeDisplay = p.transactionTime || p.paymentTime || p.time || '';
+                    const isUpgrade = Boolean(
+                      payment.isUpgrade ||
+                      payment.transactionType === 'membership_upgrade' ||
+                      payment.type === 'UPGRADE' ||
+                      String(payment.invoice || payment.invoiceNumber || '').startsWith('INV-UPG')
+                    );
+
+                    const dateDisplay = formatDate(payment.transactionDate || payment.paymentDate || payment.date || payment.createdAt || todayStr);
+                    const timeDisplay = payment.transactionTime || payment.paymentTime || payment.time || '';
 
                     return (
-                      <tr key={p.id || idx} className="hover:bg-slate-50/80 transition-colors">
+                      <tr key={payment.id || idx} className="hover:bg-slate-50/80 transition-colors">
                         {/* Invoice # */}
                         <td className="py-3.5 px-5 font-mono text-xs font-bold text-slate-900">
-                          <span className="bg-slate-100 px-2.5 py-1 rounded-lg border border-slate-200/80">
-                            {p.invoice || p.invoiceNumber || `AZ-INV-${String(idx+1).padStart(6, '0')}`}
-                          </span>
+                          <div className="flex flex-col items-start gap-1">
+                            <span className={`px-2.5 py-1 rounded-lg border ${
+                              isUpgrade
+                                ? 'bg-purple-50 text-purple-900 border-purple-300 font-black'
+                                : 'bg-slate-100 text-slate-900 border-slate-200/80'
+                            }`}>
+                              {payment.invoice || payment.invoiceNumber || `AZ-INV-${String(idx+1).padStart(6, '0')}`}
+                            </span>
+                            {isUpgrade && (
+                              <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider bg-purple-100 text-purple-800 px-2 py-0.5 rounded border border-purple-300">
+                                ⚡ UPGRADED
+                              </span>
+                            )}
+                            {payment.isUpgraded && (
+                              <span className="text-[9px] font-bold text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-200">
+                                Upgraded to {String(payment.upgradedToInvoice || 'New Bill')}
+                              </span>
+                            )}
+                          </div>
                         </td>
 
                         {/* Member */}
@@ -555,12 +579,34 @@ export default function BillingPage() {
 
                         {/* Plan */}
                         <td className="py-3.5 px-4">
-                          <span className="font-bold text-slate-800">{p.plan || 'Membership'}</span>
+                          <span className="font-bold text-slate-800">{payment.plan || 'Membership'}</span>
+                          {isUpgrade && (
+                            <div className="text-[10px] text-purple-700 font-semibold mt-0.5">
+                              {payment.previousPlan ? `Upgraded from ${payment.previousPlan}` : 'Package Upgrade'}
+                              {(payment.adjustedAmount || payment.previousPaidAmount) ? ` (₹${Number(payment.adjustedAmount || payment.previousPaidAmount).toLocaleString('en-IN')} adjusted)` : ''}
+                            </div>
+                          )}
                         </td>
 
                         {/* Amount */}
-                        <td className="py-3.5 px-4 font-black text-slate-900 text-sm">
-                          ₹{(Number(p.paid) || Number(p.amount) || 0).toLocaleString('en-IN')}
+                        <td className="py-3.5 px-4">
+                          {isUpgrade ? (
+                            <div>
+                              <div className="font-black text-slate-900 text-sm">
+                                ₹{(Number(payment.originalAmount) || Number(payment.netPayable) || Number(payment.amount) || 0).toLocaleString('en-IN')}
+                              </div>
+                              <div className="text-[10px] text-slate-500 font-medium">
+                                Adjusted: ₹{(Number(payment.adjustedAmount) || Number(payment.previousPaidAmount) || 0).toLocaleString('en-IN')}
+                              </div>
+                              <div className="text-[10px] text-emerald-700 font-bold">
+                                Collected: ₹{(Number(payment.additionalAmountPaid) || Number(payment.amountPaid) || Number(payment.paid) || 0).toLocaleString('en-IN')}
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="font-black text-slate-900 text-sm">
+                              ₹{(Number(payment.paid) || Number(payment.amount) || 0).toLocaleString('en-IN')}
+                            </div>
+                          )}
                         </td>
 
                         {/* Payment Method */}

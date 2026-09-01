@@ -662,3 +662,204 @@ export const renewMembership = async (req: Request, res: Response) => {
     res.status(500).json({ error: error.message });
   }
 };
+
+export const upgradeMembership = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const {
+      plan,
+      startDate,
+      expiryDate,
+      packagePrice,
+      previousInvoiceId,
+      previousInvoiceNumber,
+      previousInvoiceDate,
+      previousPlan,
+      previousPaidAmount,
+      adjustedAmount,
+      additionalAmountDue,
+      additionalAmountPaid,
+      paymentMethod,
+      paymentStatus,
+      invoiceDate,
+      notes,
+      invoiceNumber: providedInvoiceNumber,
+    } = req.body;
+
+    // Validation
+    if (!plan) return res.status(400).json({ error: 'New plan is required' });
+    if (!startDate) return res.status(400).json({ error: 'Start date is required' });
+    if (!expiryDate) return res.status(400).json({ error: 'Expiry date is required' });
+    if (!paymentMethod) return res.status(400).json({ error: 'Payment method is required' });
+
+    const numPkgPrice = Math.max(0, Number(packagePrice) || 0);
+    const numPrevPaid = Math.max(0, Number(previousPaidAmount) || 0);
+    const numAdjusted = Math.max(0, Number(adjustedAmount !== undefined ? adjustedAmount : numPrevPaid));
+    const numAddDue = Math.max(0, Number(additionalAmountDue !== undefined ? additionalAmountDue : Math.max(0, numPkgPrice - numAdjusted)));
+    const numAddPaid = Math.max(0, Number(additionalAmountPaid !== undefined ? additionalAmountPaid : numAddDue));
+    const numPending = Math.max(0, numAddDue - numAddPaid);
+
+    const canonicalInvoiceDate = invoiceDate || new Date().toISOString().split('T')[0];
+    const invoiceNumber = providedInvoiceNumber || `INV-UPG-${Math.floor(100000 + Math.random() * 900000)}`;
+    const nowIso = new Date().toISOString();
+
+    const existingMember = await db.getMemberById(id);
+    if (!existingMember) {
+      return res.status(404).json({ error: 'Member not found' });
+    }
+
+    // Step 1: Create the Upgraded Payment record in `payments` collection
+    let paymentRecord: any;
+    try {
+      paymentRecord = await db.addPayment({
+        memberId: id,
+        memberName: existingMember.name,
+        memberPhone: existingMember.phone || '',
+        invoiceType: 'MEMBERSHIP',
+        billingType: 'MEMBERSHIP',
+        transactionType: 'membership_upgrade',
+        isUpgrade: true,
+        plan,
+        packageName: plan,
+        previousPlan: previousPlan || existingMember.plan || '',
+        previousInvoiceNumber: previousInvoiceNumber || '',
+        previousInvoiceDate: previousInvoiceDate || '',
+        previousPaidAmount: numPrevPaid,
+        adjustedAmount: numAdjusted,
+        originalAmount: numPkgPrice,
+        packagePrice: numPkgPrice,
+        baseAmount: numPkgPrice,
+        netPayable: numPkgPrice,
+        amount: numPkgPrice,
+        additionalAmountDue: numAddDue,
+        additionalAmountPaid: numAddPaid,
+        // Crucial for Today's Collection: amountPaid is the actual additional cash collected today
+        amountPaid: numAddPaid,
+        paid: numAddPaid,
+        totalAmountPaid: numAdjusted + numAddPaid,
+        pendingAmount: numPending,
+        outstandingAmount: numPending,
+        paymentMethod,
+        method: paymentMethod,
+        paymentStatus: numPending <= 0 ? 'paid' : (numAddPaid > 0 ? 'partial' : 'pending'),
+        status: numPending <= 0 ? 'paid' : (numAddPaid > 0 ? 'partial' : 'pending'),
+        invoiceDate: canonicalInvoiceDate,
+        billingDate: canonicalInvoiceDate,
+        date: canonicalInvoiceDate,
+        paymentDate: canonicalInvoiceDate,
+        transactionDate: canonicalInvoiceDate,
+        membershipStartDate: startDate,
+        startDate,
+        membershipExpiryDate: expiryDate,
+        expiryDate,
+        invoiceNumber,
+        invoice: invoiceNumber,
+        notes: notes || `Membership Upgrade from ${previousPlan || existingMember.plan || 'previous package'} (${previousInvoiceNumber || 'INV-PREV'}). Adjusted: ₹${numAdjusted}, Additional Paid: ₹${numAddPaid}`,
+        isHistorical: false,
+        imported: false,
+        createdAt: nowIso,
+      });
+    } catch (billingErr: any) {
+      console.error('[Upgrade] Billing write failed:', billingErr.message);
+      return res.status(500).json({
+        error: 'Upgrade could not be completed. No changes were saved. (Billing write failed: ' + billingErr.message + ')',
+      });
+    }
+
+    // Step 2: Mark previous invoice as upgraded if previousInvoiceId or previousInvoiceNumber is provided
+    if (previousInvoiceId || previousInvoiceNumber) {
+      try {
+        const payments = await db.getPayments({ memberId: id });
+        const targetOld = payments.find((p: any) => 
+          (previousInvoiceId && (p.id === previousInvoiceId || p.invoice === previousInvoiceId || p.invoiceNumber === previousInvoiceId)) ||
+          (previousInvoiceNumber && (p.invoiceNumber === previousInvoiceNumber || p.invoice === previousInvoiceNumber))
+        );
+        if (targetOld && targetOld.id) {
+          await db.updatePayment(targetOld.id, {
+            isUpgraded: true,
+            upgradedToInvoice: invoiceNumber,
+            upgradedAt: nowIso,
+            // Keep original date, paymentDate, amount, and paid intact!
+          });
+        }
+      } catch (oldInvErr: any) {
+        console.warn('[Upgrade] Note: Link to previous invoice updated with warning:', oldInvErr.message);
+      }
+    }
+
+    // Step 3: Update member profile
+    const existingHistory = Array.isArray(existingMember.membershipHistory)
+      ? existingMember.membershipHistory
+      : [];
+
+    const historyEntry = {
+      packageName: plan,
+      previousPackageName: previousPlan || existingMember.plan || '',
+      type: 'UPGRADE',
+      startDate,
+      expiryDate,
+      amount: numPkgPrice,
+      previousPaidAdjusted: numAdjusted,
+      additionalAmountPaid: numAddPaid,
+      pendingAmount: numPending,
+      paymentMethod,
+      paymentStatus: numPending <= 0 ? 'paid' : (numAddPaid > 0 ? 'partial' : 'pending'),
+      invoiceNumber,
+      previousInvoiceNumber: previousInvoiceNumber || '',
+      invoiceDate: canonicalInvoiceDate,
+      upgradedAt: nowIso,
+      notes: notes || '',
+    };
+
+    const updatedHistory = [historyEntry, ...existingHistory];
+
+    const currentTotalBilled = Number(existingMember.totalBilled) || Number(existingMember.amount) || numPrevPaid;
+    const currentTotalPaid = Number(existingMember.totalPaid) || Number(existingMember.paid) || numPrevPaid;
+
+    const newTotalBilled = currentTotalBilled + Math.max(0, numPkgPrice - numAdjusted);
+    const newTotalPaid = currentTotalPaid + numAddPaid;
+
+    let updatedMember: any;
+    try {
+      updatedMember = await db.updateMember(id, {
+        plan,
+        packageName: plan,
+        price: numPkgPrice,
+        amount: numPkgPrice,
+        totalBilled: newTotalBilled,
+        totalPaid: newTotalPaid,
+        outstandingBalance: numPending,
+        startDate,
+        expiryDate,
+        status: 'active',
+        paymentStatus: numPending <= 0 ? 'paid' : 'partial',
+        membershipHistory: updatedHistory,
+        updatedAt: nowIso,
+      });
+    } catch (memberErr: any) {
+      console.error('[Upgrade] Member update failed after billing write. Invoice:', invoiceNumber, memberErr.message);
+      return res.status(500).json({
+        error: 'Billing record was created but member profile update failed. Invoice: ' + invoiceNumber,
+        invoiceNumber,
+        partialSuccess: true,
+      });
+    }
+
+    // Step 4: Side effects (non-blocking)
+    resolveStaleRenewalFollowups(id, 'MEMBERSHIP', expiryDate).catch(() => {});
+    if (numPending <= 0) {
+      resolveStaleRenewalFollowups(id, 'BALANCE').catch(() => {});
+    }
+    triggerPaymentEmail(paymentRecord).catch(() => {});
+
+    res.json({
+      success: true,
+      member: updatedMember,
+      payment: paymentRecord,
+      invoiceNumber,
+    });
+  } catch (error: any) {
+    console.error('[Upgrade] Unexpected error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+};

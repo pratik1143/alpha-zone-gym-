@@ -47,6 +47,22 @@ export default function OfficialInvoiceReceipt({ invoice, member, onPrint, onWha
   const pendingAmount = Math.max(0, netPayable - paidAmount);
   const paymentMethod = invoice?.paymentMethod || invoice?.method || member?.paymentMethod || 'UPI';
 
+  const isUpgrade = Boolean(
+    invoice?.isUpgrade ||
+    invoice?.transactionType === 'membership_upgrade' ||
+    invoice?.type === 'UPGRADE' ||
+    String(invoice?.invoiceNumber || '').startsWith('INV-UPG')
+  );
+  const previousInvoiceNumber = invoice?.previousInvoiceNumber || invoice?.originalInvoiceNumber || null;
+  const previousInvoiceDate = (invoice?.previousInvoiceDate || invoice?.originalInvoiceDate)
+    ? formatDate(invoice?.previousInvoiceDate || invoice?.originalInvoiceDate)
+    : null;
+  const previousPaidAmount = Number(invoice?.previousPaidAmount || invoice?.adjustedAmount || 0);
+  const adjustedAmount = Number(invoice?.adjustedAmount !== undefined ? invoice.adjustedAmount : previousPaidAmount);
+  const additionalAmountPaid = Number(
+    invoice?.additionalAmountPaid !== undefined ? invoice.additionalAmountPaid : (invoice?.amountPaid || 0)
+  );
+
   return (
     <div id="printable-official-invoice" className="bg-white text-black p-8 rounded-xl max-w-[800px] w-full mx-auto font-sans shadow-lg border border-slate-200 official-invoice-print-area">
       {/* ── TOP HEADER (Logo + Address) ── */}
@@ -72,6 +88,13 @@ export default function OfficialInvoiceReceipt({ invoice, member, onPrint, onWha
               <p className="text-xs font-semibold text-slate-700 mt-1 font-mono">
                 Invoice number: {invNumber}
               </p>
+              {isUpgrade && (
+                <div className="mt-1.5">
+                  <span className="px-2.5 py-0.5 bg-purple-100 text-purple-800 text-[10px] font-black uppercase tracking-wider rounded-md border border-purple-300 inline-block shadow-2xs">
+                    ⚡ UPGRADED MEMBERSHIP
+                  </span>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -96,9 +119,15 @@ export default function OfficialInvoiceReceipt({ invoice, member, onPrint, onWha
             <p><span className="font-bold">Member ID:</span> {memberId}</p>
             <p><span className="font-bold">Name:</span> {memberName}</p>
             <p><span className="font-bold">Phone:</span> {memberPhone}</p>
+            {isUpgrade && previousInvoiceNumber && (
+              <div className="pt-1.5 mt-1.5 border-t border-slate-200 font-mono text-[11px] text-purple-900 space-y-0.5">
+                <p><span className="font-bold">Original Invoice:</span> {previousInvoiceNumber}</p>
+                {previousInvoiceDate && <p><span className="font-bold">Original Payment Date:</span> {previousInvoiceDate}</p>}
+              </div>
+            )}
           </div>
           <div className="text-right space-y-0.5">
-            <p><span className="font-bold">Payment date:</span> {billDate}</p>
+            <p><span className="font-bold">{isUpgrade ? 'Upgrade Invoice Date:' : 'Payment date:'}</span> {billDate}</p>
             {billTime && <p><span className="font-bold">Payment time:</span> {billTime}</p>}
             {createdDateStr && createdDateStr !== billDate && (
               <p className="text-[10px] text-slate-500 font-mono mt-1"><span className="font-bold">Created in system:</span> {createdDateStr}</p>
@@ -114,7 +143,7 @@ export default function OfficialInvoiceReceipt({ invoice, member, onPrint, onWha
         </div>
         <div className="border border-t-0 border-slate-300 p-3 bg-white text-xs flex justify-between items-start">
           <div className="space-y-1">
-            <p><span className="font-bold">Package name:</span> {planName}</p>
+            <p><span className="font-bold">{isUpgrade ? 'Upgraded Package:' : 'Package name:'}</span> {planName}</p>
             <p><span className="font-bold">End date:</span> {endDate}</p>
           </div>
           <div className="text-right space-y-1">
@@ -126,34 +155,56 @@ export default function OfficialInvoiceReceipt({ invoice, member, onPrint, onWha
 
       {/* ── SECTION 3: Billing Detail (Gray Header) ── */}
       <div className="mb-4">
-        <div className="bg-[#808080] text-white px-3 py-1 text-sm font-bold tracking-wide rounded-t">
-          Billing Detail
+        <div className="bg-[#808080] text-white px-3 py-1 text-sm font-bold tracking-wide rounded-t flex items-center justify-between">
+          <span>Billing Detail</span>
+          {isUpgrade && <span className="text-[10px] uppercase font-mono tracking-widest bg-purple-900 text-purple-100 px-2 py-0.5 rounded">UPGRADE ADJUSTMENT</span>}
         </div>
         <div className="border border-t-0 border-slate-300 p-3 bg-white text-xs space-y-2">
           <div className="flex justify-between border-b border-slate-100 pb-1">
-            <span>Package fees:</span>
+            <span>{isUpgrade ? 'New Package Price:' : 'Package fees:'}</span>
             <span className="font-bold">Rs. {packageFees.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
           </div>
-          <div className="flex justify-between border-b border-slate-100 pb-1">
-            <span>Other Charges:</span>
-            <span className="font-bold">Rs. 0.00</span>
-          </div>
-          <div className="flex justify-between border-b border-slate-100 pb-1">
-            <span>Discount:</span>
-            <span className="font-bold">Rs. {discount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-          </div>
-          <div className="flex justify-between border-b border-slate-100 pb-1">
-            <span>TAX :</span>
-            <span className="font-bold">Rs. 0.00</span>
-          </div>
-          <div className="flex justify-between border-b border-slate-100 pb-1">
-            <span>Reward Points Redeemed :</span>
-            <span className="font-bold">Rs. 0.00</span>
-          </div>
-          <div className="flex justify-between pt-1">
-            <span>First amount paid : Via {paymentMethod}</span>
-            <span className="font-bold">Rs. {paidAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-          </div>
+          {isUpgrade ? (
+            <>
+              {previousPaidAmount > 0 && (
+                <div className="flex justify-between border-b border-slate-100 pb-1 text-slate-600">
+                  <span>Previous Paid Amount:</span>
+                  <span className="font-bold font-mono">Rs. {previousPaidAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                </div>
+              )}
+              <div className="flex justify-between border-b border-slate-100 pb-1 text-emerald-800 font-semibold bg-emerald-50/70 px-1 py-0.5 rounded">
+                <span>Adjusted Amount (Carried Forward):</span>
+                <span className="font-bold font-mono">- Rs. {adjustedAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+              </div>
+              <div className="flex justify-between pt-1 font-bold text-slate-900">
+                <span>Additional Amount Paid : Via {paymentMethod}</span>
+                <span className="font-black font-mono text-emerald-700">Rs. {additionalAmountPaid.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="flex justify-between border-b border-slate-100 pb-1">
+                <span>Other Charges:</span>
+                <span className="font-bold">Rs. 0.00</span>
+              </div>
+              <div className="flex justify-between border-b border-slate-100 pb-1">
+                <span>Discount:</span>
+                <span className="font-bold">Rs. {discount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+              </div>
+              <div className="flex justify-between border-b border-slate-100 pb-1">
+                <span>TAX :</span>
+                <span className="font-bold">Rs. 0.00</span>
+              </div>
+              <div className="flex justify-between border-b border-slate-100 pb-1">
+                <span>Reward Points Redeemed :</span>
+                <span className="font-bold">Rs. 0.00</span>
+              </div>
+              <div className="flex justify-between pt-1">
+                <span>First amount paid : Via {paymentMethod}</span>
+                <span className="font-bold">Rs. {paidAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+              </div>
+            </>
+          )}
         </div>
       </div>
 

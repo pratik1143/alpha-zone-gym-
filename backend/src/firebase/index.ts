@@ -1402,20 +1402,24 @@ export const db = {
 
   updatePayment: async (paymentId: string, updates: any): Promise<any> => {
     const firestore = getFirestoreDb();
-    const origAmt = Number(updates.originalAmount !== undefined ? updates.originalAmount : (updates.amount || 0));
-    const discAmt = Number(updates.discountAmount !== undefined ? updates.discountAmount : (updates.discount || 0));
-    const taxAmt = Number(updates.taxAmount !== undefined ? updates.taxAmount : (updates.tax || updates.gst || 0));
-    const othAmt = Number(updates.otherCharges || 0);
 
-    const calculatedNet = Math.max(0, origAmt - discAmt + taxAmt + othAmt);
-    const netPayable = Number(updates.netPayable !== undefined ? updates.netPayable : (calculatedNet > 0 ? calculatedNet : origAmt));
-    const amountPaid = Number(updates.amountPaid !== undefined ? updates.amountPaid : (updates.paid !== undefined ? updates.paid : netPayable));
-    const outstanding = Math.max(0, netPayable - amountPaid);
-    const status = updates.status || (outstanding <= 0 ? 'paid' : (amountPaid > 0 ? 'partial' : 'pending'));
+    // Check if financial figures are being modified
+    const hasFinancialUpdates = 
+      updates.originalAmount !== undefined ||
+      updates.amount !== undefined ||
+      updates.discountAmount !== undefined ||
+      updates.discount !== undefined ||
+      updates.taxAmount !== undefined ||
+      updates.tax !== undefined ||
+      updates.gst !== undefined ||
+      updates.otherCharges !== undefined ||
+      updates.netPayable !== undefined ||
+      updates.amountPaid !== undefined ||
+      updates.paid !== undefined;
 
     const targetInvDate = updates.invoiceDate || updates.billingDate || updates.date || updates.paymentDate || updates.transactionDate;
 
-    const sanitizedUpdates: any = {
+    let sanitizedUpdates: any = {
       ...updates,
       ...(targetInvDate ? {
         invoiceDate: targetInvDate,
@@ -1424,21 +1428,38 @@ export const db = {
         paymentDate: targetInvDate,
         transactionDate: targetInvDate
       } : {}),
-      originalAmount: origAmt,
-      discountAmount: discAmt,
-      discount: discAmt,
-      taxAmount: taxAmt,
-      gst: taxAmt,
-      otherCharges: othAmt,
-      netPayable,
-      amount: netPayable,
-      amountPaid,
-      paid: amountPaid,
-      outstandingAmount: outstanding,
-      pendingAmount: outstanding,
-      status,
       updatedAt: new Date().toISOString()
     };
+
+    if (hasFinancialUpdates) {
+      const origAmt = Number(updates.originalAmount !== undefined ? updates.originalAmount : (updates.amount || 0));
+      const discAmt = Number(updates.discountAmount !== undefined ? updates.discountAmount : (updates.discount || 0));
+      const taxAmt = Number(updates.taxAmount !== undefined ? updates.taxAmount : (updates.tax || updates.gst || 0));
+      const othAmt = Number(updates.otherCharges || 0);
+
+      const calculatedNet = Math.max(0, origAmt - discAmt + taxAmt + othAmt);
+      const netPayable = Number(updates.netPayable !== undefined ? updates.netPayable : (calculatedNet > 0 ? calculatedNet : origAmt));
+      const amountPaid = Number(updates.amountPaid !== undefined ? updates.amountPaid : (updates.paid !== undefined ? updates.paid : netPayable));
+      const outstanding = Math.max(0, netPayable - amountPaid);
+      const status = updates.status || (outstanding <= 0 ? 'paid' : (amountPaid > 0 ? 'partial' : 'pending'));
+
+      sanitizedUpdates = {
+        ...sanitizedUpdates,
+        originalAmount: origAmt,
+        discountAmount: discAmt,
+        discount: discAmt,
+        taxAmount: taxAmt,
+        gst: taxAmt,
+        otherCharges: othAmt,
+        netPayable,
+        amount: netPayable,
+        amountPaid,
+        paid: amountPaid,
+        outstandingAmount: outstanding,
+        pendingAmount: outstanding,
+        status
+      };
+    }
 
     if (firestore) {
       let docRef = firestore.collection('payments').doc(paymentId);
@@ -1501,14 +1522,14 @@ export const db = {
             changedBy: updates.changedBy || 'Gym Owner',
             timestamp: new Date().toISOString(),
             details: {
-              previousAmount: prevData.amount || prevData.netPayable,
-              newAmount: netPayable,
-              previousDiscount: prevData.discount || prevData.discountAmount,
-              newDiscount: discAmt,
-              previousStartDate: prevData.startDate,
-              newStartDate: sanitizedUpdates.startDate,
-              previousExpiryDate: prevData.expiryDate,
-              newExpiryDate: sanitizedUpdates.expiryDate
+              previousAmount: prevData.amount || prevData.netPayable || 0,
+              newAmount: sanitizedUpdates.netPayable || prevData.amount || 0,
+              previousDiscount: prevData.discount || prevData.discountAmount || 0,
+              newDiscount: sanitizedUpdates.discountAmount ?? prevData.discount ?? 0,
+              previousStartDate: prevData.startDate ?? null,
+              newStartDate: sanitizedUpdates.startDate ?? null,
+              previousExpiryDate: prevData.expiryDate ?? null,
+              newExpiryDate: sanitizedUpdates.expiryDate ?? null
             }
           });
         } catch (err: any) {

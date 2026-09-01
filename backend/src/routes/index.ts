@@ -4,7 +4,8 @@ import whatsappRoutes from './whatsapp.routes';
 import { loginUser } from '../controllers/auth.controller';
 import { 
   getMembers, getMembersPaginated, getMemberById, createMember, updateMember, 
-  deleteMember, toggleFreezeMember, resetMemberPassword, sendMemberCredentials, renewMembership
+  deleteMember, toggleFreezeMember, resetMemberPassword, sendMemberCredentials, renewMembership,
+  upgradeMembership
 } from '../controllers/member.controller';
 import { getAttendanceFeed, createCheckIn, checkoutLog, triggerGateUnlock, getAccessLogs, getDoorStatus, getDashboardAnalyticsFeed, getAttendanceSummaryFeed } from '../controllers/attendance.controller';
 import { getDevices, createDevice, updateDevice, deleteDevice, getDeviceLogs, triggerSimulationTap, restartDevice, queueConnectionTest, queueReadUsers, queueReadAttendance, getTesterStatus, queueSyncFirebase, queueImportUsers, startEnrollFingerprint, deleteEnrollment, syncMemberToDevice, getEnrollmentStatus, getPythonStatus, getLatestPunch, autoMapAllBiometrics } from '../controllers/device.controller';
@@ -67,6 +68,7 @@ router.post('/members/:id/freeze', toggleFreezeMember);
 router.post('/members/:id/reset-password', resetMemberPassword);
 router.post('/members/:id/send-credentials', sendMemberCredentials);
 router.post('/members/:id/renew', renewMembership);
+router.post('/members/:id/upgrade', upgradeMembership);
 
 // Attendance & Hardware Controller Sync
 router.get('/analytics/dashboard', getDashboardAnalyticsFeed);
