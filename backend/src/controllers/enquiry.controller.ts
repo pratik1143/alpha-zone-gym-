@@ -19,15 +19,34 @@ import {
   convertEnquiryBackendSchema
 } from '../validations/enquirySchemas';
 
+export const getEnquirySortTime = (e: any): number => {
+  if (e?.createdAt) {
+    const t = typeof e.createdAt === 'object' && e.createdAt.seconds
+      ? e.createdAt.seconds * 1000
+      : new Date(e.createdAt).getTime();
+    if (!isNaN(t) && t > 0) return t;
+  }
+  if (e?.enquiryDate) {
+    const t = new Date(e.enquiryDate).getTime();
+    if (!isNaN(t) && t > 0) return t;
+  }
+  if (e?.date) {
+    const t = new Date(e.date).getTime();
+    if (!isNaN(t) && t > 0) return t;
+  }
+  return 0; // safe fallback for historical records without timestamps
+};
+
 export const getEnquiries = async (req: Request, res: Response) => {
   try {
     const firestore = getFirestoreDb();
     if (firestore) {
-      const snap = await firestore.collection('enquiries').orderBy('createdAt', 'desc').get();
+      const snap = await firestore.collection('enquiries').get();
       const list = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      list.sort((a, b) => getEnquirySortTime(b) - getEnquirySortTime(a));
       return res.json(list);
     }
-    const sorted = [...mockEnquiries].sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+    const sorted = [...mockEnquiries].sort((a: any, b: any) => getEnquirySortTime(b) - getEnquirySortTime(a));
     return res.json(sorted);
   } catch (error: any) {
     console.error('Error fetching enquiries:', error);

@@ -619,6 +619,24 @@ export const classifyHistoricalPayments = async () => {
 
 let membersCache: any[] | null = null;
 
+export function getMemberSortTime(m: any): number {
+  if (m?.createdAt) {
+    const t = typeof m.createdAt === 'object' && m.createdAt.seconds
+      ? m.createdAt.seconds * 1000
+      : new Date(m.createdAt).getTime();
+    if (!isNaN(t) && t > 0) return t;
+  }
+  if (m?.joinDate) {
+    const t = new Date(m.joinDate).getTime();
+    if (!isNaN(t) && t > 0) return t;
+  }
+  if (m?.startDate) {
+    const t = new Date(m.startDate).getTime();
+    if (!isNaN(t) && t > 0) return t;
+  }
+  return 0; // safe stable fallback for historical members without timestamps
+}
+
 // Database helper functions (asynchronous to support Firestore)
 export const db = {
   classifyHistoricalPayments: async () => {
@@ -657,6 +675,7 @@ export const db = {
           return true;
         });
 
+        deduplicatedList.sort((a: any, b: any) => getMemberSortTime(b) - getMemberSortTime(a));
         membersCache = deduplicatedList;
         return membersCache;
       } catch (error: any) {
@@ -665,7 +684,7 @@ export const db = {
           disableFirestore();
         }
         const seenMockKeys = new Set<string>();
-        return mockMembers.filter((m: any) => {
+        const mockList = mockMembers.filter((m: any) => {
           const key = m.clientId
             ? `cid_${String(m.clientId).trim()}`
             : (m.memberId && m.memberId !== 'AZ-2026-0000')
@@ -675,10 +694,12 @@ export const db = {
           seenMockKeys.add(key);
           return true;
         });
+        mockList.sort((a: any, b: any) => getMemberSortTime(b) - getMemberSortTime(a));
+        return mockList;
       }
     }
     const seenMockKeys = new Set<string>();
-    return mockMembers.filter((m: any) => {
+    const mockList = mockMembers.filter((m: any) => {
       const key = m.clientId
         ? `cid_${String(m.clientId).trim()}`
         : (m.memberId && m.memberId !== 'AZ-2026-0000')
@@ -688,6 +709,8 @@ export const db = {
       seenMockKeys.add(key);
       return true;
     });
+    mockList.sort((a: any, b: any) => getMemberSortTime(b) - getMemberSortTime(a));
+    return mockList;
   },
 
   getMemberById: async (id: string): Promise<any | null> => {
@@ -806,6 +829,7 @@ export const db = {
     const newMember = {
       ...member,
       memberId,
+      createdAt: member.createdAt || new Date().toISOString(),
       startDate: member.startDate || member.joinDate || new Date().toISOString().split('T')[0],
       daysLeft: Number(member.daysLeft) || 30,
       attendanceCount: Number(member.attendanceCount) || 0,
@@ -813,7 +837,7 @@ export const db = {
       streak: Number(member.streak) || 1,
       goalWeight: member.weight ? member.weight - 5 : 70,
       attendancePercent: Number(member.attendancePercent) || 100,
-      referralCode: member.name.substring(0, 4).toUpperCase() + Math.floor(100 + Math.random() * 900)
+      referralCode: member.name ? (member.name.substring(0, 4).toUpperCase() + Math.floor(100 + Math.random() * 900)) : ''
     };
 
     if (firestore) {
@@ -821,7 +845,7 @@ export const db = {
       await firestore.collection('members').doc(docId).set(newMember);
       const added = { id: docId, ...newMember };
       if (membersCache) {
-        membersCache.push(added);
+        membersCache.unshift(added);
       } else {
         membersCache = null; // force fetch next time
       }
@@ -830,7 +854,7 @@ export const db = {
 
     const docId = member.id || member.uid || ('m' + (mockMembers.length + 1));
     const finalMember = { id: docId, ...newMember };
-    mockMembers.push(finalMember);
+    mockMembers.unshift(finalMember);
     return finalMember;
   },
 

@@ -608,24 +608,25 @@ export default function EditBillingModal({
 
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3.5 text-xs">
               <div>
-                <label className="font-extrabold text-slate-700 block mb-1">
-                  Original Transaction Amount (₹) *
-                </label>
+                <div className="flex justify-between items-center mb-1">
+                  <label className="font-extrabold text-slate-700 block">
+                    Original Transaction Amount (₹) *
+                  </label>
+                  <span className="inline-flex items-center gap-1 text-[9px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
+                    <Lock size={10} /> Locked
+                  </span>
+                </div>
                 <input
                   type="number"
                   value={originalAmount}
-                  onChange={e => setOriginalAmount(Number(e.target.value))}
-                  className={`w-full px-3 py-2 bg-white border rounded-xl font-mono font-black text-slate-900 focus:outline-none text-sm ${
-                    validationErrors.originalAmount ? 'border-red-500 bg-red-50/40' : 'border-slate-200 focus:border-pink-500'
-                  }`}
+                  readOnly
+                  tabIndex={-1}
+                  onKeyDown={e => e.preventDefault()}
+                  onPaste={e => e.preventDefault()}
+                  className="w-full px-3 py-2 bg-slate-100/90 border border-slate-200 rounded-xl font-mono font-black text-slate-700 cursor-not-allowed select-none focus:outline-none text-sm"
+                  title="Historical package amount is locked to preserve financial integrity."
                 />
-                {validationErrors.originalAmount ? (
-                  <p className="mt-1 text-[11px] font-bold text-red-500 flex items-center gap-1">
-                    <AlertCircle size={12} className="shrink-0" /> {validationErrors.originalAmount}
-                  </p>
-                ) : (
-                  <span className="text-[10px] text-slate-400 mt-0.5 block">Actual stored transaction amount</span>
-                )}
+                <span className="text-[10px] text-slate-400 mt-0.5 block">Historical package amount preserved from bill creation</span>
               </div>
 
               <div>

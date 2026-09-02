@@ -43,6 +43,24 @@ export interface EnquiryItem {
   updatedAt?: string;
 }
 
+export const getEnquirySortTime = (e: any): number => {
+  if (e?.createdAt) {
+    const t = typeof e.createdAt === 'object' && e.createdAt.seconds
+      ? e.createdAt.seconds * 1000
+      : new Date(e.createdAt).getTime();
+    if (!isNaN(t) && t > 0) return t;
+  }
+  if (e?.enquiryDate) {
+    const t = new Date(e.enquiryDate).getTime();
+    if (!isNaN(t) && t > 0) return t;
+  }
+  if (e?.date) {
+    const t = new Date(e.date).getTime();
+    if (!isNaN(t) && t > 0) return t;
+  }
+  return 0; // safe fallback for historical records without timestamps
+};
+
 export const enquiryService = {
   // Real-time listener with deduplication and API fallback
   subscribe: (onData: (items: EnquiryItem[]) => void, onError?: (err: Error) => void) => {
@@ -72,11 +90,7 @@ export const enquiryService = {
               history: Array.isArray(d.history) ? d.history : []
             };
           });
-          list.sort((a, b) => {
-            const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-            const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-            return timeB - timeA;
-          });
+          list.sort((a, b) => getEnquirySortTime(b) - getEnquirySortTime(a));
           onData(list);
         }
       })
@@ -119,19 +133,15 @@ export const enquiryService = {
             duration: d.duration || d.interestedPlan || '1 month',
             remarks: d.remarks || d.remark || '',
             history: Array.isArray(d.history) ? d.history : [],
-            createdAt: d.createdAt || new Date().toISOString(),
-            updatedAt: d.updatedAt || d.createdAt || new Date().toISOString()
+            createdAt: d.createdAt || '',
+            updatedAt: d.updatedAt || d.createdAt || ''
           };
 
           itemMap.set(docSnap.id, item);
         });
 
         const list = Array.from(itemMap.values());
-        list.sort((a, b) => {
-          const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-          const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-          return timeB - timeA;
-        });
+        list.sort((a, b) => getEnquirySortTime(b) - getEnquirySortTime(a));
         onData(list);
       },
       (err) => {

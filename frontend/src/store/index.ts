@@ -311,6 +311,26 @@ export const useGymStore = create<GymStore>((set, get) => ({
         seen.add(key);
         return true;
       });
+
+      const getMemberSortTime = (m: any): number => {
+        if (m?.createdAt) {
+          const t = typeof m.createdAt === 'object' && m.createdAt.seconds
+            ? m.createdAt.seconds * 1000
+            : new Date(m.createdAt).getTime();
+          if (!isNaN(t) && t > 0) return t;
+        }
+        if (m?.joinDate) {
+          const t = new Date(m.joinDate).getTime();
+          if (!isNaN(t) && t > 0) return t;
+        }
+        if (m?.startDate) {
+          const t = new Date(m.startDate).getTime();
+          if (!isNaN(t) && t > 0) return t;
+        }
+        return 0;
+      };
+      unique.sort((a: any, b: any) => getMemberSortTime(b) - getMemberSortTime(a));
+
       set({ members: unique });
       _membersCacheTs = Date.now();
     } catch (err) {
@@ -324,8 +344,8 @@ export const useGymStore = create<GymStore>((set, get) => ({
   },
   addMember: async (member) => {
     const res = await API.post('/members', member);
-    // Always re-fetch from server to avoid duplicates from optimistic local appends
-    await get().fetchMembers();
+    // Always force re-fetch from server to ensure immediate top placement
+    await get().fetchMembers(true);
     get().fetchPayments(); // refresh invoices ledger
     return res.data;
   },

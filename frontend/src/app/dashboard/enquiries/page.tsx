@@ -14,7 +14,7 @@ import {
 import toast from '@/lib/toast';
 import confetti from 'canvas-confetti';
 import { z } from 'zod';
-import { enquiryService, EnquiryItem, EnquiryHistoryItem } from '@/services/enquiry.service';
+import { enquiryService, EnquiryItem, EnquiryHistoryItem, getEnquirySortTime } from '@/services/enquiry.service';
 import { followupService } from '@/services/followup.service';
 import { getTodayInIndia, getTomorrowInIndia, isTodayInIndia, isOverdueInIndia, isUpcomingInIndia, formatIndianDate } from '@/lib/dateUtils';
 import { resolveAvatarUrl, MALE_DEFAULT_AVATAR, FEMALE_DEFAULT_AVATAR } from '@/lib/avatar';
@@ -255,11 +255,7 @@ export default function EnquiryGodLevelHub() {
       const staffMatch = staffFilter === 'All' || item.assignedTo === staffFilter;
 
       return nameMatch && staffMatch;
-    }).sort((a, b) => {
-      const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-      const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-      return timeB - timeA;
-    });
+    }).sort((a, b) => getEnquirySortTime(b) - getEnquirySortTime(a));
   }, [enquiries, activeFilterTab, searchQuery, statusFilter, staffFilter, priorityFilter, planFilter]);
 
   // Validate individual field using Zod

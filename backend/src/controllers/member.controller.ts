@@ -171,23 +171,41 @@ export const createMember = async (req: Request, res: Response) => {
       finalExpiry = calculateBackendPlanExpiry(plan || 'Monthly', memStartDate, plansList);
     }
 
+    const reqPlanId = String(req.body.planId || req.body.packageId || '').trim().toLowerCase();
+    const reqPlanName = String(plan || req.body.packageName || '').trim().toLowerCase();
+
     const matchedPlan = plansList.find(p => {
-      const dbName = String(p.name || '').toLowerCase();
-      const dbId = String(p.id || '').toLowerCase();
-      const reqName = String(plan || '').toLowerCase();
-      return dbName === reqName || dbId === reqName;
+      const dbName = String(p.name || '').trim().toLowerCase();
+      const dbId = String(p.id || '').trim().toLowerCase();
+      return (reqPlanId && dbId === reqPlanId) ||
+             (reqPlanName && (dbName === reqPlanName || dbId === reqPlanName));
     });
 
-    const origAmount = Number(req.body.originalAmount !== undefined ? req.body.originalAmount : (price || amount || (matchedPlan ? matchedPlan.price : 2500)));
-    const discAmount = Number(req.body.discountAmount !== undefined ? req.body.discountAmount : (req.body.discount || 0));
-    const discType = req.body.discountType || 'amount';
-    const discVal = Number(req.body.discountValue !== undefined ? req.body.discountValue : discAmount);
-    const taxAmount = Number(req.body.taxAmount !== undefined ? req.body.taxAmount : (req.body.tax || req.body.gst || 0));
-    const othCharges = Number(req.body.otherCharges || 0);
+    // Authoritative package catalog price: Single source of truth from package catalog
+    let origAmount: number;
+    if (matchedPlan && typeof matchedPlan.price === 'number') {
+      origAmount = Number(matchedPlan.price);
+    } else {
+      // Fallback only if plan is not configured in catalog
+      origAmount = Number(req.body.originalAmount !== undefined ? req.body.originalAmount : (price || amount || 2500));
+    }
 
+    const discType = req.body.discountType || 'amount';
+    const discVal = Number(req.body.discountValue !== undefined ? req.body.discountValue : (req.body.discountAmount !== undefined ? req.body.discountAmount : (req.body.discount || 0)));
+    let discAmount = 0;
+    if (discType === 'percentage') {
+      discAmount = Math.min(origAmount, (origAmount * discVal) / 100);
+    } else {
+      discAmount = Math.min(origAmount, discVal);
+    }
+    const taxAmount = Math.max(0, Number(req.body.taxAmount !== undefined ? req.body.taxAmount : (req.body.tax || req.body.gst || 0)));
+    const othCharges = Math.max(0, Number(req.body.otherCharges || 0));
+
+    // Authoritative calculation: baseAmount - discount + tax = finalPayable
     const calculatedNet = Math.max(0, origAmount - discAmount + taxAmount + othCharges);
-    const netPayable = Number(req.body.netPayable !== undefined ? req.body.netPayable : (req.body.totalBilled !== undefined ? req.body.totalBilled : calculatedNet));
-    const amountPaid = Number(totalPaid !== undefined ? totalPaid : (req.body.paid !== undefined ? req.body.paid : netPayable));
+    const netPayable = calculatedNet; // Client-provided baseAmount / netPayable is NEVER trusted
+    const rawPaid = totalPaid !== undefined ? totalPaid : (req.body.paid !== undefined ? req.body.paid : (req.body.amountPaid !== undefined ? req.body.amountPaid : netPayable));
+    const amountPaid = Math.min(netPayable, Math.max(0, Number(rawPaid)));
     const outstandingAmount = Math.max(0, netPayable - amountPaid);
     const finalPaymentStatus = paymentStatus || (outstandingAmount <= 0 ? 'paid' : (amountPaid > 0 ? 'partial' : 'pending'));
     const initialStatus = memStartDate > todayStr ? 'upcoming' : (req.body.status || 'active');

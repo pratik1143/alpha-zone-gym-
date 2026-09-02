@@ -145,7 +145,7 @@ export default function MembersPage() {
       return true;
     });
 
-    return uniqueRaw.map((m: any) => {
+    const mapped: any[] = uniqueRaw.map((m: any) => {
       let expiryDate = typeof m.expiryDate === 'string' ? m.expiryDate : (m.expiryDate ? new Date(m.expiryDate).toISOString().split('T')[0] : '');
       const todayStr = new Date().toISOString().split('T')[0];
       const rawJoin = m.startDate || m.joinDate || m.createdAt;
@@ -168,6 +168,27 @@ export default function MembersPage() {
         status: derivedStatus
       };
     });
+
+    const getMemberSortTime = (m: any): number => {
+      if (m?.createdAt) {
+        const t = typeof m.createdAt === 'object' && m.createdAt.seconds
+          ? m.createdAt.seconds * 1000
+          : new Date(m.createdAt).getTime();
+        if (!isNaN(t) && t > 0) return t;
+      }
+      if (m?.joinDate) {
+        const t = new Date(m.joinDate).getTime();
+        if (!isNaN(t) && t > 0) return t;
+      }
+      if (m?.startDate) {
+        const t = new Date(m.startDate).getTime();
+        if (!isNaN(t) && t > 0) return t;
+      }
+      return 0;
+    };
+
+    mapped.sort((a: any, b: any) => getMemberSortTime(b) - getMemberSortTime(a));
+    return mapped as any[];
   }, [rawMembers, plans]);
 
   const [search, setSearch] = useState("");
@@ -233,6 +254,17 @@ export default function MembersPage() {
       setShowAddModal(true);
     }
   }, [fetchMembers, fetchPlans]);
+
+  // Realtime Firestore listener for new/updated members
+  useEffect(() => {
+    if (!isFirebaseReady || !fDb) return;
+    const unsub = onSnapshot(collection(fDb, 'members'), () => {
+      fetchMembers(true);
+    }, (err) => {
+      console.warn("Realtime members sync notice:", err);
+    });
+    return () => unsub();
+  }, [fetchMembers]);
 
   // ── Biometric Enrollment State ──────────────────────────────────────────────
   const [enrollModalOpen, setEnrollModalOpen] = useState(false);

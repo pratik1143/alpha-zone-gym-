@@ -6,7 +6,7 @@ import {
   X, User, Phone, Mail, Calendar, Heart, Shield, Smartphone, 
   CheckCircle2, ArrowRight, ArrowLeft, CreditCard, DollarSign, 
   Printer, Download, Sparkles, Fingerprint, Banknote, Wallet, 
-  ChevronRight, Dumbbell, Award, AlertCircle, FileText, Upload, Camera, Trash2, RefreshCw, AlertTriangle, Check, SwitchCamera
+  ChevronRight, Dumbbell, Award, AlertCircle, FileText, Upload, Camera, Trash2, RefreshCw, AlertTriangle, Check, SwitchCamera, Lock
 } from 'lucide-react';
 import toast from '@/lib/toast';
 import { useGymStore } from '@/store';
@@ -656,6 +656,9 @@ export default function AddMemberModal({ isOpen, onClose }: AddMemberModalProps)
         email: normalizedEmail,
         photo: photoPreview || '',
         plan: planName,
+        planId: selectedPlan?.id || selectedPlan?.name,
+        packageId: selectedPlan?.id || selectedPlan?.name,
+        packageName: planName,
         price: basePriceNum,
         originalAmount: basePriceNum,
         packagePrice: basePriceNum,
@@ -1510,16 +1513,31 @@ export default function AddMemberModal({ isOpen, onClose }: AddMemberModalProps)
                   <h4 className="text-xs font-black uppercase tracking-wider text-slate-700">2. Billing & Discount Calculation</h4>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {/* Original Package Price */}
+                    {/* Original Package Price (LOCKED to configured package catalog) */}
                     <div>
-                      <label className="block text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1">Original Package Amount (₹)</label>
-                      <input 
-                        type="number"
-                        min="0"
-                        value={originalAmount}
-                        onChange={(e) => setOriginalAmount(e.target.value)}
-                        className="w-full h-11 bg-white border border-slate-300 rounded-xl px-4 font-mono font-bold text-xs text-slate-900 focus:outline-none focus:border-blue-600"
-                      />
+                      <div className="flex justify-between items-center mb-1">
+                        <label className="text-[10px] font-black uppercase tracking-wider text-slate-500">
+                          Original Package Amount (₹)
+                        </label>
+                        <span className="inline-flex items-center gap-1 text-[9px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
+                          <Lock size={10} /> Locked to Catalog
+                        </span>
+                      </div>
+                      <div className="relative">
+                        <input 
+                          type="number"
+                          value={originalAmount}
+                          readOnly
+                          tabIndex={-1}
+                          onKeyDown={(e) => e.preventDefault()}
+                          onPaste={(e) => e.preventDefault()}
+                          className="w-full h-11 bg-slate-100/90 border border-slate-300 rounded-xl px-4 font-mono font-black text-xs text-slate-700 cursor-not-allowed select-none focus:outline-none"
+                          title="Package amount is authoritative from the package catalog and cannot be manually modified."
+                        />
+                      </div>
+                      <span className="text-[9px] text-slate-400 font-bold mt-1 block">
+                        Authoritative price from catalog (use Discount to adjust net payable)
+                      </span>
                     </div>
 
                     {/* Discount Type & Value */}

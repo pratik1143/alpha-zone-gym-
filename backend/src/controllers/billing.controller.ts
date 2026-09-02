@@ -23,13 +23,29 @@ export const createInvoice = async (req: Request, res: Response) => {
       netPayable, amount, paid, amountPaid, plan, method, memberName, memberPhone, date, notes, idempotencyKey
     } = req.body;
 
-    const origAmt = Number(originalAmount !== undefined ? originalAmount : (amount || 0));
+    const plansList = await db.getPlans();
+    const reqPlanId = String(req.body.planId || req.body.packageId || '').trim().toLowerCase();
+    const reqPlanName = String(plan || req.body.packageName || '').trim().toLowerCase();
+    const matchedPlan = plansList.find(p => {
+      const dbName = String(p.name || '').trim().toLowerCase();
+      const dbId = String(p.id || '').trim().toLowerCase();
+      return (reqPlanId && dbId === reqPlanId) ||
+             (reqPlanName && (dbName === reqPlanName || dbId === reqPlanName));
+    });
+
+    let origAmt: number;
+    if (matchedPlan && typeof matchedPlan.price === 'number') {
+      origAmt = Number(matchedPlan.price);
+    } else {
+      origAmt = Number(originalAmount !== undefined ? originalAmount : (amount || 0));
+    }
+
     const discAmt = Number(discountAmount !== undefined ? discountAmount : (discount || 0));
     const taxAmt = Number(taxAmount !== undefined ? taxAmount : (gst || tax || 0));
     const othAmt = Number(otherCharges || 0);
 
     const calculatedNet = Math.max(0, origAmt - discAmt + taxAmt + othAmt);
-    const finalNet = Number(netPayable !== undefined ? netPayable : (calculatedNet > 0 ? calculatedNet : (amount || 0)));
+    const finalNet = calculatedNet > 0 ? calculatedNet : Number(amount || 0);
     const finalPaid = Number(amountPaid !== undefined ? amountPaid : (paid !== undefined ? paid : finalNet));
 
     if (!finalPaid && !finalNet) {
@@ -186,7 +202,12 @@ export const markPaymentPaid = async (req: Request, res: Response) => {
 export const updateInvoice = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const updates = req.body;
+    const updates = { ...req.body };
+    // Preserve the original package price used when that bill was created
+    delete updates.originalAmount;
+    delete updates.packagePrice;
+    delete updates.baseAmount;
+    delete updates.price;
     const updatedInvoice = await db.updatePayment(id, updates);
     res.json({ success: true, message: 'Invoice updated successfully', invoice: updatedInvoice });
   } catch (error: any) {
