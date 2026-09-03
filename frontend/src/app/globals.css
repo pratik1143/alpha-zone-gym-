@@ -1,3 +1,6 @@
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import "tailwindcss";
+
 /* ─── Authentic Local Apple San Francisco (SF Pro) Font Stack ────────── */
 @font-face {
   font-family: 'SF Pro Display';
@@ -107,9 +110,6 @@
   font-style: normal;
   font-display: swap;
 }
-
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap');
-@import "tailwindcss";
 
 :root {
   --primary: #0B5CBE;
