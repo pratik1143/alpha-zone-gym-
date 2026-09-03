@@ -203,11 +203,12 @@ export default function RenewalWizardModal({ isOpen, member, onClose, onSuccess 
   const [startDate, setStartDate] = useState('');
   const [expiryDate, setExpiryDate] = useState('');
   const [isExpiryManuallyEdited, setIsExpiryManuallyEdited] = useState(false);
-  const [discountAmount, setDiscountAmount] = useState(0);
+  const [discountType, setDiscountType] = useState<'fixed' | 'percentage'>('fixed');
+  const [discountValue, setDiscountValue] = useState<number>(0);
   const [taxAmount, setTaxAmount] = useState(0);
   const [paymentMethod, setPaymentMethod] = useState<string>('Cash');
-  const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>('Paid');
-  const [amountPaid, setAmountPaid] = useState(0);
+  const [amountPaidNow, setAmountPaidNow] = useState<number>(0);
+  const [isCustomPaidInput, setIsCustomPaidInput] = useState<boolean>(false);
   const [notes, setNotes] = useState('');
 
   // ─── Step navigation ──────────────────────────────────────────────────────
@@ -230,10 +231,11 @@ export default function RenewalWizardModal({ isOpen, member, onClose, onSuccess 
     setRenewedMember(null);
     setShowInvoicePreview(false);
     setInvoiceDate(today);
-    setDiscountAmount(0);
+    setDiscountType('fixed');
+    setDiscountValue(0);
     setTaxAmount(0);
     setPaymentMethod('Cash');
-    setPaymentStatus('Paid');
+    setIsCustomPaidInput(false);
     setNotes('');
     setIsExpiryManuallyEdited(false);
   }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -285,36 +287,44 @@ export default function RenewalWizardModal({ isOpen, member, onClose, onSuccess 
   }, [startDate, selectedPlanId, isCustom, customDurationMonths, planDurationDays, plans, isExpiryManuallyEdited, selectedPlan]);
 
   // ─── Financial calculation ────────────────────────────────────────────────
-  const clampedDiscount = Math.max(0, Math.min(discountAmount, baseAmount));
-  const netPayable = Math.max(0, baseAmount - clampedDiscount + taxAmount);
+  const discountAmount = useMemo(() => {
+    if (discountType === 'percentage') {
+      const clampedPct = Math.min(100, Math.max(0, discountValue));
+      return Math.round((baseAmount * clampedPct) / 100);
+    }
+    return Math.min(baseAmount, Math.max(0, discountValue));
+  }, [discountType, discountValue, baseAmount]);
+
+  const netPayable = Math.max(0, baseAmount - discountAmount + taxAmount);
 
   useEffect(() => {
-    if (paymentStatus === 'Paid') {
-      setAmountPaid(netPayable);
-    } else if (paymentStatus === 'Pending') {
-      setAmountPaid(0);
+    if (!isCustomPaidInput) {
+      setAmountPaidNow(netPayable);
     }
-    // Partial: keep whatever user typed, but clamp on save
-  }, [paymentStatus, netPayable]);
+  }, [netPayable, isCustomPaidInput]);
 
-  const clampedAmountPaid = Math.min(Math.max(0, amountPaid), netPayable);
-  const pendingAmount = Math.max(0, netPayable - clampedAmountPaid);
+  const finalAmountPaid = Math.min(Math.max(0, isCustomPaidInput ? amountPaidNow : netPayable), netPayable);
+  const remainingPending = Math.max(0, netPayable - finalAmountPaid);
+  const calculatedPaymentStatus: PaymentStatus = remainingPending <= 0 ? 'Paid' : (finalAmountPaid > 0 ? 'Partial' : 'Pending');
 
   // ─── Validation ───────────────────────────────────────────────────────────
   const step1Valid = !!selectedPlanId;
+  const isExcessiveDiscount = discountType === 'fixed' && discountValue > baseAmount;
   const step2Valid = !!(
     startDate && expiryDate &&
     expiryDate > startDate &&
-    paymentMethod && paymentStatus &&
-    clampedDiscount >= 0 &&
+    paymentMethod &&
+    !isExcessiveDiscount &&
+    discountAmount >= 0 &&
     taxAmount >= 0 &&
-    clampedAmountPaid >= 0 &&
-    clampedAmountPaid <= netPayable
+    finalAmountPaid >= 0 &&
+    finalAmountPaid <= netPayable
   );
 
   // ─── Navigation ───────────────────────────────────────────────────────────
   const goNext = () => {
     if (step === 1 && !step1Valid) { toast.error('Please select a plan.'); return; }
+    if (step === 2 && isExcessiveDiscount) { toast.error('Discount cannot exceed package amount.'); return; }
     if (step === 2 && !step2Valid) { toast.error('Please fill all required fields correctly.'); return; }
     if (step < 3) setStep(prev => (prev + 1) as Step);
   };
@@ -323,9 +333,10 @@ export default function RenewalWizardModal({ isOpen, member, onClose, onSuccess 
     if (step > 1) setStep(prev => (prev - 1) as Step);
   };
 
-  // ─── CONFIRM RENEWAL — the only backend call ──────────────────────────────
+  // ─── CONFIRM RENEWAL — atomic backend call ─────────────────────────────────
   const handleConfirmRenewal = useCallback(async () => {
     if (isSubmitting) return;
+    if (isExcessiveDiscount) { toast.error('Discount cannot exceed package amount.'); return; }
     if (!step2Valid) { toast.error('Please go back and fill all required fields.'); return; }
 
     setIsSubmitting(true);
@@ -335,21 +346,26 @@ export default function RenewalWizardModal({ isOpen, member, onClose, onSuccess 
       plan: isCustom ? `Custom (${customDurationMonths}m)` : selectedPlan?.name,
       startDate,
       expiryDate,
+      packagePrice: baseAmount,
       baseAmount,
-      discountAmount: clampedDiscount,
+      discountType,
+      discountValue,
+      discountAmount,
       taxAmount,
       netPayable,
-      amountPaid: clampedAmountPaid,
-      pendingAmount,
+      amountPaidToday: finalAmountPaid,
+      amountPaid: finalAmountPaid,
+      pendingAmount: remainingPending,
+      remainingBalance: remainingPending,
       paymentMethod,
-      paymentStatus,
+      paymentStatus: calculatedPaymentStatus,
       invoiceDate,
       notes,
       invoiceNumber: invoiceNum,
     };
 
     try {
-      // Call the new dedicated atomic renewal endpoint
+      // Call the dedicated atomic renewal endpoint
       let response: any;
       try {
         const res = await API.post(`/members/${member.id}/renew`, payload);
@@ -368,21 +384,26 @@ export default function RenewalWizardModal({ isOpen, member, onClose, onSuccess 
           plan: payload.plan,
           packageName: payload.plan,
           originalAmount: baseAmount,
+          packagePrice: baseAmount,
           baseAmount,
-          discountAmount: clampedDiscount,
-          discount: clampedDiscount,
+          discountType,
+          discountValue,
+          discountAmount,
+          discount: discountAmount,
           taxAmount,
           tax: taxAmount,
           netPayable,
-          amount: netPayable,
-          amountPaid: clampedAmountPaid,
-          paid: clampedAmountPaid,
-          pendingAmount,
-          outstandingAmount: pendingAmount,
+          amount: baseAmount,
+          amountPaidToday: finalAmountPaid,
+          amountPaid: finalAmountPaid,
+          paid: finalAmountPaid,
+          pendingAmount: remainingPending,
+          outstandingAmount: remainingPending,
+          remainingBalance: remainingPending,
           paymentMethod,
           method: paymentMethod,
-          paymentStatus,
-          status: paymentStatus,
+          paymentStatus: calculatedPaymentStatus,
+          status: calculatedPaymentStatus,
           invoiceDate,
           billingDate: invoiceDate,
           date: invoiceDate,
@@ -399,6 +420,7 @@ export default function RenewalWizardModal({ isOpen, member, onClose, onSuccess 
           imported: false,
           isRenewal: true,
           createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
         };
 
         await addPayment(invoiceData);
@@ -409,11 +431,11 @@ export default function RenewalWizardModal({ isOpen, member, onClose, onSuccess 
           startDate,
           expiryDate,
           amount: netPayable,
-          amountPaid: clampedAmountPaid,
-          pendingAmount,
+          amountPaid: finalAmountPaid,
+          pendingAmount: remainingPending,
           paymentMethod,
-          paymentStatus,
-          discount: clampedDiscount,
+          paymentStatus: calculatedPaymentStatus,
+          discount: discountAmount,
           tax: taxAmount,
           invoiceNumber: invoiceNum,
           invoiceDate,
@@ -426,12 +448,12 @@ export default function RenewalWizardModal({ isOpen, member, onClose, onSuccess 
           price: baseAmount,
           amount: netPayable,
           totalBilled: (Number(member.totalBilled) || 0) + netPayable,
-          totalPaid: (Number(member.totalPaid) || 0) + clampedAmountPaid,
-          outstandingBalance: pendingAmount,
+          totalPaid: (Number(member.totalPaid) || 0) + finalAmountPaid,
+          outstandingBalance: remainingPending,
           startDate,
           expiryDate,
           status: 'active',
-          paymentStatus,
+          paymentStatus: calculatedPaymentStatus,
           membershipHistory: [historyEntry, ...existingHistory],
           updatedAt: new Date().toISOString(),
         });
@@ -446,7 +468,7 @@ export default function RenewalWizardModal({ isOpen, member, onClose, onSuccess 
         expiryDate,
         startDate,
         status: 'active',
-        paymentStatus,
+        paymentStatus: calculatedPaymentStatus,
       };
 
       setGeneratedInvoiceNumber(response.invoiceNumber || invoiceNum);
@@ -458,10 +480,10 @@ export default function RenewalWizardModal({ isOpen, member, onClose, onSuccess 
         memberPhone: member.phone || '',
         invoiceNumber: response.invoiceNumber || invoiceNum,
         invoice: response.invoiceNumber || invoiceNum,
-        amount: netPayable,
-        paid: clampedAmountPaid,
-        discount: clampedDiscount,
-        status: paymentStatus.toLowerCase(),
+        amount: baseAmount,
+        paid: finalAmountPaid,
+        discount: discountAmount,
+        status: calculatedPaymentStatus.toLowerCase(),
         method: paymentMethod,
         expiryDate,
         startDate,
@@ -477,9 +499,9 @@ export default function RenewalWizardModal({ isOpen, member, onClose, onSuccess 
       setIsSubmitting(false);
     }
   }, [
-    isSubmitting, step2Valid, isCustom, customDurationMonths, selectedPlan,
-    startDate, expiryDate, baseAmount, clampedDiscount, taxAmount, netPayable,
-    clampedAmountPaid, pendingAmount, paymentMethod, paymentStatus, invoiceDate, notes,
+    isSubmitting, isExcessiveDiscount, step2Valid, isCustom, customDurationMonths, selectedPlan,
+    startDate, expiryDate, baseAmount, discountType, discountValue, discountAmount, taxAmount, netPayable,
+    finalAmountPaid, remainingPending, calculatedPaymentStatus, paymentMethod, invoiceDate, notes,
     member, addPayment, updateMember, fetchMembers, onSuccess,
   ]);
 
@@ -754,133 +776,189 @@ export default function RenewalWizardModal({ isOpen, member, onClose, onSuccess 
                   </div>
                 </div>
 
-                {/* Pricing breakdown */}
-                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-2.5">
-                  <div className="text-[9px] font-black text-slate-500 uppercase tracking-wider mb-1">Pricing</div>
-
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-slate-600 font-semibold flex items-center gap-1.5">
-                      <Banknote size={13} className="text-slate-400" /> Base Amount
-                    </span>
-                    <span className="font-black text-slate-800">{formatCurrency(baseAmount)}</span>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <span className="text-slate-600 font-semibold text-xs flex items-center gap-1.5 shrink-0">
-                      <Tag size={13} className="text-slate-400" /> Discount (₹)
-                    </span>
-                    <input
-                      type="number"
-                      min={0}
-                      max={baseAmount}
-                      value={discountAmount}
-                      onChange={e => setDiscountAmount(Math.max(0, Math.min(Number(e.target.value), baseAmount)))}
-                      className="flex-1 ml-auto w-24 px-2.5 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold outline-none focus:border-blue-600 text-right"
-                    />
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <span className="text-slate-600 font-semibold text-xs flex items-center gap-1.5 shrink-0">
-                      <Percent size={13} className="text-slate-400" /> Tax / GST (₹)
-                    </span>
-                    <input
-                      type="number"
-                      min={0}
-                      value={taxAmount}
-                      onChange={e => setTaxAmount(Math.max(0, Number(e.target.value)))}
-                      className="flex-1 ml-auto w-24 px-2.5 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold outline-none focus:border-blue-600 text-right"
-                    />
-                  </div>
-
-                  <div className="h-px bg-slate-200" />
-
+                {/* ── AUTHORITATIVE BILLING & CONCESSION SECTION ── */}
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4.5 space-y-3.5">
                   <div className="flex items-center justify-between">
-                    <span className="text-sm font-black text-slate-800">Final Payable</span>
-                    <span className="text-lg font-black text-blue-600">{formatCurrency(netPayable)}</span>
+                    <div className="text-[10px] font-black text-slate-600 uppercase tracking-wider flex items-center gap-1.5">
+                      <Banknote size={14} className="text-blue-600" />
+                      Renewal Billing & Concession Breakdown
+                    </div>
+                    <span className="text-[10px] font-bold text-blue-600 bg-blue-100/70 px-2 py-0.5 rounded">
+                      Official Formula
+                    </span>
                   </div>
-                </div>
 
-                {/* Payment Method */}
-                <div>
-                  <label className="text-[9px] font-black text-slate-500 uppercase block mb-2">
-                    Payment Method <span className="text-red-500">*</span>
-                  </label>
-                  <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-5">
-                    {PAYMENT_METHODS.map(m => (
-                      <button
-                        key={m}
-                        type="button"
-                        onClick={() => setPaymentMethod(m)}
-                        className={`py-2 px-1 text-[10px] font-bold rounded-xl border transition-all cursor-pointer ${
-                          paymentMethod === m
-                            ? 'border-blue-600 bg-blue-600 text-white shadow-sm'
-                            : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-600'
-                        }`}
-                      >
-                        {m}
-                      </button>
-                    ))}
+                  {/* 1. Package Price */}
+                  <div className="flex justify-between items-center bg-white p-3 rounded-xl border border-slate-200 shadow-2xs">
+                    <div>
+                      <span className="text-xs font-bold text-slate-700 block">1. Package Price:</span>
+                      <span className="text-[10px] text-slate-400">Authoritative package fee</span>
+                    </div>
+                    <span className="text-sm font-black font-mono text-slate-900">₹{baseAmount.toLocaleString('en-IN')}</span>
                   </div>
-                </div>
 
-                {/* Payment Status */}
-                <div>
-                  <label className="text-[9px] font-black text-slate-500 uppercase block mb-2">
-                    Payment Status <span className="text-red-500">*</span>
-                  </label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {(['Paid', 'Partial', 'Pending'] as PaymentStatus[]).map(s => (
-                      <button
-                        key={s}
-                        type="button"
-                        onClick={() => setPaymentStatus(s)}
-                        className={`py-2.5 text-xs font-bold rounded-xl border-2 transition-all cursor-pointer ${
-                          paymentStatus === s
-                            ? s === 'Paid'
-                              ? 'border-emerald-600 bg-emerald-600 text-white shadow-sm'
-                              : s === 'Partial'
-                              ? 'border-amber-500 bg-amber-500 text-white shadow-sm'
-                              : 'border-red-500 bg-red-500 text-white shadow-sm'
-                            : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
-                        }`}
-                      >
-                        {s}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+                  {/* 2. Discount Input with Fixed / Percentage Toggle */}
+                  <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                        <Tag size={13} className="text-blue-600" />
+                        2. Discount (Adjustment / Concession)
+                      </label>
 
-                {/* Partial payment fields */}
-                <AnimatePresence>
-                  {paymentStatus === 'Partial' && (
-                    <motion.div
-                      initial={{ height: 0, opacity: 0 }}
-                      animate={{ height: 'auto', opacity: 1 }}
-                      exit={{ height: 0, opacity: 0 }}
-                      className="overflow-hidden"
-                    >
-                      <div className="grid grid-cols-2 gap-3 p-3.5 bg-amber-50 border border-amber-100 rounded-2xl">
-                        <div>
-                          <label className="text-[9px] font-black text-amber-700 uppercase block mb-1">Amount Paid (₹)</label>
-                          <input
-                            type="number"
-                            min={0}
-                            max={netPayable}
-                            value={amountPaid}
-                            onChange={e => setAmountPaid(Math.max(0, Math.min(Number(e.target.value), netPayable)))}
-                            className="w-full px-3 py-2 bg-white border border-amber-200 rounded-xl text-xs font-bold outline-none focus:border-amber-500"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-[9px] font-black text-amber-700 uppercase block mb-1">Pending Amount</label>
-                          <div className="px-3 py-2 bg-white border border-amber-200 rounded-xl text-xs font-black text-amber-700">
-                            {formatCurrency(Math.max(0, netPayable - amountPaid))}
-                          </div>
-                        </div>
+                      <div className="flex items-center bg-slate-100 p-0.5 rounded-lg border border-slate-200">
+                        <button
+                          type="button"
+                          onClick={() => setDiscountType('fixed')}
+                          className={`px-2.5 py-1 rounded-md text-[10px] font-black transition-all cursor-pointer flex items-center gap-1 ${
+                            discountType === 'fixed'
+                              ? 'bg-blue-600 text-white shadow-xs'
+                              : 'text-slate-600 hover:text-slate-900'
+                          }`}
+                        >
+                          <Banknote size={11} /> ₹ Fixed
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDiscountType('percentage')}
+                          className={`px-2.5 py-1 rounded-md text-[10px] font-black transition-all cursor-pointer flex items-center gap-1 ${
+                            discountType === 'percentage'
+                              ? 'bg-blue-600 text-white shadow-xs'
+                              : 'text-slate-600 hover:text-slate-900'
+                          }`}
+                        >
+                          <Percent size={11} /> % Percent
+                        </button>
                       </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-center">
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs">
+                          {discountType === 'fixed' ? '₹' : '%'}
+                        </span>
+                        <input
+                          type="number"
+                          min="0"
+                          max={discountType === 'percentage' ? 100 : baseAmount}
+                          value={discountValue || ''}
+                          onChange={(e) => {
+                            const val = Number(e.target.value);
+                            setDiscountValue(isNaN(val) ? 0 : Math.max(0, val));
+                          }}
+                          placeholder={discountType === 'fixed' ? 'e.g. 1900' : 'e.g. 10'}
+                          className="w-full text-xs font-bold pl-7 pr-3 py-2 border border-slate-300 rounded-lg bg-slate-50 focus:bg-white focus:outline-none focus:border-blue-600 font-mono"
+                        />
+                      </div>
+
+                      <div className="text-right">
+                        {discountAmount > 0 ? (
+                          <div className="text-xs font-extrabold text-emerald-600 bg-emerald-50 px-2.5 py-1.5 rounded-lg border border-emerald-100 flex items-center justify-between">
+                            <span>Discount Applied:</span>
+                            <span className="font-black font-mono">- ₹{discountAmount.toLocaleString('en-IN')}</span>
+                          </div>
+                        ) : (
+                          <span className="text-[11px] text-slate-400 font-medium">No discount applied</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 3. Net Payable Highlight */}
+                  <div className="flex justify-between items-center bg-blue-50 border border-blue-200 p-3 rounded-xl">
+                    <div>
+                      <span className="font-extrabold text-blue-950 text-xs block">3. Net Payable:</span>
+                      <span className="text-[10px] text-blue-600 font-medium">Package Price − Discount</span>
+                    </div>
+                    <span className="font-black text-blue-950 text-base font-mono">₹{netPayable.toLocaleString('en-IN')}</span>
+                  </div>
+
+                  {/* 4. Amount Paid Today & Payment Method */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">
+                        4. Amount Paid Today (₹)
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        max={netPayable}
+                        value={isCustomPaidInput ? amountPaidNow : netPayable}
+                        onChange={(e) => {
+                          setIsCustomPaidInput(true);
+                          const val = Number(e.target.value);
+                          setAmountPaidNow(isNaN(val) ? 0 : Math.max(0, val));
+                        }}
+                        className="w-full text-xs font-black px-3.5 py-2 border border-slate-300 rounded-xl bg-white focus:outline-none focus:border-blue-600 font-mono"
+                        placeholder="Enter amount paid"
+                      />
+                      <div className="text-[10px] text-slate-400 mt-1 font-medium">
+                        {remainingPending > 0 ? (
+                          <span className="text-amber-600 font-bold">Remaining balance: ₹{remainingPending.toLocaleString('en-IN')}</span>
+                        ) : (
+                          <span className="text-emerald-600 font-bold">✓ Full amount paid (Balance: ₹0)</span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">
+                        Payment Method
+                      </label>
+                      <select
+                        value={paymentMethod}
+                        onChange={(e) => setPaymentMethod(e.target.value)}
+                        className="w-full text-xs font-bold px-3 py-2 border border-slate-300 rounded-xl bg-white focus:outline-none focus:border-blue-600"
+                      >
+                        <option value="UPI">UPI (Google Pay / PhonePe / Paytm)</option>
+                        <option value="Cash">Cash</option>
+                        <option value="Card">Credit / Debit Card</option>
+                        <option value="Net Banking">Net Banking</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* 5. Dedicated Dark Calculation Summary Card */}
+                  <div className="bg-slate-900 text-white rounded-2xl p-4 shadow-md space-y-2.5 border border-slate-800">
+                    <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                      <span className="text-[11px] font-black uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
+                        <Receipt size={13} className="text-blue-400" />
+                        Renewal Billing Calculation Summary
+                      </span>
+                      <span className="text-[10px] font-mono font-bold bg-blue-950/80 text-blue-300 px-2 py-0.5 rounded border border-blue-800/60">
+                        Authoritative Formula
+                      </span>
+                    </div>
+
+                    <div className="space-y-1.5 text-xs font-semibold">
+                      <div className="flex justify-between items-center text-slate-300">
+                        <span>Package Price:</span>
+                        <span className="font-mono font-bold text-white text-sm">₹{baseAmount.toLocaleString('en-IN')}</span>
+                      </div>
+
+                      <div className="flex justify-between items-center text-emerald-400">
+                        <span>Discount:</span>
+                        <span className="font-mono font-bold text-sm">{discountAmount > 0 ? `- ₹${discountAmount.toLocaleString('en-IN')}` : '₹0'}</span>
+                      </div>
+
+                      <div className="border-t border-dashed border-slate-700 pt-1.5 flex justify-between items-center text-blue-300 font-extrabold">
+                        <span>Net Payable:</span>
+                        <span className="font-mono font-black text-sm text-blue-200">₹{netPayable.toLocaleString('en-IN')}</span>
+                      </div>
+
+                      <div className="flex justify-between items-center text-emerald-300 font-extrabold">
+                        <span>Paid Today (Today's Collection):</span>
+                        <span className="font-mono font-black text-sm text-emerald-400">₹{finalAmountPaid.toLocaleString('en-IN')}</span>
+                      </div>
+
+                      <div className="border-t border-slate-700 pt-1.5 flex justify-between items-center font-black">
+                        <span className="text-slate-300">Remaining Balance:</span>
+                        <span className={`font-mono text-base ${remainingPending > 0 ? 'text-rose-400' : 'text-emerald-400'}`}>
+                          ₹{remainingPending.toLocaleString('en-IN')}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
 
                 {/* Notes */}
                 <div>
@@ -986,56 +1064,40 @@ export default function RenewalWizardModal({ isOpen, member, onClose, onSuccess 
                   </div>
                   <div className="p-4 space-y-2 text-xs">
                     <div className="flex justify-between">
-                      <span className="text-slate-500 font-semibold">Invoice Date</span>
-                      <span className="font-bold text-slate-800">{fmtDate(invoiceDate)}</span>
+                      <span className="text-slate-500 font-semibold">Invoice Date:</span>
+                      <span className="font-bold text-slate-800 font-mono">{fmtDate(invoiceDate)}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-slate-500 font-semibold">Base Amount</span>
-                      <span className="font-bold text-slate-800">{formatCurrency(baseAmount)}</span>
+                      <span className="text-slate-600 font-semibold">Package Price:</span>
+                      <span className="font-bold text-slate-900 font-mono">₹{baseAmount.toLocaleString('en-IN')}</span>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-500 font-semibold">Discount</span>
-                      <span className={`font-bold ${clampedDiscount > 0 ? 'text-emerald-600' : 'text-slate-500'}`}>
-                        {clampedDiscount > 0 ? `– ${formatCurrency(clampedDiscount)}` : '—'}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-500 font-semibold">Tax / GST</span>
-                      <span className={`font-bold ${taxAmount > 0 ? 'text-slate-800' : 'text-slate-500'}`}>
-                        {taxAmount > 0 ? formatCurrency(taxAmount) : '—'}
+                    <div className="flex justify-between text-emerald-600">
+                      <span className="font-semibold">Discount ({discountType === 'percentage' ? `${discountValue}%` : 'Fixed'}):</span>
+                      <span className="font-bold font-mono">
+                        {discountAmount > 0 ? `- ₹${discountAmount.toLocaleString('en-IN')}` : '₹0'}
                       </span>
                     </div>
                     <div className="h-px bg-slate-200" />
-                    <div className="flex justify-between">
-                      <span className="text-sm font-black text-slate-900">Final Payable</span>
-                      <span className="text-base font-black text-blue-600">{formatCurrency(netPayable)}</span>
+                    <div className="flex justify-between bg-blue-50/70 p-2 rounded-lg text-blue-950 font-bold">
+                      <span>Net Payable:</span>
+                      <span className="font-black font-mono text-sm">₹{netPayable.toLocaleString('en-IN')}</span>
                     </div>
-                    <div className="h-px bg-slate-100" />
-                    <div className="flex justify-between">
-                      <span className="text-slate-500 font-semibold">Payment Method</span>
-                      <span className="font-black text-slate-800">{paymentMethod}</span>
+                    <div className="flex justify-between text-slate-700">
+                      <span className="font-semibold">Payment Method:</span>
+                      <span className="font-bold">{paymentMethod}</span>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-500 font-semibold">Payment Status</span>
-                      <span className={`font-black px-2 py-0.5 rounded-full text-[10px] border ${
-                        paymentStatus === 'Paid'
-                          ? 'bg-emerald-100 text-emerald-700 border-emerald-200'
-                          : paymentStatus === 'Partial'
-                          ? 'bg-amber-100 text-amber-700 border-amber-200'
-                          : 'bg-red-100 text-red-700 border-red-200'
-                      }`}>
-                        {paymentStatus}
-                      </span>
+                    <div className="flex justify-between text-emerald-700 font-bold">
+                      <span>Amount Paid Today:</span>
+                      <span className="font-black font-mono">₹{finalAmountPaid.toLocaleString('en-IN')}</span>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-500 font-semibold">Amount Paid</span>
-                      <span className="font-black text-emerald-600">{formatCurrency(clampedAmountPaid)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-500 font-semibold">Pending Balance</span>
-                      <span className={`font-black ${pendingAmount > 0 ? 'text-red-600' : 'text-slate-400'}`}>
-                        {formatCurrency(pendingAmount)}
-                      </span>
+                    <div className={`flex justify-between p-2 rounded-lg font-bold ${
+                      remainingPending > 0 ? 'bg-rose-50 text-rose-800' : 'bg-emerald-50 text-emerald-800'
+                    }`}>
+                      <span>Remaining Balance:</span>
+                      <div className="text-right">
+                        <span className="font-black font-mono">₹{remainingPending.toLocaleString('en-IN')}</span>
+                        <span className="text-[10px] block font-black uppercase">Status: {calculatedPaymentStatus.toUpperCase()}</span>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1109,8 +1171,12 @@ export default function RenewalWizardModal({ isOpen, member, onClose, onSuccess 
                     { label: 'New Plan', value: planName },
                     { label: 'Valid From', value: fmtDate(startDate) },
                     { label: 'Expires', value: fmtDate(expiryDate) },
-                    { label: 'Amount', value: formatCurrency(netPayable) },
-                    { label: 'Payment', value: paymentStatus },
+                    { label: 'Package Price', value: `₹${baseAmount.toLocaleString('en-IN')}` },
+                    ...(discountAmount > 0 ? [{ label: 'Discount', value: `- ₹${discountAmount.toLocaleString('en-IN')}` }] : []),
+                    { label: 'Net Payable', value: `₹${netPayable.toLocaleString('en-IN')}` },
+                    { label: 'Paid Today', value: `₹${finalAmountPaid.toLocaleString('en-IN')}` },
+                    { label: 'Remaining Balance', value: `₹${remainingPending.toLocaleString('en-IN')}` },
+                    { label: 'Payment Status', value: calculatedPaymentStatus },
                     { label: 'Method', value: paymentMethod },
                     { label: 'Invoice', value: generatedInvoiceNumber },
                   ].map(row => (

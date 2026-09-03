@@ -518,10 +518,14 @@ export const renewMembership = async (req: Request, res: Response) => {
       plan,
       startDate,
       expiryDate,
+      packagePrice,
       baseAmount,
+      discountType,
+      discountValue,
       discountAmount,
       taxAmount,
       netPayable,
+      amountPaidToday,
       amountPaid,
       pendingAmount,
       paymentMethod,
@@ -536,15 +540,48 @@ export const renewMembership = async (req: Request, res: Response) => {
     if (!startDate) return res.status(400).json({ error: 'Start date is required' });
     if (!expiryDate) return res.status(400).json({ error: 'Expiry date is required' });
     if (!paymentMethod) return res.status(400).json({ error: 'Payment method is required' });
-    if (!paymentStatus) return res.status(400).json({ error: 'Payment status is required' });
     if (expiryDate <= startDate) return res.status(400).json({ error: 'Expiry date must be after start date' });
 
-    const numBase = Math.max(0, Number(baseAmount) || 0);
-    const numDiscount = Math.max(0, Number(discountAmount) || 0);
+    const numPkgPrice = Math.max(0, Number(packagePrice !== undefined ? packagePrice : baseAmount) || 0);
+    const rawDiscountType = String(discountType || 'fixed').toLowerCase() === 'percentage' ? 'percentage' : 'fixed';
+    const numDiscountValue = Number(discountValue !== undefined ? discountValue : (discountAmount !== undefined ? discountAmount : 0)) || 0;
+
+    // Strict Validation
+    if (numDiscountValue < 0) {
+      return res.status(400).json({ error: 'Discount cannot be negative.' });
+    }
+
+    if (rawDiscountType === 'fixed' && numDiscountValue > numPkgPrice) {
+      return res.status(400).json({ error: 'Discount cannot exceed package amount.' });
+    }
+
+    if (rawDiscountType === 'percentage' && numDiscountValue > 100) {
+      return res.status(400).json({ error: 'Discount percentage cannot exceed 100%.' });
+    }
+
+    let numDiscountAmount = 0;
+    if (rawDiscountType === 'percentage') {
+      const clampedPercent = Math.min(100, Math.max(0, numDiscountValue));
+      numDiscountAmount = Math.round((numPkgPrice * clampedPercent) / 100);
+    } else {
+      numDiscountAmount = Math.min(numPkgPrice, Math.max(0, numDiscountValue));
+    }
+
     const numTax = Math.max(0, Number(taxAmount) || 0);
-    const numNetPayable = Math.max(0, Number(netPayable) || numBase - numDiscount + numTax);
-    const numAmountPaid = Math.min(Math.max(0, Number(amountPaid) || 0), numNetPayable);
+    const numNetPayable = Math.max(0, numPkgPrice - numDiscountAmount + numTax);
+
+    const rawAmountPaid = Number(amountPaidToday !== undefined ? amountPaidToday : (amountPaid !== undefined ? amountPaid : numNetPayable));
+    if (rawAmountPaid < 0) {
+      return res.status(400).json({ error: 'Amount paid today cannot be negative.' });
+    }
+
+    const numAmountPaid = Math.max(0, isNaN(rawAmountPaid) ? 0 : rawAmountPaid);
+    if (numAmountPaid > numNetPayable) {
+      return res.status(400).json({ error: 'Amount paid today cannot exceed Net Payable.' });
+    }
+
     const numPending = Math.max(0, numNetPayable - numAmountPaid);
+    const calculatedPaymentStatus = numPending <= 0 ? 'paid' : (numAmountPaid > 0 ? 'partial' : 'pending');
 
     const canonicalInvoiceDate = invoiceDate || new Date().toISOString().split('T')[0];
     const invoiceNumber = providedInvoiceNumber || `INV-${Math.floor(100000 + Math.random() * 900000)}`;
@@ -569,22 +606,28 @@ export const renewMembership = async (req: Request, res: Response) => {
         transactionType: 'membership_renewal',
         plan,
         packageName: plan,
-        originalAmount: numBase,
-        baseAmount: numBase,
-        discountAmount: numDiscount,
-        discount: numDiscount,
+        originalAmount: numPkgPrice,
+        packagePrice: numPkgPrice,
+        baseAmount: numPkgPrice,
+        discountType: rawDiscountType,
+        discountValue: numDiscountValue,
+        discountAmount: numDiscountAmount,
+        discount: numDiscountAmount,
         taxAmount: numTax,
         tax: numTax,
         netPayable: numNetPayable,
-        amount: numNetPayable,
+        amount: numPkgPrice,
+        amountPaidToday: numAmountPaid,
+        // Crucial for Today's Collection: amountPaid is ONLY actual cash received
         amountPaid: numAmountPaid,
         paid: numAmountPaid,
         pendingAmount: numPending,
         outstandingAmount: numPending,
+        remainingBalance: numPending,
         paymentMethod,
         method: paymentMethod,
-        paymentStatus,
-        status: paymentStatus,
+        paymentStatus: calculatedPaymentStatus,
+        status: calculatedPaymentStatus,
         // Canonical date fields — invoiceDate is the business date
         invoiceDate: canonicalInvoiceDate,
         billingDate: canonicalInvoiceDate,
@@ -602,6 +645,7 @@ export const renewMembership = async (req: Request, res: Response) => {
         imported: false,
         isRenewal: true,
         createdAt: nowIso,
+        updatedAt: nowIso,
       });
     } catch (billingErr: any) {
       console.error('[Renewal] Billing write failed — member NOT updated:', billingErr.message);
@@ -623,8 +667,8 @@ export const renewMembership = async (req: Request, res: Response) => {
       amountPaid: numAmountPaid,
       pendingAmount: numPending,
       paymentMethod,
-      paymentStatus,
-      discount: numDiscount,
+      paymentStatus: calculatedPaymentStatus,
+      discount: numDiscountAmount,
       tax: numTax,
       invoiceNumber,
       invoiceDate: canonicalInvoiceDate,
@@ -638,7 +682,7 @@ export const renewMembership = async (req: Request, res: Response) => {
     try {
       updatedMember = await db.updateMember(id, {
         plan,
-        price: numBase,
+        price: numPkgPrice,
         amount: numNetPayable,
         totalBilled: (Number(existingMember.totalBilled) || 0) + numNetPayable,
         totalPaid: (Number(existingMember.totalPaid) || 0) + numAmountPaid,
@@ -646,7 +690,7 @@ export const renewMembership = async (req: Request, res: Response) => {
         startDate,
         expiryDate,
         status: 'active',
-        paymentStatus,
+        paymentStatus: calculatedPaymentStatus,
         membershipHistory: updatedHistory,
         updatedAt: nowIso,
       });

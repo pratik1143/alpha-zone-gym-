@@ -186,56 +186,107 @@ export default function RenewMembershipPage() {
       const daysLeftCount = startDateVal > todayStr ? calculatedDuration : membershipEngine.calculateDaysLeft(newExpiryString);
       const computedMemberStatus = startDateVal > todayStr ? 'upcoming' : 'active';
 
-      const invoiceData = {
-        memberId: member.id,
-        memberName: member.name,
-        memberPhone: member.phone || '',
-        amount: totalAmount,
-        paid: totalAmount,
+      const payload = {
         plan: planName,
-        method: method,
-        discount: totalDiscount,
-        status: 'paid',
-        invoice: generatedInvoiceNum,
-        invoiceNumber: generatedInvoiceNum,
-        date: todayStr,
         startDate: startDateVal,
         expiryDate: newExpiryString,
-        createdAt: new Date().toISOString()
-      };
-
-      // Add to payments collection in Firestore
-      await addDoc(collection(db, 'payments'), invoiceData);
-      setGeneratedInvoiceData(invoiceData);
-
-      // Membership history item
-      const newHistoryItem = {
-        packageName: planName,
-        startDate: startDateVal,
-        expiryDate: newExpiryString,
-        amount: totalAmount,
+        packagePrice: planPrice,
+        baseAmount: planPrice,
+        discountType: 'fixed',
+        discountValue: totalDiscount,
+        discountAmount: totalDiscount,
+        taxAmount: gstAmount,
+        netPayable: totalAmount,
+        amountPaidToday: totalAmount,
+        amountPaid: totalAmount,
+        pendingAmount: 0,
+        remainingBalance: 0,
+        paymentMethod: method,
+        paymentStatus: 'Paid',
+        invoiceDate: todayStr,
         invoiceNumber: generatedInvoiceNum,
-        renewedAt: new Date().toISOString()
+        notes: `Renewed via workspace. Trainer: ${assignedTrainer || 'General'}`,
       };
 
-      const existingHistory = Array.isArray(member.membershipHistory) ? member.membershipHistory : [];
-      const updatedHistory = [newHistoryItem, ...existingHistory];
+      try {
+        const res = await API.post(`/members/${member.id}/renew`, payload);
+        if (res.data?.payment) {
+          setGeneratedInvoiceData(res.data.payment);
+        } else {
+          setGeneratedInvoiceData({
+            ...payload,
+            memberId: member.id,
+            memberName: member.name,
+            amount: totalAmount,
+            paid: totalAmount,
+            discount: totalDiscount,
+          });
+        }
+      } catch (apiErr: any) {
+        console.warn('API renew failed, falling back to direct write:', apiErr.message);
+        const invoiceData = {
+          memberId: member.id,
+          memberName: member.name,
+          memberPhone: member.phone || '',
+          amount: planPrice,
+          packagePrice: planPrice,
+          baseAmount: planPrice,
+          discountAmount: totalDiscount,
+          discount: totalDiscount,
+          netPayable: totalAmount,
+          amountPaidToday: totalAmount,
+          amountPaid: totalAmount,
+          paid: totalAmount,
+          pendingAmount: 0,
+          remainingBalance: 0,
+          plan: planName,
+          method: method,
+          paymentMethod: method,
+          status: 'paid',
+          paymentStatus: 'paid',
+          invoice: generatedInvoiceNum,
+          invoiceNumber: generatedInvoiceNum,
+          date: todayStr,
+          invoiceDate: todayStr,
+          startDate: startDateVal,
+          expiryDate: newExpiryString,
+          createdAt: new Date().toISOString()
+        };
 
-      // Update Member Document in Firestore
-      await updateDoc(doc(db, 'members', member.id), {
-        plan: planName,
-        price: planPrice,
-        amount: totalAmount,
-        totalBilled: totalAmount,
-        totalPaid: totalAmount,
-        expiryDate: newExpiryString,
-        daysLeft: daysLeftCount,
-        status: computedMemberStatus,
-        paymentStatus: 'paid',
-        trainer: assignedTrainer || member.trainer || '',
-        membershipHistory: updatedHistory,
-        updatedAt: new Date().toISOString()
-      });
+        await addDoc(collection(db, 'payments'), invoiceData);
+        setGeneratedInvoiceData(invoiceData);
+
+        const newHistoryItem = {
+          packageName: planName,
+          startDate: startDateVal,
+          expiryDate: newExpiryString,
+          amount: totalAmount,
+          amountPaid: totalAmount,
+          pendingAmount: 0,
+          discount: totalDiscount,
+          invoiceNumber: generatedInvoiceNum,
+          renewedAt: new Date().toISOString()
+        };
+
+        const existingHistory = Array.isArray(member.membershipHistory) ? member.membershipHistory : [];
+        const updatedHistory = [newHistoryItem, ...existingHistory];
+
+        await updateDoc(doc(db, 'members', member.id), {
+          plan: planName,
+          price: planPrice,
+          amount: totalAmount,
+          totalBilled: (Number(member.totalBilled) || 0) + totalAmount,
+          totalPaid: (Number(member.totalPaid) || 0) + totalAmount,
+          outstandingBalance: 0,
+          expiryDate: newExpiryString,
+          daysLeft: daysLeftCount,
+          status: computedMemberStatus,
+          paymentStatus: 'paid',
+          trainer: assignedTrainer || member.trainer || '',
+          membershipHistory: updatedHistory,
+          updatedAt: new Date().toISOString()
+        });
+      }
 
       setCompleteDone(true);
       fetchMembers();
