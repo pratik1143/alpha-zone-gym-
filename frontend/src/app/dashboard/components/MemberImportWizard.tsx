@@ -222,7 +222,7 @@ export default function MemberImportWizard({
   };
 
   return (
-    <div className="w-full max-w-7xl mx-auto space-y-6 font-poppins text-slate-800">
+    <div className="w-full max-w-7xl mx-auto space-y-6 font-sans text-slate-800">
       {/* ── Top Header Card ───────────────────────────────────────────────── */}
       <div className="bg-gradient-to-r from-[#003B95] via-[#0052FF] to-[#002b70] p-6 md:p-8 rounded-3xl text-white shadow-lg relative overflow-hidden">
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">

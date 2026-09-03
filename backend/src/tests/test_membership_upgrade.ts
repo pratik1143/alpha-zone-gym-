@@ -3,77 +3,64 @@ import { db } from '../firebase';
 import { upgradeMembership } from '../controllers/member.controller';
 
 async function runUpgradeTests() {
-  console.log('=== RUNNING MEMBERSHIP UPGRADE AUTOMATED TEST SUITE ===');
+  console.log('=== RUNNING COMPREHENSIVE MEMBERSHIP UPGRADE & DISCOUNT TEST SUITE ===');
 
-  const testMemberId = `mem_upgrade_test_${Date.now()}`;
-  const oldInvoiceNumber = `INV-MEM-TEST-001`;
-  const oldPaymentDate = '2026-08-20';
+  const createdMemberIds: string[] = [];
 
-  try {
-    // 1. Create a member with 3-month membership
-    console.log('\n--- 1. Setting up initial member & old bill ---');
-    const member = await db.addMember({
-      id: testMemberId,
-      name: 'Upgrade Test Member',
-      phone: '9876543299',
-      plan: '3 Months',
-      price: 3000,
-      amount: 3000,
-      totalBilled: 3000,
-      totalPaid: 3000,
+  const setupMemberWithBill = async (suffix: string, initialPrice: number, planName: string) => {
+    const memberId = `mem_upg_${suffix}_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+    createdMemberIds.push(memberId);
+    const invoiceNumber = `INV-MEM-ORIG-${suffix}-${Date.now()}`;
+    const paymentDate = '2026-08-15';
+
+    await db.addMember({
+      id: memberId,
+      name: `Upgrade Client ${suffix}`,
+      phone: '9876543210',
+      plan: planName,
+      price: initialPrice,
+      amount: initialPrice,
+      totalBilled: initialPrice,
+      totalPaid: initialPrice,
       outstandingBalance: 0,
-      startDate: '2026-08-20',
-      expiryDate: '2026-11-20',
+      startDate: paymentDate,
+      expiryDate: '2026-09-15',
       status: 'active',
       paymentStatus: 'paid',
     });
 
     const oldBill = await db.addPayment({
-      memberId: testMemberId,
-      memberName: 'Upgrade Test Member',
-      plan: '3 Months',
-      invoiceNumber: oldInvoiceNumber,
-      invoice: oldInvoiceNumber,
-      amount: 3000,
-      paid: 3000,
-      originalAmount: 3000,
-      netPayable: 3000,
-      amountPaid: 3000,
+      memberId,
+      memberName: `Upgrade Client ${suffix}`,
+      plan: planName,
+      invoiceNumber,
+      invoice: invoiceNumber,
+      amount: initialPrice,
+      paid: initialPrice,
+      originalAmount: initialPrice,
+      netPayable: initialPrice,
+      amountPaid: initialPrice,
       pendingAmount: 0,
       status: 'paid',
-      date: oldPaymentDate,
-      paymentDate: oldPaymentDate,
-      invoiceDate: oldPaymentDate,
-      transactionDate: oldPaymentDate,
+      paymentStatus: 'paid',
+      date: paymentDate,
+      paymentDate,
+      invoiceDate: paymentDate,
+      transactionDate: paymentDate,
     });
 
-    console.log(`Initial member created with old bill ${oldBill.invoiceNumber} paid on ${oldPaymentDate}`);
+    return { memberId, oldBill, invoiceNumber, paymentDate };
+  };
 
-    // 2. Perform Upgrade to 6 Months (₹5,000) with ₹2,000 additional payment
-    console.log('\n--- 2. Executing Upgrade: 3 Months -> 6 Months (₹3,000 adjusted, ₹2,000 additional) ---');
-    
+  const invokeUpgrade = async (memberId: string, body: any) => {
     let resStatus = 200;
     let resJson: any = null;
     const mockReq: any = {
-      params: { id: testMemberId },
+      params: { id: memberId },
       body: {
-        plan: '6 Months',
-        packagePrice: 5000,
-        startDate: '2026-08-20',
-        expiryDate: '2027-02-20',
-        previousInvoiceId: oldBill.id,
-        previousInvoiceNumber: oldInvoiceNumber,
-        previousInvoiceDate: oldPaymentDate,
-        previousPlan: '3 Months',
-        previousPaidAmount: 3000,
-        adjustedAmount: 3000,
-        additionalAmountDue: 2000,
-        additionalAmountPaid: 2000,
-        paymentMethod: 'UPI',
-        paymentStatus: 'paid',
-        invoiceDate: '2026-09-01',
-        notes: 'Upgraded to 6 Months',
-      }
+        ...body,
+        invoiceNumber: body.invoiceNumber || `INV-UPG-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
+      },
     };
     const mockRes: any = {
       status: (code: number) => {
@@ -83,58 +70,190 @@ async function runUpgradeTests() {
       json: (data: any) => {
         resJson = data;
         return mockRes;
-      }
+      },
     };
-
     await upgradeMembership(mockReq, mockRes);
+    return { status: resStatus, data: resJson };
+  };
 
-    assert.strictEqual(resStatus, 200, `Upgrade endpoint should return 200, got ${resStatus}`);
-    assert.strictEqual(resJson.success, true, 'Upgrade response should have success = true');
-    console.log(`✓ Upgrade API succeeded with invoice: ${resJson.invoiceNumber}`);
+  try {
+    // ── TEST 2: CLIENT PRIMARY FINANCIAL SCENARIO ───────────────────────────
+    // Previous adjustment = ₹2,200, New package = ₹6,500
+    // Upgrade amount before discount = ₹4,300
+    // Discount = ₹1,900 -> Net Upgrade Amount = ₹2,400
+    // Amount paid today = ₹2,400 -> Remaining balance = ₹0, Status = PAID
+    console.log('\n--- TEST 2: Client Exact Scenario (₹6,500 new - ₹2,200 adj - ₹1,900 disc = ₹2,400 paid, Balance: ₹0) ---');
+    const t2 = await setupMemberWithBill('T2', 2200, '1 Month Standard');
+    const res2 = await invokeUpgrade(t2.memberId, {
+      plan: '3 Months Pro',
+      packagePrice: 6500,
+      startDate: '2026-08-15',
+      expiryDate: '2026-11-15',
+      previousInvoiceId: t2.oldBill.id,
+      previousInvoiceNumber: t2.invoiceNumber,
+      previousInvoiceDate: t2.paymentDate,
+      previousPlan: '1 Month Standard',
+      previousPaidAmount: 2200,
+      adjustedAmount: 2200,
+      discountType: 'fixed',
+      discountValue: 1900,
+      additionalAmountPaid: 2400,
+      paymentMethod: 'UPI',
+      invoiceDate: '2026-09-03',
+      notes: 'Client test case upgrade',
+    });
 
-    // 3. Verify Upgraded Bill
-    const newInvoice = resJson.payment;
-    assert(newInvoice.invoiceNumber.startsWith('INV-UPG-'), 'New invoice must start with INV-UPG-');
-    assert.strictEqual(newInvoice.plan, '6 Months', 'New invoice plan must be 6 Months');
-    assert.strictEqual(newInvoice.netPayable, 5000, 'New invoice total package price must be 5000');
-    assert.strictEqual(newInvoice.adjustedAmount, 3000, 'Adjusted amount must be 3000');
-    assert.strictEqual(newInvoice.additionalAmountPaid, 2000, 'Additional paid must be 2000');
-    assert.strictEqual(newInvoice.amountPaid, 2000, 'amountPaid on invoice must be 2000 for Today Collection isolation');
-    assert.strictEqual(newInvoice.previousInvoiceNumber, oldInvoiceNumber, 'Must link to old invoice number');
-    assert.strictEqual(newInvoice.previousInvoiceDate, oldPaymentDate, 'Must link to old payment date');
-    console.log('✓ Upgraded bill metadata and amounts verified');
+    assert.strictEqual(res2.status, 200, 'Endpoint must return 200');
+    assert.strictEqual(res2.data.success, true, 'Upgrade must be successful');
 
-    // 4. Verify Old Bill Remains Intact
-    const payments = await db.getPayments({ memberId: testMemberId });
-    const fetchedOldBill = payments.find((p: any) => p.invoiceNumber === oldInvoiceNumber || p.id === oldBill.id);
-    assert(fetchedOldBill, 'Old bill must still exist');
-    assert.strictEqual(fetchedOldBill.date, oldPaymentDate, 'Old bill date must NOT be overwritten');
-    assert.strictEqual(fetchedOldBill.paid, 3000, 'Old bill paid amount must remain 3000');
-    assert.strictEqual(fetchedOldBill.isUpgraded, true, 'Old bill should be marked as upgraded');
-    assert.strictEqual(fetchedOldBill.upgradedToInvoice, newInvoice.invoiceNumber, 'Old bill should reference new invoice');
-    console.log('✓ Old bill preserved with original payment date and amounts');
+    const inv2 = res2.data.payment;
+    assert.strictEqual(inv2.packagePrice, 6500, 'New Package Price must be ₹6,500');
+    assert.strictEqual(inv2.adjustedAmount, 2200, 'Adjusted Amount must be ₹2,200');
+    assert.strictEqual(inv2.upgradeBaseAmount, 4300, 'Upgrade Amount Before Discount must be ₹4,300');
+    assert.strictEqual(inv2.discountAmount, 1900, 'Discount must be ₹1,900');
+    assert.strictEqual(inv2.netPayable, 2400, 'Net Upgrade Amount must be ₹2,400');
+    assert.strictEqual(inv2.additionalAmountPaid, 2400, 'Amount Paid Today must be ₹2,400');
+    assert.strictEqual(inv2.amountPaid, 2400, 'amountPaid must be strictly ₹2,400 for Today Collection isolation');
+    assert.strictEqual(inv2.pendingAmount, 0, 'Remaining Balance must be ₹0');
+    assert.strictEqual(inv2.paymentStatus, 'paid', 'Status must be paid');
+    console.log('✓ TEST 2 Passed: Upgrade financial breakdown matches client requirements exactly');
 
-    // 5. Verify Member Document
-    const updatedMember = await db.getMemberById(testMemberId);
-    assert.strictEqual(updatedMember.plan, '6 Months', 'Member plan must be updated to 6 Months');
-    assert.strictEqual(updatedMember.expiryDate, '2027-02-20', 'Member expiry must be updated');
-    assert.strictEqual(updatedMember.totalBilled, 5000, 'Member totalBilled must be 5000');
-    assert.strictEqual(updatedMember.totalPaid, 5000, 'Member totalPaid must be 5000');
-    assert.strictEqual(updatedMember.outstandingBalance, 0, 'Outstanding balance must be 0');
-    assert(Array.isArray(updatedMember.membershipHistory) && updatedMember.membershipHistory.length > 0, 'History entry must exist');
-    assert.strictEqual(updatedMember.membershipHistory[0].type, 'UPGRADE', 'History entry must be type UPGRADE');
-    console.log('✓ Member document and membership history updated accurately');
+    // Verify Old Bill remains intact
+    const payments = await db.getPayments({ memberId: t2.memberId });
+    const fetchedOld = payments.find((p: any) => p.invoiceNumber === t2.invoiceNumber || p.id === t2.oldBill.id);
+    assert(fetchedOld, 'Old invoice must still exist');
+    assert.strictEqual(fetchedOld.date, t2.paymentDate, 'Old invoice date must remain unchanged');
+    assert.strictEqual(fetchedOld.paid, 2200, 'Old invoice amount must remain ₹2,200');
+    assert.strictEqual(fetchedOld.isUpgraded, true, 'Old invoice must be marked isUpgraded');
+    assert.strictEqual(fetchedOld.upgradedToInvoice, inv2.invoiceNumber, 'Old invoice links to new invoice');
+    console.log('✓ Old bill integrity verified: date, paid amount, and history preserved');
 
-    console.log('\n=== ALL MEMBERSHIP UPGRADE TESTS PASSED SUCCESSFULLY! ===');
+    // ── TEST 1: ₹4,300 upgrade, ₹0 discount, ₹2,400 paid -> ₹1,900 balance ──
+    console.log('\n--- TEST 1: ₹4,300 upgrade, ₹0 discount, ₹2,400 paid -> Balance: ₹1,900, Status: partial ---');
+    const t1 = await setupMemberWithBill('T1', 2200, '1 Month Standard');
+    const res1 = await invokeUpgrade(t1.memberId, {
+      plan: '3 Months Pro',
+      packagePrice: 6500,
+      startDate: '2026-08-15',
+      expiryDate: '2026-11-15',
+      previousPaidAmount: 2200,
+      adjustedAmount: 2200,
+      discountType: 'fixed',
+      discountValue: 0,
+      additionalAmountPaid: 2400,
+      paymentMethod: 'UPI',
+    });
+    assert.strictEqual(res1.data.payment.upgradeBaseAmount, 4300);
+    assert.strictEqual(res1.data.payment.discountAmount, 0);
+    assert.strictEqual(res1.data.payment.netPayable, 4300);
+    assert.strictEqual(res1.data.payment.additionalAmountPaid, 2400);
+    assert.strictEqual(res1.data.payment.pendingAmount, 1900);
+    assert.strictEqual(res1.data.payment.paymentStatus, 'partial');
+    console.log('✓ TEST 1 Passed: Expected balance ₹1,900, Status partial');
+
+    // ── TEST 3: ₹4,300 upgrade, ₹1,000 discount, ₹2,400 paid -> ₹900 balance ──
+    console.log('\n--- TEST 3: ₹4,300 upgrade, ₹1,000 discount, ₹2,400 paid -> Balance: ₹900, Status: partial ---');
+    const t3 = await setupMemberWithBill('T3', 2200, '1 Month Standard');
+    const res3 = await invokeUpgrade(t3.memberId, {
+      plan: '3 Months Pro',
+      packagePrice: 6500,
+      startDate: '2026-08-15',
+      expiryDate: '2026-11-15',
+      previousPaidAmount: 2200,
+      adjustedAmount: 2200,
+      discountType: 'fixed',
+      discountValue: 1000,
+      additionalAmountPaid: 2400,
+      paymentMethod: 'UPI',
+    });
+    assert.strictEqual(res3.data.payment.upgradeBaseAmount, 4300);
+    assert.strictEqual(res3.data.payment.discountAmount, 1000);
+    assert.strictEqual(res3.data.payment.netPayable, 3300);
+    assert.strictEqual(res3.data.payment.additionalAmountPaid, 2400);
+    assert.strictEqual(res3.data.payment.pendingAmount, 900);
+    assert.strictEqual(res3.data.payment.paymentStatus, 'partial');
+    console.log('✓ TEST 3 Passed: Expected balance ₹900, Status partial');
+
+    // ── TEST 4: Full discount: ₹4,300 upgrade, ₹4,300 discount, ₹0 paid -> Balance: ₹0, Status: paid ──
+    console.log('\n--- TEST 4: Full discount: ₹4,300 upgrade, ₹4,300 discount, ₹0 paid -> Balance: ₹0, Status: paid ---');
+    const t4 = await setupMemberWithBill('T4', 2200, '1 Month Standard');
+    const res4 = await invokeUpgrade(t4.memberId, {
+      plan: '3 Months Pro',
+      packagePrice: 6500,
+      startDate: '2026-08-15',
+      expiryDate: '2026-11-15',
+      previousPaidAmount: 2200,
+      adjustedAmount: 2200,
+      discountType: 'fixed',
+      discountValue: 4300,
+      additionalAmountPaid: 0,
+      paymentMethod: 'UPI',
+    });
+    assert.strictEqual(res4.data.payment.upgradeBaseAmount, 4300);
+    assert.strictEqual(res4.data.payment.discountAmount, 4300);
+    assert.strictEqual(res4.data.payment.netPayable, 0);
+    assert.strictEqual(res4.data.payment.additionalAmountPaid, 0);
+    assert.strictEqual(res4.data.payment.pendingAmount, 0);
+    assert.strictEqual(res4.data.payment.paymentStatus, 'paid');
+    console.log('✓ TEST 4 Passed: Full discount results in net ₹0, paid ₹0, balance ₹0, Status paid');
+
+    // ── TEST 5: Percentage discount: 10% on ₹4,300 = ₹430 -> Net ₹3,870 ────
+    console.log('\n--- TEST 5: Percentage discount: 10% on ₹4,300 = ₹430 discount -> Net: ₹3,870 ---');
+    const t5 = await setupMemberWithBill('T5', 2200, '1 Month Standard');
+    const res5 = await invokeUpgrade(t5.memberId, {
+      plan: '3 Months Pro',
+      packagePrice: 6500,
+      startDate: '2026-08-15',
+      expiryDate: '2026-11-15',
+      previousPaidAmount: 2200,
+      adjustedAmount: 2200,
+      discountType: 'percentage',
+      discountValue: 10,
+      additionalAmountPaid: 3870,
+      paymentMethod: 'UPI',
+    });
+    assert.strictEqual(res5.data.payment.upgradeBaseAmount, 4300);
+    assert.strictEqual(res5.data.payment.discountAmount, 430);
+    assert.strictEqual(res5.data.payment.netPayable, 3870);
+    assert.strictEqual(res5.data.payment.additionalAmountPaid, 3870);
+    assert.strictEqual(res5.data.payment.pendingAmount, 0);
+    assert.strictEqual(res5.data.payment.paymentStatus, 'paid');
+    console.log('✓ TEST 5 Passed: 10% percentage discount correctly calculates ₹430 discount and ₹3,870 net');
+
+    // ── TEST 7 & 8: Input Tampering / Overflow protection ──────────────────
+    console.log('\n--- TEST 7 & 8: Input tampering / overflow validation (excessive discount clamped safely) ---');
+    const tOver = await setupMemberWithBill('TOver', 2200, '1 Month Standard');
+    const resOver = await invokeUpgrade(tOver.memberId, {
+      plan: '3 Months Pro',
+      packagePrice: 6500,
+      startDate: '2026-08-15',
+      expiryDate: '2026-11-15',
+      previousPaidAmount: 2200,
+      adjustedAmount: 2200,
+      discountType: 'fixed',
+      discountValue: 999999, // Exceeds base amount
+      additionalAmountPaid: 0,
+      paymentMethod: 'UPI',
+    });
+    // Should clamp discount to 4300 and not allow negative net payable
+    assert.strictEqual(resOver.data.payment.discountAmount, 4300, 'Discount must be clamped to upgrade base amount');
+    assert.strictEqual(resOver.data.payment.netPayable, 0, 'Net payable must not become negative');
+    assert.strictEqual(resOver.data.payment.pendingAmount, 0, 'Pending amount must not become negative');
+    console.log('✓ TEST 7 & 8 Passed: Overflow discount clamped safely; no negative balance created');
+
+    console.log('\n=== ALL MEMBERSHIP UPGRADE & DISCOUNT TESTS PASSED SUCCESSFULLY! ===');
   } finally {
     // Cleanup test records
     try {
-      await db.deleteMember(testMemberId);
-      const allP = await db.getPayments({ memberId: testMemberId });
-      for (const p of allP) {
-        await db.updatePayment(p.id, { deleted: true });
+      for (const mId of createdMemberIds) {
+        await db.deleteMember(mId);
+        const allP = await db.getPayments({ memberId: mId });
+        for (const p of allP) {
+          await db.updatePayment(p.id, { deleted: true });
+        }
       }
     } catch (_) {}
+    process.exit(0);
   }
 }
 

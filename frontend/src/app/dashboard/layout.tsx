@@ -253,7 +253,7 @@ export default function DashboardLayout({
   const checkinDays = attendance ? attendance.map((a: any) => new Date(a.checkIn || '').getDate()) : [];
 
   return (
-    <div className="min-h-screen w-full flex font-poppins text-slate-800 bg-[#FDFDFD] relative">
+    <div className="min-h-screen w-full flex font-sans text-slate-800 bg-[#FDFDFD] relative">
       {/* ─── Column 1: Left Navigation Sidebar ─── */}
       <aside className="w-[230px] lg:w-[240px] flex-shrink-0 bg-white border-r border-slate-200/80 p-4 flex flex-col justify-between h-screen sticky top-0 overflow-y-auto z-40">
         <div className="space-y-6">

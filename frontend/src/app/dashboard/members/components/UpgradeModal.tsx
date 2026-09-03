@@ -123,6 +123,10 @@ export default function UpgradeModal({
   const [customPrice, setCustomPrice] = useState<number>(5000);
   const [customDurationMonths, setCustomDurationMonths] = useState<number>(3);
 
+  // Discount state
+  const [discountType, setDiscountType] = useState<'fixed' | 'percentage'>('fixed');
+  const [discountValue, setDiscountValue] = useState<number>(0);
+
   // Payment state
   const [paymentMethod, setPaymentMethod] = useState<string>('UPI');
   const [amountPaidNow, setAmountPaidNow] = useState<number>(0);
@@ -217,6 +221,8 @@ export default function UpgradeModal({
     setCreatedInvoice(null);
     setShowReceiptModal(false);
     setIsCustomPaidInput(false);
+    setDiscountType('fixed');
+    setDiscountValue(0);
     setUpgradeDate(getTodayStr());
 
     const higherPlan = availablePlans.find(
@@ -249,31 +255,42 @@ export default function UpgradeModal({
     return found;
   }, [availablePlans, selectedPlanId, customPrice, customDurationMonths]);
 
-  // ── Calculation Logic ───────────────────────────────────────────────────────
+  // ── Authoritative Calculation Logic ─────────────────────────────────────────
   // New package price
   const newPackagePrice = Math.max(0, Number(selectedPlan.price) || 0);
 
   // Adjustment logic: Old paid amount is carried forward
   const adjustedAmount = Math.max(0, currentAmountPaid);
 
-  // Upgrade Amount Due:
-  // If old bill had pending: new price - previous paid
-  // E.g. New (5000) - Old Paid (3000) = 2000 due
-  // E.g. If Old was 3000 but only 2000 paid (1000 pending) -> 5000 - 2000 = 3000 due (accounts for the 1000 old pending + 2000 upgrade)
-  const upgradeAmountDue = Math.max(0, newPackagePrice - adjustedAmount);
+  // Upgrade Base Amount before discount:
+  const upgradeBaseAmount = Math.max(0, newPackagePrice - adjustedAmount);
+
+  // Discount calculation
+  const discountAmount = useMemo(() => {
+    const numVal = Math.max(0, Number(discountValue) || 0);
+    if (discountType === 'percentage') {
+      const clampedPct = Math.min(100, numVal);
+      return Math.round((upgradeBaseAmount * clampedPct) / 100);
+    }
+    return Math.min(upgradeBaseAmount, numVal);
+  }, [upgradeBaseAmount, discountType, discountValue]);
+
+  // Net Upgrade Amount Due after discount:
+  const netUpgradeAmount = Math.max(0, upgradeBaseAmount - discountAmount);
 
   // Is cheaper warning: if new package is less than or equal to what was already paid
   const isCheaperOrEqual = newPackagePrice <= adjustedAmount;
 
-  // Sync amountPaidNow with upgradeAmountDue unless user explicitly customized it
+  // Sync amountPaidNow with netUpgradeAmount unless user explicitly customized it
   useEffect(() => {
     if (!isCustomPaidInput) {
-      setAmountPaidNow(upgradeAmountDue);
+      setAmountPaidNow(netUpgradeAmount);
     }
-  }, [upgradeAmountDue, isCustomPaidInput]);
+  }, [netUpgradeAmount, isCustomPaidInput]);
 
   const finalAdditionalPaid = Math.max(0, Number(amountPaidNow) || 0);
-  const remainingPending = Math.max(0, upgradeAmountDue - finalAdditionalPaid);
+  const remainingPending = Math.max(0, netUpgradeAmount - finalAdditionalPaid);
+  const calculatedPaymentStatus = remainingPending <= 0 ? 'paid' : (finalAdditionalPaid > 0 ? 'partial' : 'pending');
 
   // Calculated new validity:
   // Upgrade extends/replaces from current start date or today
@@ -308,13 +325,17 @@ export default function UpgradeModal({
       previousPlan: currentPlanName,
       previousPaidAmount: currentAmountPaid,
       adjustedAmount,
-      additionalAmountDue: upgradeAmountDue,
+      upgradeBaseAmount,
+      discountType,
+      discountValue: Math.max(0, Number(discountValue) || 0),
+      discountAmount,
+      additionalAmountDue: netUpgradeAmount,
       additionalAmountPaid: finalAdditionalPaid,
       paymentMethod,
-      paymentStatus: remainingPending <= 0 ? 'paid' : (finalAdditionalPaid > 0 ? 'partial' : 'pending'),
+      paymentStatus: calculatedPaymentStatus,
       invoiceDate: upgradeDate,
       invoiceNumber: invoiceNum,
-      notes: notes || `Upgraded from ${currentPlanName} (${currentInvoiceNumber}). Adjusted: ₹${adjustedAmount}, Additional Paid: ₹${finalAdditionalPaid}`,
+      notes: notes || `Upgraded from ${currentPlanName} (${currentInvoiceNumber}). Adjusted: ₹${adjustedAmount}, Discount: ₹${discountAmount}, Additional Paid: ₹${finalAdditionalPaid}`,
     };
 
     try {
@@ -342,19 +363,30 @@ export default function UpgradeModal({
           adjustedAmount: payload.adjustedAmount,
           originalAmount: payload.packagePrice,
           packagePrice: payload.packagePrice,
-          netPayable: payload.packagePrice,
+          baseAmount: payload.packagePrice,
+          amountBeforeDiscount: upgradeBaseAmount,
+          upgradeBaseAmount: upgradeBaseAmount,
+          discountType: payload.discountType,
+          discountValue: payload.discountValue,
+          discountAmount: payload.discountAmount,
+          discount: payload.discountAmount,
+          netPayable: netUpgradeAmount,
+          additionalAmountDue: netUpgradeAmount,
           amount: payload.packagePrice,
-          additionalAmountDue: payload.additionalAmountDue,
           additionalAmountPaid: payload.additionalAmountPaid,
           amountPaid: payload.additionalAmountPaid,
           paid: payload.additionalAmountPaid,
           totalAmountPaid: payload.adjustedAmount + payload.additionalAmountPaid,
           pendingAmount: remainingPending,
+          outstandingAmount: remainingPending,
+          remainingBalance: remainingPending,
           paymentMethod: payload.paymentMethod,
           method: payload.paymentMethod,
-          paymentStatus: payload.paymentStatus,
-          status: payload.paymentStatus,
+          paymentStatus: calculatedPaymentStatus,
+          status: calculatedPaymentStatus,
           invoiceDate: payload.invoiceDate,
+          billingDate: payload.invoiceDate,
+          date: payload.invoiceDate,
           paymentDate: payload.invoiceDate,
           transactionDate: payload.invoiceDate,
           membershipStartDate: payload.startDate,
@@ -375,15 +407,16 @@ export default function UpgradeModal({
 
         await updateMember(member.id, {
           plan: payload.plan,
+          packageName: payload.plan,
           price: payload.packagePrice,
           amount: payload.packagePrice,
-          totalBilled: currentTotalBilled + Math.max(0, payload.packagePrice - payload.adjustedAmount),
+          totalBilled: currentTotalBilled + netUpgradeAmount,
           totalPaid: currentTotalPaid + payload.additionalAmountPaid,
           outstandingBalance: remainingPending,
           startDate: payload.startDate,
           expiryDate: payload.expiryDate,
           status: 'active',
-          paymentStatus: payload.paymentStatus,
+          paymentStatus: calculatedPaymentStatus,
           updatedAt: new Date().toISOString(),
         });
 
@@ -408,6 +441,7 @@ export default function UpgradeModal({
         ...payload,
         invoiceNumber: invoiceNum,
         amount: newPackagePrice,
+        packagePrice: newPackagePrice,
         amountPaid: finalAdditionalPaid,
         pendingAmount: remainingPending,
       });
@@ -625,12 +659,12 @@ export default function UpgradeModal({
                 )}
               </div>
 
-              {/* AUTOMATIC UPGRADE ADJUSTMENT BREAKDOWN */}
-              <div className="bg-gradient-to-br from-purple-50 via-indigo-50/40 to-slate-50 rounded-xl p-4 border border-purple-200/80">
-                <div className="flex items-center justify-between mb-3">
+              {/* AUTOMATIC UPGRADE ADJUSTMENT & DISCOUNT BREAKDOWN */}
+              <div className="bg-gradient-to-br from-purple-50 via-indigo-50/40 to-slate-50 rounded-xl p-4 border border-purple-200/80 space-y-3.5">
+                <div className="flex items-center justify-between">
                   <span className="text-xs font-black uppercase tracking-wider text-purple-900 flex items-center gap-1.5">
                     <Sparkles size={14} className="text-purple-600" />
-                    Automatic Financial Adjustment
+                    Automatic Financial Adjustment & Discount
                   </span>
                   <span className="text-[10px] font-bold text-purple-600 bg-purple-100 px-2 py-0.5 rounded">
                     Old Payment Protected
@@ -651,10 +685,88 @@ export default function UpgradeModal({
                     <span className="font-black font-mono">- ₹{adjustedAmount.toLocaleString('en-IN')}</span>
                   </div>
 
-                  <div className="border-t border-purple-200 pt-2 flex justify-between items-center">
-                    <span className="font-extrabold text-purple-900 text-sm">Upgrade Amount Due:</span>
-                    <span className="font-black text-purple-900 text-base">₹{upgradeAmountDue.toLocaleString('en-IN')}</span>
+                  <div className="border-t border-purple-200/60 pt-2 flex justify-between items-center text-slate-800">
+                    <span className="font-extrabold">Upgrade Amount Before Discount:</span>
+                    <span className="font-black font-mono text-sm">₹{upgradeBaseAmount.toLocaleString('en-IN')}</span>
                   </div>
+                </div>
+
+                {/* ── DISCOUNT INPUT SECTION ── */}
+                <div className="bg-white p-3 rounded-xl border border-purple-100 shadow-2xs space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                      <Tag size={13} className="text-purple-600" />
+                      Apply Upgrade Discount (Optional)
+                    </label>
+
+                    {/* Discount Type Toggle: Fixed ₹ vs % Percent */}
+                    <div className="flex items-center bg-slate-100 p-0.5 rounded-lg border border-slate-200">
+                      <button
+                        type="button"
+                        onClick={() => setDiscountType('fixed')}
+                        className={`px-2.5 py-1 rounded-md text-[10px] font-black transition-all cursor-pointer flex items-center gap-1 ${
+                          discountType === 'fixed'
+                            ? 'bg-purple-600 text-white shadow-xs'
+                            : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        <Banknote size={11} /> ₹ Fixed Amount
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDiscountType('percentage')}
+                        className={`px-2.5 py-1 rounded-md text-[10px] font-black transition-all cursor-pointer flex items-center gap-1 ${
+                          discountType === 'percentage'
+                            ? 'bg-purple-600 text-white shadow-xs'
+                            : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        <Percent size={11} /> % Percentage
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-center pt-1">
+                    <div>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs">
+                          {discountType === 'fixed' ? '₹' : '%'}
+                        </span>
+                        <input
+                          type="number"
+                          min="0"
+                          max={discountType === 'percentage' ? 100 : upgradeBaseAmount}
+                          value={discountValue || ''}
+                          onChange={(e) => {
+                            const val = Number(e.target.value);
+                            setDiscountValue(isNaN(val) ? 0 : Math.max(0, val));
+                          }}
+                          placeholder={discountType === 'fixed' ? 'e.g. 1900' : 'e.g. 10'}
+                          className="w-full text-xs font-bold pl-7 pr-3 py-2 border border-slate-300 rounded-lg bg-slate-50 focus:bg-white focus:outline-hidden focus:border-purple-500 font-mono"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="text-right">
+                      {discountAmount > 0 ? (
+                        <div className="text-xs font-extrabold text-emerald-600 bg-emerald-50 px-2.5 py-1.5 rounded-lg border border-emerald-100 flex items-center justify-between">
+                          <span>Discount Applied:</span>
+                          <span className="font-black font-mono">- ₹{discountAmount.toLocaleString('en-IN')}</span>
+                        </div>
+                      ) : (
+                        <span className="text-[11px] text-slate-400 font-medium">No discount applied</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* NET UPGRADE AMOUNT DUE ROW */}
+                <div className="border-t border-purple-200 pt-2 flex justify-between items-center bg-purple-100/50 p-2.5 rounded-lg">
+                  <div>
+                    <span className="font-extrabold text-purple-950 text-sm block">Net Upgrade Amount Due:</span>
+                    <span className="text-[10px] text-purple-700 font-medium">Payable amount after adjustment & discount</span>
+                  </div>
+                  <span className="font-black text-purple-950 text-lg font-mono">₹{netUpgradeAmount.toLocaleString('en-IN')}</span>
                 </div>
 
                 {isCheaperOrEqual && (
@@ -668,7 +780,7 @@ export default function UpgradeModal({
                 )}
               </div>
 
-              {/* PAYMENT COLLECTION INPUTS (Only if additional amount > 0) */}
+              {/* PAYMENT COLLECTION INPUTS */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-black uppercase tracking-wider text-slate-700 mb-1.5">
@@ -677,7 +789,7 @@ export default function UpgradeModal({
                   <input
                     type="number"
                     min="0"
-                    max={upgradeAmountDue}
+                    max={netUpgradeAmount}
                     value={amountPaidNow}
                     onChange={(e) => {
                       setIsCustomPaidInput(true);
@@ -690,7 +802,7 @@ export default function UpgradeModal({
                     {remainingPending > 0 ? (
                       <span className="text-amber-600 font-bold">Remaining balance: ₹{remainingPending.toLocaleString('en-IN')}</span>
                     ) : (
-                      <span className="text-emerald-600 font-bold">✓ Full upgrade amount covered</span>
+                      <span className="text-emerald-600 font-bold">✓ Full upgrade amount covered (Balance: ₹0)</span>
                     )}
                   </div>
                 </div>
@@ -751,81 +863,112 @@ export default function UpgradeModal({
               <div className="text-center pb-2">
                 <h3 className="text-base font-black text-slate-900">Review Upgrade Summary</h3>
                 <p className="text-xs text-slate-500">
-                  Please verify the financial adjustment and dates below before confirming.
+                  Please verify all financial calculations and details below before confirming.
                 </p>
               </div>
 
-              {/* COMPARISON TABLE */}
+              {/* COMPREHENSIVE REVIEW TABLE */}
               <div className="border border-slate-200 rounded-xl overflow-hidden shadow-xs">
-                <div className="bg-slate-100 px-4 py-2.5 text-xs font-extrabold text-slate-700 uppercase tracking-wider flex justify-between">
-                  <span>Upgrade Comparison</span>
-                  <span>Alpha Zone Gym</span>
+                <div className="bg-slate-100 px-4 py-2.5 text-xs font-extrabold text-slate-700 uppercase tracking-wider flex justify-between items-center">
+                  <span>Upgrade Verification Breakdown</span>
+                  <span className="font-mono text-purple-700 font-bold">Alpha Zone Gym</span>
                 </div>
 
                 <div className="divide-y divide-slate-100 text-xs">
+                  {/* Member Details */}
                   <div className="grid grid-cols-2 p-3 bg-white">
                     <div>
-                      <div className="text-slate-400 text-[10px] font-bold uppercase">Current Membership</div>
-                      <div className="font-extrabold text-slate-800 text-sm mt-0.5">{currentPlanName}</div>
-                      <div className="text-[11px] text-slate-500 font-mono">Invoice: {currentInvoiceNumber}</div>
+                      <div className="text-slate-400 text-[10px] font-bold uppercase">Member</div>
+                      <div className="font-extrabold text-slate-900 text-sm mt-0.5">{member.name}</div>
+                      <div className="text-[11px] text-slate-500 font-mono">ID: {member.memberId || member.id}</div>
                     </div>
                     <div className="border-l border-slate-100 pl-4">
-                      <div className="text-purple-600 text-[10px] font-bold uppercase">Upgraded Membership</div>
-                      <div className="font-extrabold text-purple-900 text-sm mt-0.5">{selectedPlan.name}</div>
-                      <div className="text-[11px] text-purple-700 font-mono">New Linked Bill to be Created</div>
+                      <div className="text-slate-400 text-[10px] font-bold uppercase">Upgrade Transaction Date</div>
+                      <div className="font-mono font-bold text-slate-800 text-sm mt-0.5">{fmtDate(upgradeDate)}</div>
+                      <div className="text-[10px] text-slate-400">Payment Mode: {paymentMethod}</div>
                     </div>
                   </div>
 
+                  {/* Current vs Upgraded Package */}
                   <div className="grid grid-cols-2 p-3 bg-slate-50/50">
                     <div>
-                      <div className="text-slate-400 text-[10px] font-bold uppercase">Old Package Amount</div>
-                      <div className="font-black text-slate-800">₹{currentBillAmount.toLocaleString('en-IN')}</div>
-                      <div className="text-[10px] text-emerald-600 font-semibold">Paid: ₹{currentAmountPaid.toLocaleString('en-IN')}</div>
+                      <div className="text-slate-400 text-[10px] font-bold uppercase">Current Package</div>
+                      <div className="font-extrabold text-slate-800 text-sm mt-0.5">{currentPlanName}</div>
+                      <div className="text-[11px] text-slate-500 font-mono">Old Invoice: {currentInvoiceNumber}</div>
+                      <div className="text-[10px] text-slate-400">Old Date: {fmtDate(currentPaymentDate)}</div>
                     </div>
                     <div className="border-l border-slate-100 pl-4">
-                      <div className="text-purple-600 text-[10px] font-bold uppercase">New Package Amount</div>
-                      <div className="font-black text-purple-900 text-base">₹{newPackagePrice.toLocaleString('en-IN')}</div>
+                      <div className="text-purple-600 text-[10px] font-bold uppercase">New Package</div>
+                      <div className="font-extrabold text-purple-900 text-sm mt-0.5">{selectedPlan.name}</div>
+                      <div className="text-[11px] text-purple-700 font-mono">New Validity: {fmtDate(newStartDate)} → {fmtDate(newExpiryDate)}</div>
+                      <div className="text-[10px] text-purple-600 font-semibold">{daysRemaining} Days Remaining</div>
                     </div>
+                  </div>
+
+                  {/* Financial Breakdown Table Rows */}
+                  <div className="p-3 bg-white flex justify-between items-center">
+                    <span className="text-slate-600">Previous Paid Amount:</span>
+                    <span className="font-bold font-mono text-slate-800">₹{currentAmountPaid.toLocaleString('en-IN')}</span>
+                  </div>
+
+                  <div className="p-3 bg-white flex justify-between items-center">
+                    <span className="font-bold text-slate-700">New Package Price:</span>
+                    <span className="font-black font-mono text-slate-900 text-sm">₹{newPackagePrice.toLocaleString('en-IN')}</span>
                   </div>
 
                   <div className="p-3 bg-emerald-50/60 flex justify-between items-center text-emerald-900 font-semibold">
-                    <span>Adjusted Previous Payment (Carried Forward):</span>
+                    <span className="flex items-center gap-1">
+                      <CheckCircle2 size={13} className="text-emerald-600" />
+                      Carried Forward Adjustment:
+                    </span>
                     <span className="font-black font-mono text-sm">- ₹{adjustedAmount.toLocaleString('en-IN')}</span>
                   </div>
 
                   <div className="p-3 bg-white flex justify-between items-center">
-                    <span className="font-bold text-slate-700">Additional Amount Payable:</span>
-                    <span className="font-black text-slate-900 text-sm">₹{upgradeAmountDue.toLocaleString('en-IN')}</span>
+                    <span className="font-bold text-slate-700">Upgrade Amount Before Discount:</span>
+                    <span className="font-black font-mono text-slate-900 text-sm">₹{upgradeBaseAmount.toLocaleString('en-IN')}</span>
                   </div>
 
-                  <div className="p-3 bg-purple-50 flex justify-between items-center text-purple-950 font-bold">
-                    <span>Amount Paid Now ({paymentMethod}):</span>
-                    <span className="font-black text-emerald-600 text-base">₹{finalAdditionalPaid.toLocaleString('en-IN')}</span>
+                  <div className="p-3 bg-emerald-50/40 flex justify-between items-center text-emerald-800">
+                    <div>
+                      <span className="font-bold">Discount ({discountType === 'percentage' ? `${discountValue}%` : 'Fixed Amount'}):</span>
+                      <span className="text-[10px] text-emerald-600 block">Applied to upgrade balance</span>
+                    </div>
+                    <span className="font-black font-mono text-sm text-emerald-700">
+                      {discountAmount > 0 ? `- ₹${discountAmount.toLocaleString('en-IN')}` : '₹0'}
+                    </span>
                   </div>
 
-                  {remainingPending > 0 && (
-                    <div className="p-3 bg-rose-50 flex justify-between items-center text-rose-800 font-bold">
-                      <span>Remaining Balance Due:</span>
-                      <span className="font-black font-mono">₹{remainingPending.toLocaleString('en-IN')}</span>
+                  <div className="p-3 bg-purple-50 flex justify-between items-center text-purple-950 font-black">
+                    <span className="text-sm">Net Upgrade Amount Payable:</span>
+                    <span className="font-mono text-base text-purple-900">₹{netUpgradeAmount.toLocaleString('en-IN')}</span>
+                  </div>
+
+                  <div className="p-3 bg-white flex justify-between items-center font-bold">
+                    <span className="text-slate-700">Amount Paid Today ({paymentMethod}):</span>
+                    <span className="font-black font-mono text-emerald-600 text-base">₹{finalAdditionalPaid.toLocaleString('en-IN')}</span>
+                  </div>
+
+                  <div className={`p-3 flex justify-between items-center font-bold ${
+                    remainingPending > 0 ? 'bg-rose-50 text-rose-800' : 'bg-emerald-50 text-emerald-800'
+                  }`}>
+                    <span>Remaining Balance:</span>
+                    <div className="text-right">
+                      <span className="font-black font-mono text-base">₹{remainingPending.toLocaleString('en-IN')}</span>
+                      <span className={`text-[10px] font-black uppercase block ${
+                        remainingPending <= 0 ? 'text-emerald-600' : 'text-rose-600'
+                      }`}>
+                        Status: {calculatedPaymentStatus.toUpperCase()}
+                      </span>
+                    </div>
+                  </div>
+
+                  {notes && (
+                    <div className="p-3 bg-slate-50 text-slate-600">
+                      <div className="text-[10px] font-bold text-slate-400 uppercase">Notes / Remarks</div>
+                      <div className="font-medium text-xs mt-0.5">{notes}</div>
                     </div>
                   )}
-
-                  <div className="grid grid-cols-2 p-3 bg-slate-50/50">
-                    <div>
-                      <div className="text-slate-400 text-[10px] font-bold uppercase">Original Payment Date</div>
-                      <div className="font-mono font-bold text-slate-800">{fmtDate(currentPaymentDate)}</div>
-                      <div className="text-[10px] text-slate-400">(Will remain preserved)</div>
-                    </div>
-                    <div className="border-l border-slate-100 pl-4">
-                      <div className="text-purple-600 text-[10px] font-bold uppercase">New Membership Validity</div>
-                      <div className="font-mono font-bold text-purple-900">
-                        {fmtDate(newStartDate)} → {fmtDate(newExpiryDate)}
-                      </div>
-                      <div className="text-[10px] text-purple-700 font-semibold">
-                        {daysRemaining} Days Remaining
-                      </div>
-                    </div>
-                  </div>
                 </div>
               </div>
 
@@ -851,7 +994,7 @@ export default function UpgradeModal({
               <div>
                 <h3 className="text-xl font-black text-slate-900">Membership Upgrade Complete!</h3>
                 <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto">
-                  {member.name} has been upgraded to <strong>{selectedPlan.name}</strong>. The old payment was adjusted and a new invoice was generated.
+                  {member.name} has been upgraded to <strong>{selectedPlan.name}</strong>. The old payment was adjusted, discount was recorded, and a new invoice was generated.
                 </p>
               </div>
 
@@ -873,8 +1016,28 @@ export default function UpgradeModal({
                   <span className="font-bold text-emerald-600">₹{adjustedAmount.toLocaleString('en-IN')}</span>
                 </div>
                 <div className="flex justify-between">
+                  <span className="text-slate-400">Upgrade Base Amount:</span>
+                  <span className="font-bold text-slate-800">₹{upgradeBaseAmount.toLocaleString('en-IN')}</span>
+                </div>
+                {discountAmount > 0 && (
+                  <div className="flex justify-between text-emerald-600 font-bold">
+                    <span>Discount Applied:</span>
+                    <span className="font-mono">- ₹{discountAmount.toLocaleString('en-IN')}</span>
+                  </div>
+                )}
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Net Upgrade Amount:</span>
+                  <span className="font-black text-purple-900">₹{netUpgradeAmount.toLocaleString('en-IN')}</span>
+                </div>
+                <div className="flex justify-between">
                   <span className="text-slate-400">Additional Collected:</span>
                   <span className="font-black text-slate-900">₹{finalAdditionalPaid.toLocaleString('en-IN')}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Remaining Balance:</span>
+                  <span className={`font-black ${remainingPending > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
+                    ₹{remainingPending.toLocaleString('en-IN')}
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-400">New Expiry Date:</span>

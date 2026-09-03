@@ -270,6 +270,11 @@ export default function BillingTab({ member: initialMember }: { member: any }) {
 
   const calcStats = (invList: any[]) => {
     const billed = invList.reduce((s: number, inv: any) => {
+      const isUp = Boolean(inv.isUpgrade || inv.transactionType === 'membership_upgrade' || String(inv.invoiceNumber || '').startsWith('INV-UPG'));
+      if (isUp) {
+        const net = Number(inv.netPayable !== undefined ? inv.netPayable : (inv.additionalAmountDue !== undefined ? inv.additionalAmountDue : Number(inv.amount || 0)));
+        return s + (isNaN(net) ? 0 : net);
+      }
       const origAmt = Number(inv.originalAmount !== undefined ? inv.originalAmount : (inv.packagePrice || inv.price || inv.amount || 0));
       const discAmt = Number(inv.discountAmount !== undefined ? inv.discountAmount : (inv.discount || 0));
       const taxAmt = Number(inv.taxAmount !== undefined ? inv.taxAmount : (inv.tax || inv.gst || 0));
@@ -537,10 +542,13 @@ export default function BillingTab({ member: initialMember }: { member: any }) {
                   const taxAmt = Number(inv.taxAmount !== undefined ? inv.taxAmount : (inv.tax || inv.gst || 0));
                   const otherAmt = Number(inv.otherCharges || 0);
 
+                  const isUp = Boolean(inv.isUpgrade || inv.transactionType === 'membership_upgrade' || String(inv.invoiceNumber || '').startsWith('INV-UPG'));
                   const computedNet = Math.max(0, origItemAmt - discountAmt + taxAmt + otherAmt);
                   const netPayable = Number(inv.netPayable !== undefined ? inv.netPayable : (computedNet > 0 ? computedNet : Number(inv.amount || 0)));
                   const paidAmt = Number(inv.amountPaid !== undefined ? inv.amountPaid : (inv.paid !== undefined ? inv.paid : netPayable));
-                  const pendingAmt = Math.max(0, netPayable - paidAmt);
+                  const pendingAmt = isUp
+                    ? Number(inv.pendingAmount !== undefined ? inv.pendingAmount : (inv.remainingBalance !== undefined ? inv.remainingBalance : Math.max(0, netPayable - paidAmt)))
+                    : Math.max(0, netPayable - paidAmt);
                   const startDate = inv.startDate || member.joinDate || '20-08-2026';
                   const expiryDate = inv.expiryDate || member.expiryDate || '19-10-2026';
                   const planTitle = inv.plan || member.plan || 'Gym membership';

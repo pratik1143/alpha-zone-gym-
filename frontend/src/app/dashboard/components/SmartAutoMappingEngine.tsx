@@ -427,7 +427,7 @@ export default function SmartAutoMappingEngine({
   };
 
   return (
-    <div className="space-y-6 font-poppins text-slate-800">
+    <div className="space-y-6 font-sans text-slate-800">
       <input
         ref={fileInputRef}
         type="file"

@@ -1,4 +1,114 @@
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Outfit:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&family=Poppins:wght@300;400;500;600;700&family=Rowdies:wght@300;400;700&display=swap');
+/* ─── Authentic Local Apple San Francisco (SF Pro) Font Stack ────────── */
+@font-face {
+  font-family: 'SF Pro Display';
+  src: url('/fonts/SF-Pro-Display-Regular.otf') format('opentype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'SF Pro Display';
+  src: url('/fonts/SF-Pro-Display-Medium.otf') format('opentype');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'SF Pro Display';
+  src: url('/fonts/SF-Pro-Display-Semibold.otf') format('opentype');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'SF Pro Display';
+  src: url('/fonts/SF-Pro-Display-Bold.otf') format('opentype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'SF Pro Display';
+  src: url('/fonts/SF-Pro-Display-Heavy.otf') format('opentype');
+  font-weight: 800;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'SF Pro Display';
+  src: url('/fonts/SF-Pro-Display-Black.otf') format('opentype');
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'SF Pro Text';
+  src: url('/fonts/SF-Pro-Text-Regular.otf') format('opentype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'SF Pro Text';
+  src: url('/fonts/SF-Pro-Text-Medium.otf') format('opentype');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'SF Pro Text';
+  src: url('/fonts/SF-Pro-Text-Semibold.otf') format('opentype');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'SF Pro Text';
+  src: url('/fonts/SF-Pro-Text-Bold.otf') format('opentype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Aliases for 'SF Pro', 'San Francisco', 'Poppins', 'Rowdies' */
+@font-face {
+  font-family: 'San Francisco';
+  src: url('/fonts/SF-Pro-Display-Regular.otf') format('opentype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'San Francisco';
+  src: url('/fonts/SF-Pro-Display-Semibold.otf') format('opentype');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'San Francisco';
+  src: url('/fonts/SF-Pro-Display-Bold.otf') format('opentype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'San Francisco';
+  src: url('/fonts/SF-Pro-Display-Heavy.otf') format('opentype');
+  font-weight: 800;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'San Francisco';
+  src: url('/fonts/SF-Pro-Display-Black.otf') format('opentype');
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap');
 @import "tailwindcss";
 
 :root {
@@ -19,14 +129,17 @@
   --text-muted: #8FA3B8;
 
   --danger: #DC2626;
+
+  /* Apple SF Typography stack */
+  --font-sf: 'SF Pro Display', 'SF Pro Text', 'San Francisco', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
 }
 
 @theme {
-  --font-sans: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif;
-  --font-display: 'Outfit', 'Plus Jakarta Sans', sans-serif;
-  --font-mono: 'JetBrains Mono', monospace;
-  --font-rowdies: 'Rowdies', 'Outfit', sans-serif;
-  --font-poppins: 'Poppins', 'Plus Jakarta Sans', sans-serif;
+  --font-sans: 'SF Pro Display', 'SF Pro Text', 'San Francisco', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --font-display: 'SF Pro Display', 'SF Pro Text', 'San Francisco', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --font-mono: 'SF Mono', 'JetBrains Mono', Menlo, Monaco, Consolas, monospace;
+  --font-rowdies: 'SF Pro Display', 'San Francisco', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-poppins: 'SF Pro Display', 'San Francisco', -apple-system, BlinkMacSystemFont, sans-serif;
 
   --color-brand-primary: #0b5cbe;
   --color-brand-primary-hover: #064a9b;
@@ -52,9 +165,13 @@
   --color-foreground: #0b1f3a;
 }
 
-/* Base Styles */
-body {
-  font-family: var(--font-sans);
+/* ─── Universal San Francisco Font Enforcement ───────────────────────── */
+*, *::before, *::after {
+  font-family: 'SF Pro Display', 'SF Pro Text', 'San Francisco', -apple-system, BlinkMacSystemFont, system-ui, sans-serif !important;
+}
+
+html, body {
+  font-family: 'SF Pro Display', 'SF Pro Text', 'San Francisco', -apple-system, BlinkMacSystemFont, system-ui, sans-serif !important;
   background-color: #fdfdfd;
   background-image: 
     radial-gradient(circle at 10% 10%, rgba(11, 92, 190, 0.03) 0%, transparent 40%),
@@ -63,10 +180,24 @@ body {
   min-height: 100vh;
   overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  letter-spacing: -0.012em;
 }
 
-h1, h2, h3, h4, .font-display {
-  font-family: var(--font-display);
+/* Headings with crisp SF tracking */
+h1, h2, h3, h4, h5, h6, .font-display, .font-rowdies {
+  font-family: 'SF Pro Display', 'SF Pro Text', 'San Francisco', -apple-system, BlinkMacSystemFont, system-ui, sans-serif !important;
+  letter-spacing: -0.022em;
+}
+
+.font-poppins, .font-sans {
+  font-family: 'SF Pro Display', 'SF Pro Text', 'San Francisco', -apple-system, BlinkMacSystemFont, system-ui, sans-serif !important;
+}
+
+/* Form Controls - Apple / San Francisco Precision Styling */
+input, select, textarea, button, optgroup, label, span, div, p, a, table, th, td {
+  font-family: 'SF Pro Display', 'SF Pro Text', 'San Francisco', -apple-system, BlinkMacSystemFont, system-ui, sans-serif !important;
 }
 
 /* Custom Scrollbars */
@@ -86,12 +217,12 @@ h1, h2, h3, h4, .font-display {
   box-shadow: 0 0 8px rgba(11, 92, 190, 0.3);
 }
 
-/* ─── Cards ───────────────────────────────────────── */
+/* ─── Cards (Apple SF Glassmorphism & Elevation) ──────────────────────── */
 .glass-card, .card {
   background: #ffffff;
   border: 1px solid #d9e7f7;
   border-radius: 20px;
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
   box-shadow: 0 2px 12px rgba(11, 92, 190, 0.05),
               0 1px 3px rgba(11, 92, 190, 0.03);
   color: #10233f;
@@ -112,7 +243,12 @@ h1, h2, h3, h4, .font-display {
   color: #10233f;
 }
 
-/* ─── Inputs ─────────────────────────────────────── */
+/* ─── Inputs & Form Fields (San Francisco / Apple Pro Design) ────────── */
+.glass-input, .input-light, input[type="text"], input[type="email"], input[type="password"], input[type="number"], input[type="tel"], input[type="date"], select, textarea {
+  font-family: 'SF Pro Display', 'SF Pro Text', 'SF Pro', -apple-system, BlinkMacSystemFont, 'San Francisco', system-ui, sans-serif !important;
+  letter-spacing: -0.012em;
+}
+
 .glass-input, .input-light {
   background: #fdfdfd;
   border: 1.5px solid #d9e7f7;
@@ -121,13 +257,13 @@ h1, h2, h3, h4, .font-display {
   font-size: 0.875rem;
   color: #10233f;
   outline: none;
-  transition: all 0.2s ease-in-out;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   width: 100%;
 }
 .glass-input:focus, .input-light:focus {
   border-color: #0b5cbe;
   background: #ffffff;
-  box-shadow: 0 0 0 3px rgba(11, 92, 190, 0.12);
+  box-shadow: 0 0 0 3.5px rgba(11, 92, 190, 0.12);
 }
 .glass-input::placeholder, .input-light::placeholder {
   color: #8aa0ba;

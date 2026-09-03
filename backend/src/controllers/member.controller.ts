@@ -695,6 +695,9 @@ export const upgradeMembership = async (req: Request, res: Response) => {
       previousPlan,
       previousPaidAmount,
       adjustedAmount,
+      discountType,
+      discountValue,
+      discountAmount,
       additionalAmountDue,
       additionalAmountPaid,
       paymentMethod,
@@ -713,9 +716,33 @@ export const upgradeMembership = async (req: Request, res: Response) => {
     const numPkgPrice = Math.max(0, Number(packagePrice) || 0);
     const numPrevPaid = Math.max(0, Number(previousPaidAmount) || 0);
     const numAdjusted = Math.max(0, Number(adjustedAmount !== undefined ? adjustedAmount : numPrevPaid));
-    const numAddDue = Math.max(0, Number(additionalAmountDue !== undefined ? additionalAmountDue : Math.max(0, numPkgPrice - numAdjusted)));
-    const numAddPaid = Math.max(0, Number(additionalAmountPaid !== undefined ? additionalAmountPaid : numAddDue));
-    const numPending = Math.max(0, numAddDue - numAddPaid);
+
+    // 1. Authoritative base upgrade amount before discount
+    const upgradeBaseAmount = Math.max(0, numPkgPrice - numAdjusted);
+
+    // 2. Authoritative discount calculation & validation
+    const rawDiscountType = String(discountType || 'fixed').toLowerCase() === 'percentage' ? 'percentage' : 'fixed';
+    const numDiscountValue = Math.max(0, Number(discountValue) || 0);
+
+    let numDiscountAmount = 0;
+    if (rawDiscountType === 'percentage') {
+      const clampedPercent = Math.min(100, numDiscountValue);
+      numDiscountAmount = Math.round((upgradeBaseAmount * clampedPercent) / 100);
+    } else {
+      // Fixed discount cannot exceed upgradeBaseAmount
+      numDiscountAmount = Math.min(upgradeBaseAmount, numDiscountValue);
+    }
+
+    // 3. Authoritative net upgrade payable
+    const netUpgradePayable = Math.max(0, upgradeBaseAmount - numDiscountAmount);
+
+    // 4. Authoritative amount paid today & remaining balance
+    const rawAddPaid = Number(additionalAmountPaid !== undefined ? additionalAmountPaid : netUpgradePayable);
+    const numAddPaid = Math.max(0, isNaN(rawAddPaid) ? 0 : rawAddPaid);
+
+    // Never allow remaining balance to become negative
+    const numPending = Math.max(0, netUpgradePayable - numAddPaid);
+    const calculatedStatus = numPending <= 0 ? 'paid' : (numAddPaid > 0 ? 'partial' : 'pending');
 
     const canonicalInvoiceDate = invoiceDate || new Date().toISOString().split('T')[0];
     const invoiceNumber = providedInvoiceNumber || `INV-UPG-${Math.floor(100000 + Math.random() * 900000)}`;
@@ -747,9 +774,15 @@ export const upgradeMembership = async (req: Request, res: Response) => {
         originalAmount: numPkgPrice,
         packagePrice: numPkgPrice,
         baseAmount: numPkgPrice,
-        netPayable: numPkgPrice,
+        amountBeforeDiscount: upgradeBaseAmount,
+        upgradeBaseAmount: upgradeBaseAmount,
+        discountType: rawDiscountType,
+        discountValue: numDiscountValue,
+        discountAmount: numDiscountAmount,
+        discount: numDiscountAmount,
+        netPayable: netUpgradePayable,
+        additionalAmountDue: netUpgradePayable,
         amount: numPkgPrice,
-        additionalAmountDue: numAddDue,
         additionalAmountPaid: numAddPaid,
         // Crucial for Today's Collection: amountPaid is the actual additional cash collected today
         amountPaid: numAddPaid,
@@ -757,10 +790,11 @@ export const upgradeMembership = async (req: Request, res: Response) => {
         totalAmountPaid: numAdjusted + numAddPaid,
         pendingAmount: numPending,
         outstandingAmount: numPending,
+        remainingBalance: numPending,
         paymentMethod,
         method: paymentMethod,
-        paymentStatus: numPending <= 0 ? 'paid' : (numAddPaid > 0 ? 'partial' : 'pending'),
-        status: numPending <= 0 ? 'paid' : (numAddPaid > 0 ? 'partial' : 'pending'),
+        paymentStatus: calculatedStatus,
+        status: calculatedStatus,
         invoiceDate: canonicalInvoiceDate,
         billingDate: canonicalInvoiceDate,
         date: canonicalInvoiceDate,
@@ -772,7 +806,7 @@ export const upgradeMembership = async (req: Request, res: Response) => {
         expiryDate,
         invoiceNumber,
         invoice: invoiceNumber,
-        notes: notes || `Membership Upgrade from ${previousPlan || existingMember.plan || 'previous package'} (${previousInvoiceNumber || 'INV-PREV'}). Adjusted: ₹${numAdjusted}, Additional Paid: ₹${numAddPaid}`,
+        notes: notes || `Membership Upgrade from ${previousPlan || existingMember.plan || 'previous package'} (${previousInvoiceNumber || 'INV-PREV'}). Adjusted: ₹${numAdjusted}, Discount: ₹${numDiscountAmount}, Additional Paid: ₹${numAddPaid}`,
         isHistorical: false,
         imported: false,
         createdAt: nowIso,
@@ -817,11 +851,18 @@ export const upgradeMembership = async (req: Request, res: Response) => {
       startDate,
       expiryDate,
       amount: numPkgPrice,
+      packagePrice: numPkgPrice,
       previousPaidAdjusted: numAdjusted,
+      upgradeBaseAmount,
+      discountType: rawDiscountType,
+      discountValue: numDiscountValue,
+      discountAmount: numDiscountAmount,
+      discount: numDiscountAmount,
+      netPayable: netUpgradePayable,
       additionalAmountPaid: numAddPaid,
       pendingAmount: numPending,
       paymentMethod,
-      paymentStatus: numPending <= 0 ? 'paid' : (numAddPaid > 0 ? 'partial' : 'pending'),
+      paymentStatus: calculatedStatus,
       invoiceNumber,
       previousInvoiceNumber: previousInvoiceNumber || '',
       invoiceDate: canonicalInvoiceDate,
@@ -834,7 +875,7 @@ export const upgradeMembership = async (req: Request, res: Response) => {
     const currentTotalBilled = Number(existingMember.totalBilled) || Number(existingMember.amount) || numPrevPaid;
     const currentTotalPaid = Number(existingMember.totalPaid) || Number(existingMember.paid) || numPrevPaid;
 
-    const newTotalBilled = currentTotalBilled + Math.max(0, numPkgPrice - numAdjusted);
+    const newTotalBilled = currentTotalBilled + netUpgradePayable;
     const newTotalPaid = currentTotalPaid + numAddPaid;
 
     let updatedMember: any;
@@ -850,7 +891,7 @@ export const upgradeMembership = async (req: Request, res: Response) => {
         startDate,
         expiryDate,
         status: 'active',
-        paymentStatus: numPending <= 0 ? 'paid' : 'partial',
+        paymentStatus: calculatedStatus,
         membershipHistory: updatedHistory,
         updatedAt: nowIso,
       });
@@ -881,3 +922,4 @@ export const upgradeMembership = async (req: Request, res: Response) => {
     res.status(500).json({ error: error.message });
   }
 };
+

@@ -281,7 +281,7 @@ export default function RealDeviceStatusCard() {
   };
 
   return (
-    <div className="bg-white p-5 rounded-[26px] border border-slate-200 shadow-sm space-y-4 font-poppins">
+    <div className="bg-white p-5 rounded-[26px] border border-slate-200 shadow-sm space-y-4 font-sans">
       <div className="flex items-center justify-between border-b border-slate-100 pb-3">
         <div className="flex items-center gap-2">
           <div

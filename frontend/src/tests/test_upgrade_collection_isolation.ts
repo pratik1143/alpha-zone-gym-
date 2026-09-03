@@ -10,6 +10,9 @@ interface PaymentRecord {
   amountPaid?: number;
   additionalAmountPaid?: number;
   adjustedAmount?: number;
+  discount?: number;
+  discountAmount?: number;
+  netPayable?: number;
   isUpgrade?: boolean;
   transactionType?: string;
   date?: string;
@@ -36,28 +39,31 @@ const resolveAmount = (p: PaymentRecord): number => {
 function runUpgradeIsolationTests() {
   console.log('=== RUNNING UPGRADE PAYMENT TODAY COLLECTION ISOLATION TEST ===');
 
-  const today = '2026-09-01';
+  const today = '2026-09-03';
 
   // Old bill paid on 20 Aug 2026
   const oldBill: PaymentRecord = {
     invoiceNumber: 'INV-MEM-001',
-    amount: 3000,
-    paid: 3000,
-    amountPaid: 3000,
+    amount: 2200,
+    paid: 2200,
+    amountPaid: 2200,
     date: '2026-08-20',
   };
 
-  // Upgraded bill created today
-  // New package price = 5000, previous paid = 3000, additional paid = 2000
-  const upgradedBill: PaymentRecord = {
+  // Upgraded bill created today with discount
+  // New package price = 6500, previous paid = 2200, discount = 1900, additional paid = 2400
+  const clientDiscountedUpgradeBill: PaymentRecord = {
     invoiceNumber: 'INV-UPG-002',
     isUpgrade: true,
     transactionType: 'membership_upgrade',
-    amount: 5000,
-    adjustedAmount: 3000,
-    additionalAmountPaid: 2000,
-    amountPaid: 2000,
-    paid: 2000,
+    amount: 6500,
+    adjustedAmount: 2200,
+    discountAmount: 1900,
+    discount: 1900,
+    netPayable: 2400,
+    additionalAmountPaid: 2400,
+    amountPaid: 2400,
+    paid: 2400,
     date: today,
     invoiceDate: today,
   };
@@ -72,13 +78,14 @@ function runUpgradeIsolationTests() {
     invoiceDate: today,
   };
 
-  // Upgraded bill with 0 additional cash collected today (pending balance)
+  // Upgraded bill with 0 additional cash collected today (fully discounted or pending)
   const zeroCashUpgrade: PaymentRecord = {
     invoiceNumber: 'INV-UPG-004',
     isUpgrade: true,
     transactionType: 'membership_upgrade',
-    amount: 3000,
-    adjustedAmount: 3000,
+    amount: 4300,
+    adjustedAmount: 2200,
+    discountAmount: 2100,
     additionalAmountPaid: 0,
     amountPaid: 0,
     paid: 0,
@@ -86,11 +93,11 @@ function runUpgradeIsolationTests() {
     invoiceDate: today,
   };
 
-  console.log('\n--- 1. Testing resolveAmount on Upgraded Bill ---');
-  const upgAmount = resolveAmount(upgradedBill);
-  console.log(`Upgraded bill package price: ₹5,000 | Additional collected: ₹2,000 -> resolveAmount: ₹${upgAmount}`);
-  assert.strictEqual(upgAmount, 2000, 'Upgraded bill must resolve strictly to ₹2,000 additional collected today, NOT ₹5,000');
-  console.log('✓ PASS: Upgraded bill resolves to ₹2,000');
+  console.log('\n--- 1. Testing resolveAmount on Client Discounted Upgrade Bill ---');
+  const upgAmount = resolveAmount(clientDiscountedUpgradeBill);
+  console.log(`Upgraded bill package price: ₹6,500 | Adjusted: ₹2,200 | Discount: ₹1,900 | Additional collected: ₹2,400 -> resolveAmount: ₹${upgAmount}`);
+  assert.strictEqual(upgAmount, 2400, 'Upgraded bill must resolve strictly to ₹2,400 additional collected today, NOT ₹6,500, NOT ₹4,300, NOT ₹1,900');
+  console.log('✓ PASS: Upgraded bill resolves strictly to ₹2,400');
 
   console.log('\n--- 2. Testing resolveAmount on Zero Cash Upgrade ---');
   const zeroAmount = resolveAmount(zeroCashUpgrade);
@@ -99,11 +106,11 @@ function runUpgradeIsolationTests() {
   console.log('✓ PASS: Zero additional upgrade resolves to ₹0');
 
   console.log('\n--- 3. Testing Today Collection Aggregation ---');
-  const todaysPayments = [upgradedBill, regularBill, zeroCashUpgrade];
+  const todaysPayments = [clientDiscountedUpgradeBill, regularBill, zeroCashUpgrade];
   const todaysTotal = todaysPayments.reduce((sum, p) => sum + resolveAmount(p), 0);
-  console.log(`Todays payments: Upgrade (₹2,000) + Regular (₹2,500) + Zero Upgrade (₹0) -> Total: ₹${todaysTotal}`);
-  assert.strictEqual(todaysTotal, 4500, 'Today Collection must be ₹4,500 (2000 + 2500 + 0)');
-  console.log('✓ PASS: Today Collection total is exactly ₹4,500');
+  console.log(`Todays payments: Upgrade (₹2,400) + Regular (₹2,500) + Zero Upgrade (₹0) -> Total: ₹${todaysTotal}`);
+  assert.strictEqual(todaysTotal, 4900, 'Today Collection must be ₹4,900 (2400 + 2500 + 0)');
+  console.log('✓ PASS: Today Collection total is exactly ₹4,900');
 
   console.log('\n=== ALL UPGRADE COLLECTION ISOLATION TESTS PASSED! ===');
 }

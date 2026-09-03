@@ -63,6 +63,18 @@ export default function OfficialInvoiceReceipt({ invoice, member, onPrint, onWha
     invoice?.additionalAmountPaid !== undefined ? invoice.additionalAmountPaid : (invoice?.amountPaid || 0)
   );
 
+  const upgradeBaseAmount = Number(
+    invoice?.upgradeBaseAmount !== undefined ? invoice.upgradeBaseAmount :
+    (invoice?.amountBeforeDiscount !== undefined ? invoice.amountBeforeDiscount : Math.max(0, packageFees - adjustedAmount))
+  );
+  const netUpgradeAmount = Number(
+    invoice?.netPayable !== undefined ? invoice.netPayable : Math.max(0, upgradeBaseAmount - discount)
+  );
+
+  const effectivePendingAmount = isUpgrade
+    ? (invoice?.pendingAmount !== undefined ? Number(invoice.pendingAmount) : (invoice?.remainingBalance !== undefined ? Number(invoice.remainingBalance) : Math.max(0, netUpgradeAmount - additionalAmountPaid)))
+    : pendingAmount;
+
   return (
     <div id="printable-official-invoice" className="bg-white text-black p-8 rounded-xl max-w-[800px] w-full mx-auto font-sans shadow-lg border border-slate-200 official-invoice-print-area">
       {/* ── TOP HEADER (Logo + Address) ── */}
@@ -176,6 +188,22 @@ export default function OfficialInvoiceReceipt({ invoice, member, onPrint, onWha
                 <span>Adjusted Amount (Carried Forward):</span>
                 <span className="font-bold font-mono">- Rs. {adjustedAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
               </div>
+              {discount > 0 && (
+                <>
+                  <div className="flex justify-between border-b border-slate-100 pb-1 text-slate-700">
+                    <span>Upgrade Amount Before Discount:</span>
+                    <span className="font-bold font-mono">Rs. {upgradeBaseAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                  </div>
+                  <div className="flex justify-between border-b border-slate-100 pb-1 text-emerald-700 font-semibold">
+                    <span>Discount Applied {invoice?.discountType === 'percentage' && invoice?.discountValue ? `(${invoice.discountValue}%)` : ''}:</span>
+                    <span className="font-bold font-mono">- Rs. {discount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                  </div>
+                </>
+              )}
+              <div className="flex justify-between border-b border-slate-100 pb-1 font-bold text-slate-900">
+                <span>Net Upgrade Amount:</span>
+                <span className="font-black font-mono">Rs. {netUpgradeAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+              </div>
               <div className="flex justify-between pt-1 font-bold text-slate-900">
                 <span>Additional Amount Paid : Via {paymentMethod}</span>
                 <span className="font-black font-mono text-emerald-700">Rs. {additionalAmountPaid.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
@@ -214,7 +242,7 @@ export default function OfficialInvoiceReceipt({ invoice, member, onPrint, onWha
           Pending Amount
         </div>
         <div className="bg-white text-black px-6 py-2.5 text-base font-black border-l border-slate-400 text-right min-w-[140px]">
-          Rs. {pendingAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+          Rs. {effectivePendingAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
         </div>
       </div>
 
