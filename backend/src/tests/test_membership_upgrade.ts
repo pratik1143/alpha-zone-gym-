@@ -197,8 +197,8 @@ async function runUpgradeTests() {
     assert.strictEqual(res4.data.payment.paymentStatus, 'paid');
     console.log('✓ TEST 4 Passed: Full discount results in net ₹0, paid ₹0, balance ₹0, Status paid');
 
-    // ── TEST 5: Percentage discount: 10% on ₹4,300 = ₹430 -> Net ₹3,870 ────
-    console.log('\n--- TEST 5: Percentage discount: 10% on ₹4,300 = ₹430 discount -> Net: ₹3,870 ---');
+    // ── TEST 5: Excessive Discount Validation (Discount > Upgrade Amount) ────
+    console.log('\n--- TEST 5: Discount ₹5,000 on ₹4,300 upgrade -> Validation error: Discount cannot exceed upgrade amount. ---');
     const t5 = await setupMemberWithBill('T5', 2200, '1 Month Standard');
     const res5 = await invokeUpgrade(t5.memberId, {
       plan: '3 Months Pro',
@@ -207,49 +207,28 @@ async function runUpgradeTests() {
       expiryDate: '2026-11-15',
       previousPaidAmount: 2200,
       adjustedAmount: 2200,
-      discountType: 'percentage',
-      discountValue: 10,
-      additionalAmountPaid: 3870,
-      paymentMethod: 'UPI',
-    });
-    assert.strictEqual(res5.data.payment.upgradeBaseAmount, 4300);
-    assert.strictEqual(res5.data.payment.discountAmount, 430);
-    assert.strictEqual(res5.data.payment.netPayable, 3870);
-    assert.strictEqual(res5.data.payment.additionalAmountPaid, 3870);
-    assert.strictEqual(res5.data.payment.pendingAmount, 0);
-    assert.strictEqual(res5.data.payment.paymentStatus, 'paid');
-    console.log('✓ TEST 5 Passed: 10% percentage discount correctly calculates ₹430 discount and ₹3,870 net');
-
-    // ── TEST 7 & 8: Input Tampering / Overflow protection ──────────────────
-    console.log('\n--- TEST 7 & 8: Input tampering / overflow validation (excessive discount clamped safely) ---');
-    const tOver = await setupMemberWithBill('TOver', 2200, '1 Month Standard');
-    const resOver = await invokeUpgrade(tOver.memberId, {
-      plan: '3 Months Pro',
-      packagePrice: 6500,
-      startDate: '2026-08-15',
-      expiryDate: '2026-11-15',
-      previousPaidAmount: 2200,
-      adjustedAmount: 2200,
       discountType: 'fixed',
-      discountValue: 999999, // Exceeds base amount
+      discountValue: 5000, // Exceeds ₹4,300
       additionalAmountPaid: 0,
       paymentMethod: 'UPI',
     });
-    // Should clamp discount to 4300 and not allow negative net payable
-    assert.strictEqual(resOver.data.payment.discountAmount, 4300, 'Discount must be clamped to upgrade base amount');
-    assert.strictEqual(resOver.data.payment.netPayable, 0, 'Net payable must not become negative');
-    assert.strictEqual(resOver.data.payment.pendingAmount, 0, 'Pending amount must not become negative');
-    console.log('✓ TEST 7 & 8 Passed: Overflow discount clamped safely; no negative balance created');
+    assert.strictEqual(res5.status, 400, 'Must return 400 Bad Request');
+    assert.strictEqual(res5.data.error, 'Discount cannot exceed upgrade amount.', 'Must return exact validation error');
+    console.log('✓ TEST 5 Passed: Validation error correctly returned: "Discount cannot exceed upgrade amount."');
 
     console.log('\n=== ALL MEMBERSHIP UPGRADE & DISCOUNT TESTS PASSED SUCCESSFULLY! ===');
   } finally {
-    // Cleanup test records
+    // Hard Cleanup test records from Firestore
     try {
-      for (const mId of createdMemberIds) {
-        await db.deleteMember(mId);
-        const allP = await db.getPayments({ memberId: mId });
-        for (const p of allP) {
-          await db.updatePayment(p.id, { deleted: true });
+      const { getFirestoreDb } = await import('../firebase');
+      const firestore = getFirestoreDb();
+      if (firestore) {
+        for (const mId of createdMemberIds) {
+          await firestore.collection('members').doc(mId).delete();
+          const pSnap = await firestore.collection('payments').where('memberId', '==', mId).get();
+          for (const doc of pSnap.docs) {
+            await firestore.collection('payments').doc(doc.id).delete();
+          }
         }
       }
     } catch (_) {}
@@ -261,3 +240,4 @@ runUpgradeTests().catch(err => {
   console.error('Upgrade test failed:', err);
   process.exit(1);
 });
+

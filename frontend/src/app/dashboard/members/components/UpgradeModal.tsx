@@ -824,6 +824,48 @@ export default function UpgradeModal({
                 </div>
               </div>
 
+              {/* CALCULATION SUMMARY CARD */}
+              <div className="bg-slate-900 text-white rounded-2xl p-4.5 shadow-md space-y-3 border border-slate-800">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                  <span className="text-[11px] font-black uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
+                    <Receipt size={13} className="text-purple-400" />
+                    Upgrade Billing Calculation Summary
+                  </span>
+                  <span className="text-[10px] font-mono font-bold bg-purple-950/80 text-purple-300 px-2 py-0.5 rounded border border-purple-800/60">
+                    Authoritative Formula
+                  </span>
+                </div>
+
+                <div className="space-y-2 text-xs font-semibold">
+                  <div className="flex justify-between items-center text-slate-300">
+                    <span>Upgrade Amount (Difference):</span>
+                    <span className="font-mono font-bold text-white text-sm">₹{upgradeBaseAmount.toLocaleString('en-IN')}</span>
+                  </div>
+
+                  <div className="flex justify-between items-center text-emerald-400">
+                    <span>Discount (Adjustment/Concession):</span>
+                    <span className="font-mono font-bold text-sm">{discountAmount > 0 ? `- ₹${discountAmount.toLocaleString('en-IN')}` : '₹0'}</span>
+                  </div>
+
+                  <div className="border-t border-dashed border-slate-700 pt-2 flex justify-between items-center text-purple-300 font-extrabold">
+                    <span>Net Payable:</span>
+                    <span className="font-mono font-black text-sm text-purple-200">₹{netUpgradeAmount.toLocaleString('en-IN')}</span>
+                  </div>
+
+                  <div className="flex justify-between items-center text-emerald-300 font-extrabold">
+                    <span>Amount Paid Today (Collection):</span>
+                    <span className="font-mono font-black text-sm text-emerald-400">₹{finalAdditionalPaid.toLocaleString('en-IN')}</span>
+                  </div>
+
+                  <div className="border-t border-slate-700 pt-2 flex justify-between items-center font-black">
+                    <span className="text-slate-300">Remaining Balance:</span>
+                    <span className={`font-mono text-base ${remainingPending > 0 ? 'text-rose-400' : 'text-emerald-400'}`}>
+                      ₹{remainingPending.toLocaleString('en-IN')}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
               {/* UPGRADE DATE & NOTES */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>

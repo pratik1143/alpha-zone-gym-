@@ -722,15 +722,26 @@ export const upgradeMembership = async (req: Request, res: Response) => {
 
     // 2. Authoritative discount calculation & validation
     const rawDiscountType = String(discountType || 'fixed').toLowerCase() === 'percentage' ? 'percentage' : 'fixed';
-    const numDiscountValue = Math.max(0, Number(discountValue) || 0);
+    const numDiscountValue = Number(discountValue) || 0;
+
+    if (numDiscountValue < 0) {
+      return res.status(400).json({ error: 'Discount cannot be negative.' });
+    }
+
+    if (rawDiscountType === 'fixed' && numDiscountValue > upgradeBaseAmount) {
+      return res.status(400).json({ error: 'Discount cannot exceed upgrade amount.' });
+    }
+
+    if (rawDiscountType === 'percentage' && numDiscountValue > 100) {
+      return res.status(400).json({ error: 'Discount percentage cannot exceed 100%.' });
+    }
 
     let numDiscountAmount = 0;
     if (rawDiscountType === 'percentage') {
-      const clampedPercent = Math.min(100, numDiscountValue);
+      const clampedPercent = Math.min(100, Math.max(0, numDiscountValue));
       numDiscountAmount = Math.round((upgradeBaseAmount * clampedPercent) / 100);
     } else {
-      // Fixed discount cannot exceed upgradeBaseAmount
-      numDiscountAmount = Math.min(upgradeBaseAmount, numDiscountValue);
+      numDiscountAmount = Math.min(upgradeBaseAmount, Math.max(0, numDiscountValue));
     }
 
     // 3. Authoritative net upgrade payable
@@ -738,7 +749,14 @@ export const upgradeMembership = async (req: Request, res: Response) => {
 
     // 4. Authoritative amount paid today & remaining balance
     const rawAddPaid = Number(additionalAmountPaid !== undefined ? additionalAmountPaid : netUpgradePayable);
+    if (rawAddPaid < 0) {
+      return res.status(400).json({ error: 'Amount Paid Today cannot be negative.' });
+    }
+
     const numAddPaid = Math.max(0, isNaN(rawAddPaid) ? 0 : rawAddPaid);
+    if (numAddPaid > netUpgradePayable) {
+      return res.status(400).json({ error: 'Amount Paid Today cannot exceed Net Payable.' });
+    }
 
     // Never allow remaining balance to become negative
     const numPending = Math.max(0, netUpgradePayable - numAddPaid);
@@ -767,14 +785,19 @@ export const upgradeMembership = async (req: Request, res: Response) => {
         plan,
         packageName: plan,
         previousPlan: previousPlan || existingMember.plan || '',
+        previousBillId: previousInvoiceId || '',
+        oldInvoiceId: previousInvoiceId || '',
+        previousInvoiceId: previousInvoiceId || '',
         previousInvoiceNumber: previousInvoiceNumber || '',
         previousInvoiceDate: previousInvoiceDate || '',
         previousPaidAmount: numPrevPaid,
+        previousAdjustedAmount: numAdjusted,
         adjustedAmount: numAdjusted,
         originalAmount: numPkgPrice,
         packagePrice: numPkgPrice,
         baseAmount: numPkgPrice,
         amountBeforeDiscount: upgradeBaseAmount,
+        upgradeDifference: upgradeBaseAmount,
         upgradeBaseAmount: upgradeBaseAmount,
         discountType: rawDiscountType,
         discountValue: numDiscountValue,
@@ -784,6 +807,7 @@ export const upgradeMembership = async (req: Request, res: Response) => {
         additionalAmountDue: netUpgradePayable,
         amount: numPkgPrice,
         additionalAmountPaid: numAddPaid,
+        amountPaidToday: numAddPaid,
         // Crucial for Today's Collection: amountPaid is the actual additional cash collected today
         amountPaid: numAddPaid,
         paid: numAddPaid,
