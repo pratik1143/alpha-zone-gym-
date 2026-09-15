@@ -27,7 +27,7 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // Request Logger Middleware
-app.use((req, res, next) => {
+app.use((req: express.Request, res: express.Response, next: express.NextFunction) => {
   res.on('finish', () => {
     console.log(`[HTTP] ${req.method} ${req.originalUrl} - Status: ${res.statusCode}`);
   });
@@ -38,7 +38,7 @@ app.use((req, res, next) => {
 app.use('/api', router);
 
 // Health check endpoint
-app.get('/health', (req, res) => {
+app.get('/health', (req: express.Request, res: express.Response) => {
   res.json({ status: 'healthy', service: 'alpha-zone-os-api', timestamp: new Date().toISOString() });
 });
 

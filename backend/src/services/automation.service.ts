@@ -297,9 +297,9 @@ export const generateInvoicePdf = async (payment: any, member: any): Promise<Buf
     const doc = new PDFDocument({ size: 'A4', margin: 40 });
     const chunks: Buffer[] = [];
 
-    doc.on('data', (chunk) => chunks.push(chunk));
+    doc.on('data', (chunk: any) => chunks.push(chunk));
     doc.on('end', () => resolve(Buffer.concat(chunks)));
-    doc.on('error', (err) => reject(err));
+    doc.on('error', (err: any) => reject(err));
 
     // Theme Colors
     const primaryColor = '#0f172a'; // Deep Slate
