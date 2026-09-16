@@ -22,12 +22,20 @@ import OfficialInvoiceReceipt from '@/app/dashboard/components/OfficialInvoiceRe
 import EditBillingModal from './EditBillingModal';
 import CreateNewBillModal from '../../components/CreateNewBillModal';
 import UpgradeModal from '../../components/UpgradeModal';
+import {
+  listenMemberBillingTransactions,
+  NormalizedBillingTransaction,
+  BillingSummary,
+  BillingDiagnostics
+} from '@/services/billingService';
 
 export default function BillingTab({ member: initialMember }: { member: any }) {
   const router = useRouter();
   const { fetchMembers } = useGymStore();
   const [member, setMember] = useState(initialMember);
-  const [invoices, setInvoices] = useState<any[]>([]);
+  const [invoices, setInvoices] = useState<NormalizedBillingTransaction[]>([]);
+  const [summary, setSummary] = useState<BillingSummary>({ totalBilled: 0, totalCollected: 0, totalPending: 0 });
+  const [diagnostics, setDiagnostics] = useState<BillingDiagnostics | null>(null);
   const [loading, setLoading] = useState(true);
   const [markingId, setMarkingId] = useState<string | null>(null);
 
@@ -81,180 +89,17 @@ export default function BillingTab({ member: initialMember }: { member: any }) {
     };
   }, [openDropdown]);
 
-  // Real-time listener for member invoices (Multi-field Resilient Matching)
+  // Real-time listener for member invoices using Canonical Billing Service
   useEffect(() => {
     if (!member) return;
     setLoading(true);
 
-    const embeddedHistory = [
-      ...(Array.isArray(member.billingHistory) ? member.billingHistory : []),
-      ...(Array.isArray(member.payments) ? member.payments : []),
-      ...(Array.isArray(member.membershipHistory) ? member.membershipHistory : []),
-      ...(Array.isArray(member.ptHistory) ? member.ptHistory : [])
-    ];
-
-    const memberDocIds = new Set([
-      member.id, member.uid, member.memberId, member.clientId, member.memberCode, member.docId,
-      member.id && String(member.id),
-      member.memberId && String(member.memberId),
-      member.clientId && String(member.clientId),
-    ].filter(Boolean).map(x => String(x).toLowerCase()));
-
-    const cleanMemberNums = new Set(
-      Array.from(memberDocIds).map(x => x.replace(/^(az-2026-|az-)/i, ''))
-    );
-
-    const rawPhone = (member.phone || '').replace(/\D/g, '');
-
-    const isMemberMatch = (inv: any) => {
-      if (!inv || inv.deleted === true || String(inv.status || '').toLowerCase() === 'void' || inv.isDuplicate === true) {
-        return false;
-      }
-      const invMemId = String(inv.memberId || inv.clientId || inv.uid || inv.docId || inv.memberCode || '').trim().toLowerCase();
-      const invCleanNum = invMemId.replace(/^(az-2026-|az-)/i, '');
-      const invPhone = String(inv.memberPhone || inv.phone || '').replace(/\D/g, '');
-
-      if (invMemId && (memberDocIds.has(invMemId) || cleanMemberNums.has(invCleanNum))) {
-        return true;
-      }
-      if (rawPhone && invPhone && (invPhone === rawPhone || invPhone.endsWith(rawPhone) || rawPhone.endsWith(invPhone))) {
-        return true;
-      }
-      return false;
-    };
-
-    const unsub = onSnapshot(collection(db, 'payments'), (snap) => {
-      const allDocs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-
-      // Find live payment docs matching member ID or phone
-      const liveData = allDocs.filter(isMemberMatch);
-      const combinedMap = new Map<string, any>();
-
-      // 1. Add Firestore live payments
-      liveData.forEach((inv: any) => {
-        const key = inv.id || inv.invoiceNumber || inv.invoice || `inv_live_${Math.random()}`;
-        combinedMap.set(key, inv);
-      });
-
-      // 2. Add embedded history records if not already present
-      if (embeddedHistory.length > 0) {
-        embeddedHistory.forEach((inv: any, idx: number) => {
-          const key = inv.id || inv.invoiceNumber || inv.invoice || `inv_emb_${idx}`;
-          if (!combinedMap.has(key)) {
-            combinedMap.set(key, inv);
-          }
-        });
-      }
-
-      // 3. Fallback Auto-Invoice generation if no payment records exist
-      if (combinedMap.size === 0 && member) {
-        const rawPaid = member.amountPaid ?? member.paid ?? member.totalPaid ?? member.paidAmount ?? member.amount ?? 0;
-        const rawBalance = member.balanceAmount ?? member.balance ?? member.outstandingBalance ?? member.balanceDue ?? member.dueAmount ?? member.pendingAmount ?? 0;
-        const rawPrice = member.price ?? member.packagePrice ?? member.planPrice ?? member.planAmount ?? member.totalBilled ?? member.amount ?? 0;
-
-        let extractedPrice = Number(rawPrice) || 0;
-
-        if (!extractedPrice && typeof member.plan === 'string') {
-          const match = member.plan.match(/₹?\s*([0-9,]+)/);
-          if (match) extractedPrice = Number(match[1].replace(/,/g, ''));
-        }
-        if (!extractedPrice && typeof member.packageName === 'string') {
-          const match = member.packageName.match(/₹?\s*([0-9,]+)/);
-          if (match) extractedPrice = Number(match[1].replace(/,/g, ''));
-        }
-        if (!extractedPrice && (member.plan || member.packageName)) {
-          extractedPrice = 5000;
-        }
-
-        let balanceAmount = Number(rawBalance) || 0;
-        let amountPaid = Number(rawPaid) || 0;
-
-        const isPaidOrActive = (member.paymentStatus || '').toLowerCase() === 'paid' ||
-                              (member.status || '').toLowerCase() === 'active' ||
-                              balanceAmount === 0;
-
-        if (amountPaid === 0 && (isPaidOrActive || balanceAmount > 0)) {
-          if (balanceAmount > 0 && extractedPrice > balanceAmount) {
-            amountPaid = extractedPrice - balanceAmount;
-          } else if (balanceAmount === 0) {
-            amountPaid = extractedPrice || 5000;
-          }
-        }
-
-        const totalBilled = Number(member.totalBilled) || (amountPaid + balanceAmount) || extractedPrice || 5000;
-        const planPrice = totalBilled || extractedPrice || 5000;
-        const netPayable = planPrice;
-
-        const payStatus = balanceAmount === 0
-          ? 'paid'
-          : (amountPaid > 0 ? 'partial' : 'pending');
-
-        const membershipLabel = member.packageName || (typeof member.plan === 'string' ? member.plan.split('₹')[0].trim() : 'General Membership') || 'General Membership';
-
-        const invNum = member.memberId
-          ? `INV-${String(member.memberId).replace('AZ-2026-', '').replace('AZ-', '')}`
-          : (member.clientId ? `INV-LEG-${member.clientId}` : `INV-AUTO-${member.id || '670'}`);
-
-        const autoInv = {
-          id: `inv_auto_${member.id || member.uid || Date.now()}`,
-          invoiceNumber: invNum,
-          invoice: invNum,
-          plan: membershipLabel,
-          packageName: membershipLabel,
-          amount: planPrice,
-          totalBilled: planPrice,
-          packagePrice: planPrice,
-          originalAmount: planPrice,
-          netPayable: netPayable,
-          baseAmount: planPrice,
-          paid: amountPaid,
-          amountPaid: amountPaid,
-          paidAmount: amountPaid,
-          amountPaidToday: amountPaid,
-          pendingAmount: balanceAmount,
-          balanceAmount: balanceAmount,
-          remainingBalance: balanceAmount,
-          outstandingAmount: balanceAmount,
-          discount: Number(member.discount) || 0,
-          discountAmount: Number(member.discount) || 0,
-          tax: Number(member.tax) || 0,
-          taxAmount: Number(member.tax) || 0,
-          method: member.paymentMethod || member.method || 'Cash',
-          paymentMethod: member.paymentMethod || member.method || 'Cash',
-          status: payStatus,
-          paymentStatus: payStatus,
-          billingType: 'membership',
-          date: member.startDate || member.joinDate || new Date().toISOString().split('T')[0],
-          startDate: member.startDate || member.joinDate || new Date().toISOString().split('T')[0],
-          expiryDate: member.expiryDate || '',
-          invoiceDate: member.startDate || member.joinDate || new Date().toISOString().split('T')[0],
-          createdAt: member.createdAt || member.joinDate || new Date().toISOString(),
-          memberId: member.id || member.uid,
-          memberName: member.name || 'Member',
-          memberPhone: member.phone || '',
-          isAutoGenerated: true,
-        };
-
-        combinedMap.set(autoInv.id, autoInv);
-      }
-
-      const sorted = Array.from(combinedMap.values()).sort((a: any, b: any) => {
-        const dateA = String(a.transactionDate || a.paymentDate || a.date || a.createdAt || '');
-        const timeA = String(a.transactionTime || a.paymentTime || a.time || '');
-        const dateB = String(b.transactionDate || b.paymentDate || b.date || b.createdAt || '');
-        const timeB = String(b.transactionTime || b.paymentTime || b.time || '');
-
-        const dtA = dateA.includes('T') ? new Date(dateA).getTime() : new Date(`${dateA} ${timeA}`.trim()).getTime();
-        const dtB = dateB.includes('T') ? new Date(dateB).getTime() : new Date(`${dateB} ${timeB}`.trim()).getTime();
-        return (isNaN(dtB) ? 0 : dtB) - (isNaN(dtA) ? 0 : dtA);
-      });
-
-      setInvoices(sorted);
+    const unsub = listenMemberBillingTransactions(member, (txList, sum, diag) => {
+      setInvoices(txList);
+      setSummary(sum);
+      setDiagnostics(diag);
       setLoading(false);
-    }, (err) => {
-      console.warn("Firestore payments listener notice:", err);
-      setInvoices(embeddedHistory);
-      setLoading(false);
+      console.log('[MEMBER BILLING DIAGNOSTICS]', diag);
     });
 
     return () => unsub();
@@ -476,6 +321,33 @@ export default function BillingTab({ member: initialMember }: { member: any }) {
 
   return (
     <div className="space-y-6">
+      {/* ── DEV-ONLY BILLING DIAGNOSTICS PANEL (Rule #15) ────────────────── */}
+      {process.env.NODE_ENV === 'development' && diagnostics && (
+        <div className="bg-slate-900 text-slate-100 p-4 rounded-3xl border border-slate-700 shadow-xl space-y-2 text-xs font-mono">
+          <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+            <span className="font-black text-amber-400 text-sm tracking-wider">🛠 BILLING RESOLVER DIAGNOSTICS (DEV ONLY)</span>
+            <span className="text-[10px] bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded font-bold">STABLE RULE #15</span>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 text-[11px]">
+            <div><span className="text-slate-400">Member Doc ID:</span> <span className="text-emerald-400 font-bold">{diagnostics.memberDocId}</span></div>
+            <div><span className="text-slate-400">Canonical Member ID:</span> <span className="text-cyan-400 font-bold">{diagnostics.canonicalMemberId}</span></div>
+            <div><span className="text-slate-400">Live Firestore Payments:</span> <span className="text-yellow-400 font-bold">{diagnostics.firestoreLiveCount}</span></div>
+            <div><span className="text-slate-400">Embedded History Records:</span> <span className="text-purple-400 font-bold">{diagnostics.embeddedCount}</span></div>
+          </div>
+          <div className="text-[10px] text-slate-400 truncate">
+            <span className="font-bold text-slate-300">Resolved Query Keys:</span> {diagnostics.allMemberKeys.join(', ')}
+          </div>
+          <div className="pt-1 border-t border-slate-800 flex items-center justify-between text-[11px]">
+            <span>Canonical Calculated Totals:</span>
+            <div className="flex items-center gap-4 font-bold">
+              <span className="text-slate-300">Billed: ₹{diagnostics.billed.toLocaleString('en-IN')}</span>
+              <span className="text-emerald-400">Collected: ₹{diagnostics.collected.toLocaleString('en-IN')}</span>
+              <span className={diagnostics.pending > 0 ? "text-rose-400" : "text-slate-400"}>Pending: ₹{diagnostics.pending.toLocaleString('en-IN')}</span>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── KPI Cards Header (Separate Membership & PT Totals) ───────────────────────── */}
       <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-7 gap-3">
         
