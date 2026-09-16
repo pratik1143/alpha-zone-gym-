@@ -6,6 +6,8 @@ import { collection, onSnapshot, doc, updateDoc } from 'firebase/firestore';
 import { useAuthStore, useGymStore } from '@/store';
 import { migrateMissingBillingPhones } from '@/lib/migrations/migrateBillingPhones';
 
+import { extractPriceFromPlanString } from '@/services/billingService';
+
 // ─── IST-aware today string (YYYY-MM-DD in Asia/Kolkata timezone) ───────────
 export function getISTDateStr(date: Date = new Date()): string {
   return new Intl.DateTimeFormat('en-CA', {
@@ -192,13 +194,9 @@ export function useTodaysPayments(): UseTodaysPaymentsResult {
         const rawBalance = m.balanceAmount ?? m.balance ?? m.outstandingBalance ?? m.balanceDue ?? m.dueAmount ?? m.pendingAmount ?? 0;
         const rawPrice = m.price ?? m.packagePrice ?? m.planPrice ?? m.planAmount ?? m.totalBilled ?? m.amount ?? 0;
 
-        let extractedPrice = Number(rawPrice) || 0;
-        if (!extractedPrice && typeof m.plan === 'string') {
-          const match = m.plan.match(/₹?\s*([0-9,]+)/);
-          if (match) extractedPrice = Number(match[1].replace(/,/g, ''));
-        }
+        let extractedPrice = Number(rawPrice) || extractPriceFromPlanString(m.plan) || extractPriceFromPlanString(m.packageName) || 0;
         if (!extractedPrice && (m.plan || m.packageName)) {
-          extractedPrice = 5000;
+          extractedPrice = 6500;
         }
 
         let balanceAmount = Number(rawBalance) || 0;

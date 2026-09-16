@@ -349,15 +349,17 @@ export default function DashboardLayout({
       </aside>
 
       {/* ─── Main Workspace Content Area ─── */}
-      <main className="flex-1 min-w-0 w-full h-full p-4 sm:p-6 overflow-y-auto flex flex-col gap-4 text-left bg-[#FDFDFD]">
-        {/* Top Header Bar: Universal Search (Left/Center) + Live Time Card (Right) */}
-        <div className="w-full flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 shrink-0 pb-1">
-          <div className="w-full sm:max-w-[460px] md:max-w-[500px]">
-            <UniversalSearchBar />
+      <main className="flex-1 min-w-0 w-full h-full p-4 sm:p-6 overflow-y-auto flex flex-col justify-between gap-6 text-left bg-[#FDFDFD]">
+        <div className="flex flex-col gap-4 flex-1">
+          {/* Top Header Bar: Universal Search (Left/Center) + Live Time Card (Right) */}
+          <div className="w-full flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 shrink-0 pb-1">
+            <div className="w-full sm:max-w-[460px] md:max-w-[500px]">
+              <UniversalSearchBar />
+            </div>
+            <LiveTimeCard />
           </div>
-          <LiveTimeCard />
+          {children}
         </div>
-        {children}
         <SoftwareFooter />
       </main>
 

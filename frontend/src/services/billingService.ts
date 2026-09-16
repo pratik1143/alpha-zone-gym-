@@ -1,5 +1,6 @@
 import { db } from '@/lib/firebase';
 import { collection, query, where, getDocs, onSnapshot, Unsubscribe } from 'firebase/firestore';
+import { useGymStore } from '@/store';
 
 export interface NormalizedBillingTransaction {
   id: string;
@@ -49,12 +50,103 @@ export interface BillingDiagnostics {
   canonicalMemberId: string;
   allMemberKeys: string[];
   phoneMatched: string;
+  nameMatched: string;
   firestoreLiveCount: number;
   embeddedCount: number;
   normalizedCount: number;
   billed: number;
   collected: number;
   pending: number;
+}
+
+export interface UpgradeBillParams {
+  previousPackageAmount: number;
+  previousAmountPaid: number;
+  previousOutstanding: number;
+  newPackageAmount: number;
+  discount: number;
+  amountPaidTodayInput?: number;
+}
+
+export interface UpgradeBillResult {
+  previousPackageAmount: number;
+  previousAmountPaid: number;
+  previousOutstanding: number;
+  newPackageAmount: number;
+  carryForwardCredit: number;
+  upgradeAmountBeforeDiscount: number;
+  discount: number;
+  finalPayable: number;
+  amountPaidToday: number;
+  remainingPending: number;
+}
+
+/**
+ * Robust price extraction helper from plan strings (e.g. "3 months ₹6,500" -> 6500)
+ * Prevents matching month count (3 or 6) as price.
+ */
+export function extractPriceFromPlanString(planStr?: string): number {
+  if (!planStr || typeof planStr !== 'string') return 0;
+
+  // 1. Match explicit currency symbol ₹ or Rs. followed by numbers (e.g., "3 months ₹6,500" or "Rs 12000")
+  const currencyMatch = planStr.match(/(?:₹|rs\.?)\s*([0-9,]+)/i);
+  if (currencyMatch && currencyMatch[1]) {
+    const val = Number(currencyMatch[1].replace(/,/g, ''));
+    if (!isNaN(val) && val > 0) return val;
+  }
+
+  // 2. Match standalone numbers >= 100 in the string (e.g. "3 Months 6500" or "12 Months 15000")
+  const numberMatches = planStr.match(/\b([0-9]{3,6})\b/g);
+  if (numberMatches && numberMatches.length > 0) {
+    const val = Number(numberMatches[0].replace(/,/g, ''));
+    if (!isNaN(val) && val >= 100) return val;
+  }
+
+  return 0;
+}
+
+/**
+ * CENTRAL UPGRADE CALCULATION ENGINE (Rule & Hard Correction)
+ * Upgrades adjust previous paid money against new package price:
+ * Upgrade Amount = New Package - Carry Forward Credit (Previous Paid)
+ * Final Payable = max(0, Upgrade Amount - Discount)
+ */
+export function calculateUpgradeBill(params: UpgradeBillParams): UpgradeBillResult {
+  const previousPackageAmount = Math.max(0, Number(params.previousPackageAmount) || 0);
+  const previousAmountPaid = Math.max(0, Number(params.previousAmountPaid) || 0);
+  const previousOutstanding = Math.max(0, Number(params.previousOutstanding) || 0);
+  const newPackageAmount = Math.max(0, Number(params.newPackageAmount) || 0);
+  const discount = Math.max(0, Number(params.discount) || 0);
+
+  // Carry Forward Credit = Previous Amount Paid used as adjustment
+  const carryForwardCredit = previousAmountPaid;
+
+  // Upgrade Amount Before Discount = New Package Amount - Carry Forward Credit
+  const upgradeAmountBeforeDiscount = Math.max(0, newPackageAmount - carryForwardCredit);
+
+  // Final Payable = max(0, Upgrade Amount Before Discount - Discount)
+  const finalPayable = Math.max(0, upgradeAmountBeforeDiscount - discount);
+
+  // Amount Paid Today
+  const amountPaidToday = params.amountPaidTodayInput !== undefined
+    ? Math.min(finalPayable, Math.max(0, Number(params.amountPaidTodayInput) || 0))
+    : finalPayable;
+
+  // Remaining Pending
+  const remainingPending = Math.max(0, finalPayable - amountPaidToday);
+
+  return {
+    previousPackageAmount,
+    previousAmountPaid,
+    previousOutstanding,
+    newPackageAmount,
+    carryForwardCredit,
+    upgradeAmountBeforeDiscount,
+    discount,
+    finalPayable,
+    amountPaidToday,
+    remainingPending
+  };
 }
 
 /**
@@ -65,31 +157,59 @@ export interface BillingDiagnostics {
  * - clientId (e.g. 28)
  * - member_28, member_AZ-2026-0028
  * - numeric suffix (28)
+ * - phone number
+ * - member name
  */
-export function resolveMemberIdentifierKeys(member: any): { keysSet: Set<string>; cleanNumsSet: Set<string>; phone: string } {
-  if (!member) return { keysSet: new Set(), cleanNumsSet: new Set(), phone: '' };
+export function resolveMemberIdentifierKeys(member: any): { keysSet: Set<string>; cleanNumsSet: Set<string>; phone: string; name: string } {
+  if (!member) return { keysSet: new Set(), cleanNumsSet: new Set(), phone: '', name: '' };
 
+  const storeMembers = typeof window !== 'undefined' ? (useGymStore.getState?.()?.members || []) : [];
+  
+  // Find matching member record in store if available to merge all possible identifiers
+  let fullMember = typeof member === 'object' ? member : null;
+  if (storeMembers.length > 0) {
+    const searchTarget = (typeof member === 'string' ? member : (member?.id || member?.memberId || member?.phone || member?.name || '')).trim().toLowerCase();
+    const storeMatch = storeMembers.find((sm: any) => {
+      if (!sm) return false;
+      const smId = String(sm.id || '').toLowerCase();
+      const smDocId = String(sm.docId || '').toLowerCase();
+      const smMemberId = String(sm.memberId || '').toLowerCase();
+      const smClientId = String(sm.clientId || '').toLowerCase();
+      const smPhone = String(sm.phone || '').replace(/\D/g, '');
+      const smName = String(sm.name || '').trim().toLowerCase();
+      return (
+        smId === searchTarget ||
+        smDocId === searchTarget ||
+        smMemberId === searchTarget ||
+        smClientId === searchTarget ||
+        (smPhone && searchTarget.replace(/\D/g, '') && smPhone.endsWith(searchTarget.replace(/\D/g, ''))) ||
+        (smName && smName === searchTarget)
+      );
+    });
+    if (storeMatch) {
+      fullMember = { ...storeMatch, ...fullMember };
+    }
+  }
+
+  const m = fullMember || (typeof member === 'object' ? member : {});
   const rawKeys: string[] = [];
-  if (typeof member === 'string') {
-    rawKeys.push(member);
-  } else if (typeof member === 'object') {
-    if (member.id) rawKeys.push(String(member.id));
-    if (member.docId) rawKeys.push(String(member.docId));
-    if (member.uid) rawKeys.push(String(member.uid));
-    if (member.memberId) rawKeys.push(String(member.memberId));
-    if (member.clientId) rawKeys.push(String(member.clientId));
-    if (member.memberCode) rawKeys.push(String(member.memberCode));
-    if (member.employeeId) rawKeys.push(String(member.employeeId));
 
-    // Add prefixed variations used by migration imports (member_${clientId})
-    if (member.clientId) {
-      rawKeys.push(`member_${member.clientId}`);
-      rawKeys.push(`member_AZ-${member.clientId}`);
-      rawKeys.push(`member_AZ-2026-${member.clientId}`);
-    }
-    if (member.memberId) {
-      rawKeys.push(`member_${member.memberId}`);
-    }
+  if (typeof member === 'string') rawKeys.push(member);
+  if (m.id) rawKeys.push(String(m.id));
+  if (m.docId) rawKeys.push(String(m.docId));
+  if (m.uid) rawKeys.push(String(m.uid));
+  if (m.memberId) rawKeys.push(String(m.memberId));
+  if (m.clientId) rawKeys.push(String(m.clientId));
+  if (m.memberCode) rawKeys.push(String(m.memberCode));
+  if (m.employeeId) rawKeys.push(String(m.employeeId));
+
+  if (m.clientId) {
+    rawKeys.push(`member_${m.clientId}`);
+    rawKeys.push(`member_AZ-${m.clientId}`);
+    rawKeys.push(`member_AZ-2026-${m.clientId}`);
+  }
+  if (m.memberId) {
+    rawKeys.push(`member_${m.memberId}`);
   }
 
   const keysSet = new Set<string>();
@@ -105,21 +225,24 @@ export function resolveMemberIdentifierKeys(member: any): { keysSet: Set<string>
     if (cleanNum) cleanNumsSet.add(cleanNum);
   });
 
-  const rawPhone = typeof member === 'object' ? (member.phone || member.mobile || member.memberPhone || '') : '';
+  const rawPhone = m.phone || m.mobile || m.memberPhone || '';
   const phone = String(rawPhone).replace(/\D/g, '');
 
-  return { keysSet, cleanNumsSet, phone };
+  const rawName = m.name || m.memberName || '';
+  const name = String(rawName).trim().toLowerCase();
+
+  return { keysSet, cleanNumsSet, phone, name };
 }
 
 /**
  * 2. MATCH AN INVOICE RECORD AGAINST MEMBER IDENTIFIERS
  */
-export function isInvoiceMatchingMember(inv: any, memberInfo: { keysSet: Set<string>; cleanNumsSet: Set<string>; phone: string }): boolean {
+export function isInvoiceMatchingMember(inv: any, memberInfo: { keysSet: Set<string>; cleanNumsSet: Set<string>; phone: string; name: string }): boolean {
   if (!inv || inv.deleted === true || String(inv.status || '').toLowerCase() === 'void' || inv.isDuplicate === true) {
     return false;
   }
 
-  const { keysSet, cleanNumsSet, phone } = memberInfo;
+  const { keysSet, cleanNumsSet, phone, name } = memberInfo;
 
   const invKeys = [
     inv.memberId,
@@ -144,6 +267,14 @@ export function isInvoiceMatchingMember(inv: any, memberInfo: { keysSet: Set<str
   if (phone && phone.length >= 7) {
     const invPhone = String(inv.memberPhone || inv.phone || inv.mobile || '').replace(/\D/g, '');
     if (invPhone && (invPhone === phone || invPhone.endsWith(phone) || phone.endsWith(invPhone))) {
+      return true;
+    }
+  }
+
+  // Name match fallback if member name matches exactly
+  if (name && name.length >= 3) {
+    const invName = String(inv.memberName || inv.name || '').trim().toLowerCase();
+    if (invName && invName === name) {
       return true;
     }
   }
@@ -258,6 +389,7 @@ export function listenMemberBillingTransactions(
       canonicalMemberId: '',
       allMemberKeys: [],
       phoneMatched: '',
+      nameMatched: '',
       firestoreLiveCount: 0,
       embeddedCount: 0,
       normalizedCount: 0,
@@ -304,17 +436,15 @@ export function listenMemberBillingTransactions(
       const rawBalance = member.balanceAmount ?? member.balance ?? member.outstandingBalance ?? member.balanceDue ?? member.dueAmount ?? member.pendingAmount ?? 0;
       const rawPrice = member.price ?? member.packagePrice ?? member.planPrice ?? member.planAmount ?? member.totalBilled ?? member.amount ?? 0;
 
-      let extractedPrice = Number(rawPrice) || 0;
-      if (!extractedPrice && typeof member.plan === 'string') {
-        const match = member.plan.match(/₹?\s*([0-9,]+)/);
-        if (match) extractedPrice = Number(match[1].replace(/,/g, ''));
-      }
-      if (!extractedPrice && typeof member.packageName === 'string') {
-        const match = member.packageName.match(/₹?\s*([0-9,]+)/);
-        if (match) extractedPrice = Number(match[1].replace(/,/g, ''));
-      }
+      let extractedPrice = Number(rawPrice) || extractPriceFromPlanString(member.plan) || extractPriceFromPlanString(member.packageName) || 0;
+
       if (!extractedPrice && (member.plan || member.packageName)) {
-        extractedPrice = 5000;
+        const pLower = String(member.plan || member.packageName || '').toLowerCase();
+        if (pLower.includes('3 month') || pLower.includes('quarterly')) extractedPrice = 6500;
+        else if (pLower.includes('6 month') || pLower.includes('semi')) extractedPrice = 12000;
+        else if (pLower.includes('annual') || pLower.includes('12 month') || pLower.includes('1 year')) extractedPrice = 20000;
+        else if (pLower.includes('1 month') || pLower.includes('monthly')) extractedPrice = 2500;
+        else extractedPrice = 6500;
       }
 
       let balanceAmount = Number(rawBalance) || 0;
@@ -328,12 +458,12 @@ export function listenMemberBillingTransactions(
         if (balanceAmount > 0 && extractedPrice > balanceAmount) {
           amountPaid = extractedPrice - balanceAmount;
         } else if (balanceAmount === 0) {
-          amountPaid = extractedPrice || 5000;
+          amountPaid = extractedPrice || 6500;
         }
       }
 
-      const totalBilled = Number(member.totalBilled) || (amountPaid + balanceAmount) || extractedPrice || 5000;
-      const planPrice = totalBilled || extractedPrice || 5000;
+      const totalBilled = Number(member.totalBilled) || (amountPaid + balanceAmount) || extractedPrice || 6500;
+      const planPrice = totalBilled || extractedPrice || 6500;
 
       const payStatus = balanceAmount === 0 ? 'paid' : (amountPaid > 0 ? 'partial' : 'pending');
       const membershipLabel = member.packageName || (typeof member.plan === 'string' ? member.plan.split('₹')[0].trim() : 'General Membership') || 'General Membership';
@@ -385,6 +515,7 @@ export function listenMemberBillingTransactions(
       canonicalMemberId: String(member.memberId || member.clientId || member.id || ''),
       allMemberKeys: Array.from(memberInfo.keysSet),
       phoneMatched: memberInfo.phone,
+      nameMatched: memberInfo.name,
       firestoreLiveCount: matchedDocs.length,
       embeddedCount: embeddedRaw.length,
       normalizedCount: normalized.length,
@@ -404,6 +535,7 @@ export function listenMemberBillingTransactions(
       canonicalMemberId: String(member.memberId || member.clientId || member.id || ''),
       allMemberKeys: Array.from(memberInfo.keysSet),
       phoneMatched: memberInfo.phone,
+      nameMatched: memberInfo.name,
       firestoreLiveCount: 0,
       embeddedCount: embeddedRaw.length,
       normalizedCount: normalizedEmbedded.length,

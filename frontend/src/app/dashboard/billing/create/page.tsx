@@ -16,6 +16,7 @@ import { useGymStore } from '@/store';
 import toast from '@/lib/toast';
 import { formatDate, formatPhoneNumber, cleanPlanName } from '@/lib/utils';
 import OfficialInvoiceReceipt from '../../components/OfficialInvoiceReceipt';
+import { calculateUpgradeBill, extractPriceFromPlanString } from '@/services/billingService';
 
 // ─── CRM Blue Design Tokens ──────────────────────────────────────────
 const BLUE_PRIMARY = '#0B5CBE';
@@ -200,13 +201,7 @@ function UniversalBillingTerminalContent() {
     const rawBalance = lastInv?.pendingAmount ?? lastInv?.balanceAmount ?? selectedMember.balanceAmount ?? selectedMember.outstandingBalance ?? selectedMember.balance ?? selectedMember.dueAmount ?? selectedMember.pendingAmount ?? selectedMember.balanceDue ?? selectedMember.remainingBalance;
     const rawPrice = lastInv?.netPayable ?? lastInv?.originalAmount ?? lastInv?.amount ?? selectedMember.price ?? selectedMember.totalBilled ?? selectedMember.packagePrice ?? selectedMember.amount ?? selectedMember.netPayable ?? 6500;
 
-    let parsedPrice = Number(rawPrice) || 0;
-    if (!parsedPrice && typeof selectedMember.plan === 'string') {
-      const match = selectedMember.plan.match(/₹?\s*([0-9,]+)/);
-      if (match) parsedPrice = Number(match[1].replace(/,/g, ''));
-    }
-    if (!parsedPrice) parsedPrice = 6500;
-
+    let parsedPrice = Number(rawPrice) || extractPriceFromPlanString(selectedMember.plan) || extractPriceFromPlanString(selectedMember.packageName) || 6500;
     let paid = Number(rawPaid) || 0;
 
     let pending = 0;
@@ -237,8 +232,8 @@ function UniversalBillingTerminalContent() {
     };
   }, [selectedMember, todayYMD]);
 
-  // Carry Forward Amount is AUTO-CALCULATED from Previous Pending
-  const carryForwardAmount = currentMembershipSnapshot.currentPending;
+  // Carry Forward Amount (For standard renewal/new: pending balance; For upgrade: credit adjustment)
+  const carryForwardAmount = activeMode === 'upgrade' ? currentMembershipSnapshot.alreadyPaid : currentMembershipSnapshot.currentPending;
 
   // ── DISCOUNT & ACCOUNTING ENGINE ───────────────────────────────────────
   const [discountType, setDiscountType] = useState<'flat' | 'percent'>('flat');
@@ -251,11 +246,24 @@ function UniversalBillingTerminalContent() {
     return Math.min(packagePrice, Math.max(0, discountValue));
   }, [packagePrice, discountType, discountValue]);
 
-  // Centralized Amount Payable Calculation Function
+  // Centralized Amount Payable Calculation Engine
+  const upgradeCalc = useMemo(() => {
+    return calculateUpgradeBill({
+      previousPackageAmount: currentMembershipSnapshot.originalBill,
+      previousAmountPaid: currentMembershipSnapshot.alreadyPaid,
+      previousOutstanding: currentMembershipSnapshot.currentPending,
+      newPackageAmount: packagePrice,
+      discount: discountAmount
+    });
+  }, [currentMembershipSnapshot, packagePrice, discountAmount]);
+
   const finalPayable = useMemo(() => {
+    if (activeMode === 'upgrade') {
+      return upgradeCalc.finalPayable;
+    }
     const netCurrentPackage = Math.max(0, packagePrice - discountAmount);
-    return netCurrentPackage + carryForwardAmount;
-  }, [packagePrice, discountAmount, carryForwardAmount]);
+    return netCurrentPackage + currentMembershipSnapshot.currentPending;
+  }, [activeMode, upgradeCalc, packagePrice, discountAmount, currentMembershipSnapshot]);
 
   // ── AMOUNT PAID & REMAINING PENDING ───────────────────────────────────
   const [paymentMethod, setPaymentMethod] = useState<'UPI' | 'Cash' | 'Card' | 'Bank Transfer' | 'QR' | 'Split'>('UPI');
@@ -316,7 +324,8 @@ function UniversalBillingTerminalContent() {
         previousBillAmount: currentMembershipSnapshot.originalBill,
         previousAmountPaid: currentMembershipSnapshot.alreadyPaid,
         previousPending: currentMembershipSnapshot.currentPending,
-        carryForward: carryForwardAmount,
+        carryForwardCredit: upgradeCalc.carryForwardCredit,
+        upgradeAmountBeforeDiscount: upgradeCalc.upgradeAmountBeforeDiscount,
 
         // Financial Ledger
         packagePrice: packagePrice,
@@ -341,7 +350,7 @@ function UniversalBillingTerminalContent() {
         startDate: startDate,
         expiryDate: calculatedExpiryDate,
         createdAt: new Date().toISOString(),
-        notes: `Membership upgraded to ${selectedPackage?.name}. Carry forward: ₹${carryForwardAmount}`,
+        notes: `Membership upgraded to ${selectedPackage?.name}. Credit adjustment: -₹${upgradeCalc.carryForwardCredit}`,
       };
 
       // 1. Add to Firestore payments
@@ -382,7 +391,7 @@ function UniversalBillingTerminalContent() {
   const meta = MODE_METADATA[activeMode] || MODE_METADATA.upgrade;
 
   return (
-    <div className="w-full min-h-screen bg-[#F8FAFC] pb-28 text-left font-sans">
+    <div className="w-full bg-[#F8FAFC] pb-12 text-left font-sans">
       
       {/* ── 1. DEDICATED HEADER: BILLING TERMINAL ────────────────────────── */}
       <div className="bg-white border-b border-slate-200/90 sticky top-0 z-20 shadow-xs">
@@ -693,17 +702,19 @@ function UniversalBillingTerminalContent() {
                 </div>
               </div>
 
-              {/* ── STEP 4: CARRY FORWARD (AUTO-CALCULATED) ────────────────────── */}
+              {/* ── STEP 4: CARRY FORWARD / UPGRADE CREDIT ────────────────────── */}
               <div className="bg-amber-50/70 rounded-2xl p-5 border border-amber-200 space-y-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <AlertCircle size={16} className="text-amber-600" />
                     <span className="text-xs font-black uppercase tracking-wider text-amber-900">
-                      CARRY FORWARD (AUTO CALCULATED FROM PREVIOUS PENDING)
+                      {activeMode === 'upgrade'
+                        ? 'PREVIOUS PAID CREDIT (UPGRADE ADJUSTMENT)'
+                        : 'CARRY FORWARD (PREVIOUS PENDING BALANCE)'}
                     </span>
                   </div>
-                  <span className="font-mono font-black text-sm text-red-600">
-                    ₹{carryForwardAmount.toLocaleString('en-IN')}
+                  <span className={`font-mono font-black text-sm ${activeMode === 'upgrade' ? 'text-emerald-700' : 'text-red-600'}`}>
+                    {activeMode === 'upgrade' ? `-₹${currentMembershipSnapshot.alreadyPaid.toLocaleString('en-IN')}` : `₹${carryForwardAmount.toLocaleString('en-IN')}`}
                   </span>
                 </div>
 
@@ -717,13 +728,20 @@ function UniversalBillingTerminalContent() {
                     <span className="font-mono font-bold">₹{currentMembershipSnapshot.originalBill.toLocaleString('en-IN')}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span>Already Paid:</span>
+                    <span>Already Paid (Credit Adjustment):</span>
                     <span className="font-mono font-bold text-emerald-700">₹{currentMembershipSnapshot.alreadyPaid.toLocaleString('en-IN')}</span>
                   </div>
-                  <div className="flex justify-between pt-1 border-t border-slate-100 font-bold">
-                    <span>Previous Pending (Carry Forward):</span>
-                    <span className="font-mono text-red-600 font-black">₹{carryForwardAmount.toLocaleString('en-IN')}</span>
-                  </div>
+                  {activeMode === 'upgrade' ? (
+                    <div className="flex justify-between pt-1 border-t border-slate-100 font-bold">
+                      <span>Upgrade Credit Subtracted:</span>
+                      <span className="font-mono text-emerald-600 font-black">-₹{currentMembershipSnapshot.alreadyPaid.toLocaleString('en-IN')}</span>
+                    </div>
+                  ) : (
+                    <div className="flex justify-between pt-1 border-t border-slate-100 font-bold">
+                      <span>Previous Pending (Carry Forward):</span>
+                      <span className="font-mono text-red-600 font-black">₹{carryForwardAmount.toLocaleString('en-IN')}</span>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -774,7 +792,11 @@ function UniversalBillingTerminalContent() {
                 <div className="p-4 rounded-xl bg-blue-50/70 border border-blue-200 flex items-center justify-between">
                   <div>
                     <span className="text-[10px] font-black uppercase text-[#0B5CBE] tracking-wider block">FINAL AMOUNT PAYABLE</span>
-                    <p className="text-xs text-slate-500 font-medium">Package (₹{packagePrice}) + Carry (₹{carryForwardAmount}) - Discount (₹{discountAmount})</p>
+                    <p className="text-xs text-slate-500 font-medium">
+                      {activeMode === 'upgrade'
+                        ? `New Package (₹${packagePrice}) - Paid Credit (₹${currentMembershipSnapshot.alreadyPaid}) - Discount (₹${discountAmount})`
+                        : `Package (₹${packagePrice}) + Carry (₹${carryForwardAmount}) - Discount (₹${discountAmount})`}
+                    </p>
                   </div>
                   <span className="text-2xl font-black text-[#0B5CBE] font-mono">
                     ₹{finalPayable.toLocaleString('en-IN')}
@@ -857,16 +879,23 @@ function UniversalBillingTerminalContent() {
                     <span className="font-mono font-bold text-slate-900">₹{packagePrice.toLocaleString('en-IN')}</span>
                   </div>
 
-                  {carryForwardAmount > 0 && (
-                    <div className="flex justify-between text-amber-700 font-bold">
-                      <span>Carry Forward:</span>
-                      <span className="font-mono">+₹{carryForwardAmount.toLocaleString('en-IN')}</span>
+                  {activeMode === 'upgrade' ? (
+                    <div className="flex justify-between text-emerald-600 font-bold">
+                      <span>Less: Previous Paid Credit:</span>
+                      <span className="font-mono">-₹{currentMembershipSnapshot.alreadyPaid.toLocaleString('en-IN')}</span>
                     </div>
+                  ) : (
+                    carryForwardAmount > 0 && (
+                      <div className="flex justify-between text-amber-700 font-bold">
+                        <span>Carry Forward:</span>
+                        <span className="font-mono">+₹{carryForwardAmount.toLocaleString('en-IN')}</span>
+                      </div>
+                    )
                   )}
 
                   {discountAmount > 0 && (
                     <div className="flex justify-between text-emerald-600 font-bold">
-                      <span>Discount:</span>
+                      <span>Less: Discount:</span>
                       <span className="font-mono">-₹{discountAmount.toLocaleString('en-IN')}</span>
                     </div>
                   )}
