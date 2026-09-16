@@ -143,12 +143,8 @@ export default function BillingTab({ member: initialMember }: { member: any }) {
           let balanceAmount = Number(rawBalance) || 0;
           let amountPaid = Number(rawPaid) || 0;
 
-          // 3. If paid amount is 0 and balance is 0, but member is active/paid, assume full payment
-          const isFullyPaidMember = (member.paymentStatus || '').toLowerCase() === 'paid' ||
-                                    (member.status || '').toLowerCase() === 'active' ||
-                                    balanceAmount === 0;
-
-          if (amountPaid === 0 && balanceAmount === 0 && isFullyPaidMember) {
+          // If paid amount is 0 and balance is 0, the member's plan was fully paid (works for active, expired, & imported members)
+          if (amountPaid === 0 && balanceAmount === 0) {
             amountPaid = extractedPrice || 5000;
           }
 

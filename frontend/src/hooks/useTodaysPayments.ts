@@ -204,11 +204,7 @@ export function useTodaysPayments(): UseTodaysPaymentsResult {
         let balanceAmount = Number(rawBalance) || 0;
         let amountPaid = Number(rawPaid) || 0;
 
-        const isFullyPaid = (m.paymentStatus || '').toLowerCase() === 'paid' ||
-                            (m.status || '').toLowerCase() === 'active' ||
-                            balanceAmount === 0;
-
-        if (amountPaid === 0 && balanceAmount === 0 && isFullyPaid) {
+        if (amountPaid === 0 && balanceAmount === 0) {
           amountPaid = extractedPrice || 5000;
         }
 
