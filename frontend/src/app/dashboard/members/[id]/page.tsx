@@ -641,7 +641,7 @@ export default function ClientProfileSystem() {
                       <TrendingUp size={13} className="text-[#0B5CBE]" /> Upgrade Package
                     </button>
                     <button
-                      onClick={() => { setShowQuickMenu(false); router.push(`/dashboard/billing/create?mode=renew&id=${id}`); }}
+                      onClick={() => { setShowQuickMenu(false); setShowRenewalModal(true); }}
                       className="w-full px-3 py-2 text-left hover:bg-blue-50 text-blue-700 rounded-xl flex items-center gap-2 text-xs font-bold transition-colors border-none bg-transparent cursor-pointer"
                     >
                       <Repeat size={13} className="text-blue-600" /> Renew Membership
@@ -701,7 +701,7 @@ export default function ClientProfileSystem() {
       <div className="w-full">
         <AnimatePresence mode="wait">
           <motion.div key={activeTab} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.2 }}>
-            {activeTab === 'Profile' && <ProfileTab member={member} />}
+            {activeTab === 'Profile' && <ProfileTab member={member} onOpenRenewModal={() => setShowRenewalModal(true)} />}
             {activeTab === 'Billing' && <BillingTab member={member} />}
             {activeTab === 'Communication' && <CommunicationTab member={member} />}
             {activeTab === 'Attendance' && <AttendanceTab member={member} />}

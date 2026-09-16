@@ -19,9 +19,9 @@ import MemberAvatar from '../../../components/MemberAvatar';
 import OfficialInvoiceReceipt from '../../../components/OfficialInvoiceReceipt';
 
 const PLANS = [
-  { id: '1m', name: '1 Month Standard', price: 2500, duration: 1, desc: 'Basic single month access' },
+  { id: '1m', name: '1 Month Standard', price: 2000, duration: 1, desc: 'Basic single month access' },
   { id: '3m', name: '3 Months Pro', price: 6500, duration: 3, desc: 'Quarterly membership saver' },
-  { id: '6m', name: '6 Months Elite', price: 11500, duration: 6, desc: 'Semi-annual transformation pack' },
+  { id: '6m', name: '6 Months Elite', price: 10000, duration: 6, desc: 'Semi-annual transformation pack' },
   { id: '12m', name: '12 Months VIP', price: 18000, duration: 12, desc: 'Annual ultimate access' },
   { id: '10d', name: '10 Days Pass', price: 1000, duration: 0.33, desc: '10 Days short trial pass' },
   { id: 'pt', name: 'Personal Training (PT)', price: 8000, duration: 1, desc: '1-on-1 personal trainer sessions' },

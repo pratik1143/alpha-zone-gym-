@@ -109,7 +109,7 @@ const healthSchema = z.object({
   medicalNotes: z.string().optional(),
 });
 
-export default function ProfileTab({ member }: { member: any }) {
+export default function ProfileTab({ member, onOpenRenewModal }: { member: any; onOpenRenewModal?: () => void }) {
   const router = useRouter();
   const { fetchMembers } = useGymStore();
   const plans = useGymStore(s => s.plans);
@@ -327,7 +327,13 @@ export default function ProfileTab({ member }: { member: any }) {
 
             <div className="flex gap-3">
               <button 
-                onClick={() => router.push(`/dashboard/members/${encodeURIComponent(member.id)}/renew`)}
+                onClick={() => {
+                  if (onOpenRenewModal) {
+                    onOpenRenewModal();
+                  } else {
+                    router.push(`/dashboard/members/${encodeURIComponent(member.id)}/renew`);
+                  }
+                }}
                 className="flex-1 py-3 bg-white text-slate-900 rounded-xl text-xs font-black transition-all hover:bg-slate-100 flex items-center justify-center gap-2 border-none cursor-pointer shadow-md active:scale-95"
               >
                 <CreditCard size={14} className="text-blue-600" /> Renew Plan

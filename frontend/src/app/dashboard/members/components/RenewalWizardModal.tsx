@@ -200,6 +200,7 @@ export default function RenewalWizardModal({ isOpen, member, onClose, onSuccess 
 
   // ─── Step 2 State ─────────────────────────────────────────────────────────
   const [invoiceDate, setInvoiceDate] = useState(today);
+  const [startDateOption, setStartDateOption] = useState<'expiry' | 'today' | 'custom'>('expiry');
   const [startDate, setStartDate] = useState('');
   const [expiryDate, setExpiryDate] = useState('');
   const [isExpiryManuallyEdited, setIsExpiryManuallyEdited] = useState(false);
@@ -231,6 +232,7 @@ export default function RenewalWizardModal({ isOpen, member, onClose, onSuccess 
     setRenewedMember(null);
     setShowInvoicePreview(false);
     setInvoiceDate(today);
+    setStartDateOption('expiry');
     setDiscountType('fixed');
     setDiscountValue(0);
     setTaxAmount(0);
@@ -252,22 +254,23 @@ export default function RenewalWizardModal({ isOpen, member, onClose, onSuccess 
     ? customDurationMonths * 30
     : (selectedPlan?.durationDays || 30);
 
-  // ─── Start date default: day after current expiry if still active, else today ──
-  const defaultStartDate = useMemo(() => {
-    if (!member) return today;
-    const expiry = member.expiryDate;
-    if (expiry && expiry >= today) {
-      return addDaysToDate(expiry, 1);
-    }
-    return today;
+  // ─── Start date resolution options ──────────────────────────────
+  const expiryBasedStartDate = useMemo(() => {
+    if (!member || !member.expiryDate) return today;
+    return addDaysToDate(member.expiryDate, 1);
   }, [member, today]);
 
-  // Initialize start date when plan changes or modal opens
+  // Update start date based on selected option
   useEffect(() => {
     if (!isOpen) return;
-    setStartDate(defaultStartDate);
-    setIsExpiryManuallyEdited(false);
-  }, [isOpen, defaultStartDate]);
+    if (startDateOption === 'expiry') {
+      setStartDate(expiryBasedStartDate);
+      setIsExpiryManuallyEdited(false);
+    } else if (startDateOption === 'today') {
+      setStartDate(today);
+      setIsExpiryManuallyEdited(false);
+    }
+  }, [isOpen, startDateOption, expiryBasedStartDate, today]);
 
   // Recalculate expiry when startDate or plan changes (unless manually edited)
   useEffect(() => {
@@ -730,8 +733,84 @@ export default function RenewalWizardModal({ isOpen, member, onClose, onSuccess 
                   </div>
                 </div>
 
-                {/* Dates */}
-                <div className="grid grid-cols-2 gap-3">
+                {/* Start Date Selection Options */}
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-700 uppercase tracking-wider block">
+                    Renewal Start Date Option <span className="text-red-500">*</span>
+                  </label>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    {/* Option 1: From Expiry Date */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setStartDateOption('expiry');
+                        setStartDate(expiryBasedStartDate);
+                        setIsExpiryManuallyEdited(false);
+                      }}
+                      className={`p-3 rounded-xl border-2 text-left transition-all cursor-pointer flex flex-col justify-between ${
+                        startDateOption === 'expiry'
+                          ? 'border-blue-600 bg-blue-50 text-blue-900 shadow-xs'
+                          : 'border-slate-200 bg-white hover:border-slate-300 text-slate-700'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-black">🗓️ From Expiry Date</span>
+                        {startDateOption === 'expiry' && <Check size={14} className="text-blue-600" />}
+                      </div>
+                      <span className="text-[10px] font-bold text-slate-500 mt-1">
+                        {fmtDate(expiryBasedStartDate)}
+                      </span>
+                    </button>
+
+                    {/* Option 2: Today (IST) */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setStartDateOption('today');
+                        setStartDate(today);
+                        setIsExpiryManuallyEdited(false);
+                      }}
+                      className={`p-3 rounded-xl border-2 text-left transition-all cursor-pointer flex flex-col justify-between ${
+                        startDateOption === 'today'
+                          ? 'border-blue-600 bg-blue-50 text-blue-900 shadow-xs'
+                          : 'border-slate-200 bg-white hover:border-slate-300 text-slate-700'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-black">⚡ Starting Today</span>
+                        {startDateOption === 'today' && <Check size={14} className="text-blue-600" />}
+                      </div>
+                      <span className="text-[10px] font-bold text-slate-500 mt-1">
+                        {fmtDate(today)}
+                      </span>
+                    </button>
+
+                    {/* Option 3: Custom Date */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setStartDateOption('custom');
+                        setIsExpiryManuallyEdited(false);
+                      }}
+                      className={`p-3 rounded-xl border-2 text-left transition-all cursor-pointer flex flex-col justify-between ${
+                        startDateOption === 'custom'
+                          ? 'border-blue-600 bg-blue-50 text-blue-900 shadow-xs'
+                          : 'border-slate-200 bg-white hover:border-slate-300 text-slate-700'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-black">📅 Custom Date</span>
+                        {startDateOption === 'custom' && <Check size={14} className="text-blue-600" />}
+                      </div>
+                      <span className="text-[10px] font-bold text-slate-500 mt-1">
+                        Pick Any Date
+                      </span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Dates Input Grid */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
                     <label className="text-[9px] font-black text-slate-500 uppercase block mb-1.5">
                       Invoice Date <span className="text-red-500">*</span>
@@ -750,11 +829,16 @@ export default function RenewalWizardModal({ isOpen, member, onClose, onSuccess 
                     <input
                       type="date"
                       value={startDate}
+                      disabled={startDateOption !== 'custom'}
                       onChange={e => {
                         setStartDate(e.target.value);
                         setIsExpiryManuallyEdited(false);
                       }}
-                      className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold outline-none focus:border-blue-600 transition-colors"
+                      className={`w-full px-3 py-2 border rounded-xl text-xs font-bold outline-none transition-colors ${
+                        startDateOption !== 'custom'
+                          ? 'bg-slate-100 text-slate-600 border-slate-200 cursor-not-allowed'
+                          : 'bg-white text-slate-900 border-slate-300 focus:border-blue-600'
+                      }`}
                     />
                   </div>
                   <div>
