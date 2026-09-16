@@ -75,6 +75,16 @@ def show_attendance_popup(popup_data):
         logging.warning("[Popup] Skipping popup because Tkinter/GUI is not available.")
         return
 
+def show_attendance_popup(popup_data):
+    """
+    Triggers a Premium Always-On-Top Windows Desktop Overlay Popup Window.
+    Appears above Chrome, Excel, Word, or any minimized desktop app.
+    White & Royal Blue Theme displaying complete member information.
+    """
+    if not HAS_GUI:
+        logging.warning("[Popup] Skipping popup because Tkinter/GUI is not available.")
+        return
+
     def _gui_thread():
         try:
             root = tk.Tk()
@@ -88,52 +98,56 @@ def show_attendance_popup(popup_data):
             member_name = popup_data.get('memberName', 'Gym Member')
             member_code = popup_data.get('memberCode', popup_data.get('memberId', ''))
             plan_name = popup_data.get('plan', 'Standard Membership')
+            start_date = popup_data.get('startDate', 'N/A')
+            expiry_date = popup_data.get('expiryDate', 'N/A')
+            dob_str = popup_data.get('dob', 'N/A')
             days_left = popup_data.get('daysRemaining', popup_data.get('daysLeft', 'N/A'))
             visit_count = popup_data.get('visitCount', 1)
             avatar_url = popup_data.get('avatarUrl', '')
             biometric_id = popup_data.get('biometricId', popup_data.get('deviceId', 'N/A'))
             expired_days = popup_data.get('expiredDays', 0)
 
-            # Modern Color Palettes & Status Mapping
-            first_checkin = popup_data.get('firstCheckInTime', popup_data.get('checkIn', ''))
-            current_punch = popup_data.get('currentPunchTime', popup_data.get('timestamp', ''))
+            # Check Birthday
+            is_bday = False
+            if dob_str and dob_str != 'N/A':
+                try:
+                    today = datetime.now()
+                    d = datetime.strptime(str(dob_str).split('T')[0], "%Y-%m-%d")
+                    if d.month == today.month and d.day == today.day:
+                        is_bday = True
+                except Exception:
+                    pass
 
+            # White & Blue Theme Palette
+            bg_color = "#ffffff"       # Pure White background
+            card_border = "#2563eb"    # Royal Blue Outer Border
+            header_bg = "#1e40af"      # Deep Royal Blue Header
+            
             if status == 'granted':
-                bg_color = "#0b0f19"      # Rich Dark Slate 950
-                card_border = "#10b981"   # Emerald 500
-                header_bg = "#042f2e"     # Emerald 950
                 status_text = "✓ ACCESS GRANTED"
-                status_fg = "#34d399"     # Emerald 400
-                badge_bg = "#064e3b"
-                message = "Welcome Back! 💪"
+                status_fg = "#1e40af"     # Deep Blue
+                badge_bg = "#dbeafe"      # Light Blue
+                message = "Welcome Back! 💪" if not is_bday else "🎉 HAPPY BIRTHDAY! 🎂"
             elif status == 'already_inside':
-                bg_color = "#0b0f19"
-                card_border = "#0284c7"   # Sky 600
-                header_bg = "#0c4a6e"     # Sky 950
+                first_checkin = popup_data.get('firstCheckInTime', popup_data.get('checkIn', ''))
                 status_text = "✓ ALREADY INSIDE"
-                status_fg = "#38bdf8"     # Sky 400
-                badge_bg = "#0369a1"
+                status_fg = "#0369a1"
+                badge_bg = "#e0f2fe"
                 message = f"First Check-in Today: {first_checkin[11:16] if len(first_checkin)>=16 else 'Today'}"
             elif status in ('denied', 'expired', 'frozen'):
-                bg_color = "#0b0f19"
-                card_border = "#ef4444"   # Red 500
-                header_bg = "#450a0a"     # Red 950
                 status_text = "⚠ ACCESS DENIED"
-                status_fg = "#f87171"     # Red 400
-                badge_bg = "#7f1d1d"
+                status_fg = "#991b1b"
+                badge_bg = "#fee2e2"
                 message = f"Expired {expired_days} days ago" if expired_days else "Membership Expired"
             else: # unmapped
-                bg_color = "#0b0f19"
-                card_border = "#f59e0b"   # Amber 500
-                header_bg = "#451a03"     # Amber 950
-                status_text = "⚠ MEMBER NOT MAPPED"
-                status_fg = "#fbbf24"     # Amber 400
-                badge_bg = "#78350f"
-                message = f"ESSL Device User ID #{biometric_id} needs CRM mapping"
+                status_text = "⚠ UNMAPPED MEMBER"
+                status_fg = "#92400e"
+                badge_bg = "#fef3c7"
+                message = f"Biometric ID #{biometric_id} needs CRM mapping"
 
-            # Window Dimensions and Top-Right Positioning
-            win_width = 390
-            win_height = 440
+            # Window Dimensions & Top-Right Screen Position
+            win_width = 410
+            win_height = 510
             screen_w = root.winfo_screenwidth()
             
             x_pos = screen_w - win_width - 25
@@ -146,7 +160,7 @@ def show_attendance_popup(popup_data):
             main_frame.pack(fill=tk.BOTH, expand=True, padx=2, pady=2)
 
             # 1. Header Bar
-            header_frame = tk.Frame(main_frame, bg=header_bg, height=48)
+            header_frame = tk.Frame(main_frame, bg=header_bg, height=44)
             header_frame.pack(fill=tk.X, side=tk.TOP)
             header_frame.pack_propagate(False)
 
@@ -157,13 +171,13 @@ def show_attendance_popup(popup_data):
                 fg="#ffffff", 
                 bg=header_bg
             )
-            header_title.pack(side=tk.LEFT, padx=16)
+            header_title.pack(side=tk.LEFT, padx=14)
 
             close_btn = tk.Label(
                 header_frame, 
                 text="✕", 
                 font=("Segoe UI", 12, "bold"), 
-                fg="#94a3b8", 
+                fg="#bfdbfe", 
                 bg=header_bg,
                 cursor="hand2"
             )
@@ -172,15 +186,15 @@ def show_attendance_popup(popup_data):
 
             # 2. Status Badge Banner
             status_badge_frame = tk.Frame(main_frame, bg=badge_bg, bd=0)
-            status_badge_frame.pack(fill=tk.X, padx=16, pady=(14, 6))
+            status_badge_frame.pack(fill=tk.X, padx=14, pady=(12, 4))
 
             status_label = tk.Label(
                 status_badge_frame, 
                 text=status_text, 
-                font=("Segoe UI", 11, "bold"), 
+                font=("Segoe UI", 10, "bold"), 
                 fg=status_fg, 
                 bg=badge_bg,
-                pady=6
+                pady=5
             )
             status_label.pack()
 
@@ -191,69 +205,75 @@ def show_attendance_popup(popup_data):
                     req = urllib.request.Request(avatar_url, headers={'User-Agent': 'Mozilla/5.0'})
                     with urllib.request.urlopen(req, timeout=3) as resp:
                         img_data = resp.read()
-                        photo_img = _create_circular_image(img_data, size=(92, 92))
+                        photo_img = _create_circular_image(img_data, size=(86, 86))
                 except Exception as e:
                     logging.warning(f"Could not download member avatar: {e}")
 
-            avatar_canvas = tk.Canvas(main_frame, width=92, height=92, bg=bg_color, highlightthickness=0)
-            avatar_canvas.pack(pady=6)
+            avatar_canvas = tk.Canvas(main_frame, width=86, height=86, bg=bg_color, highlightthickness=0)
+            avatar_canvas.pack(pady=4)
 
             if photo_img:
-                avatar_canvas.create_image(46, 46, image=photo_img)
+                avatar_canvas.create_image(43, 43, image=photo_img)
                 avatar_canvas.image = photo_img
             else:
                 clean_name = member_name.replace("Unmapped Biometric User #", "ID ")
                 parts = clean_name.split()
                 initials = (parts[0][0] + (parts[1][0] if len(parts) > 1 else '')).upper() if parts else "AZ"
-                avatar_canvas.create_oval(2, 2, 90, 90, fill="#1e293b", outline=card_border, width=2)
-                avatar_canvas.create_text(46, 46, text=initials[:2], font=("Segoe UI", 20, "bold"), fill="#ffffff")
+                avatar_canvas.create_oval(2, 2, 84, 84, fill="#eff6ff", outline="#2563eb", width=2)
+                avatar_canvas.create_text(43, 43, text=initials[:2], font=("Segoe UI", 18, "bold"), fill="#1e40af")
 
             # 4. Member Name & Reference Code
             name_label = tk.Label(
                 main_frame, 
                 text=member_name, 
                 font=("Segoe UI", 13, "bold"), 
-                fg="#ffffff", 
+                fg="#0f172a", 
                 bg=bg_color
             )
-            name_label.pack(pady=(2, 0))
+            name_label.pack(pady=(1, 0))
 
-            if member_code:
-                code_label = tk.Label(
-                    main_frame, 
-                    text=f"Ref: {member_code}", 
-                    font=("Consolas", 9), 
-                    fg="#64748b", 
-                    bg=bg_color
-                )
-                code_label.pack()
+            sub_info = f"Ref: {member_code}" if member_code else ""
+            if biometric_id and biometric_id != 'N/A':
+                sub_info += f"  •  Bio ID: #{biometric_id}"
 
-            # 5. Details Info Box
-            info_box = tk.Frame(main_frame, bg="#1e293b", bd=0)
-            info_box.pack(fill=tk.X, padx=18, pady=10)
+            code_label = tk.Label(
+                main_frame, 
+                text=sub_info, 
+                font=("Consolas", 9, "bold"), 
+                fg="#2563eb", 
+                bg=bg_color
+            )
+            code_label.pack()
+
+            # 5. Complete 2-Column Details Info Box
+            info_box = tk.Frame(main_frame, bg="#f0f9ff", bd=1, highlightbackground="#bfdbfe", highlightthickness=1)
+            info_box.pack(fill=tk.X, padx=14, pady=8)
+
+            # Row 1: Plan / Package
+            r1_frame = tk.Frame(info_box, bg="#f0f9ff")
+            r1_frame.pack(fill=tk.X, padx=10, pady=(6, 2))
+            tk.Label(r1_frame, text="PACKAGE:", font=("Segoe UI", 8, "bold"), fg="#64748b", bg="#f0f9ff").pack(side=tk.LEFT)
+            tk.Label(r1_frame, text=plan_name, font=("Segoe UI", 9, "bold"), fg="#0f172a", bg="#f0f9ff").pack(side=tk.LEFT, padx=6)
+
+            # Row 2: Start Date & Expiry Date
+            r2_frame = tk.Frame(info_box, bg="#f0f9ff")
+            r2_frame.pack(fill=tk.X, padx=10, pady=2)
+            tk.Label(r2_frame, text=f"Start: {str(start_date).split('T')[0]}", font=("Segoe UI", 8, "bold"), fg="#334155", bg="#f0f9ff").pack(side=tk.LEFT)
+            tk.Label(r2_frame, text=f"Expiry: {str(expiry_date).split('T')[0]}", font=("Segoe UI", 8, "bold"), fg="#dc2626" if status in ('expired','denied') else "#166534", bg="#f0f9ff").pack(side=tk.RIGHT)
+
+            # Row 3: Birthday & Days Left / Visit Count
+            r3_frame = tk.Frame(info_box, bg="#f0f9ff")
+            r3_frame.pack(fill=tk.X, padx=10, pady=(2, 6))
+            
+            bday_display = f"DOB: {str(dob_str).split('T')[0]}" if dob_str and dob_str != 'N/A' else "DOB: N/A"
+            if is_bday:
+                bday_display += " 🎂"
+            tk.Label(r3_frame, text=bday_display, font=("Segoe UI", 8, "bold"), fg="#9333ea" if is_bday else "#475569", bg="#f0f9ff").pack(side=tk.LEFT)
 
             if status in ('granted', 'already_inside'):
-                r1 = tk.Label(info_box, text=f"Plan: {plan_name}", font=("Segoe UI", 9, "bold"), fg="#e2e8f0", bg="#1e293b")
-                r1.pack(anchor="w", padx=14, pady=(8, 2))
-                
-                r2 = tk.Label(info_box, text=f"Days Remaining: {days_left} Days", font=("Segoe UI", 9, "bold"), fg="#34d399", bg="#1e293b")
-                r2.pack(anchor="w", padx=14, pady=2)
-
-                r3_text = f"First Check-in: {first_checkin[11:16]}" if status == 'already_inside' and first_checkin else f"Today's Visit: #{visit_count}"
-                r3 = tk.Label(info_box, text=r3_text, font=("Segoe UI", 9), fg="#38bdf8" if status == 'already_inside' else "#94a3b8", bg="#1e293b")
-                r3.pack(anchor="w", padx=14, pady=(2, 8))
-            elif status in ('denied', 'expired', 'frozen'):
-                r1 = tk.Label(info_box, text=f"Plan: {plan_name}", font=("Segoe UI", 9, "bold"), fg="#e2e8f0", bg="#1e293b")
-                r1.pack(anchor="w", padx=14, pady=(8, 2))
-                
-                r2 = tk.Label(info_box, text=message, font=("Segoe UI", 9, "bold"), fg="#f87171", bg="#1e293b")
-                r2.pack(anchor="w", padx=14, pady=(2, 8))
-            else: # unmapped
-                r1 = tk.Label(info_box, text=f"ESSL Hardware User ID: #{biometric_id}", font=("Segoe UI", 9, "bold"), fg="#e2e8f0", bg="#1e293b")
-                r1.pack(anchor="w", padx=14, pady=(8, 2))
-                
-                r2 = tk.Label(info_box, text="Biometric ID needs CRM member mapping", font=("Segoe UI", 9), fg="#fbbf24", bg="#1e293b")
-                r2.pack(anchor="w", padx=14, pady=(2, 8))
+                tk.Label(r3_frame, text=f"{days_left} Days Left (Visit #{visit_count})", font=("Segoe UI", 8, "bold"), fg="#2563eb", bg="#f0f9ff").pack(side=tk.RIGHT)
+            elif status in ('denied', 'expired'):
+                tk.Label(r3_frame, text=f"Expired ({expired_days}d ago)", font=("Segoe UI", 8, "bold"), fg="#dc2626", bg="#f0f9ff").pack(side=tk.RIGHT)
 
             # 6. Action Button Footer
             if status in ('granted', 'already_inside'):
@@ -261,7 +281,7 @@ def show_attendance_popup(popup_data):
                     main_frame, 
                     text=message, 
                     font=("Segoe UI", 10, "bold"), 
-                    fg="#38bdf8" if status == 'already_inside' else "#34d399", 
+                    fg="#1e40af", 
                     bg=bg_color
                 )
                 msg_label.pack(pady=4)
@@ -278,8 +298,8 @@ def show_attendance_popup(popup_data):
                     text="⚡ RENEW MEMBERSHIP", 
                     font=("Segoe UI", 9, "bold"), 
                     fg="#ffffff", 
-                    bg="#ef4444", 
-                    activebackground="#dc2626",
+                    bg="#dc2626", 
+                    activebackground="#b91c1c",
                     activeforeground="#ffffff",
                     bd=0, 
                     padx=16, 
@@ -327,10 +347,10 @@ def show_attendance_popup(popup_data):
                     btn_box, 
                     text="⚡ MAP MEMBER", 
                     font=("Segoe UI", 9, "bold"), 
-                    fg="#0f172a", 
-                    bg="#f59e0b", 
-                    activebackground="#d97706",
-                    activeforeground="#0f172a",
+                    fg="#ffffff", 
+                    bg="#d97706", 
+                    activebackground="#b45309",
+                    activeforeground="#ffffff",
                     bd=0, 
                     padx=12, 
                     pady=6, 
