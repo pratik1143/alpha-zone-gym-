@@ -18,6 +18,52 @@ export function getISTDateStr(date: Date = new Date()): string {
   }).format(date);
 }
 
+/**
+ * Safely normalizes any date representation (Date, ISO string, YYYY-MM-DD, Timestamp)
+ * into a canonical YYYY-MM-DD date string in Asia/Kolkata (IST) timezone.
+ */
+export function getCanonicalISTDate(rawDate?: unknown): string {
+  if (!rawDate) return getISTDateStr();
+
+  try {
+    // 1. Handle Firestore Timestamp
+    if (typeof rawDate === 'object' && rawDate !== null && 'toDate' in rawDate && typeof (rawDate as any).toDate === 'function') {
+      return getISTDateStr((rawDate as any).toDate());
+    }
+
+    // 2. Handle JS Date
+    if (rawDate instanceof Date) {
+      return isNaN(rawDate.getTime()) ? getISTDateStr() : getISTDateStr(rawDate);
+    }
+
+    const str = String(rawDate).trim();
+    if (!str) return getISTDateStr();
+
+    // 3. Handle ISO string (e.g. 2026-09-16T14:25:42.484Z)
+    if (str.includes('T')) {
+      const parsed = new Date(str);
+      if (!isNaN(parsed.getTime())) {
+        return getISTDateStr(parsed);
+      }
+    }
+
+    // 4. Handle standard YYYY-MM-DD
+    if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
+      return str;
+    }
+
+    // 5. Fallback Date parsing
+    const parsed = new Date(str);
+    if (!isNaN(parsed.getTime())) {
+      return getISTDateStr(parsed);
+    }
+  } catch (err) {
+    console.warn('[getCanonicalISTDate] Date parse fallback notice:', err);
+  }
+
+  return getISTDateStr();
+}
+
 export interface PaymentRecord {
   id: string;
   invoice?: string;
@@ -320,8 +366,8 @@ export function useTodaysPayments(): UseTodaysPaymentsResult {
       const status = String(p.status || p.paymentStatus || '').toLowerCase();
       if (status !== 'paid' && status !== 'partial') return false;
 
-      // Strict IST date match on canonical invoiceDate (invoiceDate / billingDate / date / paymentDate / transactionDate)
-      const pDate = String(p.invoiceDate || p.billingDate || p.date || p.paymentDate || p.transactionDate || '').split('T')[0];
+      // Strict IST date match on canonical payment date using IST parser
+      const pDate = getCanonicalISTDate(p.paymentDate || p.invoiceDate || p.billingDate || p.date || p.transactionDate || p.createdAt);
       if (pDate !== todayStr) return false;
 
       // Deduplicate by ID
@@ -420,3 +466,32 @@ export function useTodaysPayments(): UseTodaysPaymentsResult {
     updatePaymentDateTime,
   };
 }
+
+/**
+ * Centralized, canonical calculation of Today's Collection KPI.
+ * Takes array of payment records and returns total collected money today.
+ */
+export function calculateTodaysCollection(payments: PaymentRecord[], gymTimezone = 'Asia/Kolkata'): number {
+  const todayStr = getISTDateStr();
+  const seen = new Set<string>();
+
+  return (payments || []).reduce((sum, p) => {
+    if (!p || p.isSample || p.isMock || p.deleted || p.isDuplicate) return sum;
+    if (p.isHistorical === true || p.imported === true || p.isLegacyImport === true || p.transactionType === 'historical_import') return sum;
+
+    const status = String(p.status || p.paymentStatus || '').toLowerCase();
+    if (status !== 'paid' && status !== 'partial') return sum;
+
+    const pDate = getCanonicalISTDate(p.paymentDate || p.invoiceDate || p.billingDate || p.date || p.transactionDate || p.createdAt);
+    if (pDate !== todayStr) return sum;
+
+    const key = String(p.id || p.invoice || p.invoiceNumber || '').trim();
+    if (key && seen.has(key)) return sum;
+    if (key) seen.add(key);
+
+    const val = p.amountPaid !== undefined ? p.amountPaid : (p.paid !== undefined ? p.paid : (p.amount ?? 0));
+    const num = Number(val);
+    return sum + (isNaN(num) ? 0 : num);
+  }, 0);
+}
+

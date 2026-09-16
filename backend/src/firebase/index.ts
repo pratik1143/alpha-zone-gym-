@@ -2053,13 +2053,27 @@ export const db = {
 
   addDeviceLog: async (log: any): Promise<any> => {
     const firestore = getFirestoreDb();
-    const newLog = {
+    const rawLog = {
+      deviceId: log?.deviceId || 'dev_001',
+      deviceName: log?.deviceName || log?.name || 'EasyBio Access Control',
+      level: log?.level || 'INFO',
+      message: log?.message || 'Device operation logged',
       ...log,
       timestamp: new Date().toISOString()
     };
+
+    // Strip any undefined properties to satisfy Firestore Admin SDK
+    const newLog = Object.fromEntries(
+      Object.entries(rawLog).filter(([_, v]) => v !== undefined)
+    );
+
     if (firestore) {
-      const docRef = await firestore.collection('deviceLogs').add(newLog);
-      return { id: docRef.id, ...newLog };
+      try {
+        const docRef = await firestore.collection('deviceLogs').add(newLog);
+        return { id: docRef.id, ...newLog };
+      } catch (err) {
+        console.warn('[addDeviceLog] Firestore write notice:', err);
+      }
     }
     newLog.id = 'log_' + Date.now();
     mockDeviceLogs.unshift(newLog);

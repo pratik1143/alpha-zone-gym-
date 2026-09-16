@@ -11,12 +11,13 @@ import {
   Percent, Tag, DollarSign, Dumbbell, User, Award, ArrowRight, Eye, FileText
 } from 'lucide-react';
 import { db } from '@/lib/firebase';
-import { collection, addDoc, doc, updateDoc, getDocs, query, where } from 'firebase/firestore';
+import { collection, addDoc, doc, updateDoc, getDocs, getDoc, query, where, writeBatch } from 'firebase/firestore';
 import { useGymStore } from '@/store';
 import toast from '@/lib/toast';
 import { formatDate, formatPhoneNumber, cleanPlanName } from '@/lib/utils';
 import OfficialInvoiceReceipt from '../../components/OfficialInvoiceReceipt';
 import { calculateUpgradeBill, extractPriceFromPlanString, getDefaultPriceForPlan } from '@/services/billingService';
+import { getCanonicalISTDate } from '@/hooks/useTodaysPayments';
 
 // ─── CRM Blue Design Tokens ──────────────────────────────────────────
 const BLUE_PRIMARY = '#0B5CBE';
@@ -139,7 +140,7 @@ function UniversalBillingTerminalContent() {
   }, [activeMode, selectedMemberId]);
 
   // ── DATE CALCULATIONS ──────────────────────────────────────────────────
-  const todayYMD = useMemo(() => new Date().toISOString().split('T')[0], []);
+  const todayYMD = useMemo(() => getCanonicalISTDate(), []);
 
   const [billDate, setBillDate] = useState(todayYMD); // Actual transaction date
   const [startDate, setStartDate] = useState(todayYMD); // Membership start date
@@ -326,77 +327,130 @@ function UniversalBillingTerminalContent() {
     setSubmitting(true);
 
     const isRenew = activeMode === 'renew';
+    const normalizedPaymentDate = getCanonicalISTDate(billDate);
+    const newPaymentRef = doc(collection(db, 'payments'));
+    const transactionId = `TXN-${normalizedPaymentDate.replace(/-/g, '')}-${Math.floor(1000 + Math.random() * 9000)}`;
+
+    const payStatus = remainingPending <= 0 ? 'paid' : (amountPaidToday > 0 ? 'partial' : 'pending');
+
+    // PHASE 2: TEMPORARY TRANSACTION TRACE (CREATE)
+    console.log('[BILLING CREATE]', {
+      memberId: selectedMember.id,
+      invoiceId: fixedInvoiceNo,
+      transactionId: transactionId,
+      originalAmount: packagePrice,
+      discount: discountAmount,
+      tax: 0,
+      netPayable: finalPayable,
+      amountPaid: amountPaidToday,
+      pendingAmount: remainingPending,
+      paymentMethod: paymentMethod,
+      paymentStatus: payStatus,
+      billDate: billDate,
+      paymentDate: normalizedPaymentDate,
+      createdAt: new Date().toISOString(),
+      collectionTarget: 'payments',
+    });
+
+    const billPayload = {
+      id: newPaymentRef.id,
+      transactionId: transactionId,
+      invoiceNumber: fixedInvoiceNo,
+      invoice: fixedInvoiceNo,
+      memberId: selectedMember.id,
+      memberName: selectedMember.name,
+      memberPhone: selectedMember.phone || '',
+      mode: activeMode.toUpperCase(),
+      transactionType: isRenew ? 'membership_renewal' : 'membership_upgrade',
+      billingType: 'membership',
+      plan: selectedPackage?.name || (isRenew ? 'Renewed Membership' : 'Upgraded Membership'),
+      packageName: selectedPackage?.name || (isRenew ? 'Renewed Membership' : 'Upgraded Membership'),
+
+      // Previous Billing Relationship
+      previousInvoiceNumber: currentMembershipSnapshot.previousInvoiceNo,
+      previousPackage: currentMembershipSnapshot.package,
+      previousBillAmount: currentMembershipSnapshot.originalBill,
+      previousAmountPaid: currentMembershipSnapshot.alreadyPaid,
+      previousPending: currentMembershipSnapshot.currentPending,
+      carryForwardCredit: activeMode === 'upgrade' ? upgradeCalc.carryForwardCredit : 0,
+      upgradeAmountBeforeDiscount: activeMode === 'upgrade' ? upgradeCalc.upgradeAmountBeforeDiscount : packagePrice,
+
+      // Financial Ledger
+      packagePrice: packagePrice,
+      originalAmount: packagePrice,
+      discountAmount: discountAmount,
+      discount: discountAmount,
+      discountType: discountType,
+      netPayable: finalPayable,
+      amount: finalPayable,
+      amountPaid: amountPaidToday,
+      paid: amountPaidToday,
+      pendingAmount: remainingPending,
+      balanceAmount: remainingPending,
+      outstandingAmount: remainingPending,
+
+      // Meta & Canonical Dates
+      method: paymentMethod,
+      paymentMethod: paymentMethod,
+      status: payStatus,
+      paymentStatus: payStatus,
+      paymentDate: normalizedPaymentDate,
+      invoiceDate: normalizedPaymentDate,
+      date: normalizedPaymentDate,
+      billingDate: normalizedPaymentDate,
+      transactionDate: normalizedPaymentDate,
+      startDate: startDate,
+      expiryDate: calculatedExpiryDate,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      isHistorical: false,
+      imported: false,
+      notes: isRenew
+        ? `Membership renewed to ${selectedPackage?.name} from ${startDate} to ${calculatedExpiryDate}`
+        : `Membership upgraded to ${selectedPackage?.name}. Credit adjustment: -₹${upgradeCalc.carryForwardCredit}`,
+    };
 
     try {
-      const billPayload = {
-        invoiceNumber: fixedInvoiceNo,
-        invoice: fixedInvoiceNo,
-        memberId: selectedMember.id,
-        memberName: selectedMember.name,
-        memberPhone: selectedMember.phone || '',
-        mode: activeMode.toUpperCase(),
-        transactionType: isRenew ? 'membership_renewal' : 'membership_upgrade',
-        billingType: 'membership',
-        plan: selectedPackage?.name || (isRenew ? 'Renewed Membership' : 'Upgraded Membership'),
-        packageName: selectedPackage?.name || (isRenew ? 'Renewed Membership' : 'Upgraded Membership'),
+      // PHASE 14: ATOMIC BATCH WRITE
+      const batch = writeBatch(db);
 
-        // Previous Billing Relationship (Old invoice untouched)
-        previousInvoiceNumber: currentMembershipSnapshot.previousInvoiceNo,
-        previousPackage: currentMembershipSnapshot.package,
-        previousBillAmount: currentMembershipSnapshot.originalBill,
-        previousAmountPaid: currentMembershipSnapshot.alreadyPaid,
-        previousPending: currentMembershipSnapshot.currentPending,
-        carryForwardCredit: activeMode === 'upgrade' ? upgradeCalc.carryForwardCredit : 0,
-        upgradeAmountBeforeDiscount: activeMode === 'upgrade' ? upgradeCalc.upgradeAmountBeforeDiscount : packagePrice,
+      // 1. Add canonical payment document to payments collection
+      batch.set(newPaymentRef, billPayload);
 
-        // Financial Ledger
-        packagePrice: packagePrice,
-        originalAmount: packagePrice,
-        discountAmount: discountAmount,
-        discount: discountAmount,
-        discountType: discountType,
-        netPayable: finalPayable,
-        amount: finalPayable,
-        amountPaid: amountPaidToday,
-        paid: amountPaidToday,
-        pendingAmount: remainingPending,
-        balanceAmount: remainingPending,
-        outstandingAmount: remainingPending,
-
-        // Meta & Dates
-        method: paymentMethod,
-        paymentMethod: paymentMethod,
-        status: remainingPending <= 0 ? 'paid' : (amountPaidToday > 0 ? 'partial' : 'pending'),
-        date: billDate,
-        invoiceDate: billDate,
-        startDate: startDate,
-        expiryDate: calculatedExpiryDate,
-        createdAt: new Date().toISOString(),
-        notes: isRenew
-          ? `Membership renewed to ${selectedPackage?.name} from ${startDate} to ${calculatedExpiryDate}`
-          : `Membership upgraded to ${selectedPackage?.name}. Credit adjustment: -₹${upgradeCalc.carryForwardCredit}`,
-      };
-
-      // 1. Add to Firestore payments
-      const docRef = await addDoc(collection(db, 'payments'), billPayload);
-      const savedInvoice = { id: docRef.id, ...billPayload };
-
-      // 2. Update Member Record (Atomic merge - preserving old history)
+      // 2. Update Member Record atomically
       const newTotalPaid = (Number(selectedMember.totalPaid) || 0) + amountPaidToday;
       const newTotalBilled = (Number(selectedMember.totalBilled) || 0) + finalPayable;
 
-      await updateDoc(doc(db, 'members', selectedMember.id), {
+      const memberRef = doc(db, 'members', selectedMember.id);
+      batch.update(memberRef, {
         plan: selectedPackage?.name || selectedMember.plan,
         price: packagePrice,
         startDate: startDate,
         expiryDate: calculatedExpiryDate,
         status: calculatedExpiryDate >= todayYMD ? 'active' : 'expired',
-        paymentStatus: remainingPending <= 0 ? 'paid' : (amountPaidToday > 0 ? 'partial' : 'pending'),
+        paymentStatus: payStatus,
         totalBilled: newTotalBilled,
         totalPaid: newTotalPaid,
         outstandingBalance: remainingPending,
         updatedAt: new Date().toISOString(),
       });
+
+      await batch.commit();
+
+      // PHASE 2: WRITE SUCCESS & READBACK TRACE
+      console.log('[BILLING WRITE SUCCESS]', {
+        collection: 'payments',
+        documentId: newPaymentRef.id,
+      });
+
+      const readbackSnap = await getDoc(newPaymentRef);
+      console.log('[BILLING READBACK]', {
+        collection: 'payments',
+        documentId: newPaymentRef.id,
+        data: readbackSnap.data(),
+      });
+
+      const savedInvoice = { ...billPayload };
 
       // 3. Refresh store state
       await fetchMembers(true);

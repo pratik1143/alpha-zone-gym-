@@ -7,10 +7,11 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { membershipEngine } from '@/lib/engines/membershipEngine';
 import { db } from '@/lib/firebase';
-import { doc, setDoc, updateDoc } from 'firebase/firestore';
+import { doc, setDoc, updateDoc, collection, writeBatch } from 'firebase/firestore';
 import { useGymStore } from '@/store';
 import toast from '@/lib/toast';
 import { getDefaultPriceForPlan } from '@/services/billingService';
+import { getCanonicalISTDate } from '@/hooks/useTodaysPayments';
 
 // ── ZOD VALIDATION SCHEMA ──────────────────────────────────────────────────
 const createBillSchema = z.object({
@@ -219,14 +220,20 @@ export default function CreateNewBillModal({
       const origAmt = Number(data.amount);
       const discAmt = 0;
       const netPayable = origAmt - discAmt;
+      const normalizedToday = getCanonicalISTDate();
+      const newPayRef = doc(collection(db, 'payments'));
+      const txnId = `TXN-${normalizedToday.replace(/-/g, '')}-${Math.floor(1000 + Math.random() * 9000)}`;
 
       const newBill = {
+        id: newPayRef.id,
+        transactionId: txnId,
         memberId: member.id,
         memberName: member.name,
         memberPhone: member.phone || member.mobile || '',
         invoiceNumber: invNum,
         invoice: invNum,
         plan: data.plan,
+        packageName: data.plan,
         originalAmount: origAmt,
         discountAmount: discAmt,
         discount: discAmt,
@@ -238,23 +245,32 @@ export default function CreateNewBillModal({
         paid: netPayable,
         outstandingAmount: 0,
         pendingAmount: 0,
+        paymentMethod: data.method,
         method: data.method,
         status: 'paid',
-        date: new Date().toISOString().split('T')[0],
-        paymentDate: new Date().toISOString().split('T')[0],
+        paymentStatus: 'paid',
+        date: normalizedToday,
+        paymentDate: normalizedToday,
+        invoiceDate: normalizedToday,
+        billingDate: normalizedToday,
+        transactionDate: normalizedToday,
         transactionType: 'membership_payment',
+        billingType: 'membership',
         isHistorical: false,
         imported: false,
         startDate: data.startDate,
         expiryDate: data.expiryDate,
         createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
         isRealTimeToday: true,
       };
 
-      // 1. Create separate payment invoice document
-      await setDoc(doc(db, 'payments', `inv_${Date.now()}`), newBill);
+      const batch = writeBatch(db);
 
-      // 2. Append to membershipHistory array
+      // 1. Create payment document
+      batch.set(newPayRef, newBill);
+
+      // 2. Append to membershipHistory array & update member
       const existingHistory = Array.isArray(member.membershipHistory) ? member.membershipHistory : [];
       const newHistoryEntry = {
         plan: data.plan,
@@ -266,15 +282,21 @@ export default function CreateNewBillModal({
       };
       const updatedHistory = [...existingHistory, newHistoryEntry];
 
-      // 3. Update Member Document with latest coverage
-      await updateDoc(doc(db, 'members', member.id), {
+      const memberRef = doc(db, 'members', member.id);
+      batch.update(memberRef, {
         plan: data.plan,
         startDate: member.startDate || data.startDate,
         expiryDate: data.expiryDate,
         status: 'active',
         paymentStatus: 'paid',
+        totalPaid: (Number(member.totalPaid) || 0) + netPayable,
+        totalBilled: (Number(member.totalBilled) || 0) + netPayable,
+        outstandingBalance: 0,
         membershipHistory: updatedHistory,
+        updatedAt: new Date().toISOString(),
       });
+
+      await batch.commit();
 
       toast.success(`Bill ${invNum} generated successfully!`);
       fetchMembers();
