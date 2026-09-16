@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { db } from '@/lib/firebase';
 import { collection, onSnapshot, doc, updateDoc } from 'firebase/firestore';
-import { useAuthStore } from '@/store';
+import { useAuthStore, useGymStore } from '@/store';
 import { migrateMissingBillingPhones } from '@/lib/migrations/migrateBillingPhones';
 
 // ─── IST-aware today string (YYYY-MM-DD in Asia/Kolkata timezone) ───────────
@@ -93,6 +93,7 @@ export interface UseTodaysPaymentsResult {
  */
 export function useTodaysPayments(): UseTodaysPaymentsResult {
   const { user } = useAuthStore();
+  const { members } = useGymStore();
   const [rawPayments, setRawPayments] = useState<PaymentRecord[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -160,16 +161,112 @@ export function useTodaysPayments(): UseTodaysPaymentsResult {
 
   // ── Derived memos ─────────────────────────────────────────────────────────
 
-  // All active (non-deleted, non-void, non-duplicate) payments
-  const allPayments = useMemo<PaymentRecord[]>(() =>
-    rawPayments.filter((p) =>
+  // All active (non-deleted, non-void, non-duplicate) payments including synthesized member fallbacks
+  const allPayments = useMemo<PaymentRecord[]>(() => {
+    const validRaw = rawPayments.filter((p) =>
       p &&
       p.deleted !== true &&
       p.isDuplicate !== true &&
       (p.status || '').toLowerCase() !== 'void'
-    ),
-    [rawPayments]
-  );
+    );
+
+    const map = new Map<string, PaymentRecord>();
+    const knownMemberIds = new Set<string>();
+
+    validRaw.forEach((p) => {
+      const key = String(p.id || p.invoice || p.invoiceNumber || '').trim();
+      if (key) map.set(key, p);
+      if (p.memberId) knownMemberIds.add(String(p.memberId).trim());
+    });
+
+    // Synthesize auto-generated payments for members with billing data but no explicit payments doc
+    if (Array.isArray(members) && members.length > 0) {
+      members.forEach((m: any) => {
+        const memId = String(m.id || m.uid || m.memberId || '').trim();
+        if (!memId) return;
+
+        // Skip if this member already has payment records in Firestore
+        if (knownMemberIds.has(memId)) return;
+
+        const rawPaid = m.amountPaid ?? m.paid ?? m.totalPaid ?? m.paidAmount ?? m.amount ?? 0;
+        const rawBalance = m.balanceAmount ?? m.balance ?? m.outstandingBalance ?? m.balanceDue ?? m.dueAmount ?? m.pendingAmount ?? 0;
+        const rawPrice = m.price ?? m.packagePrice ?? m.planPrice ?? m.planAmount ?? m.totalBilled ?? m.amount ?? 0;
+
+        let extractedPrice = Number(rawPrice) || 0;
+        if (!extractedPrice && typeof m.plan === 'string') {
+          const match = m.plan.match(/₹?\s*([0-9,]+)/);
+          if (match) extractedPrice = Number(match[1].replace(/,/g, ''));
+        }
+        if (!extractedPrice && (m.plan || m.packageName)) {
+          extractedPrice = 5000;
+        }
+
+        let balanceAmount = Number(rawBalance) || 0;
+        let amountPaid = Number(rawPaid) || 0;
+
+        const isFullyPaid = (m.paymentStatus || '').toLowerCase() === 'paid' ||
+                            (m.status || '').toLowerCase() === 'active' ||
+                            balanceAmount === 0;
+
+        if (amountPaid === 0 && balanceAmount === 0 && isFullyPaid) {
+          amountPaid = extractedPrice || 5000;
+        }
+
+        const totalBilled = Number(m.totalBilled) || (amountPaid + balanceAmount) || extractedPrice || 5000;
+        const planPrice = totalBilled || extractedPrice || 5000;
+        const netPayable = planPrice;
+        const payStatus = balanceAmount === 0 ? 'paid' : (amountPaid > 0 ? 'partial' : 'pending');
+        const membershipLabel = m.packageName || (typeof m.plan === 'string' ? m.plan.split('₹')[0].trim() : 'General Membership') || 'General Membership';
+
+        const invNum = m.memberId
+          ? `INV-${String(m.memberId).replace('AZ-2026-', '').replace('AZ-', '')}`
+          : (m.clientId ? `INV-LEG-${m.clientId}` : `INV-AUTO-${m.id || '670'}`);
+
+        const autoKey = `inv_auto_${memId}`;
+        if (!map.has(autoKey)) {
+          map.set(autoKey, {
+            id: autoKey,
+            invoiceNumber: invNum,
+            invoice: invNum,
+            plan: membershipLabel,
+            packageName: membershipLabel,
+            amount: planPrice,
+            totalBilled: planPrice,
+            packagePrice: planPrice,
+            originalAmount: planPrice,
+            netPayable: netPayable,
+            baseAmount: planPrice,
+            paid: amountPaid,
+            amountPaid: amountPaid,
+            paidAmount: amountPaid,
+            amountPaidToday: amountPaid,
+            pendingAmount: balanceAmount,
+            balanceAmount: balanceAmount,
+            remainingBalance: balanceAmount,
+            outstandingAmount: balanceAmount,
+            discount: Number(m.discount) || 0,
+            tax: Number(m.tax) || 0,
+            method: m.paymentMethod || m.method || 'Cash',
+            paymentMethod: m.paymentMethod || m.method || 'Cash',
+            status: payStatus,
+            paymentStatus: payStatus,
+            billingType: 'membership',
+            date: m.startDate || m.joinDate || new Date().toISOString().split('T')[0],
+            startDate: m.startDate || m.joinDate || new Date().toISOString().split('T')[0],
+            expiryDate: m.expiryDate || '',
+            invoiceDate: m.startDate || m.joinDate || new Date().toISOString().split('T')[0],
+            createdAt: m.createdAt || m.joinDate || new Date().toISOString(),
+            memberId: memId,
+            memberName: m.name || 'Member',
+            memberPhone: m.phone || '',
+            isAutoGenerated: true,
+          } as PaymentRecord);
+        }
+      });
+    }
+
+    return Array.from(map.values());
+  }, [rawPayments, members]);
 
   // Today's valid paid payments (IST transactionDate, non-historical, non-sample)
   const todaysPayments = useMemo<PaymentRecord[]>(() => {
