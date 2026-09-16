@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { db } from '../firebase';
 import { exec } from 'child_process';
+import os from 'os';
 
 let latestPunchEvent: any = null;
 
@@ -190,35 +191,122 @@ export const checkoutLog = async (req: Request, res: Response) => {
   }
 };
 
-export const triggerGateUnlock = async (req: Request, res: Response) => {
+let lastGateUnlockTime = 0;
+
+export function getLocalIpAddress(): string {
   try {
-    let { deviceId } = req.body;
-    
+    const interfaces = os.networkInterfaces();
+    for (const devName in interfaces) {
+      const iface = interfaces[devName];
+      if (!iface) continue;
+      for (const alias of iface) {
+        if (alias.family === 'IPv4' && !alias.internal && alias.address !== '127.0.0.1') {
+          return alias.address;
+        }
+      }
+    }
+  } catch (e) {}
+  return '127.0.0.1';
+}
+
+export const getGateStatus = async (req: Request, res: Response) => {
+  try {
+    const deviceIp = process.env.EASYBIO_DEVICE_IP || '192.168.18.11';
+    const devicePort = process.env.EASYBIO_DEVICE_PORT || '4370';
+    const serverIp = getLocalIpAddress();
+    const serverPort = process.env.PORT || '8000';
+
+    res.json({
+      device: 'EasyBio Access Control',
+      ip: deviceIp,
+      port: devicePort,
+      connected: true,
+      serverIp,
+      serverPort,
+      accessUrl: `http://${serverIp}:${serverPort}/gate-control`,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+export const triggerGateUnlock = async (req: Request, res: Response) => {
+  const now = Date.now();
+  if (now - lastGateUnlockTime < 3000) {
+    console.log('[GATE] Cooldown active. Rejecting rapid repeat unlock request.');
+    return res.status(429).json({
+      success: false,
+      message: 'Gate unlock in progress. Please wait 3 seconds before opening again.'
+    });
+  }
+  lastGateUnlockTime = now;
+
+  const deviceIp = process.env.EASYBIO_DEVICE_IP || '192.168.18.11';
+  const devicePort = process.env.EASYBIO_DEVICE_PORT || '4370';
+  const authenticatedUser = (req as any).user?.email || (req as any).user?.name || (req as any).user?.uid || 'Staff / Authorized LAN User';
+
+  console.log('[GATE] Request received');
+  console.log(`[GATE] Authenticated user = ${authenticatedUser}`);
+  console.log(`[GATE] Device IP = ${deviceIp}:${devicePort}`);
+  console.log('[GATE] Calling existing door-open function');
+
+  try {
+    let { deviceId } = req.body || {};
     if (!deviceId) {
-      const devicesList = await db.getDevices();
-      const firstEnabled = devicesList.find(d => d.enabled === true);
-      deviceId = firstEnabled ? firstEnabled.id : 'dev_k90_main';
+      try {
+        const devicesList = await db.getDevices();
+        const firstEnabled = devicesList.find((d: any) => d.enabled === true);
+        deviceId = firstEnabled ? firstEnabled.id : 'dev_k90_main';
+      } catch (e) {
+        deviceId = 'dev_k90_main';
+      }
     }
 
     if (deviceId) {
-      await db.updateDevice(deviceId, { unlockPending: true });
-      await db.addDeviceLog({
-        deviceId,
-        deviceName: 'Access Control',
-        level: 'SUCCESS',
-        message: '[Access Control] Manual gate unlock signal delivered to ESSL K90 Pro.'
-      });
+      try {
+        await db.updateDevice(deviceId, { unlockPending: true });
+        await db.addDeviceLog({
+          deviceId,
+          deviceName: 'Access Control',
+          level: 'SUCCESS',
+          message: `[Access Control] Manual gate unlock signal delivered to EasyBio (${deviceIp}:${devicePort}).`
+        });
+      } catch (e) {}
     }
 
-    // Direct physical hardware relay unlock signal to ESSL K90 Pro at 192.168.18.11:4370
-    exec(`python -c "from zk import ZK; zk=ZK('192.168.18.11', port=4370, timeout=4); conn=zk.connect(); conn.unlock(50); conn.disconnect()"`, (err) => {
-      if (err) console.warn('[Gate Unlock Exec Error]:', err.message);
-      else console.log('[Gate Unlock Success] Gate relay open signal delivered to ESSL K90 Pro hardware.');
-    });
+    // Direct physical hardware relay unlock signal to EasyBio terminal via Python pyzk socket
+    const pyCmd = `python -c "from zk import ZK; zk=ZK('${deviceIp}', port=${devicePort}, timeout=4); conn=zk.connect(); conn.unlock(50); conn.disconnect()"`;
 
-    res.json({ success: true, message: 'Unlock signal sent to physical gate successfully' });
+    exec(pyCmd, (err, stdout, stderr) => {
+      if (err) {
+        console.error('[GATE] Device response error:', err.message);
+        console.log('[GATE] FAILURE');
+        return res.status(500).json({
+          success: false,
+          message: `Physical device connection failed (${deviceIp}): ${err.message}`,
+          deviceIp,
+          timestamp: new Date().toLocaleTimeString('en-IN')
+        });
+      } else {
+        console.log('[GATE] Device response = Door Unlocked.');
+        console.log('[GATE] SUCCESS');
+        return res.json({
+          success: true,
+          message: 'Door unlocked',
+          deviceIp,
+          devicePort,
+          timestamp: new Date().toLocaleTimeString('en-IN')
+        });
+      }
+    });
   } catch (error: any) {
-    res.json({ success: true, message: 'Unlock signal executed' });
+    console.error('[GATE] FAILURE:', error.message);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to trigger gate unlock',
+      deviceIp
+    });
   }
 };
 

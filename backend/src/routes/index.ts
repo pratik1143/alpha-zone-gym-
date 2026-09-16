@@ -7,7 +7,7 @@ import {
   deleteMember, toggleFreezeMember, resetMemberPassword, sendMemberCredentials, renewMembership,
   upgradeMembership
 } from '../controllers/member.controller';
-import { getAttendanceFeed, createCheckIn, checkoutLog, triggerGateUnlock, getAccessLogs, getDoorStatus, getDashboardAnalyticsFeed, getAttendanceSummaryFeed } from '../controllers/attendance.controller';
+import { getAttendanceFeed, createCheckIn, checkoutLog, triggerGateUnlock, getGateStatus, getAccessLogs, getDoorStatus, getDashboardAnalyticsFeed, getAttendanceSummaryFeed } from '../controllers/attendance.controller';
 import { getDevices, createDevice, updateDevice, deleteDevice, getDeviceLogs, triggerSimulationTap, restartDevice, queueConnectionTest, queueReadUsers, queueReadAttendance, getTesterStatus, queueSyncFirebase, queueImportUsers, startEnrollFingerprint, deleteEnrollment, syncMemberToDevice, getEnrollmentStatus, getPythonStatus, getLatestPunch, autoMapAllBiometrics } from '../controllers/device.controller';
 import { getInvoices, createInvoice, updateInvoice, markPaymentPaid } from '../controllers/billing.controller';
 import { 
@@ -34,9 +34,13 @@ const router = Router();
 router.post('/auth/login', loginUser);
 router.get('/python/status', getPythonStatus);
 router.get('/system/health', getPythonStatus);
+router.get('/gate/status', getGateStatus);
 
 // Protect all CRM / dashboard operations
 router.use(authenticateToken);
+
+// Dedicated Gate Control & Hardware Routes
+router.post('/gate/open', triggerGateUnlock);
 
 // Universal Global Search API
 router.get('/search', globalSearch);
@@ -100,6 +104,10 @@ router.post('/devices/testing/seed-users', seedDeviceUsers);
 router.get('/migrations', getMigrations);
 
 // Smart Biometric Enrollment
+router.post('/devices/enroll-user', startEnrollFingerprint);
+router.post('/devices/enroll-fingerprint', startEnrollFingerprint);
+router.post('/devices/delete-enrollment', deleteEnrollment);
+router.post('/devices/sync-member', syncMemberToDevice);
 router.post('/devices/biometric/enroll-fingerprint', startEnrollFingerprint);
 router.post('/devices/biometric/delete', deleteEnrollment);
 router.post('/devices/biometric/sync', syncMemberToDevice);

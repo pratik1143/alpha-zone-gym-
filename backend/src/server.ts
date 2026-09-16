@@ -42,16 +42,25 @@ app.get('/health', (req: express.Request, res: express.Response) => {
   res.json({ status: 'healthy', service: 'alpha-zone-os-api', timestamp: new Date().toISOString() });
 });
 
+import { getLocalIpAddress } from './controllers/attendance.controller';
+
 if (process.env.VERCEL) {
   // In Vercel serverless environment, just export the app
-  // Cron jobs will not run automatically in serverless mode unless triggered by Vercel Cron.
   module.exports = app;
 } else {
-  // Boot the server locally
-  app.listen(PORT, async () => {
+  // Boot the server locally bound to 0.0.0.0 for GYM LAN availability
+  const numPort = Number(PORT) || 5000;
+  app.listen(numPort, '0.0.0.0', async () => {
+    const lanIp = getLocalIpAddress();
+    const deviceIp = process.env.EASYBIO_DEVICE_IP || '192.168.18.11';
     console.log(`===================================================`);
-    console.log(`  ALPHA ZONE OS Backend API running on port ${PORT}`);
-    console.log(`  Access routes: http://localhost:${PORT}/api`);
+    console.log(`  ALPHA ZONE GYM — GATE CONTROL & BACKEND SERVER`);
+    console.log(`===================================================`);
+    console.log(`  Status       : ONLINE`);
+    console.log(`  Local URL    : http://127.0.0.1:${numPort}/api`);
+    console.log(`  LAN URL      : http://${lanIp}:${numPort}/api`);
+    console.log(`  Gate Control : http://${lanIp}:${numPort}/gate-control`);
+    console.log(`  EasyBio Device: ${deviceIp}`);
     console.log(`===================================================`);
 
     try {

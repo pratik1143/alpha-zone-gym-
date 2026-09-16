@@ -8,6 +8,7 @@ import API from '@/services/api';
 import { useGymStore } from '@/store';
 import { membershipEngine } from '@/lib/engines/membershipEngine';
 import toast from '@/lib/toast';
+import { useRouter } from 'next/navigation';
 
 import SuccessPopup from './popups/SuccessPopup';
 import UnknownPopup from './popups/UnknownPopup';
@@ -23,11 +24,12 @@ interface PopupData {
 }
 
 export default function AttendancePopupManager() {
+  const router = useRouter();
   const [queue, setQueue] = useState<PopupData[]>([]);
   const [activePopup, setActivePopup] = useState<PopupData | null>(null);
   const processedDocIds = useRef<Set<string>>(new Set());
 
-  // Audio elements or synthesized sounds can be triggered here
+  // Audio elements / chime player
   const playSound = (type: string) => {
     try {
       const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
@@ -68,26 +70,27 @@ export default function AttendancePopupManager() {
     if (!docId || processedDocIds.current.has(docId)) return;
     processedDocIds.current.add(docId);
 
-    // Strictly suppress popups for punches older than 15 seconds
+    // Suppress popups for punches older than 20 seconds
     const rawTimeStr = data.checkIn || data.timestamp || data.createdAt;
     if (rawTimeStr) {
       const punchMs = new Date(rawTimeStr).getTime();
       const nowMs = Date.now();
       const ageSec = (nowMs - punchMs) / 1000;
-      if (ageSec > 15 || ageSec < -5) {
+      if (ageSec > 20 || ageSec < -5) {
         return;
       }
     }
 
     const members = useGymStore.getState().members;
     const match = members.find((m: any) =>
+      (m.biometricId && data.biometricId && String(m.biometricId).trim() === String(data.biometricId).trim()) ||
+      (m.deviceUserId && data.biometricId && String(m.deviceUserId).trim() === String(data.biometricId).trim()) ||
+      (m.clientId && data.biometricId && String(m.clientId).trim() === String(data.biometricId).trim()) ||
+      (m.customId && data.biometricId && String(m.customId).trim() === String(data.biometricId).trim()) ||
       (m.id && data.memberId && m.id === data.memberId) ||
       (m.uid && data.memberId && m.uid === data.memberId) ||
       (m.memberId && data.memberId && m.memberId === data.memberId) ||
       (m.memberId && data.memberCode && m.memberId === data.memberCode) ||
-      (m.biometricId && data.biometricId && m.biometricId === data.biometricId) ||
-      (m.biometricId && data.deviceUserId && m.biometricId === data.deviceUserId) ||
-      (m.deviceUserId && data.biometricId && m.deviceUserId === data.biometricId) ||
       (m.phone && data.phone && String(m.phone).replace(/\D/g, '') === String(data.phone).replace(/\D/g, '')) ||
       (m.name && data.memberName && m.name.trim().toLowerCase() === String(data.memberName).trim().toLowerCase())
     );
@@ -96,7 +99,7 @@ export default function AttendancePopupManager() {
 
     if (data.status === 'duplicate' || data.method === 'duplicate' || data.isDuplicate) {
       type = 'duplicate';
-    } else if (data.status === 'unknown' || (data.memberName && String(data.memberName).toLowerCase().includes('unmapped'))) {
+    } else if (data.status === 'unknown' || (data.memberName && String(data.memberName).toLowerCase().includes('unmapped')) || (!match && data.unmapped)) {
       type = 'unknown';
     } else if (data.status === 'denied') {
       if (data.reason?.toLowerCase().includes('blacklisted')) type = 'blacklisted';
@@ -117,27 +120,75 @@ export default function AttendancePopupManager() {
       ? new Date(rawTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })
       : new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
 
+    const formattedDate = rawTime
+      ? new Date(rawTime).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+      : new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+
+    // Birthday & Anniversary Check
+    const dobStr = match?.dob || match?.dateOfBirth;
+    let isBirthday = false;
+    if (dobStr) {
+      try {
+        const d = new Date(dobStr);
+        const today = new Date();
+        isBirthday = d.getMonth() === today.getMonth() && d.getDate() === today.getDate();
+      } catch (e) {}
+    }
+
+    const joinStr = match?.joinDate || match?.startDate || match?.createdAt;
+    let isAnniversary = false;
+    let anniversaryYears = 0;
+    if (joinStr) {
+      try {
+        const j = new Date(joinStr);
+        const today = new Date();
+        if (j.getMonth() === today.getMonth() && j.getDate() === today.getDate()) {
+          anniversaryYears = today.getFullYear() - j.getFullYear();
+          if (anniversaryYears > 0) isAnniversary = true;
+        }
+      } catch (e) {}
+    }
+
+    // Payment Status calculation
+    const rawPaid = Number(match?.amountPaid ?? match?.paid ?? match?.totalPaid ?? 0);
+    const rawPending = Number(match?.pendingAmount ?? match?.balanceAmount ?? match?.outstandingBalance ?? 0);
+    const payStatus = rawPending <= 0 ? 'FULLY PAID' : (rawPaid > 0 ? 'PARTIAL' : 'PENDING');
+
     const popupData: PopupData = {
       id: docId,
       type,
       data: {
+        rawId: match?.id || data.memberId,
         memberName: match?.name || data.memberName || 'Athlete',
-        memberCode: match?.biometricId || match?.deviceUserId || match?.clientId || match?.customId || match?.memberId || data.memberCode || data.memberId || 'AZ-2026-0001',
+        memberCode: match?.memberId || match?.clientId || match?.customId || data.memberCode || data.memberId || '#AZ-2026-0001',
+        biometricId: data.biometricId || match?.biometricId || match?.deviceUserId || '1',
         timestamp: formattedTime,
-        deviceName: data.deviceName || data.method || 'ESSL K90 Pro',
+        dateStr: formattedDate,
+        deviceName: data.deviceName || 'EasyBio ESSL K90 Pro',
+        method: data.method || 'Fingerprint',
         branch: match?.branch || data.branch || 'Mohali, Punjab',
-        avatarUrl: match?.photo || match?.avatarUrl || match?.avatar || data.avatarUrl || data.photo || '',
-        plan: match?.plan || 'Monthly Standard',
-        trainer: match?.trainer || 'No PT Assigned',
+        avatarUrl: match?.photo || match?.avatarUrl || match?.avatar || match?.profilePhotoUrl || data.avatarUrl || data.photo || '',
+        plan: match?.plan || match?.packageName || 'Monthly Standard',
+        status: (match?.status || 'active').toUpperCase(),
+        startDate: match?.startDate || match?.joinDate || 'N/A',
+        expiryDate: match?.expiryDate || 'N/A',
         remainingDays: days > 0 ? days : 0,
         expiredDays: days < 0 ? Math.abs(days) : 0,
+        payStatus,
+        phone: match?.phone || data.phone || '',
+        dob: dobStr || '',
+        gender: match?.gender || '',
+        isBirthday,
+        isAnniversary,
+        anniversaryYears,
+        trainer: match?.trainer || '',
         workout: 'Push Day',
-        reason: data.reason
+        reason: data.reason || 'Attendance Recorded'
       }
     };
 
-    const memberName = match?.name || data.memberName || `ID #${data.biometricId || data.memberId || '1145'}`;
-    const toastTitle = type === 'unknown' ? 'Unmapped Biometric Punch' : (type === 'duplicate' ? 'Already Inside' : 'Attendance Marked');
+    const memberName = match?.name || data.memberName || `Biometric User #${data.biometricId || data.memberId || '1'}`;
+    const toastTitle = type === 'unknown' ? 'Unmapped Biometric Punch' : (type === 'duplicate' ? 'Already Checked In' : 'Attendance Marked');
     toast(`⚡ ${toastTitle}: ${memberName}`, {
       icon: type === 'success' ? '🟢' : type === 'duplicate' ? '🔵' : type === 'unknown' ? '🟡' : '🔴',
       duration: 5000,
@@ -151,7 +202,6 @@ export default function AttendancePopupManager() {
   useEffect(() => {
     let isMounted = true;
     
-    // Set initial baseline punch on mount to prevent stale popups
     API.get('/attendance/latest-punch').then(res => {
       const latest = res.data?.latestPunch;
       if (latest && isMounted) {
@@ -191,7 +241,6 @@ export default function AttendancePopupManager() {
       (snapshot) => {
         if (isInitialLoad) {
           isInitialLoad = false;
-          // Baseline: mark all historical docs in snapshot as already processed
           snapshot.docs.forEach(doc => processedDocIds.current.add(doc.id));
           return;
         }
@@ -222,12 +271,12 @@ export default function AttendancePopupManager() {
     }
   }, [queue, activePopup]);
 
-  // Auto Close Manager (4 seconds)
+  // Auto Close Manager (7 seconds)
   useEffect(() => {
     if (activePopup) {
       const timer = setTimeout(() => {
         setActivePopup(null);
-      }, 4000);
+      }, 7000);
 
       return () => clearTimeout(timer);
     }
@@ -237,26 +286,25 @@ export default function AttendancePopupManager() {
     setActivePopup(null);
   };
 
-  const handleRegister = () => {
+  const handleViewMember = (memberId?: string) => {
     handleClose();
-    toast('Open Add Member Wizard here...');
-  };
-
-  const handleMap = () => {
-    handleClose();
-    toast('Open Map Existing Member here...');
+    if (memberId) {
+      router.push(`/dashboard/members/${memberId}`);
+    } else {
+      router.push('/dashboard/members');
+    }
   };
 
   return (
-    <div className="fixed top-6 right-6 z-[9999] flex flex-col gap-4 pointer-events-none">
+    <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-slate-950/40 backdrop-blur-xs pointer-events-none">
       <AnimatePresence>
         {activePopup && (
           <div className="pointer-events-auto">
-            {activePopup.type === 'success' && <SuccessPopup data={activePopup.data} onClose={handleClose} />}
-            {activePopup.type === 'unknown' && <UnknownPopup data={activePopup.data} onClose={handleClose} onRegister={handleRegister} onMap={handleMap} />}
+            {activePopup.type === 'success' && <SuccessPopup data={activePopup.data} onClose={handleClose} onViewMember={() => handleViewMember(activePopup.data.rawId)} />}
+            {activePopup.type === 'unknown' && <UnknownPopup data={activePopup.data} onClose={handleClose} onRegister={() => handleViewMember()} onMap={() => handleViewMember()} />}
             {activePopup.type === 'duplicate' && <DuplicatePopup data={activePopup.data} onClose={handleClose} />}
-            {activePopup.type === 'expired' && <ExpiredPopup data={activePopup.data} onClose={handleClose} onRenew={() => { handleClose(); toast('Open Renew'); }} />}
-            {activePopup.type === 'frozen' && <FrozenPopup data={activePopup.data} onClose={handleClose} onResume={() => { handleClose(); toast('Resume'); }} />}
+            {activePopup.type === 'expired' && <ExpiredPopup data={activePopup.data} onClose={handleClose} onRenew={() => handleViewMember(activePopup.data.rawId)} />}
+            {activePopup.type === 'frozen' && <FrozenPopup data={activePopup.data} onClose={handleClose} onResume={() => handleViewMember(activePopup.data.rawId)} />}
             {activePopup.type === 'blacklisted' && <BlacklistedPopup data={activePopup.data} onClose={handleClose} />}
           </div>
         )}
