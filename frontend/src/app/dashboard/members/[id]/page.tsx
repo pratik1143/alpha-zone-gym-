@@ -28,7 +28,7 @@ import UpgradeModal from '../components/UpgradeModal';
 import ProfileTab from './components/ProfileTab';
 import BillingTab from './components/BillingTab';
 import CommunicationTab from './components/CommunicationTab';
-import AttendanceTab, { buildAttendanceSessions } from './components/AttendanceTab';
+import AttendanceTab, { buildAttendanceSessions, isLogForMember } from './components/AttendanceTab';
 
 const TABS = [
   'Profile', 'Billing', 'Communication', 'Attendance'
@@ -123,18 +123,7 @@ export default function ClientProfileSystem() {
       if (!isMounted) return;
       const rawLogs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
 
-      const memberLogs = rawLogs.filter((log: any) => {
-        if (!log) return false;
-        const lMemberId = String(log.memberId || log.memberCode || log.uid || '').trim();
-        const lBioId = String(log.biometricId || log.deviceUserId || log.bioId || '').trim();
-        const lPhone = log.phone ? String(log.phone).replace(/\D/g, '').slice(-10) : '';
-
-        if (docId && lMemberId && docId === lMemberId) return true;
-        if (memberCode && lMemberId && memberCode === lMemberId) return true;
-        if (bioId && lBioId && bioId === lBioId) return true;
-        if (phone && lPhone && phone === lPhone) return true;
-        return false;
-      });
+      const memberLogs = rawLogs.filter((log: any) => isLogForMember(log, member));
 
       const sessions = buildAttendanceSessions(memberLogs);
       setRealAttendanceCount(sessions.length);
