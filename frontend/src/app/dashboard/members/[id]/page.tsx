@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { db } from '@/lib/firebase';
-import { doc, onSnapshot, collection, query, where, updateDoc } from 'firebase/firestore';
+import { doc, onSnapshot, collection, query, where, updateDoc, getDocs } from 'firebase/firestore';
 import toast from '@/lib/toast';
 import { membershipEngine } from '@/lib/engines/membershipEngine';
 import { paymentEngine } from '@/lib/engines/paymentEngine';
@@ -67,10 +67,10 @@ export default function ClientProfileSystem() {
   }, [showQuickMenu]);
 
   useEffect(() => {
-    if (searchParams && searchParams.get('renew') === 'true') {
-      setShowRenewalModal(true);
+    if (searchParams && searchParams.get('renew') === 'true' && id) {
+      router.push(`/dashboard/billing/create?mode=renew&id=${encodeURIComponent(id)}`);
     }
-  }, [searchParams]);
+  }, [searchParams, id, router]);
 
   const handleSavePhoto = async (photoUrl: string) => {
     if (!member) return;
@@ -171,13 +171,69 @@ export default function ClientProfileSystem() {
   const outstanding = Math.max(0, rawOutstanding);
   const payStatus = isMemberPaid ? 'PAID' : (outstanding <= 0 ? 'PAID' : paymentEngine.calculatePaymentStatus(totalInvoiced, totalPaid));
 
-  // ── SELF HEAL & FALLBACK member fetch ───────────────────────────
+  // ── SELF HEAL & FALLBACK member fetch (Multi-field Resilient Lookup) ──
   useEffect(() => {
     if (!id) return;
     setLoading(true);
     let isMounted = true;
 
+    const findInStore = (searchId: string) => {
+      const storeMembers = useGymStore.getState().members || [];
+      const target = String(searchId).trim().toLowerCase();
+      const cleanNum = target.replace(/^(az-2026-|az-)/i, '');
+
+      return storeMembers.find((m: any) => {
+        if (!m) return false;
+        const mId = String(m.id || '').toLowerCase();
+        const mUid = String(m.uid || '').toLowerCase();
+        const mDocId = String(m.docId || '').toLowerCase();
+        const mMemberId = String(m.memberId || '').toLowerCase();
+        const mClientId = String(m.clientId || '').toLowerCase();
+        const mCode = String(m.memberCode || '').toLowerCase();
+        const mPhone = String(m.phone || '').replace(/\D/g, '');
+
+        if (mId === target || mUid === target || mDocId === target || mMemberId === target || mClientId === target || mCode === target) {
+          return true;
+        }
+        if (mPhone && target.replace(/\D/g, '') && (mPhone === target.replace(/\D/g, '') || mPhone.endsWith(target.replace(/\D/g, '')))) {
+          return true;
+        }
+        if (cleanNum && cleanNum.length >= 2) {
+          const mCleanMember = mMemberId.replace(/^(az-2026-|az-)/i, '');
+          const mCleanClient = mClientId.replace(/^(az-2026-|az-)/i, '');
+          if (mCleanMember === cleanNum || mCleanClient === cleanNum) return true;
+        }
+        return false;
+      });
+    };
+
     const fetchFallbackMember = async () => {
+      // 1. Check local store
+      const storeMatch = findInStore(id);
+      if (storeMatch && isMounted) {
+        setMember(storeMatch);
+        setLoading(false);
+        return;
+      }
+
+      // 2. Query Firestore by alternative key fields
+      try {
+        const memCol = collection(db, 'members');
+        const qFields = ['memberId', 'clientId', 'uid', 'docId', 'phone', 'memberCode'];
+        for (const field of qFields) {
+          const snap = await getDocs(query(memCol, where(field, '==', id)));
+          if (!snap.empty && isMounted) {
+            const d = snap.docs[0];
+            setMember({ id: d.id, ...d.data() });
+            setLoading(false);
+            return;
+          }
+        }
+      } catch (err) {
+        console.warn('Firestore query lookup notice:', err);
+      }
+
+      // 3. Call API single member endpoint
       try {
         const res = await API.get(`/members/${id}`);
         if (res.data && isMounted) {
@@ -186,13 +242,11 @@ export default function ClientProfileSystem() {
           return;
         }
       } catch (e) {
-        console.warn('API single member fetch failed, checking local store:', e);
+        console.warn('API single member fetch failed:', e);
       }
 
-      const storeMembers = useGymStore.getState().members;
-      const foundInStore = storeMembers.find((m: any) => m.id === id || m.uid === id || m.memberId === id);
       if (isMounted) {
-        setMember(foundInStore || null);
+        setMember(null);
         setLoading(false);
       }
     };
@@ -426,8 +480,8 @@ export default function ClientProfileSystem() {
                       </span>
                     )}
                     <button
-                      onClick={() => setShowUpgradeModal(true)}
-                      className="ml-1 px-2.5 py-0.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-md text-[10px] font-black uppercase tracking-wider flex items-center gap-1 transition-all shadow-2xs border-none cursor-pointer"
+                      onClick={() => router.push(`/dashboard/billing/create?mode=upgrade&id=${id}`)}
+                      className="ml-1 px-2.5 py-0.5 bg-[#0B5CBE] hover:bg-blue-700 text-white rounded-md text-[10px] font-black uppercase tracking-wider flex items-center gap-1 transition-all shadow-2xs border-none cursor-pointer"
                       title="Upgrade Package"
                     >
                       <TrendingUp size={11} /> Upgrade
@@ -523,16 +577,16 @@ export default function ClientProfileSystem() {
             {/* Action Buttons Group */}
             <div className="flex items-center gap-2 shrink-0 flex-wrap sm:flex-nowrap">
               <button
-                onClick={() => setShowUpgradeModal(true)}
-                className="flex-1 sm:flex-none h-11 px-4 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-xl flex items-center justify-center gap-1.5 text-xs font-black transition-all cursor-pointer shadow-xs hover:shadow-[0_4px_12px_rgba(139,92,246,0.3)] active:scale-[0.98] border-none"
+                onClick={() => router.push(`/dashboard/billing/create?mode=upgrade&id=${id}`)}
+                className="flex-1 sm:flex-none h-11 px-4 bg-gradient-to-r from-[#0B5CBE] to-[#064A9B] hover:from-[#064A9B] hover:to-[#083F82] text-white rounded-xl flex items-center justify-center gap-1.5 text-xs font-black transition-all cursor-pointer shadow-xs active:scale-[0.98] border-none"
                 title="Upgrade Membership Package"
               >
                 <TrendingUp size={14} /> Upgrade
               </button>
 
               <button
-                onClick={() => setShowPtModal(true)}
-                className="flex-1 sm:flex-none h-11 px-4 bg-[#0066FF] hover:bg-blue-700 text-white rounded-xl flex items-center justify-center gap-1.5 text-xs font-black transition-all cursor-pointer shadow-xs hover:shadow-[0_4px_12px_rgba(0,102,255,0.3)] active:scale-[0.98] border-none"
+                onClick={() => router.push(`/dashboard/billing/create?mode=pt&id=${id}`)}
+                className="flex-1 sm:flex-none h-11 px-4 bg-[#0B5CBE] hover:bg-blue-700 text-white rounded-xl flex items-center justify-center gap-1.5 text-xs font-black transition-all cursor-pointer shadow-xs active:scale-[0.98] border-none"
                 title="Add Personal Training Bill"
               >
                 <Dumbbell size={14} /> + Add PT Bill
@@ -581,22 +635,22 @@ export default function ClientProfileSystem() {
                       <Camera size={13} className="text-slate-400" /> Change Photo
                     </button>
                     <button
-                      onClick={() => { setShowQuickMenu(false); setShowUpgradeModal(true); }}
-                      className="w-full px-3 py-2 text-left hover:bg-purple-50 text-purple-700 rounded-xl flex items-center gap-2 text-xs font-bold transition-colors border-none bg-transparent cursor-pointer"
+                      onClick={() => { setShowQuickMenu(false); router.push(`/dashboard/billing/create?mode=upgrade&id=${id}`); }}
+                      className="w-full px-3 py-2 text-left hover:bg-blue-50 text-[#0B5CBE] rounded-xl flex items-center gap-2 text-xs font-bold transition-colors border-none bg-transparent cursor-pointer"
                     >
-                      <TrendingUp size={13} className="text-purple-600" /> Upgrade Package
+                      <TrendingUp size={13} className="text-[#0B5CBE]" /> Upgrade Package
                     </button>
                     <button
-                      onClick={() => { setShowQuickMenu(false); setShowRenewalModal(true); }}
-                      className="w-full px-3 py-2 text-left hover:bg-slate-50 rounded-xl flex items-center gap-2 text-xs font-bold text-slate-700 transition-colors border-none bg-transparent cursor-pointer"
+                      onClick={() => { setShowQuickMenu(false); router.push(`/dashboard/billing/create?mode=renew&id=${id}`); }}
+                      className="w-full px-3 py-2 text-left hover:bg-blue-50 text-blue-700 rounded-xl flex items-center gap-2 text-xs font-bold transition-colors border-none bg-transparent cursor-pointer"
                     >
                       <Repeat size={13} className="text-blue-600" /> Renew Membership
                     </button>
                     <button
-                      onClick={() => { setShowQuickMenu(false); setShowPtModal(true); }}
-                      className="w-full px-3 py-2 text-left hover:bg-slate-50 rounded-xl flex items-center gap-2 text-xs font-bold text-slate-700 transition-colors border-none bg-transparent cursor-pointer"
+                      onClick={() => { setShowQuickMenu(false); router.push(`/dashboard/billing/create?mode=pt&id=${id}`); }}
+                      className="w-full px-3 py-2 text-left hover:bg-blue-50 text-blue-700 rounded-xl flex items-center gap-2 text-xs font-bold transition-colors border-none bg-transparent cursor-pointer"
                     >
-                      <Dumbbell size={13} className="text-indigo-600" /> Add PT Bill
+                      <Dumbbell size={13} className="text-[#0B5CBE]" /> Add PT Bill
                     </button>
                     <div className="border-t border-slate-100 my-1" />
                     <button

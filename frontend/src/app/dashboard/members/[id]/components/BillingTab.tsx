@@ -81,156 +81,161 @@ export default function BillingTab({ member: initialMember }: { member: any }) {
     };
   }, [openDropdown]);
 
-  // Real-time listener for member invoices
+  // Real-time listener for member invoices (Multi-field Resilient Matching)
   useEffect(() => {
     if (!member) return;
     setLoading(true);
 
-    const fallbackInvoices = Array.isArray(member.billingHistory) && member.billingHistory.length > 0
-      ? member.billingHistory
-      : (Array.isArray(member.payments) && member.payments.length > 0 ? member.payments : []);
+    const embeddedHistory = [
+      ...(Array.isArray(member.billingHistory) ? member.billingHistory : []),
+      ...(Array.isArray(member.payments) ? member.payments : []),
+      ...(Array.isArray(member.membershipHistory) ? member.membershipHistory : []),
+      ...(Array.isArray(member.ptHistory) ? member.ptHistory : [])
+    ];
 
     const memberDocIds = new Set([
-      member.id, member.uid, member.memberId,
+      member.id, member.uid, member.memberId, member.clientId, member.memberCode, member.docId,
       member.id && String(member.id),
-      member.memberId && String(member.memberId)
-    ].filter(Boolean));
+      member.memberId && String(member.memberId),
+      member.clientId && String(member.clientId),
+    ].filter(Boolean).map(x => String(x).toLowerCase()));
+
+    const cleanMemberNums = new Set(
+      Array.from(memberDocIds).map(x => x.replace(/^(az-2026-|az-)/i, ''))
+    );
 
     const rawPhone = (member.phone || '').replace(/\D/g, '');
+
+    const isMemberMatch = (inv: any) => {
+      if (!inv || inv.deleted === true || String(inv.status || '').toLowerCase() === 'void' || inv.isDuplicate === true) {
+        return false;
+      }
+      const invMemId = String(inv.memberId || inv.clientId || inv.uid || inv.docId || inv.memberCode || '').trim().toLowerCase();
+      const invCleanNum = invMemId.replace(/^(az-2026-|az-)/i, '');
+      const invPhone = String(inv.memberPhone || inv.phone || '').replace(/\D/g, '');
+
+      if (invMemId && (memberDocIds.has(invMemId) || cleanMemberNums.has(invCleanNum))) {
+        return true;
+      }
+      if (rawPhone && invPhone && (invPhone === rawPhone || invPhone.endsWith(rawPhone) || rawPhone.endsWith(invPhone))) {
+        return true;
+      }
+      return false;
+    };
 
     const unsub = onSnapshot(collection(db, 'payments'), (snap) => {
       const allDocs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
 
-      // Find live non-deleted payment docs matching member ID or phone
-      const liveData = allDocs.filter((inv: any) => {
-        if (!inv || inv.deleted === true || String(inv.status || '').toLowerCase() === 'void' || inv.isDuplicate === true) {
-          return false;
-        }
-        const invMemId = String(inv.memberId || '').trim();
-        const invPhone = String(inv.memberPhone || inv.phone || '').replace(/\D/g, '');
-
-        const matchesId = invMemId && memberDocIds.has(invMemId);
-        const matchesPhone = rawPhone && invPhone && (invPhone === rawPhone || invPhone.endsWith(rawPhone) || rawPhone.endsWith(invPhone));
-
-        return matchesId || matchesPhone;
-      });
-
+      // Find live payment docs matching member ID or phone
+      const liveData = allDocs.filter(isMemberMatch);
       const combinedMap = new Map<string, any>();
 
-      if (liveData.length > 0) {
-        // Live Firestore invoices found — use them
-        liveData.forEach((inv: any) => {
-          const key = inv.id || inv.invoiceNumber || inv.invoice;
-          combinedMap.set(key, inv);
-        });
-      } else {
-        // No Firestore payment docs — use embedded data or auto-generate
-        if (fallbackInvoices.length > 0) {
-          fallbackInvoices.forEach((inv: any, idx: number) => {
-            const key = inv.id || inv.invoiceNumber || inv.invoice || `inv_${idx}`;
+      // 1. Add Firestore live payments
+      liveData.forEach((inv: any) => {
+        const key = inv.id || inv.invoiceNumber || inv.invoice || `inv_live_${Math.random()}`;
+        combinedMap.set(key, inv);
+      });
+
+      // 2. Add embedded history records if not already present
+      if (embeddedHistory.length > 0) {
+        embeddedHistory.forEach((inv: any, idx: number) => {
+          const key = inv.id || inv.invoiceNumber || inv.invoice || `inv_emb_${idx}`;
+          if (!combinedMap.has(key)) {
             combinedMap.set(key, inv);
-          });
+          }
+        });
+      }
+
+      // 3. Fallback Auto-Invoice generation if no payment records exist
+      if (combinedMap.size === 0 && member) {
+        const rawPaid = member.amountPaid ?? member.paid ?? member.totalPaid ?? member.paidAmount ?? member.amount ?? 0;
+        const rawBalance = member.balanceAmount ?? member.balance ?? member.outstandingBalance ?? member.balanceDue ?? member.dueAmount ?? member.pendingAmount ?? 0;
+        const rawPrice = member.price ?? member.packagePrice ?? member.planPrice ?? member.planAmount ?? member.totalBilled ?? member.amount ?? 0;
+
+        let extractedPrice = Number(rawPrice) || 0;
+
+        if (!extractedPrice && typeof member.plan === 'string') {
+          const match = member.plan.match(/₹?\s*([0-9,]+)/);
+          if (match) extractedPrice = Number(match[1].replace(/,/g, ''));
+        }
+        if (!extractedPrice && typeof member.packageName === 'string') {
+          const match = member.packageName.match(/₹?\s*([0-9,]+)/);
+          if (match) extractedPrice = Number(match[1].replace(/,/g, ''));
+        }
+        if (!extractedPrice && (member.plan || member.packageName)) {
+          extractedPrice = 5000;
         }
 
-        // Always generate an auto-invoice from member fields when no Firestore record exists
-        if (member) {
-          const rawPaid = member.amountPaid ?? member.paid ?? member.totalPaid ?? member.paidAmount ?? member.amount ?? 0;
-          const rawBalance = member.balanceAmount ?? member.balance ?? member.outstandingBalance ?? member.balanceDue ?? member.dueAmount ?? member.pendingAmount ?? 0;
-          const rawPrice = member.price ?? member.packagePrice ?? member.planPrice ?? member.planAmount ?? member.totalBilled ?? member.amount ?? 0;
+        let balanceAmount = Number(rawBalance) || 0;
+        let amountPaid = Number(rawPaid) || 0;
 
-          let extractedPrice = Number(rawPrice) || 0;
+        const isPaidOrActive = (member.paymentStatus || '').toLowerCase() === 'paid' ||
+                              (member.status || '').toLowerCase() === 'active' ||
+                              balanceAmount === 0;
 
-          if (!extractedPrice && typeof member.plan === 'string') {
-            const match = member.plan.match(/₹?\s*([0-9,]+)/);
-            if (match) {
-              extractedPrice = Number(match[1].replace(/,/g, ''));
-            }
-          }
-          if (!extractedPrice && typeof member.packageName === 'string') {
-            const match = member.packageName.match(/₹?\s*([0-9,]+)/);
-            if (match) {
-              extractedPrice = Number(match[1].replace(/,/g, ''));
-            }
-          }
-          if (!extractedPrice && (member.plan || member.packageName)) {
-            extractedPrice = 5000;
-          }
-
-          let balanceAmount = Number(rawBalance) || 0;
-          let amountPaid = Number(rawPaid) || 0;
-
-          const isPaidOrActive = (member.paymentStatus || '').toLowerCase() === 'paid' ||
-                                (member.status || '').toLowerCase() === 'active' ||
-                                balanceAmount === 0;
-
-          // If raw paid amount is missing, calculate paid amount from package price and balance due
-          if (amountPaid === 0 && (isPaidOrActive || balanceAmount > 0)) {
-            if (balanceAmount > 0 && extractedPrice > balanceAmount) {
-              amountPaid = extractedPrice - balanceAmount;
-            } else if (balanceAmount === 0) {
-              amountPaid = extractedPrice || 5000;
-            }
-          }
-
-          const totalBilled = Number(member.totalBilled) || (amountPaid + balanceAmount) || extractedPrice || 5000;
-          const planPrice = totalBilled || extractedPrice || 5000;
-          const netPayable = planPrice;
-
-          const payStatus = balanceAmount === 0
-            ? 'paid'
-            : (amountPaid > 0 ? 'partial' : 'pending');
-
-          const membershipLabel = member.packageName || (typeof member.plan === 'string' ? member.plan.split('₹')[0].trim() : 'General Membership') || 'General Membership';
-
-          const invNum = member.memberId
-            ? `INV-${String(member.memberId).replace('AZ-2026-', '').replace('AZ-', '')}`
-            : (member.clientId ? `INV-LEG-${member.clientId}` : `INV-AUTO-${member.id || '670'}`);
-
-          const autoInv = {
-            id: `inv_auto_${member.id || member.uid || Date.now()}`,
-            invoiceNumber: invNum,
-            invoice: invNum,
-            plan: membershipLabel,
-            packageName: membershipLabel,
-            amount: planPrice,
-            totalBilled: planPrice,
-            packagePrice: planPrice,
-            originalAmount: planPrice,
-            netPayable: netPayable,
-            baseAmount: planPrice,
-            paid: amountPaid,
-            amountPaid: amountPaid,
-            paidAmount: amountPaid,
-            amountPaidToday: amountPaid,
-            pendingAmount: balanceAmount,
-            balanceAmount: balanceAmount,
-            remainingBalance: balanceAmount,
-            outstandingAmount: balanceAmount,
-            discount: Number(member.discount) || 0,
-            discountAmount: Number(member.discount) || 0,
-            tax: Number(member.tax) || 0,
-            taxAmount: Number(member.tax) || 0,
-            method: member.paymentMethod || member.method || 'Cash',
-            paymentMethod: member.paymentMethod || member.method || 'Cash',
-            status: payStatus,
-            paymentStatus: payStatus,
-            billingType: 'membership',
-            date: member.startDate || member.joinDate || new Date().toISOString().split('T')[0],
-            startDate: member.startDate || member.joinDate || new Date().toISOString().split('T')[0],
-            expiryDate: member.expiryDate || '',
-            invoiceDate: member.startDate || member.joinDate || new Date().toISOString().split('T')[0],
-            createdAt: member.createdAt || member.joinDate || new Date().toISOString(),
-            memberId: member.id || member.uid,
-            memberName: member.name || 'Member',
-            memberPhone: member.phone || '',
-            isAutoGenerated: true,
-          };
-
-          const autoKey = autoInv.id;
-          if (!combinedMap.has(autoKey) && !combinedMap.has(autoInv.invoiceNumber)) {
-            combinedMap.set(autoKey, autoInv);
+        if (amountPaid === 0 && (isPaidOrActive || balanceAmount > 0)) {
+          if (balanceAmount > 0 && extractedPrice > balanceAmount) {
+            amountPaid = extractedPrice - balanceAmount;
+          } else if (balanceAmount === 0) {
+            amountPaid = extractedPrice || 5000;
           }
         }
+
+        const totalBilled = Number(member.totalBilled) || (amountPaid + balanceAmount) || extractedPrice || 5000;
+        const planPrice = totalBilled || extractedPrice || 5000;
+        const netPayable = planPrice;
+
+        const payStatus = balanceAmount === 0
+          ? 'paid'
+          : (amountPaid > 0 ? 'partial' : 'pending');
+
+        const membershipLabel = member.packageName || (typeof member.plan === 'string' ? member.plan.split('₹')[0].trim() : 'General Membership') || 'General Membership';
+
+        const invNum = member.memberId
+          ? `INV-${String(member.memberId).replace('AZ-2026-', '').replace('AZ-', '')}`
+          : (member.clientId ? `INV-LEG-${member.clientId}` : `INV-AUTO-${member.id || '670'}`);
+
+        const autoInv = {
+          id: `inv_auto_${member.id || member.uid || Date.now()}`,
+          invoiceNumber: invNum,
+          invoice: invNum,
+          plan: membershipLabel,
+          packageName: membershipLabel,
+          amount: planPrice,
+          totalBilled: planPrice,
+          packagePrice: planPrice,
+          originalAmount: planPrice,
+          netPayable: netPayable,
+          baseAmount: planPrice,
+          paid: amountPaid,
+          amountPaid: amountPaid,
+          paidAmount: amountPaid,
+          amountPaidToday: amountPaid,
+          pendingAmount: balanceAmount,
+          balanceAmount: balanceAmount,
+          remainingBalance: balanceAmount,
+          outstandingAmount: balanceAmount,
+          discount: Number(member.discount) || 0,
+          discountAmount: Number(member.discount) || 0,
+          tax: Number(member.tax) || 0,
+          taxAmount: Number(member.tax) || 0,
+          method: member.paymentMethod || member.method || 'Cash',
+          paymentMethod: member.paymentMethod || member.method || 'Cash',
+          status: payStatus,
+          paymentStatus: payStatus,
+          billingType: 'membership',
+          date: member.startDate || member.joinDate || new Date().toISOString().split('T')[0],
+          startDate: member.startDate || member.joinDate || new Date().toISOString().split('T')[0],
+          expiryDate: member.expiryDate || '',
+          invoiceDate: member.startDate || member.joinDate || new Date().toISOString().split('T')[0],
+          createdAt: member.createdAt || member.joinDate || new Date().toISOString(),
+          memberId: member.id || member.uid,
+          memberName: member.name || 'Member',
+          memberPhone: member.phone || '',
+          isAutoGenerated: true,
+        };
+
+        combinedMap.set(autoInv.id, autoInv);
       }
 
       const sorted = Array.from(combinedMap.values()).sort((a: any, b: any) => {
@@ -248,7 +253,7 @@ export default function BillingTab({ member: initialMember }: { member: any }) {
       setLoading(false);
     }, (err) => {
       console.warn("Firestore payments listener notice:", err);
-      setInvoices(fallbackInvoices);
+      setInvoices(embeddedHistory);
       setLoading(false);
     });
 
@@ -905,13 +910,12 @@ export default function BillingTab({ member: initialMember }: { member: any }) {
           <button
             type="button"
             onClick={() => {
-              setSelectedInvoiceForUpgrade(openDropdown.invoice);
-              setShowUpgradeModal(true);
+              router.push(`/dashboard/billing/create?mode=upgrade&id=${member.id}`);
               setOpenDropdown(null);
             }}
-            className="w-full px-4 py-2.5 hover:bg-purple-50 hover:text-purple-800 flex items-center gap-2.5 text-left border-none bg-transparent cursor-pointer text-purple-700 transition-colors font-extrabold"
+            className="w-full px-4 py-2.5 hover:bg-blue-50 hover:text-[#0B5CBE] flex items-center gap-2.5 text-left border-none bg-transparent cursor-pointer text-slate-800 transition-colors font-extrabold"
           >
-            <TrendingUp size={15} className="text-purple-600" />
+            <TrendingUp size={15} className="text-[#0B5CBE]" />
             <span>Upgrade Package</span>
           </button>
 
