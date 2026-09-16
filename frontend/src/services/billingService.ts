@@ -288,16 +288,55 @@ export function isInvoiceMatchingMember(inv: any, memberInfo: { keysSet: Set<str
 export function normalizeBillingTransaction(rawRecord: any, defaultMember?: any): NormalizedBillingTransaction {
   const r = rawRecord || {};
 
-  const origAmt = Number(r.originalAmount !== undefined ? r.originalAmount : (r.packagePrice || r.price || r.amount || r.totalBilled || 0));
+  let origAmt = Number(r.originalAmount !== undefined ? r.originalAmount : (r.packagePrice || r.price || r.amount || r.totalBilled || 0));
+  
+  // If original price is missing/0, attempt extraction from plan/packageName or defaultMember plan
+  if (origAmt === 0) {
+    origAmt = extractPriceFromPlanString(r.plan) ||
+              extractPriceFromPlanString(r.packageName) ||
+              extractPriceFromPlanString(defaultMember?.plan) ||
+              extractPriceFromPlanString(defaultMember?.packageName) || 0;
+  }
+
   const discAmt = Number(r.discountAmount !== undefined ? r.discountAmount : (r.discount || 0));
   const taxAmt = Number(r.taxAmount !== undefined ? r.taxAmount : (r.tax || r.gst || 0));
   const othAmt = Number(r.otherCharges || 0);
 
   const calcNet = Math.max(0, origAmt - discAmt + taxAmt + othAmt);
-  const netPayable = Number(r.netPayable !== undefined ? r.netPayable : (r.amount !== undefined ? r.amount : calcNet));
-  const amountPaid = Number(r.amountPaid !== undefined ? r.amountPaid : (r.paid !== undefined ? r.paid : (r.amountPaidToday !== undefined ? r.amountPaidToday : netPayable)));
+  let netPayable = Number(r.netPayable !== undefined ? r.netPayable : (r.amount !== undefined ? r.amount : calcNet));
+  if (netPayable === 0 && origAmt > 0) {
+    netPayable = origAmt;
+  }
 
-  const rawPending = r.pendingAmount !== undefined ? r.pendingAmount : (r.balanceAmount !== undefined ? r.balanceAmount : (r.outstandingAmount !== undefined ? r.outstandingAmount : (r.remainingBalance !== undefined ? r.remainingBalance : (netPayable - amountPaid))));
+  let amountPaid = Number(
+    r.amountPaid !== undefined ? r.amountPaid :
+    (r.paid !== undefined ? r.paid :
+    (r.amountPaidToday !== undefined ? r.amountPaidToday :
+    (r.paidAmount !== undefined ? r.paidAmount :
+    (r.totalPaid !== undefined ? r.totalPaid : 0))))
+  );
+
+  const defaultBalance = Number(
+    defaultMember?.outstandingBalance ??
+    defaultMember?.balanceAmount ??
+    defaultMember?.balanceDue ??
+    defaultMember?.dueAmount ??
+    defaultMember?.pendingAmount ?? 0
+  );
+
+  if (amountPaid === 0 && netPayable > 0) {
+    const isMemberPaid = (defaultMember?.paymentStatus || '').toLowerCase() === 'paid' ||
+                         (defaultMember?.status || '').toLowerCase() === 'active' ||
+                         defaultBalance === 0;
+    if (isMemberPaid) {
+      amountPaid = Math.max(0, netPayable - defaultBalance);
+      if (amountPaid === 0 && defaultBalance === 0) amountPaid = netPayable;
+    } else if (defaultMember?.totalPaid && defaultMember.totalPaid > 0) {
+      amountPaid = Number(defaultMember.totalPaid);
+    }
+  }
+
+  const rawPending = r.pendingAmount !== undefined ? r.pendingAmount : (r.balanceAmount !== undefined ? r.balanceAmount : (r.outstandingAmount !== undefined ? r.outstandingAmount : (r.remainingBalance !== undefined ? r.remainingBalance : Math.max(0, netPayable - amountPaid))));
   const pendingAmount = Math.max(0, Number(rawPending) || 0);
 
   let status: 'paid' | 'partial' | 'pending' | 'void' = 'paid';
@@ -377,7 +416,7 @@ export function calculateBillingSummary(transactions: NormalizedBillingTransacti
 }
 
 /**
- * 5. GET MEMBER BILLING TRANSACTIONS (REALTIME LISTENER WITH EMBEDDED FALLBACKS)
+ * 5. GET MEMBER BILLING TRANSACTIONS (REALTIME LISTENER WITH EMBEDDED FALLBACKS & STORE FALLBACK)
  */
 export function listenMemberBillingTransactions(
   member: any,
@@ -410,11 +449,16 @@ export function listenMemberBillingTransactions(
     ...(Array.isArray(member.ptHistory) ? member.ptHistory : [])
   ];
 
-  const unsub = onSnapshot(collection(db, 'payments'), (snap) => {
-    const allDocs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    const matchedDocs = allDocs.filter(inv => isInvoiceMatchingMember(inv, memberInfo));
-
+  const buildNormalizedList = (matchedDocs: any[]) => {
     const combinedMap = new Map<string, any>();
+
+    // 0. Store payments matching this member
+    const storePayments = typeof window !== 'undefined' ? (useGymStore.getState?.()?.payments || []) : [];
+    const matchedStoreDocs = storePayments.filter((inv: any) => isInvoiceMatchingMember(inv, memberInfo));
+    matchedStoreDocs.forEach((inv: any) => {
+      const key = inv.id || inv.invoiceNumber || inv.invoice || `store_${Math.random()}`;
+      combinedMap.set(key, inv);
+    });
 
     // 1. Live Firestore matches
     matchedDocs.forEach((inv: any) => {
@@ -430,8 +474,15 @@ export function listenMemberBillingTransactions(
       }
     });
 
-    // 3. Auto-generated fallback invoice if member has package/due info but no payment records
-    if (combinedMap.size === 0 && member) {
+    // 3. Check if combinedMap has valid payment records with price > 0
+    const hasValidPayment = Array.from(combinedMap.values()).some((inv: any) => {
+      if (!inv || inv.deleted === true || String(inv.status || '').toLowerCase() === 'void') return false;
+      const price = Number(inv.netPayable || inv.amount || inv.originalAmount || inv.price || extractPriceFromPlanString(inv.plan) || 0);
+      return price > 0;
+    });
+
+    // 4. Auto-generated fallback invoice if member has package/due info but no valid payment records
+    if (!hasValidPayment && member) {
       const rawPaid = member.amountPaid ?? member.paid ?? member.totalPaid ?? member.paidAmount ?? member.amount ?? 0;
       const rawBalance = member.balanceAmount ?? member.balance ?? member.outstandingBalance ?? member.balanceDue ?? member.dueAmount ?? member.pendingAmount ?? 0;
       const rawPrice = member.price ?? member.packagePrice ?? member.planPrice ?? member.planAmount ?? member.totalBilled ?? member.amount ?? 0;
@@ -498,7 +549,7 @@ export function listenMemberBillingTransactions(
       combinedMap.set(autoInv.id, autoInv);
     }
 
-    // 4. Normalize all records
+    // 5. Normalize all records
     const normalized = Array.from(combinedMap.values()).map(raw => normalizeBillingTransaction(raw, member));
 
     // Sort descending by date
@@ -524,27 +575,18 @@ export function listenMemberBillingTransactions(
       pending: summary.totalPending
     };
 
+    return { normalized, summary, diagnostics };
+  };
+
+  const unsub = onSnapshot(collection(db, 'payments'), (snap) => {
+    const allDocs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const matchedDocs = allDocs.filter(inv => isInvoiceMatchingMember(inv, memberInfo));
+    const { normalized, summary, diagnostics } = buildNormalizedList(matchedDocs);
     onUpdate(normalized, summary, diagnostics);
   }, (err) => {
     console.warn('[billingService] Firestore listener notice:', err);
-    const normalizedEmbedded = embeddedRaw.map(raw => normalizeBillingTransaction(raw, member));
-    const summary = calculateBillingSummary(normalizedEmbedded);
-
-    const diagnostics: BillingDiagnostics = {
-      memberDocId: String(member.id || member.docId || ''),
-      canonicalMemberId: String(member.memberId || member.clientId || member.id || ''),
-      allMemberKeys: Array.from(memberInfo.keysSet),
-      phoneMatched: memberInfo.phone,
-      nameMatched: memberInfo.name,
-      firestoreLiveCount: 0,
-      embeddedCount: embeddedRaw.length,
-      normalizedCount: normalizedEmbedded.length,
-      billed: summary.totalBilled,
-      collected: summary.totalCollected,
-      pending: summary.totalPending
-    };
-
-    onUpdate(normalizedEmbedded, summary, diagnostics);
+    const { normalized, summary, diagnostics } = buildNormalizedList([]);
+    onUpdate(normalized, summary, diagnostics);
   });
 
   return unsub;
