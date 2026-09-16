@@ -55,6 +55,57 @@ export async function migrateMissingBillingPhones(): Promise<{ migratedCount: nu
           migratedCount++;
         }
       }
+
+      // Auto-repair corrupted INV-161 (Pankaj) bill values if present in Firestore
+      const invNum = String(pData.invoiceNumber || pData.invoice || pDoc.id).trim();
+      const isPankajInv = invNum === 'INV-161' || (pData.memberName === 'Pankaj' && (pData.plan === '1 Month' || pData.memberPhone?.includes('8628029106')));
+      if (isPankajInv) {
+        const curOrig = Number(pData.originalAmount ?? pData.packagePrice ?? 0);
+        const curAmt = Number(pData.amount ?? pData.paid ?? pData.amountPaid ?? 0);
+        if (curOrig === 7500 || curAmt === 5500 || !pData.discountAmount || pData.discountAmount === 0) {
+          await updateDoc(doc(db, 'payments', pDoc.id), {
+            originalAmount: 2500,
+            packagePrice: 2500,
+            discountAmount: 500,
+            discount: 500,
+            netPayable: 2000,
+            amount: 2000,
+            amountPaid: 2000,
+            paid: 2000,
+            amountPaidToday: 2000,
+            pendingAmount: 0,
+            balanceAmount: 0,
+            outstandingAmount: 0,
+            status: 'paid',
+            paymentStatus: 'paid',
+            updatedAt: new Date().toISOString()
+          });
+
+          const pankajMember = memberMap.get(memberId) || memberMap.get('161');
+          if (pankajMember && pankajMember.id) {
+            await updateDoc(doc(db, 'members', pankajMember.id), {
+              price: 2500,
+              packagePrice: 2500,
+              discount: 500,
+              discountAmount: 500,
+              amount: 2000,
+              totalBilled: 2500,
+              totalPaid: 2000,
+              amountPaid: 2000,
+              paid: 2000,
+              paidAmount: 2000,
+              outstandingBalance: 0,
+              pendingAmount: 0,
+              balanceAmount: 0,
+              paymentStatus: 'paid',
+              status: 'active',
+              updatedAt: new Date().toISOString()
+            });
+          }
+          migratedCount++;
+          console.log('[Billing Migration] Repaired Pankaj INV-161: Package ₹2,500 - Discount ₹500 = ₹2,000 Paid.');
+        }
+      }
     }
 
     if (migratedCount > 0) {

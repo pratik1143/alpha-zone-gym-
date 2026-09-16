@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Calendar, Clock, X, Save, RefreshCw, Receipt, CheckCircle2, User, CreditCard, AlertCircle } from 'lucide-react';
+import { Calendar, Clock, X, Save, RefreshCw, Receipt, CheckCircle2, User, CreditCard, AlertCircle, DollarSign, Tag, Percent, Banknote, Smartphone, Landmark } from 'lucide-react';
 import { db } from '@/lib/firebase';
 import { doc, updateDoc } from 'firebase/firestore';
 import { PaymentRecord, getISTDateStr } from '@/hooks/useTodaysPayments';
@@ -25,6 +25,11 @@ export default function EditPaymentModal({
 }: EditPaymentModalProps) {
   const [transactionDate, setTransactionDate] = useState<string>('');
   const [transactionTime, setTransactionTime] = useState<string>('');
+  const [packagePrice, setPackagePrice] = useState<number>(0);
+  const [discount, setDiscount] = useState<number>(0);
+  const [amountPaid, setAmountPaid] = useState<number>(0);
+  const [paymentMethod, setPaymentMethod] = useState<string>('Cash');
+
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string>('');
 
@@ -50,19 +55,40 @@ export default function EditPaymentModal({
         rawTime = '05:30 PM';
       }
       setTransactionTime(rawTime);
+
+      const initDisc = Number(payment.discountAmount !== undefined ? payment.discountAmount : (payment.discount || 0));
+      const initPaid = Number(payment.amountPaid !== undefined ? payment.amountPaid : (payment.paid !== undefined ? payment.paid : 0));
+      const initOrig = Number(
+        payment.originalAmount !== undefined ? payment.originalAmount :
+        (payment.packagePrice !== undefined ? payment.packagePrice :
+        (payment.amount !== undefined ? Number(payment.amount) + initDisc : 2500))
+      );
+
+      setPackagePrice(initOrig);
+      setDiscount(initDisc);
+      setAmountPaid(initPaid || Math.max(0, initOrig - initDisc));
+      setPaymentMethod(String(payment.method || payment.paymentMethod || 'Cash'));
       setErrorMsg('');
     }
   }, [payment]);
 
   if (!isOpen || !payment) return null;
 
+  const netPayable = Math.max(0, packagePrice - discount);
+  const pendingAmount = Math.max(0, netPayable - amountPaid);
+  const calculatedStatus = pendingAmount <= 0 ? 'paid' : (amountPaid > 0 ? 'partial' : 'pending');
+
   const handleSave = async () => {
     if (!transactionDate) {
       setErrorMsg('Transaction Date is required.');
       return;
     }
-    if (!transactionTime) {
-      setErrorMsg('Transaction Time is required.');
+    if (packagePrice < 0) {
+      setErrorMsg('Package Fee cannot be negative.');
+      return;
+    }
+    if (discount > packagePrice) {
+      setErrorMsg('Discount cannot exceed Package Fee.');
       return;
     }
 
@@ -70,21 +96,84 @@ export default function EditPaymentModal({
     setErrorMsg('');
 
     try {
-      await paymentEngine.updateTransactionDateAtomic({
-        paymentId: payment.id,
-        memberId: payment.memberId || (payment as any).memberUid,
-        invoiceNumber: payment.invoiceNumber || payment.invoice,
+      const payload: Record<string, any> = {
+        originalAmount: packagePrice,
+        packagePrice: packagePrice,
+        discountAmount: discount,
+        discount: discount,
+        netPayable: netPayable,
+        amount: netPayable,
+        amountPaid: amountPaid,
+        paid: amountPaid,
+        amountPaidToday: amountPaid,
+        pendingAmount: pendingAmount,
+        balanceAmount: pendingAmount,
+        outstandingAmount: pendingAmount,
+        remainingBalance: pendingAmount,
+        paymentMethod: paymentMethod,
+        method: paymentMethod,
+        status: calculatedStatus,
+        paymentStatus: calculatedStatus,
         transactionDate,
-        transactionTime,
-      });
+        paymentDate: transactionDate,
+        date: transactionDate,
+        transactionTime: transactionTime || '05:30 PM',
+        paymentTime: transactionTime || '05:30 PM',
+        time: transactionTime || '05:30 PM',
+        updatedAt: new Date().toISOString(),
+      };
 
-      toast.success('Bill date & time updated successfully! 🎉');
+      // 1. Update Payment Document in Firestore
+      if (payment.id) {
+        await updateDoc(doc(db, 'payments', payment.id), payload);
+      }
+
+      // 2. Atomic Date Update Sync
+      try {
+        await paymentEngine.updateTransactionDateAtomic({
+          paymentId: payment.id,
+          memberId: payment.memberId || (payment as any).memberUid,
+          invoiceNumber: payment.invoiceNumber || payment.invoice,
+          transactionDate,
+          transactionTime: transactionTime || '05:30 PM',
+        });
+      } catch (atomicErr) {
+        console.warn('Atomic date update notice:', atomicErr);
+      }
+
+      // 3. Update Member Document if available
+      const memId = payment.memberId || (payment as any).memberUid;
+      if (memId) {
+        try {
+          await updateDoc(doc(db, 'members', String(memId)), {
+            price: packagePrice,
+            packagePrice: packagePrice,
+            discount: discount,
+            discountAmount: discount,
+            amount: netPayable,
+            amountPaid: amountPaid,
+            paid: amountPaid,
+            paidAmount: amountPaid,
+            outstandingBalance: pendingAmount,
+            pendingAmount: pendingAmount,
+            balanceAmount: pendingAmount,
+            paymentMethod: paymentMethod,
+            paymentStatus: calculatedStatus,
+            status: calculatedStatus === 'paid' ? 'active' : 'active',
+            updatedAt: new Date().toISOString(),
+          });
+        } catch (memErr) {
+          console.warn('Member sync notice:', memErr);
+        }
+      }
+
+      toast.success('Bill details updated successfully! 🎉');
       if (onSaved) onSaved();
       onClose();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Unknown error';
       setErrorMsg('Failed to update transaction: ' + msg);
-      toast.error('Failed to update bill date: ' + msg);
+      toast.error('Failed to update bill details: ' + msg);
     } finally {
       setIsSaving(false);
     }
@@ -93,8 +182,6 @@ export default function EditPaymentModal({
   const invNum = payment.invoice || payment.invoiceNumber || 'AZ-INV-000000';
   const memberName = payment.memberName || 'Member';
   const planName = payment.plan || 'Membership';
-  const totalAmount = Number(payment.paid) || Number(payment.amount) || 0;
-  const payMethod = payment.method || payment.paymentMethod || 'UPI';
 
   return (
     <AnimatePresence>
@@ -117,17 +204,17 @@ export default function EditPaymentModal({
           className="relative bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-lg z-10 overflow-hidden text-left"
         >
           {/* Header */}
-          <div className="bg-slate-50/80 px-6 py-5 border-b border-slate-100 flex items-center justify-between">
+          <div className="bg-slate-50/80 px-6 py-4 border-b border-slate-100 flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-11 h-11 rounded-xl bg-blue-50 border border-blue-100 text-[#0B5CBE] flex items-center justify-center shrink-0">
-                <Calendar size={22} />
+              <div className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-100 text-[#0B5CBE] flex items-center justify-center shrink-0">
+                <Receipt size={20} />
               </div>
               <div>
                 <h3 className="text-base font-extrabold text-slate-900 tracking-tight leading-tight">
-                  Edit Payment Transaction
+                  Edit Payment & Bill Details
                 </h3>
                 <p className="text-slate-500 text-xs mt-0.5 font-medium">
-                  Update the actual payment date and time for this transaction.
+                  Correct package price, discount, payment method & date for {memberName}.
                 </p>
               </div>
             </div>
@@ -141,37 +228,19 @@ export default function EditPaymentModal({
           </div>
 
           {/* Body Content */}
-          <div className="p-6 space-y-5">
+          <div className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
 
-            {/* Read-Only Transaction Summary Card */}
-            <div className="bg-slate-50/70 rounded-xl p-4 border border-slate-200/80 space-y-2.5">
-              <div className="flex items-center justify-between border-b border-slate-200/60 pb-2">
+            {/* Read-Only Transaction Banner */}
+            <div className="bg-slate-50 rounded-xl p-3.5 border border-slate-200 flex items-center justify-between">
+              <div>
                 <span className="font-mono text-xs font-black text-[#0B5CBE] bg-blue-50 px-2.5 py-0.5 rounded-md border border-blue-100">
                   {invNum}
                 </span>
-                <span className="text-xs font-black text-slate-900">
-                  ₹{totalAmount.toLocaleString('en-IN')}
-                </span>
+                <div className="text-xs font-bold text-slate-800 mt-1">{memberName} ({planName})</div>
               </div>
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                <div>
-                  <span className="text-slate-400 text-[10px] font-extrabold uppercase tracking-wider block">Member</span>
-                  <span className="font-bold text-slate-800">{memberName}</span>
-                </div>
-                <div>
-                  <span className="text-slate-400 text-[10px] font-extrabold uppercase tracking-wider block">Plan / Item</span>
-                  <span className="font-bold text-slate-800">{planName}</span>
-                </div>
-                <div>
-                  <span className="text-slate-400 text-[10px] font-extrabold uppercase tracking-wider block">Payment Method</span>
-                  <span className="font-bold text-slate-800">{payMethod}</span>
-                </div>
-                <div>
-                  <span className="text-slate-400 text-[10px] font-extrabold uppercase tracking-wider block">Recorded System Date</span>
-                  <span className="font-medium text-slate-500 font-mono text-[11px]">
-                    {payment.createdAt ? formatDate(payment.createdAt) : '—'}
-                  </span>
-                </div>
+              <div className="text-right">
+                <span className="text-xs font-black text-slate-900">Net: ₹{netPayable.toLocaleString('en-IN')}</span>
+                <div className="text-[10px] text-emerald-700 font-bold">Paid: ₹{amountPaid.toLocaleString('en-IN')}</div>
               </div>
             </div>
 
@@ -183,51 +252,126 @@ export default function EditPaymentModal({
               </div>
             )}
 
-            {/* Editable Fields Form */}
-            <div className="space-y-4">
+            {/* Editable Financial & Date Inputs */}
+            <div className="space-y-3.5">
               
-              {/* TRANSACTION DATE */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-extrabold uppercase tracking-wider text-slate-700 block">
-                  Transaction Date <span className="text-rose-500">*</span>
-                </label>
-                <div className="relative">
+              {/* PACKAGE FEE & DISCOUNT */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[10px] font-extrabold uppercase tracking-wider text-slate-700 block mb-1">
+                    Package Fee (₹) <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={packagePrice || ''}
+                    onChange={(e) => setPackagePrice(Math.max(0, Number(e.target.value)))}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 outline-none focus:border-[#0B5CBE] focus:bg-white font-mono"
+                    placeholder="e.g. 2500"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-extrabold uppercase tracking-wider text-slate-700 block mb-1">
+                    Discount (₹)
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={packagePrice}
+                    value={discount || ''}
+                    onChange={(e) => setDiscount(Math.max(0, Number(e.target.value)))}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 outline-none focus:border-[#0B5CBE] focus:bg-white font-mono"
+                    placeholder="e.g. 500"
+                  />
+                </div>
+              </div>
+
+              {/* AMOUNT PAID & PAYMENT METHOD */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[10px] font-extrabold uppercase tracking-wider text-slate-700 block mb-1">
+                    Amount Paid Today (₹) <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={netPayable}
+                    value={amountPaid || ''}
+                    onChange={(e) => setAmountPaid(Math.max(0, Number(e.target.value)))}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 outline-none focus:border-[#0B5CBE] focus:bg-white font-mono"
+                    placeholder="e.g. 2000"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-extrabold uppercase tracking-wider text-slate-700 block mb-1">
+                    Payment Method
+                  </label>
+                  <select
+                    value={paymentMethod}
+                    onChange={(e) => setPaymentMethod(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 outline-none focus:border-[#0B5CBE] focus:bg-white cursor-pointer"
+                  >
+                    <option value="Cash">Cash</option>
+                    <option value="UPI">UPI</option>
+                    <option value="Card">Card</option>
+                    <option value="Net Banking">Net Banking</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* TRANSACTION DATE & TIME */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[10px] font-extrabold uppercase tracking-wider text-slate-700 block mb-1">
+                    Payment Date <span className="text-rose-500">*</span>
+                  </label>
                   <input
                     type="date"
                     value={transactionDate}
                     onChange={(e) => setTransactionDate(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-bold text-slate-900 outline-none focus:border-[#0B5CBE] focus:bg-white transition-all font-mono"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 outline-none focus:border-[#0B5CBE] focus:bg-white font-mono"
                   />
                 </div>
-                <p className="text-[10px] text-slate-400 font-medium">
-                  Date on which payment actually occurred.
-                </p>
-              </div>
-
-              {/* TRANSACTION TIME */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-extrabold uppercase tracking-wider text-slate-700 block">
-                  Transaction Time <span className="text-rose-500">*</span>
-                </label>
-                <div className="relative">
+                <div>
+                  <label className="text-[10px] font-extrabold uppercase tracking-wider text-slate-700 block mb-1">
+                    Payment Time
+                  </label>
                   <input
                     type="text"
-                    placeholder="e.g. 05:30 PM or 17:30"
+                    placeholder="e.g. 05:30 PM"
                     value={transactionTime}
                     onChange={(e) => setTransactionTime(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-bold text-slate-900 outline-none focus:border-[#0B5CBE] focus:bg-white transition-all font-mono"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 outline-none focus:border-[#0B5CBE] focus:bg-white font-mono"
                   />
                 </div>
-                <p className="text-[10px] text-slate-400 font-medium">
-                  Actual time of payment (e.g. 11:45 AM or 05:30 PM).
-                </p>
               </div>
 
-            </div>
+              {/* LIVE SUMMARY CALCULATOR PREVIEW */}
+              <div className="bg-blue-50/70 border border-blue-100 rounded-xl p-3 text-xs font-semibold text-blue-900 space-y-1">
+                <div className="flex justify-between">
+                  <span>Package Fee:</span>
+                  <span className="font-bold font-mono">₹{packagePrice.toLocaleString('en-IN')}</span>
+                </div>
+                <div className="flex justify-between text-emerald-700">
+                  <span>Less: Discount:</span>
+                  <span className="font-bold font-mono">- ₹{discount.toLocaleString('en-IN')}</span>
+                </div>
+                <div className="flex justify-between font-bold border-t border-blue-200/60 pt-1 text-slate-900">
+                  <span>Final Payable:</span>
+                  <span className="font-black font-mono">₹{netPayable.toLocaleString('en-IN')}</span>
+                </div>
+                <div className="flex justify-between text-emerald-800 font-bold">
+                  <span>Amount Paid:</span>
+                  <span className="font-black font-mono">₹{amountPaid.toLocaleString('en-IN')}</span>
+                </div>
+                {pendingAmount > 0 && (
+                  <div className="flex justify-between text-rose-700 font-bold">
+                    <span>Remaining Balance:</span>
+                    <span className="font-black font-mono">₹{pendingAmount.toLocaleString('en-IN')}</span>
+                  </div>
+                )}
+              </div>
 
-            {/* Notice banner regarding createdAt protection */}
-            <div className="p-3 bg-blue-50/60 border border-blue-100 rounded-xl text-[11px] text-blue-900 font-medium leading-relaxed">
-              <span className="font-extrabold text-[#0B5CBE]">Note:</span> Updating this transaction date will recalculate Today's Collection and historical reports according to the new transaction date. System creation date (<code className="font-mono font-bold">createdAt</code>) will remain untouched for audit history.
             </div>
 
           </div>
