@@ -6,6 +6,7 @@ import { collection, onSnapshot, doc, updateDoc } from 'firebase/firestore';
 import { useAuthStore, useGymStore } from '@/store';
 import { migrateMissingBillingPhones } from '@/lib/migrations/migrateBillingPhones';
 
+import API from '@/services/api';
 import { extractPriceFromPlanString, getDefaultPriceForPlan } from '@/services/billingService';
 
 // ─── IST-aware today string (YYYY-MM-DD in Asia/Kolkata timezone) ───────────
@@ -155,32 +156,71 @@ export function useTodaysPayments(): UseTodaysPaymentsResult {
   // Stable IST today string — computed once per mount (refreshes on page load)
   const todayStr = useMemo(() => getISTDateStr(), []);
 
-  // ── Live Firestore listener & automatic data relation repair ──────────────
+  // ── Live Firestore listener & API fallback ──────────────
   useEffect(() => {
-    // Run safe migration once in background to repair any existing records missing memberPhone
+    let isMounted = true;
+
+    // Background migration for phone numbers
     migrateMissingBillingPhones().catch((err) => {
       console.warn('[useTodaysPayments] background phone migration notice:', err);
     });
+
+    const fetchApiFallback = async () => {
+      try {
+        const res = await API.get('/billing');
+        if (isMounted && Array.isArray(res.data) && res.data.length > 0) {
+          const apiDocs = res.data as PaymentRecord[];
+          setRawPayments((prev) => {
+            if (prev.length === 0) return apiDocs;
+            const map = new Map<string, PaymentRecord>();
+            prev.forEach(d => { if (d.id) map.set(d.id, d); });
+            apiDocs.forEach(d => { if (d.id && !map.has(d.id)) map.set(d.id, d); });
+            return Array.from(map.values());
+          });
+          setLoading(false);
+        }
+      } catch (e) {
+        try {
+          const res2 = await API.get('/payments');
+          if (isMounted && Array.isArray(res2.data) && res2.data.length > 0) {
+            setRawPayments(res2.data as PaymentRecord[]);
+          }
+        } catch (_) {}
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    };
+
+    // Always fetch via API on mount to guarantee server Admin SDK access
+    fetchApiFallback();
 
     let unsub: (() => void) | undefined;
     try {
       unsub = onSnapshot(
         collection(db, 'payments'),
         (snap) => {
+          if (!isMounted) return;
           const docs = snap.docs.map((d) => ({ id: d.id, ...d.data() } as PaymentRecord));
-          setRawPayments(docs);
+          if (docs.length > 0) {
+            setRawPayments(docs);
+          } else {
+            fetchApiFallback();
+          }
           setLoading(false);
         },
         (err) => {
-          console.warn('[useTodaysPayments] listener error:', err);
-          setLoading(false);
+          console.warn('[useTodaysPayments] listener notice, using API fallback:', err);
+          fetchApiFallback();
         }
       );
     } catch (err) {
-      console.warn('[useTodaysPayments] failed to attach:', err);
-      setLoading(false);
+      console.warn('[useTodaysPayments] failed to attach listener, using API fallback:', err);
+      fetchApiFallback();
     }
-    return () => { if (unsub) unsub(); };
+    return () => {
+      isMounted = false;
+      if (unsub) unsub();
+    };
   }, []);
 
   // ── Helpers ───────────────────────────────────────────────────────────────
