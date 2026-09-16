@@ -23,9 +23,13 @@ export default function OfficialInvoiceReceipt({ invoice, member, onPrint, onWha
   const billDate = rawDateStr ? formatDate(rawDateStr) : formatDate(member?.joinDate || new Date().toISOString());
   const billTime = invoice?.transactionTime || invoice?.paymentTime || invoice?.time || '';
   const createdDateStr = invoice?.createdAt ? formatDate(invoice.createdAt) : null;
-  const planName = invoice?.plan || member?.plan || '3 Months';
-  const startDate = invoice?.startDate ? formatDate(invoice.startDate) : formatDate(member?.joinDate || new Date().toISOString());
-  const endDate = invoice?.expiryDate ? formatDate(invoice.expiryDate) : formatDate(member?.expiryDate || new Date(Date.now() + 90*24*60*60*1000).toISOString());
+  const planName = invoice?.plan || invoice?.packageName || member?.plan || '3 Months';
+  
+  const rawStartDate = invoice?.startDate || invoice?.membershipStartDate || invoice?.date || invoice?.invoiceDate;
+  const startDate = rawStartDate ? formatDate(rawStartDate) : formatDate(member?.startDate || member?.joinDate || new Date().toISOString());
+  
+  const rawEndDate = invoice?.expiryDate || invoice?.membershipExpiryDate || invoice?.endDate;
+  const endDate = rawEndDate ? formatDate(rawEndDate) : formatDate(member?.expiryDate || new Date(Date.now() + 30*24*60*60*1000).toISOString());
   const billedBy = invoice?.billedBy || 'Veer Chand (manager)';
 
   const discount = Number(invoice?.discountAmount !== undefined ? invoice.discountAmount : (invoice?.discount || 0));
