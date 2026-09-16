@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import { createPortal } from 'react-dom';
 import {
   Receipt, CreditCard, AlertCircle, CheckCircle, Clock, Download, MessageSquare,
@@ -23,6 +24,7 @@ import CreateNewBillModal from '../../components/CreateNewBillModal';
 import UpgradeModal from '../../components/UpgradeModal';
 
 export default function BillingTab({ member: initialMember }: { member: any }) {
+  const router = useRouter();
   const { fetchMembers } = useGymStore();
   const [member, setMember] = useState(initialMember);
   const [invoices, setInvoices] = useState<any[]>([]);
@@ -505,17 +507,14 @@ export default function BillingTab({ member: initialMember }: { member: any }) {
           </div>
           <div className="flex flex-col gap-1.5 mt-2">
             <button
-              onClick={() => setShowNewBillModal(true)}
+              onClick={() => router.push(`/dashboard/billing/create?mode=new&id=${member.id}`)}
               className="py-1.5 px-3 bg-white text-[#0b5cbe] hover:bg-[#eaf3ff] rounded-xl text-[11px] font-black transition-all flex items-center justify-center gap-1 shadow-xs border-none cursor-pointer"
             >
               <Plus size={13} /> + New Bill
             </button>
             <button
-              onClick={() => {
-                setSelectedInvoiceForUpgrade(null);
-                setShowUpgradeModal(true);
-              }}
-              className="py-1.5 px-3 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-[11px] font-black transition-all flex items-center justify-center gap-1 shadow-xs border-none cursor-pointer"
+              onClick={() => router.push(`/dashboard/billing/create?mode=upgrade&id=${member.id}`)}
+              className="py-1.5 px-3 bg-[#064A9B] hover:bg-[#083F82] text-white rounded-xl text-[11px] font-black transition-all flex items-center justify-center gap-1 shadow-xs border-none cursor-pointer"
             >
               <TrendingUp size={13} /> Upgrade Package
             </button>
@@ -543,14 +542,22 @@ export default function BillingTab({ member: initialMember }: { member: any }) {
               </p>
             </div>
           </div>
-          <button
-            onClick={() => {
-              window.location.href = `/dashboard/follow-up?tab=balance&search=${encodeURIComponent(member.name || '')}`;
-            }}
-            className="px-4 py-2 bg-[#D97706] hover:bg-amber-700 text-white text-xs font-black rounded-xl transition-all shadow-md shadow-amber-600/20 flex items-center justify-center gap-1.5 shrink-0 border-none cursor-pointer"
-          >
-            <Plus size={14} /> + Balance Follow-Up
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={() => router.push(`/dashboard/billing/create?mode=collect&id=${member.id}`)}
+              className="px-4 py-2 bg-gradient-to-r from-[#0B5CBE] to-[#064A9B] hover:from-[#064A9B] hover:to-[#083F82] text-white text-xs font-black rounded-xl transition-all shadow-md flex items-center justify-center gap-1.5 border-none cursor-pointer"
+            >
+              <CreditCard size={14} /> Collect Payment
+            </button>
+            <button
+              onClick={() => {
+                window.location.href = `/dashboard/follow-up?tab=balance&search=${encodeURIComponent(member.name || '')}`;
+              }}
+              className="px-4 py-2 bg-[#D97706] hover:bg-amber-700 text-white text-xs font-black rounded-xl transition-all shadow-md shadow-amber-600/20 flex items-center justify-center gap-1.5 border-none cursor-pointer"
+            >
+              <Plus size={14} /> + Balance Follow-Up
+            </button>
+          </div>
         </div>
       )}
 

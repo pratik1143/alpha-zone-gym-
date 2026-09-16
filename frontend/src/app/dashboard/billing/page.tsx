@@ -17,7 +17,8 @@ import EditPaymentModal from './components/EditPaymentModal';
 import OfficialInvoiceReceipt from '../components/OfficialInvoiceReceipt';
 import { useTodaysPayments, PaymentRecord } from '@/hooks/useTodaysPayments';
 
-// ── Payment Methods Map ──────────────────────────────────────
+import { useRouter } from 'next/navigation';
+
 const payMethodsConfig: Record<string, { icon: any; label: string; color: string; bg: string }> = {
   UPI:           { icon: Smartphone, label: 'UPI',         color: '#0B5CBE', bg: 'rgba(11,92,190,0.08)' },
   Cash:          { icon: Banknote,   label: 'Cash',        color: '#16a34a', bg: 'rgba(22,163,74,0.08)'  },
@@ -32,6 +33,7 @@ const fadeUp = (delay = 0) => ({
 });
 
 export default function BillingPage() {
+  const router = useRouter();
   const { members, fetchPayments: refreshStorePayments } = useGymStore();
 
   // ── Central payment hook (single source of truth) ─────────────────────────
@@ -286,7 +288,7 @@ export default function BillingPage() {
         </div>
 
         <button
-          onClick={() => setShowInvoiceModal('Gym')}
+          onClick={() => router.push('/dashboard/billing/create')}
           className="w-full sm:w-auto bg-[#0B5CBE] hover:bg-blue-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-md transition-all border-none flex items-center justify-center gap-2 cursor-pointer active:scale-95 shrink-0"
         >
           <Plus size={16} /> Collect Payment
@@ -497,7 +499,7 @@ export default function BillingPage() {
               </p>
             </div>
             <button
-              onClick={() => setShowInvoiceModal('Gym')}
+              onClick={() => router.push('/dashboard/billing/create')}
               className="mt-2 bg-[#0B5CBE] hover:bg-blue-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-md transition-all border-none inline-flex items-center gap-2 cursor-pointer"
             >
               <Plus size={15} /> Collect Payment
