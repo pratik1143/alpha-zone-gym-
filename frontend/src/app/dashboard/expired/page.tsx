@@ -599,7 +599,7 @@ export default function ExpiredPage() {
             onClick={() => {
               const m = actionsMenu.member;
               setActionsMenu(null);
-              setRenewTargetMember(m);
+              router.push(`/dashboard/billing/create?mode=renew&id=${encodeURIComponent(m.id)}`);
             }}
             className="w-full px-3.5 py-2 hover:bg-blue-50 hover:text-blue-700 flex items-center gap-2.5 text-left border-none bg-transparent cursor-pointer text-blue-700 transition-colors font-extrabold"
           >

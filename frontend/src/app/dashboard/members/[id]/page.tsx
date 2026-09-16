@@ -641,7 +641,7 @@ export default function ClientProfileSystem() {
                       <TrendingUp size={13} className="text-[#0B5CBE]" /> Upgrade Package
                     </button>
                     <button
-                      onClick={() => { setShowQuickMenu(false); setShowRenewalModal(true); }}
+                      onClick={() => { setShowQuickMenu(false); router.push(`/dashboard/billing/create?mode=renew&id=${encodeURIComponent(id)}`); }}
                       className="w-full px-3 py-2 text-left hover:bg-blue-50 text-blue-700 rounded-xl flex items-center gap-2 text-xs font-bold transition-colors border-none bg-transparent cursor-pointer"
                     >
                       <Repeat size={13} className="text-blue-600" /> Renew Membership

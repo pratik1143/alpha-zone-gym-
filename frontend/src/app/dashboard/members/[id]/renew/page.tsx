@@ -37,6 +37,12 @@ export default function RenewMembershipPage() {
   const rawId = params?.id as string;
   const id = rawId ? decodeURIComponent(rawId) : '';
 
+  useEffect(() => {
+    if (id) {
+      router.replace(`/dashboard/billing/create?mode=renew&id=${encodeURIComponent(id)}`);
+    }
+  }, [id, router]);
+
   const { fetchMembers } = useGymStore();
   const [member, setMember] = useState<any>(null);
   const [loading, setLoading] = useState(true);

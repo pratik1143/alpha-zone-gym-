@@ -328,11 +328,7 @@ export default function ProfileTab({ member, onOpenRenewModal }: { member: any; 
             <div className="flex gap-3">
               <button 
                 onClick={() => {
-                  if (onOpenRenewModal) {
-                    onOpenRenewModal();
-                  } else {
-                    router.push(`/dashboard/members/${encodeURIComponent(member.id)}/renew`);
-                  }
+                  router.push(`/dashboard/billing/create?mode=renew&id=${encodeURIComponent(member.id)}`);
                 }}
                 className="flex-1 py-3 bg-white text-slate-900 rounded-xl text-xs font-black transition-all hover:bg-slate-100 flex items-center justify-center gap-2 border-none cursor-pointer shadow-md active:scale-95"
               >

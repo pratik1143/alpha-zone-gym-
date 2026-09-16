@@ -317,26 +317,28 @@ function UniversalBillingTerminalContent() {
     setPackagePrice(pkg.price);
   };
 
-  const handleConfirmUpgrade = async () => {
+  const handleConfirmBill = async () => {
     if (!selectedMember) {
-      toast.error('Please select an active member for this upgrade.');
+      toast.error(`Please select a member for this ${activeMode}.`);
       return;
     }
     if (submitting) return; // Prevent double click
     setSubmitting(true);
 
+    const isRenew = activeMode === 'renew';
+
     try {
-      const upgradePayload = {
+      const billPayload = {
         invoiceNumber: fixedInvoiceNo,
         invoice: fixedInvoiceNo,
         memberId: selectedMember.id,
         memberName: selectedMember.name,
         memberPhone: selectedMember.phone || '',
-        mode: 'UPGRADE',
-        transactionType: 'membership_upgrade',
+        mode: activeMode.toUpperCase(),
+        transactionType: isRenew ? 'membership_renewal' : 'membership_upgrade',
         billingType: 'membership',
-        plan: selectedPackage?.name || 'Upgraded Membership',
-        packageName: selectedPackage?.name || 'Upgraded Membership',
+        plan: selectedPackage?.name || (isRenew ? 'Renewed Membership' : 'Upgraded Membership'),
+        packageName: selectedPackage?.name || (isRenew ? 'Renewed Membership' : 'Upgraded Membership'),
 
         // Previous Billing Relationship (Old invoice untouched)
         previousInvoiceNumber: currentMembershipSnapshot.previousInvoiceNo,
@@ -344,8 +346,8 @@ function UniversalBillingTerminalContent() {
         previousBillAmount: currentMembershipSnapshot.originalBill,
         previousAmountPaid: currentMembershipSnapshot.alreadyPaid,
         previousPending: currentMembershipSnapshot.currentPending,
-        carryForwardCredit: upgradeCalc.carryForwardCredit,
-        upgradeAmountBeforeDiscount: upgradeCalc.upgradeAmountBeforeDiscount,
+        carryForwardCredit: activeMode === 'upgrade' ? upgradeCalc.carryForwardCredit : 0,
+        upgradeAmountBeforeDiscount: activeMode === 'upgrade' ? upgradeCalc.upgradeAmountBeforeDiscount : packagePrice,
 
         // Financial Ledger
         packagePrice: packagePrice,
@@ -370,12 +372,14 @@ function UniversalBillingTerminalContent() {
         startDate: startDate,
         expiryDate: calculatedExpiryDate,
         createdAt: new Date().toISOString(),
-        notes: `Membership upgraded to ${selectedPackage?.name}. Credit adjustment: -₹${upgradeCalc.carryForwardCredit}`,
+        notes: isRenew
+          ? `Membership renewed to ${selectedPackage?.name} from ${startDate} to ${calculatedExpiryDate}`
+          : `Membership upgraded to ${selectedPackage?.name}. Credit adjustment: -₹${upgradeCalc.carryForwardCredit}`,
       };
 
       // 1. Add to Firestore payments
-      const docRef = await addDoc(collection(db, 'payments'), upgradePayload);
-      const savedInvoice = { id: docRef.id, ...upgradePayload };
+      const docRef = await addDoc(collection(db, 'payments'), billPayload);
+      const savedInvoice = { id: docRef.id, ...billPayload };
 
       // 2. Update Member Record (Atomic merge - preserving old history)
       const newTotalPaid = (Number(selectedMember.totalPaid) || 0) + amountPaidToday;
@@ -399,10 +403,10 @@ function UniversalBillingTerminalContent() {
       await fetchPayments(true);
 
       setSuccessInvoice(savedInvoice);
-      toast.success(`Upgrade invoice ${fixedInvoiceNo} created! 🎉`);
+      toast.success(`${isRenew ? 'Renewal' : 'Upgrade'} invoice ${fixedInvoiceNo} created! 🎉`);
     } catch (err: any) {
-      console.error('Upgrade execution error:', err);
-      toast.error('Failed to create upgrade invoice: ' + (err?.message || err));
+      console.error('Billing execution error:', err);
+      toast.error(`Failed to create ${activeMode} invoice: ` + (err?.message || err));
     } finally {
       setSubmitting(false);
     }
@@ -466,7 +470,9 @@ function UniversalBillingTerminalContent() {
             </div>
 
             <div>
-              <h2 className="text-2xl font-black text-slate-900">UPGRADE SUCCESSFUL ✓</h2>
+              <h2 className="text-2xl font-black text-slate-900">
+                {activeMode === 'renew' ? 'RENEWAL SUCCESSFUL ✓' : 'UPGRADE SUCCESSFUL ✓'}
+              </h2>
               <p className="text-xs font-semibold text-slate-500 mt-1">
                 Transaction <code className="font-mono bg-slate-100 px-2 py-0.5 rounded text-slate-800 font-bold">{successInvoice.invoiceNumber}</code> has been confirmed.
               </p>
@@ -478,7 +484,9 @@ function UniversalBillingTerminalContent() {
                 <p className="font-black text-slate-900 mt-0.5">{selectedMember?.name}</p>
               </div>
               <div>
-                <span className="text-[10px] font-bold text-slate-400 uppercase">Upgraded To</span>
+                <span className="text-[10px] font-bold text-slate-400 uppercase">
+                  {activeMode === 'renew' ? 'Renewed Package' : 'Upgraded To'}
+                </span>
                 <p className="font-black text-[#0B5CBE] mt-0.5">{successInvoice.plan}</p>
               </div>
               <div>
@@ -522,10 +530,10 @@ function UniversalBillingTerminalContent() {
             {/* LEFT 7 COLS: STEP 1 TO STEP 5 */}
             <div className="lg:col-span-7 space-y-6">
 
-              {/* ── STEP 1: UPGRADE MEMBER & CURRENT MEMBERSHIP SNAPSHOT ───────── */}
+              {/* ── STEP 1: MEMBER PROFILE & CURRENT MEMBERSHIP SNAPSHOT ───────── */}
               <div className="bg-white rounded-2xl p-5 border border-slate-200/90 shadow-xs space-y-4">
                 <span className="text-[10px] font-black uppercase tracking-wider text-[#0B5CBE] block">
-                  STEP 1 — UPGRADE MEMBER PROFILE
+                  STEP 1 — {activeMode === 'renew' ? 'RENEW MEMBER PROFILE' : 'UPGRADE MEMBER PROFILE'}
                 </span>
 
                 {/* Search / Select Member Dropdown */}
@@ -689,10 +697,10 @@ function UniversalBillingTerminalContent() {
                 )}
               </div>
 
-              {/* ── STEP 2: SELECT NEW MEMBERSHIP PACKAGE ──────────────────────── */}
+              {/* ── STEP 2: SELECT MEMBERSHIP PACKAGE ──────────────────────── */}
               <div className="bg-white rounded-2xl p-5 border border-slate-200/90 shadow-xs space-y-3">
                 <span className="text-[10px] font-black uppercase tracking-wider text-[#0B5CBE] block">
-                  STEP 2 — SELECT NEW MEMBERSHIP PACKAGE
+                  STEP 2 — {activeMode === 'renew' ? 'SELECT RENEWAL PACKAGE' : 'SELECT NEW MEMBERSHIP PACKAGE'}
                 </span>
 
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
@@ -732,11 +740,42 @@ function UniversalBillingTerminalContent() {
                 </div>
               </div>
 
-              {/* ── STEP 3: UPGRADE DATES & BILL DATE ─────────────────────────── */}
+              {/* ── STEP 3: MEMBERSHIP DATES & START OPTION ─────────────────────────── */}
               <div className="bg-white rounded-2xl p-5 border border-slate-200/90 shadow-xs space-y-3">
                 <span className="text-[10px] font-black uppercase tracking-wider text-[#0B5CBE] block">
-                  STEP 3 — UPGRADE DATES
+                  STEP 3 — {activeMode === 'renew' ? 'RENEWAL DATES & START OPTION' : 'UPGRADE DATES'}
                 </span>
+
+                {activeMode === 'renew' && (
+                  <div className="flex flex-wrap items-center gap-2 mb-2 p-3 bg-blue-50/60 rounded-xl border border-blue-100">
+                    <span className="text-[10px] font-black text-[#0B5CBE] uppercase w-full block">Quick Renewal Start Date:</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (selectedMember?.expiryDate) setStartDate(selectedMember.expiryDate);
+                        else setStartDate(todayYMD);
+                      }}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border cursor-pointer ${
+                        startDate === selectedMember?.expiryDate
+                          ? 'bg-[#0B5CBE] text-white border-[#0B5CBE] shadow-xs'
+                          : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                      }`}
+                    >
+                      🗓️ From Expiry Date ({selectedMember?.expiryDate ? formatDate(selectedMember.expiryDate) : 'Today'})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setStartDate(todayYMD)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border cursor-pointer ${
+                        startDate === todayYMD && startDate !== selectedMember?.expiryDate
+                          ? 'bg-[#0B5CBE] text-white border-[#0B5CBE] shadow-xs'
+                          : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                      }`}
+                    >
+                      ⚡ Starting Today ({formatDate(todayYMD)})
+                    </button>
+                  </div>
+                )}
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
                   <div>
@@ -903,7 +942,9 @@ function UniversalBillingTerminalContent() {
                 <div className="flex items-center justify-between border-b border-slate-100 pb-3.5">
                   <div className="flex items-center gap-2">
                     <TrendingUp size={18} className="text-[#0B5CBE]" />
-                    <h3 className="font-extrabold text-sm text-slate-900">UPGRADE SUMMARY</h3>
+                    <h3 className="font-extrabold text-sm text-slate-900">
+                      {activeMode === 'renew' ? 'RENEWAL SUMMARY' : 'UPGRADE SUMMARY'}
+                    </h3>
                   </div>
                   <span className="text-[10px] font-mono font-bold bg-blue-50 text-[#0B5CBE] px-2 py-0.5 rounded border border-blue-100">
                     LIVE
@@ -995,17 +1036,17 @@ function UniversalBillingTerminalContent() {
 
                   <button
                     type="button"
-                    onClick={handleConfirmUpgrade}
+                    onClick={handleConfirmBill}
                     disabled={submitting || !selectedMember}
                     className={`w-full py-3.5 px-4 ${BLUE_GRADIENT} ${BLUE_GRADIENT_HOVER} text-white font-black text-xs rounded-xl shadow-lg transition-all border-none cursor-pointer flex items-center justify-center gap-2 active:scale-98 disabled:opacity-50 disabled:cursor-not-allowed`}
                   >
                     {submitting ? (
                       <>
-                        <RefreshCw size={16} className="animate-spin" /> GENERATING UPGRADE BILL...
+                        <RefreshCw size={16} className="animate-spin" /> {activeMode === 'renew' ? 'GENERATING RENEWAL BILL...' : 'GENERATING UPGRADE BILL...'}
                       </>
                     ) : (
                       <>
-                        <ShieldCheck size={18} /> GENERATE UPGRADE BILL
+                        <ShieldCheck size={18} /> {activeMode === 'renew' ? 'GENERATE RENEWAL BILL' : 'GENERATE UPGRADE BILL'}
                       </>
                     )}
                   </button>
@@ -1056,7 +1097,7 @@ function UniversalBillingTerminalContent() {
                   paymentMethod: paymentMethod,
                   startDate: startDate,
                   expiryDate: calculatedExpiryDate,
-                  isUpgrade: true,
+                  isUpgrade: activeMode === 'upgrade',
                   previousInvoiceNumber: currentMembershipSnapshot.previousInvoiceNo,
                   previousPaidAmount: currentMembershipSnapshot.alreadyPaid,
                 }}
@@ -1073,7 +1114,7 @@ function UniversalBillingTerminalContent() {
                 <button
                   onClick={() => {
                     setShowPreviewModal(false);
-                    handleConfirmUpgrade();
+                    handleConfirmBill();
                   }}
                   className={`px-5 py-2 ${BLUE_GRADIENT} ${BLUE_GRADIENT_HOVER} text-white rounded-xl font-bold text-xs shadow-md border-none cursor-pointer flex items-center gap-1.5`}
                 >

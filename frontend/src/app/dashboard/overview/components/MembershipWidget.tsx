@@ -98,7 +98,7 @@ export default function MembershipWidget() {
                   animate={{ opacity: 1, scale: 1, x: 0 }}
                   exit={{ opacity: 0, scale: 0.8, x: -50 }}
                   transition={{ type: "spring", bounce: 0.3, duration: 0.6, delay: idx * 0.05 }}
-                  onClick={() => router.push(`/dashboard/members/${encodeURIComponent(item.id || item.docId || '')}/renew`)}
+                  onClick={() => router.push(`/dashboard/billing/create?mode=renew&id=${encodeURIComponent(item.id || item.docId || '')}`)}
                   className={`snap-center shrink-0 w-72 h-44 rounded-2xl bg-gradient-to-br ${getGradient(idx)} p-5 text-white shadow-lg relative overflow-hidden group flex flex-col justify-between cursor-pointer hover:shadow-xl transition-all`}
                 >
                   {/* Glass reflection */}
@@ -138,7 +138,7 @@ export default function MembershipWidget() {
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        router.push(`/dashboard/members/${encodeURIComponent(item.id || item.docId || '')}/renew`);
+                        router.push(`/dashboard/billing/create?mode=renew&id=${encodeURIComponent(item.id || item.docId || '')}`);
                       }}
                       className="bg-white/20 hover:bg-white/40 backdrop-blur-md border border-white/40 px-3.5 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-1 cursor-pointer shadow-sm active:scale-95"
                     >
