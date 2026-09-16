@@ -1114,6 +1114,11 @@ def run_membership_validation(user_id, device_id, device_name, branch, timestamp
     expired_days = 0
     first_checkin_time = ''
     current_punch_time = timestamp_iso
+    avatar_url = ''
+    member_name = 'Gym Member'
+    plan_name = 'Standard Membership'
+    member_id_str = ''
+    member_code_str = f"ID #{user_id_str}"
 
     if not member and api_result and not api_result.get('unmapped'):
         member_name = api_result.get('memberName', 'Gym Member')
@@ -1168,12 +1173,13 @@ def run_membership_validation(user_id, device_id, device_name, branch, timestamp
         # UNMAPPED MEMBER (Requirement 3 & 15)
         status = 'unmapped'
         member_name = f"Unmapped Biometric User #{user_id_str}"
+        avatar_url = ""
         plan_name = "Unmapped Biometric ID"
-        member_id_str = ""
+        member_id_str = f"unmapped_{user_id_str}"
         member_code_str = f"ID #{user_id_str}"
 
     mapping_found = True if member or (api_result and not api_result.get('unmapped')) else False
-    attendance_written = True if (status in ('granted', 'already_inside', 'expired', 'frozen') and mapping_found) else False
+    attendance_written = True
     gate_will_trigger = True if (status == 'granted' and mapping_found and is_realtime) else False
 
     # 5. Trigger Always-on-Top Desktop Overlay Popup ONLY for fresh real-time punches
@@ -1226,8 +1232,8 @@ def run_membership_validation(user_id, device_id, device_name, branch, timestamp
     print(f"Gate Relay   : {'OPENED (3.0s)' if gate_will_trigger else 'DISABLED'}")
     print("="*52 + "\n")
 
-    # 7. Save Attendance Session ONLY for resolved members (Duplicate protected)
-    if mapping_found and attendance_written:
+    # 7. Save Attendance Session (Duplicate protected)
+    if attendance_written:
         today_str = datetime.now().strftime("%Y-%m-%d")
         att_doc_id = f"att_{member_id_str}_{today_str}"
         
@@ -1325,22 +1331,31 @@ def sync_device_data(conn, device_id, device_name, branch):
 
         logging.info(f"Synced Device {device_name}: Users={len(users)}, Templates={len(templates)}, Logs={len(attendance)}")
 
-        # Sync Users to Firestore collection deviceUsers
-        for user in users:
-            # Find matching templates for this user to count fingerprints
-            user_templates = [t for t in templates if str(t.uid) == str(user.user_id)]
-            
-            db.collection('deviceUsers').document(f"dev_{device_id}_usr_{user.user_id}").set({
-                'deviceId': device_id,
-                'deviceName': device_name,
-                'userId': user.user_id,
-                'userName': user.name,
-                'privilege': user.privilege,
-                'card': user.card,
-                'fingerprintsCount': len(user_templates),
-                'enrollmentStatus': 'Enrolled' if len(user_templates) > 0 else 'Card Only',
-                'lastActivity': datetime.utcnow().isoformat() + 'Z'
-            }, merge=True)
+        # Sync Users to Firestore collection deviceUsers using batch write
+        if db is not None:
+            batch = db.batch()
+            batch_count = 0
+            for user in users:
+                user_templates = [t for t in templates if str(t.uid) == str(user.user_id)]
+                doc_ref = db.collection('deviceUsers').document(f"dev_{device_id}_usr_{user.user_id}")
+                batch.set(doc_ref, {
+                    'deviceId': device_id,
+                    'deviceName': device_name,
+                    'userId': user.user_id,
+                    'userName': user.name,
+                    'privilege': user.privilege,
+                    'card': user.card,
+                    'fingerprintsCount': len(user_templates),
+                    'enrollmentStatus': 'Enrolled' if len(user_templates) > 0 else 'Card Only',
+                    'lastActivity': datetime.utcnow().isoformat() + 'Z'
+                }, merge=True)
+                batch_count += 1
+                if batch_count >= 400:
+                    batch.commit()
+                    batch = db.batch()
+                    batch_count = 0
+            if batch_count > 0:
+                batch.commit()
 
         # Update Device info in Firestore
         db.collection('devices').document(device_id).update({

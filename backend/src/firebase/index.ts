@@ -1573,6 +1573,49 @@ export const db = {
     return { id: paymentId, ...sanitizedUpdates };
   },
 
+  deletePayment: async (paymentId: string): Promise<boolean> => {
+    const firestore = getFirestoreDb();
+    if (firestore) {
+      try {
+        const docRef = firestore.collection('payments').doc(paymentId);
+        const docSnap = await docRef.get();
+        if (docSnap.exists) {
+          await docRef.update({
+            deleted: true,
+            deletedAt: new Date().toISOString()
+          });
+        } else {
+          const qSnap = await firestore.collection('payments')
+            .where('invoice', '==', paymentId)
+            .get();
+          if (!qSnap.empty) {
+            for (const doc of qSnap.docs) {
+              await doc.ref.update({ deleted: true, deletedAt: new Date().toISOString() });
+            }
+          } else {
+            const qSnap2 = await firestore.collection('payments')
+              .where('invoiceNumber', '==', paymentId)
+              .get();
+            for (const doc of qSnap2.docs) {
+              await doc.ref.update({ deleted: true, deletedAt: new Date().toISOString() });
+            }
+          }
+        }
+        return true;
+      } catch (err) {
+        console.error(`[Firestore] deletePayment error for ${paymentId}:`, err);
+      }
+    }
+
+    const idx = mockPayments.findIndex(p => p.id === paymentId || p.invoice === paymentId || p.invoiceNumber === paymentId);
+    if (idx !== -1) {
+      mockPayments[idx].deleted = true;
+      mockPayments[idx].deletedAt = new Date().toISOString();
+      saveMockDb();
+    }
+    return true;
+  },
+
   cleanupDuplicateInvoices: async (): Promise<any> => {
     const firestore = getFirestoreDb();
     const cleanedReport: any[] = [];

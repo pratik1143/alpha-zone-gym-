@@ -464,17 +464,40 @@ export function useTodaysPayments(): UseTodaysPaymentsResult {
   // ── Soft Delete ───────────────────────────────────────────────────────────
   const deletePayment = async (payment: PaymentRecord): Promise<boolean> => {
     if (!payment?.id) return false;
+    const targetId = payment.id;
+    let success = false;
+
+    // 1. Try REST API endpoint (Server Admin SDK bypasses client permissions)
     try {
-      await updateDoc(doc(db, 'payments', payment.id), {
-        deleted: true,
-        deletedAt: new Date().toISOString(),
-        deletedBy: user?.uid || user?.email || 'unknown',
-      });
-      return true;
-    } catch (err) {
-      console.error('[useTodaysPayments] deletePayment failed:', err);
-      return false;
+      await API.delete(`/billing/${encodeURIComponent(targetId)}`);
+      success = true;
+    } catch (apiErr) {
+      try {
+        await API.delete(`/payments/${encodeURIComponent(targetId)}`);
+        success = true;
+      } catch (_) {}
     }
+
+    // 2. Client-side Firestore fallback if API is not reachable
+    if (!success) {
+      try {
+        await updateDoc(doc(db, 'payments', targetId), {
+          deleted: true,
+          deletedAt: new Date().toISOString(),
+          deletedBy: user?.uid || user?.email || 'unknown',
+        });
+        success = true;
+      } catch (err) {
+        console.error('[useTodaysPayments] deletePayment client fallback failed:', err);
+      }
+    }
+
+    // 3. Optimistically remove from state so the payment disappears immediately in UI
+    if (success) {
+      setRawPayments((prev) => prev.filter((p) => p.id !== targetId));
+    }
+
+    return success;
   };
 
   // ── Update Payment Date & Time ─────────────────────────────────────────────

@@ -215,6 +215,16 @@ export const updateInvoice = async (req: Request, res: Response) => {
   }
 };
 
+export const deleteInvoice = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    await db.deletePayment(id);
+    res.json({ success: true, message: 'Invoice deleted successfully' });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
 export const cleanupDuplicateInvoicesController = async (req: Request, res: Response) => {
   try {
     const report = await db.cleanupDuplicateInvoices();

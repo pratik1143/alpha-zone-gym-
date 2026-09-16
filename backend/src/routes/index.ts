@@ -9,7 +9,7 @@ import {
 } from '../controllers/member.controller';
 import { getAttendanceFeed, createCheckIn, checkoutLog, triggerGateUnlock, getGateStatus, getAccessLogs, getDoorStatus, getDashboardAnalyticsFeed, getAttendanceSummaryFeed } from '../controllers/attendance.controller';
 import { getDevices, createDevice, updateDevice, deleteDevice, getDeviceLogs, triggerSimulationTap, restartDevice, queueConnectionTest, queueReadUsers, queueReadAttendance, getTesterStatus, queueSyncFirebase, queueImportUsers, startEnrollFingerprint, deleteEnrollment, syncMemberToDevice, getEnrollmentStatus, getPythonStatus, getLatestPunch, autoMapAllBiometrics } from '../controllers/device.controller';
-import { getInvoices, createInvoice, updateInvoice, markPaymentPaid } from '../controllers/billing.controller';
+import { getInvoices, createInvoice, updateInvoice, deleteInvoice, markPaymentPaid } from '../controllers/billing.controller';
 import { 
   getWorkoutPlan, saveWorkoutPlan, getDietPlan, saveDietPlan,
   generateAIDiet, approveDietPlan, duplicateDietPlan, archiveDietPlan,
@@ -120,11 +120,13 @@ router.get('/devices/biometric/status/:memberId', getEnrollmentStatus);
 router.get('/billing', getInvoices);
 router.post('/billing', createInvoice);
 router.put('/billing/:id', updateInvoice);
+router.delete('/billing/:id', deleteInvoice);
 router.post('/billing/pay/:memberId', markPaymentPaid);
 
 // Payments Aliases (compatibility with REST API client calls)
 router.get('/payments', getInvoices);
 router.post('/payments', createInvoice);
+router.delete('/payments/:id', deleteInvoice);
 
 // Trainer Workout & Diet Builders
 router.get('/trainers/workouts/:memberId', getWorkoutPlan);
