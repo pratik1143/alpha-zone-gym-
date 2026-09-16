@@ -26,6 +26,8 @@ if sys.platform == 'win32':
         except Exception:
             pass
 
+CRM_BASE_URL = os.getenv("CRM_BASE_URL", "https://alphazonegym.in").rstrip('/')
+
 
 def _create_circular_image(image_bytes_or_pil, size=(96, 96)):
     """Converts image bytes or PIL object to a circular PhotoImage."""
@@ -266,7 +268,8 @@ def show_attendance_popup(popup_data):
             elif status in ('denied', 'expired', 'frozen'):
                 def open_renew():
                     import webbrowser
-                    url = f"http://localhost:3000/dashboard/members/{popup_data.get('memberId', '')}/renew"
+                    member_id = popup_data.get('memberId', '')
+                    url = f"{CRM_BASE_URL}/dashboard/billing/create?mode=renew&id={member_id}" if member_id else f"{CRM_BASE_URL}/dashboard/billing/create"
                     webbrowser.open(url)
                     root.destroy()
 
@@ -296,12 +299,12 @@ def show_attendance_popup(popup_data):
                         urllib.request.urlopen(req, timeout=3)
                     except Exception:
                         pass
-                    webbrowser.open("http://localhost:3000/dashboard/settings/member-migration")
+                    webbrowser.open(f"{CRM_BASE_URL}/dashboard/settings/member-migration")
                     root.destroy()
 
                 def open_mapping():
                     import webbrowser
-                    webbrowser.open("http://localhost:3000/dashboard/settings/member-migration")
+                    webbrowser.open(f"{CRM_BASE_URL}/dashboard/settings/member-migration")
                     root.destroy()
 
                 btn_auto = tk.Button(

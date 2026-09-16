@@ -295,6 +295,15 @@ export default function AttendancePopupManager() {
     }
   };
 
+  const handleRenewMember = (memberId?: string) => {
+    handleClose();
+    if (memberId) {
+      router.push(`/dashboard/billing/create?mode=renew&id=${encodeURIComponent(memberId)}`);
+    } else {
+      router.push('/dashboard/billing/create');
+    }
+  };
+
   if (!activePopup) return null;
 
   return (
@@ -305,7 +314,7 @@ export default function AttendancePopupManager() {
             {activePopup.type === 'success' && <SuccessPopup data={activePopup.data} onClose={handleClose} onViewMember={() => handleViewMember(activePopup.data.rawId)} />}
             {activePopup.type === 'unknown' && <UnknownPopup data={activePopup.data} onClose={handleClose} onRegister={() => handleViewMember()} onMap={() => handleViewMember()} />}
             {activePopup.type === 'duplicate' && <DuplicatePopup data={activePopup.data} onClose={handleClose} />}
-            {activePopup.type === 'expired' && <ExpiredPopup data={activePopup.data} onClose={handleClose} onRenew={() => handleViewMember(activePopup.data.rawId)} />}
+            {activePopup.type === 'expired' && <ExpiredPopup data={activePopup.data} onClose={handleClose} onRenew={() => handleRenewMember(activePopup.data.rawId)} />}
             {activePopup.type === 'frozen' && <FrozenPopup data={activePopup.data} onClose={handleClose} onResume={() => handleViewMember(activePopup.data.rawId)} />}
             {activePopup.type === 'blacklisted' && <BlacklistedPopup data={activePopup.data} onClose={handleClose} />}
           </div>
