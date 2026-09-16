@@ -253,9 +253,9 @@ export default function DashboardLayout({
   const checkinDays = attendance ? attendance.map((a: any) => new Date(a.checkIn || '').getDate()) : [];
 
   return (
-    <div className="min-h-screen w-full flex font-sans text-slate-800 bg-[#FDFDFD] relative">
+    <div className="h-screen w-full flex font-sans text-slate-800 bg-[#FDFDFD] overflow-hidden relative">
       {/* ─── Column 1: Left Navigation Sidebar ─── */}
-      <aside className="w-[230px] lg:w-[240px] flex-shrink-0 bg-white border-r border-slate-200/80 p-4 flex flex-col justify-between h-screen sticky top-0 overflow-y-auto z-40">
+      <aside className="w-[230px] lg:w-[240px] flex-shrink-0 bg-white border-r border-slate-200/80 p-4 flex flex-col justify-between h-full overflow-y-auto z-40">
         <div className="space-y-6">
           {/* Branding Logo */}
           <div className="px-1 flex items-center justify-start border-b border-slate-100 pb-4">
@@ -349,7 +349,7 @@ export default function DashboardLayout({
       </aside>
 
       {/* ─── Main Workspace Content Area ─── */}
-      <main className="flex-1 min-w-0 w-full p-4 sm:p-6 overflow-y-auto flex flex-col gap-4 text-left bg-[#FDFDFD]">
+      <main className="flex-1 min-w-0 w-full h-full p-4 sm:p-6 overflow-y-auto flex flex-col gap-4 text-left bg-[#FDFDFD]">
         {/* Top Header Bar: Universal Search (Left/Center) + Live Time Card (Right) */}
         <div className="w-full flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 shrink-0 pb-1">
           <div className="w-full sm:max-w-[460px] md:max-w-[500px]">
