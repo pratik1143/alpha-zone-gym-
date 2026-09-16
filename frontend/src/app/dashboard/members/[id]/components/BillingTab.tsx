@@ -96,41 +96,94 @@ export default function BillingTab({ member: initialMember }: { member: any }) {
       const combinedMap = new Map<string, any>();
 
       if (liveData.length > 0) {
+        // Live Firestore invoices found — use them
         liveData.forEach((inv: any) => {
           const key = inv.id || inv.invoiceNumber || inv.invoice;
           combinedMap.set(key, inv);
         });
-      } else if (fallbackInvoices.length > 0) {
-        fallbackInvoices.forEach((inv: any, idx: number) => {
-          const key = inv.id || inv.invoiceNumber || inv.invoice || `inv_${idx}`;
-          combinedMap.set(key, inv);
-        });
-      } else if (member) {
-        const amountPaid = Number(member.amountPaid !== undefined ? member.amountPaid : (member.paid ?? member.totalPaid ?? member.amount ?? member.price ?? 0));
-        const balanceAmount = Number(member.balanceAmount !== undefined ? member.balanceAmount : (member.balance ?? member.outstandingBalance ?? 0));
-        const totalBilled = Number(member.totalBilled !== undefined ? member.totalBilled : (amountPaid + balanceAmount));
-        const autoInv = {
-          id: `inv_auto_${member.id || Date.now()}`,
-          invoiceNumber: member.clientId ? `INV-LEG-${member.clientId}` : (member.memberId ? member.memberId.replace('AZ-2026-', '') : '670'),
-          invoice: member.clientId ? `INV-LEG-${member.clientId}` : (member.memberId ? member.memberId.replace('AZ-2026-', '') : '670'),
-          plan: member.packageName || member.plan || 'General Membership',
-          packageName: member.packageName || member.plan || 'General Membership',
-          amount: totalBilled,
-          totalBilled: totalBilled,
-          packagePrice: totalBilled,
-          paid: amountPaid,
-          amountPaid: amountPaid,
-          pendingAmount: balanceAmount,
-          balanceAmount: balanceAmount,
-          discount: 0,
-          method: member.paymentMethod || member.method || 'Imported',
-          status: balanceAmount === 0 ? 'paid' : (amountPaid > 0 ? 'partial' : 'pending'),
-          paymentStatus: balanceAmount === 0 ? 'paid' : (amountPaid > 0 ? 'partial' : 'pending'),
-          date: member.startDate || member.joinDate || new Date().toISOString().split('T')[0],
-          startDate: member.startDate || member.joinDate || new Date().toISOString().split('T')[0],
-          expiryDate: member.expiryDate || new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-        };
-        combinedMap.set(autoInv.id, autoInv);
+      } else {
+        // No Firestore payment docs — use embedded data or auto-generate
+        if (fallbackInvoices.length > 0) {
+          fallbackInvoices.forEach((inv: any, idx: number) => {
+            const key = inv.id || inv.invoiceNumber || inv.invoice || `inv_${idx}`;
+            combinedMap.set(key, inv);
+          });
+        }
+
+        // Always generate an auto-invoice from member fields when no Firestore record exists
+        // This covers: imported members, manually added members, partial payments with balance due
+        if (member) {
+          // Try every possible field name for amountPaid / balanceAmount / price
+          const rawPaid = member.amountPaid ?? member.paid ?? member.totalPaid ?? member.amount ?? 0;
+          const rawBalance = member.balanceAmount ?? member.balance ?? member.outstandingBalance ?? member.balanceDue ?? member.dueAmount ?? 0;
+          const rawPrice = member.price ?? member.packagePrice ?? member.planPrice ?? member.planAmount ?? 0;
+
+          const amountPaid = Number(rawPaid) || 0;
+          const balanceAmount = Number(rawBalance) || 0;
+          // totalBilled: prefer stored value, else paid+balance, else plan price
+          const totalBilled = Number(member.totalBilled) || (amountPaid + balanceAmount) || Number(rawPrice) || 0;
+
+          // Only skip auto-invoice if member has literally zero financial data AND an embedded invoice already exists
+          if (totalBilled > 0 || balanceAmount > 0 || amountPaid > 0 || combinedMap.size === 0) {
+            const membershipLabel = member.packageName || member.plan || member.planName || 'General Membership';
+            const planPrice = totalBilled || Number(rawPrice) || 0;
+            const netPayable = totalBilled || planPrice;
+
+            const payStatus = balanceAmount === 0
+              ? 'paid'
+              : (amountPaid > 0 ? 'partial' : 'pending');
+
+            const autoInv = {
+              id: `inv_auto_${member.id || member.uid || Date.now()}`,
+              invoiceNumber: member.memberId
+                ? `INV-${member.memberId.replace('AZ-2026-', '').replace('AZ-', '')}`
+                : (member.clientId ? `INV-LEG-${member.clientId}` : `INV-AUTO`),
+              invoice: member.memberId
+                ? `INV-${member.memberId.replace('AZ-2026-', '').replace('AZ-', '')}`
+                : (member.clientId ? `INV-LEG-${member.clientId}` : `INV-AUTO`),
+              plan: membershipLabel,
+              packageName: membershipLabel,
+              // Amount fields — cover all column names used in the billing table
+              amount: planPrice,
+              totalBilled: planPrice,
+              packagePrice: planPrice,
+              netPayable: netPayable,
+              baseAmount: planPrice,
+              // Payment fields
+              paid: amountPaid,
+              amountPaid: amountPaid,
+              amountPaidToday: amountPaid,
+              pendingAmount: balanceAmount,
+              balanceAmount: balanceAmount,
+              remainingBalance: balanceAmount,
+              discount: Number(member.discount) || 0,
+              tax: Number(member.tax) || 0,
+              // Meta
+              method: member.paymentMethod || member.method || 'Imported',
+              paymentMethod: member.paymentMethod || member.method || 'Imported',
+              status: payStatus,
+              paymentStatus: payStatus,
+              billingType: 'membership',
+              // Dates
+              date: member.startDate || member.joinDate || new Date().toISOString().split('T')[0],
+              startDate: member.startDate || member.joinDate || new Date().toISOString().split('T')[0],
+              expiryDate: member.expiryDate || '',
+              invoiceDate: member.startDate || member.joinDate || new Date().toISOString().split('T')[0],
+              createdAt: member.createdAt || member.joinDate || new Date().toISOString(),
+              // Member info
+              memberId: member.id || member.uid,
+              memberName: member.name,
+              memberPhone: member.phone || '',
+              isAutoGenerated: true, // flag to distinguish from real invoices
+            };
+
+            // Use invoiceNumber as key so it doesn't duplicate if fallbackInvoices already has same
+            const autoKey = autoInv.invoiceNumber;
+            if (!combinedMap.has(autoKey)) {
+              combinedMap.set(autoKey, autoInv);
+            }
+          }
+        }
       }
 
       const sorted = Array.from(combinedMap.values()).sort((a: any, b: any) => {
