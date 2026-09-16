@@ -48,17 +48,26 @@ export default function BillingPage() {
     deletePayment,
   } = useTodaysPayments();
 
-  // payments list used for table = all non-deleted payments (sorted by invoiceDate + transactionTime newest first)
+  // payments list used for table = all non-deleted payments (sorted by ISO timestamp / date + time newest first)
   const payments = useMemo(
     () => [...allPayments].sort((a, b) => {
-      const dateA = String(a.invoiceDate || a.billingDate || a.date || a.paymentDate || a.transactionDate || a.createdAt || '');
-      const timeA = String(a.transactionTime || a.paymentTime || a.time || '');
-      const dateB = String(b.invoiceDate || b.billingDate || b.date || b.paymentDate || b.transactionDate || b.createdAt || '');
-      const timeB = String(b.transactionTime || b.paymentTime || b.time || '');
-
-      const dtA = dateA.includes('T') ? new Date(dateA).getTime() : new Date(`${dateA} ${timeA}`.trim()).getTime();
-      const dtB = dateB.includes('T') ? new Date(dateB).getTime() : new Date(`${dateB} ${timeB}`.trim()).getTime();
-      return (isNaN(dtB) ? 0 : dtB) - (isNaN(dtA) ? 0 : dtA);
+      const getTimestamp = (p: PaymentRecord): number => {
+        const isoStr = p.createdAt || p.updatedAt;
+        if (isoStr && typeof isoStr === 'string' && isoStr.includes('T')) {
+          const ms = new Date(isoStr).getTime();
+          if (!isNaN(ms) && ms > 0) return ms;
+        }
+        const dateStr = String(p.invoiceDate || p.billingDate || p.date || p.paymentDate || p.transactionDate || '');
+        const timeStr = String(p.transactionTime || p.paymentTime || p.time || '');
+        if (dateStr.includes('T')) {
+          const ms = new Date(dateStr).getTime();
+          if (!isNaN(ms) && ms > 0) return ms;
+        }
+        const fullStr = `${dateStr} ${timeStr}`.trim();
+        const ms = new Date(fullStr).getTime();
+        return isNaN(ms) ? 0 : ms;
+      };
+      return getTimestamp(b) - getTimestamp(a);
     }),
     [allPayments]
   );
@@ -151,9 +160,9 @@ export default function BillingPage() {
     if (foundMember && foundMember.name) {
       memberName = foundMember.name;
     } else if (p.memberName && p.memberName.trim()) {
-      memberName = targetId ? (p.memberName.includes('Deleted') ? p.memberName : `${p.memberName} (Deleted Member)`) : p.memberName;
+      memberName = p.memberName.trim();
     } else {
-      memberName = targetId ? 'Unknown / Deleted Member' : 'Member';
+      memberName = targetId ? 'Member' : 'Member';
     }
 
     const rawPhone = (foundMember?.phone || foundMember?.mobile || p.memberPhone || '').trim();

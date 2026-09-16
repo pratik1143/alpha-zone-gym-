@@ -192,10 +192,20 @@ export function useTodaysPayments(): UseTodaysPaymentsResult {
           knownMemberKeys.add(`az-2026-${cleanNum}`);
         }
       });
+
+      if (p.memberPhone) {
+        const cleanPhone = String(p.memberPhone).replace(/\D/g, '');
+        if (cleanPhone.length >= 10) {
+          knownMemberKeys.add(`phone_${cleanPhone.slice(-10)}`);
+        }
+      }
+      if (p.memberName && typeof p.memberName === 'string') {
+        knownMemberKeys.add(`name_${p.memberName.trim().toLowerCase()}`);
+      }
     });
 
-    // Synthesize auto-generated payments for members with billing data but no explicit payments doc
-    if (Array.isArray(members) && members.length > 0) {
+    // Synthesize auto-generated payments for members with billing data but no explicit payments doc ONLY after Firestore loading completes
+    if (!loading && Array.isArray(members) && members.length > 0) {
       members.forEach((m: any) => {
         if (!m) return;
         const mTargets = [m.id, m.uid, m.memberId, m.clientId, m.docId].filter(Boolean);
@@ -211,6 +221,13 @@ export function useTodaysPayments(): UseTodaysPaymentsResult {
           if (knownMemberKeys.has(s) || (cleanNum && knownMemberKeys.has(cleanNum))) {
             hasRealPayment = true;
             break;
+          }
+        }
+
+        if (!hasRealPayment && m.phone) {
+          const cleanPhone = String(m.phone).replace(/\D/g, '');
+          if (cleanPhone.length >= 10 && knownMemberKeys.has(`phone_${cleanPhone.slice(-10)}`)) {
+            hasRealPayment = true;
           }
         }
 
