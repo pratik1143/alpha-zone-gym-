@@ -59,108 +59,179 @@ const renderGateHtml = (req: express.Request, res: express.Response) => {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ALPHA ZONE GYM — EasyBio Local Gate Control</title>
+  <title>ALPHA ZONE GYM — EasyBio Gate Control Terminal</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
+    body { font-family: 'Plus Jakarta Sans', sans-serif; }
     @keyframes pulse-ring {
-      0% { transform: scale(0.95); opacity: 0.8; }
-      50% { transform: scale(1.05); opacity: 0.4; }
-      100% { transform: scale(0.95); opacity: 0.8; }
+      0% { transform: scale(0.96); opacity: 0.7; }
+      50% { transform: scale(1.06); opacity: 0.35; }
+      100% { transform: scale(0.96); opacity: 0.7; }
     }
-    .pulse-glow { animation: pulse-ring 2.5s infinite ease-in-out; }
+    .pulse-glow { animation: pulse-ring 2.8s infinite ease-in-out; }
+    @keyframes progress-drain {
+      0% { width: 100%; }
+      100% { width: 0%; }
+    }
+    .animate-progress { animation: progress-drain 15s linear forwards; }
   </style>
 </head>
-<body class="bg-slate-950 text-slate-100 min-h-screen font-sans flex flex-col justify-between">
+<body class="bg-gradient-to-br from-slate-50 via-blue-50/40 to-indigo-50/60 text-slate-800 min-h-screen font-sans flex flex-col justify-between antialiased selection:bg-blue-600 selection:text-white">
   
-  <!-- Header Banner -->
-  <header class="bg-slate-900/80 border-b border-slate-800 p-5 backdrop-blur-md sticky top-0 z-30">
-    <div class="max-w-4xl mx-auto flex items-center justify-between">
-      <div class="flex items-center gap-3">
-        <div class="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-400 flex items-center justify-center font-black text-lg shadow-inner">
-          ⚡
+  <!-- Top Header Navigation -->
+  <header class="bg-white/80 border-b border-blue-100/80 p-4 px-6 backdrop-blur-xl sticky top-0 z-30 shadow-sm">
+    <div class="max-w-5xl mx-auto flex items-center justify-between">
+      <div class="flex items-center gap-3.5">
+        <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 p-0.5 shadow-md shadow-blue-500/20 shrink-0 flex items-center justify-center">
+          <img 
+            src="https://i.ibb.co/vzG7CgD/alpha-zone-logo.png" 
+            alt="Alpha Zone Gym Logo" 
+            class="w-full h-full object-contain p-1 rounded-xl bg-white" 
+            onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';"
+          />
+          <div class="hidden w-full h-full items-center justify-center text-white font-black text-xl">AZ</div>
         </div>
         <div>
-          <h1 class="text-lg font-black text-white tracking-wider uppercase">ALPHA ZONE GYM</h1>
-          <p class="text-xs text-amber-400/90 font-bold">EasyBio LAN Gate Control Terminal</p>
+          <div class="flex items-center gap-2">
+            <h1 class="text-lg font-black text-slate-900 tracking-tight uppercase">ALPHA ZONE GYM</h1>
+            <span class="px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 text-[10px] font-black uppercase tracking-wider border border-blue-200">
+              LAN TERMINAL
+            </span>
+          </div>
+          <p class="text-xs text-slate-500 font-semibold mt-0.5">EasyBio Hardware Access Control Engine</p>
         </div>
       </div>
-      <div class="flex items-center gap-2">
-        <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
-        <span class="text-xs font-mono font-bold text-emerald-400 bg-emerald-950/60 px-2.5 py-1 rounded-full border border-emerald-800/80">
+
+      <div class="flex items-center gap-2 bg-blue-50 border border-blue-200/80 px-3.5 py-1.5 rounded-full shadow-inner">
+        <span class="relative flex h-2.5 w-2.5">
+          <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+          <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-blue-600"></span>
+        </span>
+        <span class="text-xs font-mono font-black text-blue-900">
           LAN ACTIVE: ${lanIp}
         </span>
       </div>
     </div>
   </header>
 
-  <!-- Main Container -->
-  <main class="max-w-4xl mx-auto px-4 py-8 w-full flex-1 flex flex-col items-center justify-center space-y-8">
+  <!-- Main Work Area -->
+  <main class="max-w-5xl mx-auto px-4 py-8 w-full flex-1 flex flex-col items-center justify-center space-y-8">
     
-    <!-- Status Grid -->
+    <!-- Status Dashboard Cards -->
     <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 w-full">
-      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-col">
-        <span class="text-[10px] font-black uppercase text-slate-400 tracking-wider">HARDWARE DEVICE</span>
-        <span class="text-sm font-black text-white mt-1">EasyBio Biometric</span>
-        <span class="text-xs font-mono text-emerald-400 font-bold mt-0.5">192.168.18.11:4370</span>
+      <div class="bg-white/90 border border-blue-100 rounded-3xl p-5 shadow-xl shadow-blue-900/5 flex flex-col justify-between">
+        <div class="flex items-center justify-between text-slate-400 mb-2">
+          <span class="text-[10px] font-black uppercase tracking-wider text-slate-400">HARDWARE TERMINAL</span>
+          <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+        </div>
+        <div>
+          <div class="text-base font-black text-slate-900">EasyBio Biometric</div>
+          <div class="text-xs font-mono text-blue-600 font-bold mt-1 bg-blue-50 px-2 py-0.5 rounded-md inline-block border border-blue-100">192.168.18.11:4370</div>
+        </div>
       </div>
 
-      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-col">
-        <span class="text-[10px] font-black uppercase text-slate-400 tracking-wider">GATE RELAY ACTION</span>
-        <span class="text-sm font-black text-white mt-1">Direct Unlock (15s)</span>
-        <span class="text-xs font-mono text-emerald-400 font-bold mt-0.5">Hardware Enabled</span>
+      <div class="bg-white/90 border border-blue-100 rounded-3xl p-5 shadow-xl shadow-blue-900/5 flex flex-col justify-between">
+        <div class="flex items-center justify-between text-slate-400 mb-2">
+          <span class="text-[10px] font-black uppercase tracking-wider text-slate-400">RELAY DURATION</span>
+          <span class="text-[10px] font-extrabold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">15 SECONDS</span>
+        </div>
+        <div>
+          <div class="text-base font-black text-slate-900">Direct Gate Unlock</div>
+          <div class="text-xs text-emerald-600 font-bold mt-1 flex items-center gap-1">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Auto-Relay Lock Active
+          </div>
+        </div>
       </div>
 
-      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-col">
-        <span class="text-[10px] font-black uppercase text-slate-400 tracking-wider">CRM SYSTEM</span>
-        <span class="text-sm font-black text-white mt-1">Alpha Zone OS</span>
-        <a href="http://${lanIp}:3000/dashboard" target="_blank" class="text-xs font-mono text-blue-400 font-bold mt-0.5 hover:underline">
-          Open CRM (Port 3000) &rarr;
-        </a>
+      <div class="bg-white/90 border border-blue-100 rounded-3xl p-5 shadow-xl shadow-blue-900/5 flex flex-col justify-between">
+        <div class="flex items-center justify-between text-slate-400 mb-2">
+          <span class="text-[10px] font-black uppercase tracking-wider text-slate-400">CRM SYSTEM LINK</span>
+          <span class="text-[10px] font-bold text-slate-400">PORT 3000</span>
+        </div>
+        <div>
+          <div class="text-base font-black text-slate-900">Alpha Zone OS</div>
+          <a href="http://${lanIp}:3000/dashboard" target="_blank" class="text-xs font-bold text-blue-600 hover:text-blue-800 mt-1 inline-flex items-center gap-1 group">
+            Launch Main CRM <span class="group-hover:translate-x-0.5 transition-transform">&rarr;</span>
+          </a>
+        </div>
       </div>
     </div>
 
-    <!-- MAIN HEAVY GATE UNLOCK BUTTON -->
-    <div class="flex flex-col items-center justify-center space-y-4 py-4">
+    <!-- CENTRAL HEAVY GATE UNLOCK ACTION -->
+    <div class="flex flex-col items-center justify-center space-y-6 py-6 w-full max-w-md">
       <div class="relative flex items-center justify-center">
-        <div id="pulseBg" class="absolute w-56 h-56 rounded-full bg-emerald-500/20 pulse-glow"></div>
+        <!-- Glow Pulse Behind Button -->
+        <div id="pulseBg" class="absolute w-64 h-64 rounded-full bg-blue-500/20 pulse-glow"></div>
         
         <button 
           id="unlockBtn"
           onclick="triggerGateUnlock()"
-          class="relative w-48 h-48 rounded-full bg-gradient-to-b from-emerald-500 via-emerald-600 to-emerald-700 hover:from-emerald-400 hover:to-emerald-600 text-white shadow-[0_15px_40px_rgba(16,185,129,0.5)] active:scale-95 transition-all cursor-pointer flex flex-col items-center justify-center border-4 border-emerald-300/40 text-center"
+          class="relative w-56 h-56 rounded-full bg-gradient-to-tr from-blue-700 via-blue-600 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 active:scale-95 text-white shadow-[0_20px_60px_rgba(37,99,235,0.4)] transition-all cursor-pointer flex flex-col items-center justify-center border-4 border-white/60 group text-center"
         >
-          <span class="text-4xl mb-1">🔓</span>
-          <span class="text-lg font-black tracking-wider uppercase">OPEN GATE</span>
-          <span class="text-[10px] font-bold tracking-widest uppercase opacity-90">Press to Unlock</span>
+          <div class="w-16 h-16 rounded-2xl bg-white/15 backdrop-blur-md flex items-center justify-center mb-2 shadow-inner group-hover:scale-110 transition-transform">
+            <span id="lockIcon" class="text-3xl">🔓</span>
+          </div>
+          <span class="text-xl font-black tracking-wider uppercase">OPEN GATE</span>
+          <span class="text-[10px] font-bold tracking-widest uppercase opacity-80 mt-1 bg-white/10 px-2.5 py-0.5 rounded-full">
+            UNLOCK 15 SECONDS
+          </span>
         </button>
       </div>
 
-      <!-- Live Feedback Banner -->
-      <div id="statusBanner" class="hidden text-center max-w-md p-4 rounded-2xl border font-bold text-sm transition-all shadow-lg"></div>
+      <!-- Live Interactive Feedback Banner with 15s Timer -->
+      <div id="statusBanner" class="hidden w-full bg-white border border-blue-200 p-5 rounded-3xl shadow-xl space-y-3 transition-all text-center">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <div id="statusDot" class="w-3 h-3 rounded-full bg-emerald-500 animate-ping"></div>
+            <span id="bannerTitle" class="text-sm font-black text-slate-900 uppercase tracking-tight">GATE UNLOCKED!</span>
+          </div>
+          <span id="timerText" class="text-xs font-mono font-black text-blue-600 bg-blue-50 px-2.5 py-1 rounded-full border border-blue-100">15s Left</span>
+        </div>
+        <p id="bannerDesc" class="text-xs text-slate-600 font-semibold text-left">Hardware relay signal triggered. Gate is open for 15 seconds.</p>
+        
+        <!-- Animated Progress Bar -->
+        <div class="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+          <div id="progressBar" class="h-full bg-gradient-to-r from-blue-600 to-emerald-500 transition-all duration-1000 w-full"></div>
+        </div>
+      </div>
     </div>
 
-    <!-- Quick Info Notice -->
-    <div class="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-4 text-center text-xs text-slate-400 max-w-xl">
-      💡 <strong class="text-slate-200">Gym WiFi Quick Access:</strong> Anyone connected to the Gym WiFi network can open <code class="bg-slate-800 text-amber-300 px-2 py-0.5 rounded font-mono">http://${lanIp}:8000/gate-control</code> on their phone or PC to trigger gate unlock.
+    <!-- Quick WiFi Access Card -->
+    <div class="bg-white/80 border border-blue-100/90 rounded-2xl p-4 px-6 text-center text-xs text-slate-600 max-w-lg shadow-sm">
+      💡 <strong class="text-slate-900 font-bold">Gym WiFi Quick Access:</strong> Connect to Gym WiFi and open <code class="bg-blue-50 text-blue-700 px-2 py-0.5 rounded font-mono font-bold border border-blue-200">http://${lanIp}:8000/gate-control</code> on phone or PC for 1-tap door unlock.
     </div>
 
   </main>
 
   <!-- Footer -->
-  <footer class="border-t border-slate-800/80 py-4 text-center text-xs text-slate-500">
+  <footer class="border-t border-blue-100 bg-white/60 py-4 text-center text-xs font-semibold text-slate-500">
     Alpha Zone Gym OS &copy; 2026 • Local EasyBio Access Control Engine
   </footer>
 
   <script>
+    let countdownInterval = null;
+
     async function triggerGateUnlock() {
       const btn = document.getElementById('unlockBtn');
       const banner = document.getElementById('statusBanner');
-      const pulse = document.getElementById('pulseBg');
+      const bannerTitle = document.getElementById('bannerTitle');
+      const bannerDesc = document.getElementById('bannerDesc');
+      const timerText = document.getElementById('timerText');
+      const progressBar = document.getElementById('progressBar');
+      const lockIcon = document.getElementById('lockIcon');
 
       btn.disabled = true;
       btn.style.opacity = '0.7';
-      banner.className = 'block bg-blue-900/60 border-blue-500/50 text-blue-200 text-center max-w-md p-4 rounded-2xl border font-bold text-sm shadow-lg animate-pulse';
-      banner.innerHTML = '⏳ Sending Unlock Signal to EasyBio Device (192.168.18.11)...';
+      lockIcon.innerText = '🔓';
+
+      banner.className = 'block w-full bg-white border border-blue-200 p-5 rounded-3xl shadow-xl space-y-3 transition-all text-center';
+      bannerTitle.innerText = '⏳ TRANSMITTING UNLOCK SIGNAL...';
+      bannerDesc.innerText = 'Sending signal to EasyBio hardware at 192.168.18.11...';
+      timerText.innerText = '15s';
+      progressBar.style.width = '100%';
 
       try {
         let res = await fetch('/api/attendance/gate-unlock', {
@@ -185,8 +256,8 @@ const renderGateHtml = (req: express.Request, res: express.Response) => {
         const data = await res.json();
 
         if (data.success) {
-          banner.className = 'block bg-emerald-950 border-emerald-500 text-emerald-300 text-center max-w-md p-4 rounded-2xl border font-black text-sm shadow-xl';
-          banner.innerHTML = '✅ DOOR UNLOCKED FOR 15 SECONDS!<br><span class="text-xs font-normal text-emerald-400">Hardware relay signal triggered successfully.</span>';
+          bannerTitle.innerText = '✅ DOOR UNLOCKED FOR 15 SECONDS!';
+          bannerDesc.innerText = 'Hardware relay open. Member access granted.';
           
           // Audio chime
           try {
@@ -200,13 +271,34 @@ const renderGateHtml = (req: express.Request, res: express.Response) => {
             osc.start();
             osc.stop(ctx.currentTime + 0.3);
           } catch(e){}
+
+          // Start 15 Seconds Countdown Timer
+          let secondsLeft = 15;
+          if (countdownInterval) clearInterval(countdownInterval);
+
+          countdownInterval = setInterval(() => {
+            secondsLeft -= 1;
+            timerText.innerText = secondsLeft + 's Left';
+            const pct = (secondsLeft / 15) * 100;
+            progressBar.style.width = pct + '%';
+
+            if (secondsLeft <= 0) {
+              clearInterval(countdownInterval);
+              bannerTitle.innerText = '🔒 GATE RELAY LOCKED';
+              bannerDesc.innerText = '15 seconds elapsed. Gate relay auto-locked.';
+              timerText.innerText = 'Locked';
+              lockIcon.innerText = '🔒';
+              progressBar.style.width = '0%';
+            }
+          }, 1000);
+
         } else {
-          banner.className = 'block bg-red-950 border-red-500 text-red-300 text-center max-w-md p-4 rounded-2xl border font-bold text-sm shadow-xl';
-          banner.innerHTML = '⚠️ ' + (data.message || 'Gate Unlock Request Failed');
+          bannerTitle.innerText = '⚠️ UNLOCK FAILED';
+          bannerDesc.innerText = data.message || 'Gate Unlock Request Failed';
         }
       } catch (err) {
-        banner.className = 'block bg-red-950 border-red-500 text-red-300 text-center max-w-md p-4 rounded-2xl border font-bold text-sm shadow-xl';
-        banner.innerHTML = '❌ Connection Error: Unable to reach Gate Controller API';
+        bannerTitle.innerText = '❌ CONNECTION ERROR';
+        bannerDesc.innerText = 'Unable to reach Gate Controller API. Ensure backend service is active.';
       } finally {
         setTimeout(() => {
           btn.disabled = false;
