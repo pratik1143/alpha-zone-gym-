@@ -1531,9 +1531,9 @@ def device_worker_thread(device_id, ip, port, device_name, branch, sync_interval
                 
                 logging.info(f"Realtime Swipe Detected: UserID={event.user_id}, Time={event.timestamp}")
                 
-                # Prevent processing stale/buffered events during reconnect loops
+                # Prevent processing stale/buffered events during reconnect loops (allow up to 5 minutes clock drift)
                 event_age = abs((datetime.now() - event.timestamp).total_seconds())
-                if event_age > 15:
+                if event_age > 300:
                     logging.info(f"Skipping stale/buffered event (Age: {event_age:.1f}s): UserID={event.user_id}, Time={event.timestamp}")
                     continue
                 
@@ -1544,14 +1544,15 @@ def device_worker_thread(device_id, ip, port, device_name, branch, sync_interval
                     logging.info(f"[Cooldown] Skipping repeat swipe for UserID={event.user_id} within 15s cooldown.")
                     continue
 
-                # Run Membership Validation Engine using server-side authoritative UTC time
+                # Run Membership Validation Engine using server-side authoritative UTC time for live swipe
                 timestamp_iso = datetime.utcnow().isoformat() + 'Z'
                 success = run_membership_validation(
                     user_id=event.user_id,
                     device_id=device_id,
                     device_name=device_name,
                     branch=branch,
-                    timestamp_iso=timestamp_iso
+                    timestamp_iso=timestamp_iso,
+                    is_realtime=True
                 )
                 
                 # Trigger door lock relay control if active athlete validated
@@ -1578,7 +1579,7 @@ def device_worker_thread(device_id, ip, port, device_name, branch, sync_interval
                 last_sync_time = now
                 try:
                     attendance = conn.get_attendance()
-                    # Sync any logs from device memory to Firebase
+                    # Sync any logs from device memory to Firebase (is_realtime=False so NO random popups!)
                     for record in attendance[-100:]:  # Process latest 100 logs
                         rec_time = record.timestamp.isoformat() + 'Z' if record.timestamp else datetime.utcnow().isoformat() + 'Z'
                         rec_doc_id = f"att_{device_id}_{record.user_id}_{rec_time.replace(':', '-').replace('.', '-')}"
@@ -1590,7 +1591,8 @@ def device_worker_thread(device_id, ip, port, device_name, branch, sync_interval
                                 device_id=device_id,
                                 device_name=device_name,
                                 branch=branch,
-                                timestamp_iso=rec_time
+                                timestamp_iso=rec_time,
+                                is_realtime=False
                             )
                 except Exception as sync_err:
                     logging.error(f"Error during periodic offline log sync: {sync_err}")
