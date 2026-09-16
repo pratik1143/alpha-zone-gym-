@@ -90,11 +90,31 @@ export default function BillingTab({ member: initialMember }: { member: any }) {
       ? member.billingHistory
       : (Array.isArray(member.payments) && member.payments.length > 0 ? member.payments : []);
 
-    const docId = member.id || member.uid || member.memberId;
-    const q = query(collection(db, 'payments'), where('memberId', '==', docId));
+    const memberDocIds = new Set([
+      member.id, member.uid, member.memberId,
+      member.id && String(member.id),
+      member.memberId && String(member.memberId)
+    ].filter(Boolean));
 
-    const unsub = onSnapshot(q, (snap) => {
-      const liveData = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const rawPhone = (member.phone || '').replace(/\D/g, '');
+
+    const unsub = onSnapshot(collection(db, 'payments'), (snap) => {
+      const allDocs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+      // Find live non-deleted payment docs matching member ID or phone
+      const liveData = allDocs.filter((inv: any) => {
+        if (!inv || inv.deleted === true || String(inv.status || '').toLowerCase() === 'void' || inv.isDuplicate === true) {
+          return false;
+        }
+        const invMemId = String(inv.memberId || '').trim();
+        const invPhone = String(inv.memberPhone || inv.phone || '').replace(/\D/g, '');
+
+        const matchesId = invMemId && memberDocIds.has(invMemId);
+        const matchesPhone = rawPhone && invPhone && (invPhone === rawPhone || invPhone.endsWith(rawPhone) || rawPhone.endsWith(invPhone));
+
+        return matchesId || matchesPhone;
+      });
+
       const combinedMap = new Map<string, any>();
 
       if (liveData.length > 0) {
@@ -113,16 +133,13 @@ export default function BillingTab({ member: initialMember }: { member: any }) {
         }
 
         // Always generate an auto-invoice from member fields when no Firestore record exists
-        // This covers: imported members, manually added members, test members, partial payments with balance due
         if (member) {
-          // 1. Resolve raw numeric fields (supporting all backend/frontend schema variations)
           const rawPaid = member.amountPaid ?? member.paid ?? member.totalPaid ?? member.paidAmount ?? member.amount ?? 0;
           const rawBalance = member.balanceAmount ?? member.balance ?? member.outstandingBalance ?? member.balanceDue ?? member.dueAmount ?? member.pendingAmount ?? 0;
           const rawPrice = member.price ?? member.packagePrice ?? member.planPrice ?? member.planAmount ?? member.totalBilled ?? member.amount ?? 0;
 
           let extractedPrice = Number(rawPrice) || 0;
 
-          // 2. If explicit price is 0, parse numeric price embedded in plan string (e.g., "Monthly Standard ₹5,000")
           if (!extractedPrice && typeof member.plan === 'string') {
             const match = member.plan.match(/₹?\s*([0-9,]+)/);
             if (match) {
@@ -135,7 +152,6 @@ export default function BillingTab({ member: initialMember }: { member: any }) {
               extractedPrice = Number(match[1].replace(/,/g, ''));
             }
           }
-          // Default standard price if plan is set but no numeric value found
           if (!extractedPrice && (member.plan || member.packageName)) {
             extractedPrice = 5000;
           }
@@ -143,9 +159,17 @@ export default function BillingTab({ member: initialMember }: { member: any }) {
           let balanceAmount = Number(rawBalance) || 0;
           let amountPaid = Number(rawPaid) || 0;
 
-          // If paid amount is 0 and balance is 0, the member's plan was fully paid (works for active, expired, & imported members)
-          if (amountPaid === 0 && balanceAmount === 0) {
-            amountPaid = extractedPrice || 5000;
+          const isPaidOrActive = (member.paymentStatus || '').toLowerCase() === 'paid' ||
+                                (member.status || '').toLowerCase() === 'active' ||
+                                balanceAmount === 0;
+
+          // If raw paid amount is missing, calculate paid amount from package price and balance due
+          if (amountPaid === 0 && (isPaidOrActive || balanceAmount > 0)) {
+            if (balanceAmount > 0 && extractedPrice > balanceAmount) {
+              amountPaid = extractedPrice - balanceAmount;
+            } else if (balanceAmount === 0) {
+              amountPaid = extractedPrice || 5000;
+            }
           }
 
           const totalBilled = Number(member.totalBilled) || (amountPaid + balanceAmount) || extractedPrice || 5000;
@@ -168,14 +192,12 @@ export default function BillingTab({ member: initialMember }: { member: any }) {
             invoice: invNum,
             plan: membershipLabel,
             packageName: membershipLabel,
-            // Amount fields — cover all column names used in the billing table and receipts
             amount: planPrice,
             totalBilled: planPrice,
             packagePrice: planPrice,
             originalAmount: planPrice,
             netPayable: netPayable,
             baseAmount: planPrice,
-            // Payment fields
             paid: amountPaid,
             amountPaid: amountPaid,
             paidAmount: amountPaid,
@@ -188,19 +210,16 @@ export default function BillingTab({ member: initialMember }: { member: any }) {
             discountAmount: Number(member.discount) || 0,
             tax: Number(member.tax) || 0,
             taxAmount: Number(member.tax) || 0,
-            // Meta
             method: member.paymentMethod || member.method || 'Cash',
             paymentMethod: member.paymentMethod || member.method || 'Cash',
             status: payStatus,
             paymentStatus: payStatus,
             billingType: 'membership',
-            // Dates
             date: member.startDate || member.joinDate || new Date().toISOString().split('T')[0],
             startDate: member.startDate || member.joinDate || new Date().toISOString().split('T')[0],
             expiryDate: member.expiryDate || '',
             invoiceDate: member.startDate || member.joinDate || new Date().toISOString().split('T')[0],
             createdAt: member.createdAt || member.joinDate || new Date().toISOString(),
-            // Member info
             memberId: member.id || member.uid,
             memberName: member.name || 'Member',
             memberPhone: member.phone || '',
