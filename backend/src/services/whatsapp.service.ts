@@ -11,13 +11,19 @@ class WhatsAppService {
   private clientInfo: any = null;
 
   constructor() {
-    // Automatically attempt reconnection if initialized
-    setTimeout(() => {
-      this.initClient();
-    }, 2000);
+    // WhatsApp Web auto-launch disabled in favor of Meta Cloud API / Manual trigger
   }
 
   public async getStatus() {
+    if (process.env.ENABLE_WHATSAPP_WEB !== 'true') {
+      return {
+        status: 'Disabled',
+        qr: null,
+        profileName: 'Meta Cloud API Mode',
+        phoneNumber: null,
+        lastSync: new Date().toISOString(),
+      };
+    }
     return {
       status: this.status,
       qr: this.qrCode,
@@ -28,6 +34,10 @@ class WhatsAppService {
   }
 
   public async initClient() {
+    if (process.env.ENABLE_WHATSAPP_WEB !== 'true') {
+      console.log('[WhatsApp] Web Module disabled (Meta Cloud API selected).');
+      return;
+    }
     if (this.client && this.status === 'Connecting') {
       console.log('[WhatsApp] Initialization already in progress.');
       return;

@@ -36,11 +36,13 @@ router.get('/python/status', getPythonStatus);
 router.get('/system/health', getPythonStatus);
 router.get('/gate/status', getGateStatus);
 
+// Unauthenticated Gate Unlock Endpoints (for Gym LAN Terminal & Quick Open)
+router.post('/gate/open', triggerGateUnlock);
+router.post('/attendance/gate-unlock', triggerGateUnlock);
+router.post('/attendance/unlock', triggerGateUnlock);
+
 // Protect all CRM / dashboard operations
 router.use(authenticateToken);
-
-// Dedicated Gate Control & Hardware Routes
-router.post('/gate/open', triggerGateUnlock);
 
 // Universal Global Search API
 router.get('/search', globalSearch);

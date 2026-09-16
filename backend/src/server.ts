@@ -42,7 +42,14 @@ app.get('/health', (req: express.Request, res: express.Response) => {
   res.json({ status: 'healthy', service: 'alpha-zone-os-api', timestamp: new Date().toISOString() });
 });
 
-import { getLocalIpAddress } from './controllers/attendance.controller';
+import { getLocalIpAddress, triggerGateUnlock } from './controllers/attendance.controller';
+
+// Directly mount unauthenticated LAN Gate Unlock POST endpoints on app
+app.post('/api/attendance/gate-unlock', triggerGateUnlock);
+app.post('/api/gate/open', triggerGateUnlock);
+app.post('/api/attendance/unlock', triggerGateUnlock);
+app.post('/gate/open', triggerGateUnlock);
+app.post('/gate-unlock', triggerGateUnlock);
 
 // Dedicated Standalone LAN Gate Control Web Application Served directly on Port 8000
 const renderGateHtml = (req: express.Request, res: express.Response) => {
@@ -156,11 +163,25 @@ const renderGateHtml = (req: express.Request, res: express.Response) => {
       banner.innerHTML = '⏳ Sending Unlock Signal to EasyBio Device (192.168.18.11)...';
 
       try {
-        const res = await fetch('/api/attendance/gate-unlock', {
+        let res = await fetch('/api/attendance/gate-unlock', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ source: 'lan_web_app' })
         });
+        if (!res.ok) {
+          res = await fetch('/api/gate/open', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ source: 'lan_web_app' })
+          });
+        }
+        if (!res.ok) {
+          res = await fetch('/gate/open', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ source: 'lan_web_app' })
+          });
+        }
         const data = await res.json();
 
         if (data.success) {
