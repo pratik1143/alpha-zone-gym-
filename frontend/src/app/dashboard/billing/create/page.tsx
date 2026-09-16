@@ -188,9 +188,17 @@ function UniversalBillingTerminalContent() {
       };
     }
 
-    const rawPaid = selectedMember.amountPaid ?? selectedMember.paid ?? selectedMember.totalPaid ?? selectedMember.paidAmount ?? 0;
-    const rawBalance = selectedMember.balanceAmount ?? selectedMember.outstandingBalance ?? selectedMember.balance ?? selectedMember.dueAmount ?? 0;
-    const rawPrice = selectedMember.price ?? selectedMember.totalBilled ?? selectedMember.packagePrice ?? 6500;
+    const embeddedHistory = [
+      ...(Array.isArray(selectedMember.billingHistory) ? selectedMember.billingHistory : []),
+      ...(Array.isArray(selectedMember.payments) ? selectedMember.payments : []),
+      ...(Array.isArray(selectedMember.membershipHistory) ? selectedMember.membershipHistory : [])
+    ];
+
+    const lastInv = embeddedHistory.length > 0 ? embeddedHistory[embeddedHistory.length - 1] : null;
+
+    const rawPaid = lastInv?.amountPaid ?? lastInv?.paid ?? selectedMember.amountPaid ?? selectedMember.paid ?? selectedMember.totalPaid ?? selectedMember.paidAmount ?? selectedMember.amountPaidToday ?? 0;
+    const rawBalance = lastInv?.pendingAmount ?? lastInv?.balanceAmount ?? selectedMember.balanceAmount ?? selectedMember.outstandingBalance ?? selectedMember.balance ?? selectedMember.dueAmount ?? selectedMember.pendingAmount ?? selectedMember.balanceDue ?? selectedMember.remainingBalance;
+    const rawPrice = lastInv?.netPayable ?? lastInv?.originalAmount ?? lastInv?.amount ?? selectedMember.price ?? selectedMember.totalBilled ?? selectedMember.packagePrice ?? selectedMember.amount ?? selectedMember.netPayable ?? 6500;
 
     let parsedPrice = Number(rawPrice) || 0;
     if (!parsedPrice && typeof selectedMember.plan === 'string') {
@@ -199,22 +207,33 @@ function UniversalBillingTerminalContent() {
     }
     if (!parsedPrice) parsedPrice = 6500;
 
-    const pending = Math.max(0, Number(rawBalance) || 0);
     let paid = Number(rawPaid) || 0;
+
+    let pending = 0;
+    if (rawBalance !== undefined && rawBalance !== null && !isNaN(Number(rawBalance)) && Number(rawBalance) > 0) {
+      pending = Number(rawBalance);
+    } else if (parsedPrice > paid) {
+      pending = Math.max(0, parsedPrice - paid);
+    } else if (Number(selectedMember.outstandingBalance || 0) > 0) {
+      pending = Number(selectedMember.outstandingBalance);
+    }
+
     if (paid === 0 && pending > 0 && parsedPrice > pending) {
       paid = parsedPrice - pending;
     } else if (paid === 0 && pending === 0) {
       paid = parsedPrice;
     }
 
+    const prevInvNo = lastInv?.invoiceNumber || lastInv?.invoice || selectedMember.lastInvoiceNo || (selectedMember.clientId ? `INV-LEG-${selectedMember.clientId}` : `INV-LEG-${String(selectedMember.id || '355').slice(0, 6)}`);
+
     return {
       package: selectedMember.plan || selectedMember.packageName || '3 Months Standard',
-      startDate: selectedMember.startDate || selectedMember.joinDate || '2026-09-12',
-      expiryDate: selectedMember.expiryDate || '2026-12-10',
+      startDate: selectedMember.startDate || selectedMember.joinDate || todayYMD,
+      expiryDate: selectedMember.expiryDate || todayYMD,
       originalBill: parsedPrice,
       alreadyPaid: paid,
       currentPending: pending,
-      previousInvoiceNo: selectedMember.lastInvoiceNo || `INV-LEG-${selectedMember.id?.slice(0, 6) || '355'}`
+      previousInvoiceNo: prevInvNo
     };
   }, [selectedMember, todayYMD]);
 
