@@ -47,6 +47,7 @@ function UniversalBillingTerminalContent() {
   const [selectedMemberId, setSelectedMemberId] = useState<string>(memberIdParam);
   const [memberSearch, setMemberSearch] = useState('');
   const [showMemberDropdown, setShowMemberDropdown] = useState(false);
+  const memberDropdownRef = useRef<HTMLDivElement>(null);
 
   // Sync mode URL param
   useEffect(() => {
@@ -54,6 +55,21 @@ function UniversalBillingTerminalContent() {
       setActiveMode(modeParam);
     }
   }, [modeParam]);
+
+  // Click outside to close member search dropdown
+  useEffect(() => {
+    const handleOutsideClick = (e: MouseEvent) => {
+      if (memberDropdownRef.current && !memberDropdownRef.current.contains(e.target as Node)) {
+        setShowMemberDropdown(false);
+      }
+    };
+    if (showMemberDropdown) {
+      document.addEventListener('mousedown', handleOutsideClick);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick);
+    };
+  }, [showMemberDropdown]);
 
   // Selected Member Object (Multi-field Resilient Matching)
   const selectedMember = useMemo(() => {
@@ -82,6 +98,7 @@ function UniversalBillingTerminalContent() {
     }) || null;
   }, [members, selectedMemberId]);
 
+  // Sync initial member search label only when selectedMemberId changes
   useEffect(() => {
     if (selectedMember) {
       setMemberSearch(`${selectedMember.name} (${selectedMember.memberId || selectedMember.id})`);
@@ -103,8 +120,10 @@ function UniversalBillingTerminalContent() {
           // direct lookup notice
         }
       })();
+    } else if (!selectedMemberId) {
+      setMemberSearch('');
     }
-  }, [selectedMember, selectedMemberId]);
+  }, [selectedMemberId]);
 
   useEffect(() => {
     if (plans.length === 0) fetchPlans();
@@ -508,8 +527,8 @@ function UniversalBillingTerminalContent() {
                   STEP 1 — UPGRADE MEMBER PROFILE
                 </span>
 
-                {/* Search / Select Member Dropdown if no member in URL */}
-                <div className="relative">
+                {/* Search / Select Member Dropdown */}
+                <div className="relative" ref={memberDropdownRef}>
                   <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 focus-within:border-[#0B5CBE] focus-within:bg-white transition-all">
                     <Search size={16} className="text-slate-400 shrink-0" />
                     <input
@@ -523,42 +542,73 @@ function UniversalBillingTerminalContent() {
                       onFocus={() => setShowMemberDropdown(true)}
                       className="w-full bg-transparent text-xs font-bold text-slate-900 outline-none"
                     />
-                    {selectedMember && (
+                    {(selectedMember || memberSearch) && (
                       <button
+                        type="button"
                         onClick={() => {
                           setSelectedMemberId('');
                           setMemberSearch('');
+                          setShowMemberDropdown(true);
+                          router.replace(`/dashboard/billing/create?mode=${activeMode}`);
                         }}
-                        className="text-slate-400 hover:text-slate-600 border-none bg-transparent cursor-pointer"
+                        className="text-slate-400 hover:text-slate-600 border-none bg-transparent cursor-pointer px-1 py-0.5"
+                        title="Clear & Change Member"
                       >
                         <X size={14} />
                       </button>
                     )}
                   </div>
 
-                  {showMemberDropdown && !selectedMember && (
-                    <div className="absolute left-0 right-0 top-full mt-1 bg-white rounded-xl border border-slate-200 shadow-xl z-30 max-h-56 overflow-y-auto divide-y divide-slate-100">
-                      {members.filter((m: any) => (m.name || '').toLowerCase().includes(memberSearch.toLowerCase())).slice(0, 8).map((m: any) => (
-                        <div
-                          key={m.id}
-                          onClick={() => {
-                            setSelectedMemberId(m.id);
-                            setShowMemberDropdown(false);
-                          }}
-                          className="p-3 hover:bg-blue-50/60 cursor-pointer flex items-center justify-between transition-colors"
-                        >
-                          <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-full bg-blue-100 text-[#0B5CBE] font-black text-xs flex items-center justify-center">
-                              {m.name?.[0] || 'M'}
+                  {showMemberDropdown && (
+                    <div className="absolute left-0 right-0 top-full mt-1 bg-white rounded-xl border border-slate-200 shadow-xl z-30 max-h-60 overflow-y-auto divide-y divide-slate-100">
+                      {(() => {
+                        const rawQ = memberSearch.trim().toLowerCase();
+                        const isMatchSelected = selectedMember && memberSearch.includes(selectedMember.name);
+                        const q = isMatchSelected ? '' : rawQ;
+
+                        const filtered = members.filter((m: any) => {
+                          if (!m) return false;
+                          if (!q) return true;
+                          const name = String(m.name || '').toLowerCase();
+                          const phone = String(m.phone || '').replace(/\D/g, '');
+                          const mId = String(m.memberId || m.id || '').toLowerCase();
+                          const cId = String(m.clientId || '').toLowerCase();
+                          const bioId = String(m.biometricId || m.deviceUserId || '').toLowerCase();
+                          return name.includes(q) || phone.includes(q) || mId.includes(q) || cId.includes(q) || bioId.includes(q);
+                        });
+
+                        if (filtered.length === 0) {
+                          return (
+                            <div className="p-4 text-center text-xs text-slate-400 font-bold">
+                              No members found matching "{memberSearch}"
                             </div>
-                            <div>
-                              <div className="text-xs font-extrabold text-slate-900">{m.name}</div>
-                              <div className="text-[10px] text-slate-400 font-medium">{m.memberId || m.id} • {m.phone}</div>
+                          );
+                        }
+
+                        return filtered.slice(0, 12).map((m: any) => (
+                          <div
+                            key={m.id}
+                            onClick={() => {
+                              setSelectedMemberId(m.id);
+                              setMemberSearch(`${m.name} (${m.memberId || m.id})`);
+                              setShowMemberDropdown(false);
+                              router.replace(`/dashboard/billing/create?mode=${activeMode}&id=${m.id}`);
+                            }}
+                            className="p-3 hover:bg-blue-50/60 cursor-pointer flex items-center justify-between transition-colors"
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-full bg-blue-100 text-[#0B5CBE] font-black text-xs flex items-center justify-center">
+                                {m.name?.[0] || 'M'}
+                              </div>
+                              <div>
+                                <div className="text-xs font-extrabold text-slate-900">{m.name}</div>
+                                <div className="text-[10px] text-slate-400 font-medium">{m.memberId || m.id} • {m.phone}</div>
+                              </div>
                             </div>
+                            <span className="text-[10px] font-bold text-slate-500 uppercase">{m.status || 'Active'}</span>
                           </div>
-                          <span className="text-[10px] font-bold text-slate-500 uppercase">{m.status || 'Active'}</span>
-                        </div>
-                      ))}
+                        ));
+                      })()}
                     </div>
                   )}
                 </div>
@@ -583,6 +633,19 @@ function UniversalBillingTerminalContent() {
                           </div>
                         </div>
                       </div>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedMemberId('');
+                          setMemberSearch('');
+                          setShowMemberDropdown(true);
+                          router.replace(`/dashboard/billing/create?mode=${activeMode}`);
+                        }}
+                        className="px-3 py-1.5 bg-white hover:bg-slate-100 text-[#0B5CBE] border border-blue-200 rounded-lg text-xs font-bold transition-all cursor-pointer shadow-2xs"
+                      >
+                        Change Member
+                      </button>
                     </div>
 
                     {/* CURRENT MEMBERSHIP SNAPSHOT */}
