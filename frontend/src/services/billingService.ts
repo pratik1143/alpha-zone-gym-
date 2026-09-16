@@ -106,6 +106,36 @@ export function extractPriceFromPlanString(planStr?: string): number {
 }
 
 /**
+ * Default standard plan price resolution based on duration or keywords.
+ * Resolves "1 Month" / "Monthly" / "1M" to 2000 (instead of 6500 fallback).
+ */
+export function getDefaultPriceForPlan(planStr?: string): number {
+  if (!planStr || typeof planStr !== 'string') return 2000;
+
+  const extracted = extractPriceFromPlanString(planStr);
+  if (extracted > 0) return extracted;
+
+  const lower = planStr.toLowerCase().trim();
+  if (lower.includes('1 month') || lower.includes('monthly') || lower.includes('1m') || lower.includes('standard')) {
+    return 2000;
+  }
+  if (lower.includes('2 month') || lower.includes('2m')) {
+    return 4000;
+  }
+  if (lower.includes('3 month') || lower.includes('quarterly') || lower.includes('3m') || lower.includes('pro') || lower.includes('prime')) {
+    return 6500;
+  }
+  if (lower.includes('6 month') || lower.includes('semi') || lower.includes('6m')) {
+    return 10000;
+  }
+  if (lower.includes('12 month') || lower.includes('1 year') || lower.includes('annual') || lower.includes('12m')) {
+    return 18000;
+  }
+
+  return 2000;
+}
+
+/**
  * CENTRAL UPGRADE CALCULATION ENGINE (Rule & Hard Correction)
  * Upgrades adjust previous paid money against new package price:
  * Upgrade Amount = New Package - Carry Forward Credit (Previous Paid)
@@ -290,12 +320,9 @@ export function normalizeBillingTransaction(rawRecord: any, defaultMember?: any)
 
   let origAmt = Number(r.originalAmount !== undefined ? r.originalAmount : (r.packagePrice || r.price || r.amount || r.totalBilled || 0));
   
-  // If original price is missing/0, attempt extraction from plan/packageName or defaultMember plan
+  // If original price is missing/0, attempt extraction or default price resolution from plan/packageName
   if (origAmt === 0) {
-    origAmt = extractPriceFromPlanString(r.plan) ||
-              extractPriceFromPlanString(r.packageName) ||
-              extractPriceFromPlanString(defaultMember?.plan) ||
-              extractPriceFromPlanString(defaultMember?.packageName) || 0;
+    origAmt = getDefaultPriceForPlan(r.plan || r.packageName || defaultMember?.plan || defaultMember?.packageName);
   }
 
   const discAmt = Number(r.discountAmount !== undefined ? r.discountAmount : (r.discount || 0));
@@ -373,7 +400,7 @@ export function normalizeBillingTransaction(rawRecord: any, defaultMember?: any)
     billDate: String(dateStr),
     startDate: String(r.startDate || dateStr),
     expiryDate: String(r.expiryDate || r.endDate || ''),
-    amount: netPayable,
+    amount: (status === 'paid' && amountPaid > 0 && amountPaid < netPayable) ? amountPaid : netPayable,
     originalAmount: origAmt,
     discount: discAmt,
     discountAmount: discAmt,
@@ -487,16 +514,7 @@ export function listenMemberBillingTransactions(
       const rawBalance = member.balanceAmount ?? member.balance ?? member.outstandingBalance ?? member.balanceDue ?? member.dueAmount ?? member.pendingAmount ?? 0;
       const rawPrice = member.price ?? member.packagePrice ?? member.planPrice ?? member.planAmount ?? member.totalBilled ?? member.amount ?? 0;
 
-      let extractedPrice = Number(rawPrice) || extractPriceFromPlanString(member.plan) || extractPriceFromPlanString(member.packageName) || 0;
-
-      if (!extractedPrice && (member.plan || member.packageName)) {
-        const pLower = String(member.plan || member.packageName || '').toLowerCase();
-        if (pLower.includes('3 month') || pLower.includes('quarterly')) extractedPrice = 6500;
-        else if (pLower.includes('6 month') || pLower.includes('semi')) extractedPrice = 12000;
-        else if (pLower.includes('annual') || pLower.includes('12 month') || pLower.includes('1 year')) extractedPrice = 20000;
-        else if (pLower.includes('1 month') || pLower.includes('monthly')) extractedPrice = 2500;
-        else extractedPrice = 6500;
-      }
+      let extractedPrice = Number(rawPrice) || getDefaultPriceForPlan(member.plan || member.packageName);
 
       let balanceAmount = Number(rawBalance) || 0;
       let amountPaid = Number(rawPaid) || 0;
@@ -509,12 +527,12 @@ export function listenMemberBillingTransactions(
         if (balanceAmount > 0 && extractedPrice > balanceAmount) {
           amountPaid = extractedPrice - balanceAmount;
         } else if (balanceAmount === 0) {
-          amountPaid = extractedPrice || 6500;
+          amountPaid = extractedPrice || 2000;
         }
       }
 
-      const totalBilled = Number(member.totalBilled) || (amountPaid + balanceAmount) || extractedPrice || 6500;
-      const planPrice = totalBilled || extractedPrice || 6500;
+      const totalBilled = Number(member.totalBilled) || (amountPaid + balanceAmount) || extractedPrice || 2000;
+      const planPrice = totalBilled || extractedPrice || 2000;
 
       const payStatus = balanceAmount === 0 ? 'paid' : (amountPaid > 0 ? 'partial' : 'pending');
       const membershipLabel = member.packageName || (typeof member.plan === 'string' ? member.plan.split('₹')[0].trim() : 'General Membership') || 'General Membership';
@@ -526,11 +544,11 @@ export function listenMemberBillingTransactions(
         invoice: invNum,
         plan: membershipLabel,
         packageName: membershipLabel,
-        amount: planPrice,
+        amount: (payStatus === 'paid' && amountPaid > 0) ? amountPaid : planPrice,
         totalBilled: planPrice,
         packagePrice: planPrice,
         originalAmount: planPrice,
-        netPayable: planPrice,
+        netPayable: (payStatus === 'paid' && amountPaid > 0) ? amountPaid : planPrice,
         amountPaid: amountPaid,
         paid: amountPaid,
         pendingAmount: balanceAmount,

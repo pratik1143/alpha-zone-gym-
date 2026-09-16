@@ -10,6 +10,7 @@ import { db } from '@/lib/firebase';
 import { doc, setDoc, updateDoc } from 'firebase/firestore';
 import { useGymStore } from '@/store';
 import toast from '@/lib/toast';
+import { getDefaultPriceForPlan } from '@/services/billingService';
 
 // ── ZOD VALIDATION SCHEMA ──────────────────────────────────────────────────
 const createBillSchema = z.object({
@@ -133,10 +134,12 @@ export default function CreateNewBillModal({
   // Reset values when modal opens or member changes
   useEffect(() => {
     if (isOpen && member) {
+      const targetPlan = member.plan || member.packageName || '1 Month Standard';
+      const targetPrice = getDefaultPriceForPlan(targetPlan);
       const autoStart = membershipEngine.calculateAutoStartDate(member);
-      const autoExpiry = membershipEngine.calculateMembershipExpiry(autoStart, '3 Months (Quarterly)');
-      setValue('plan', '3 Months (Quarterly)', { shouldValidate: true });
-      setValue('amount', 6500, { shouldValidate: true });
+      const autoExpiry = membershipEngine.calculateMembershipExpiry(autoStart, targetPlan);
+      setValue('plan', targetPlan, { shouldValidate: true });
+      setValue('amount', targetPrice, { shouldValidate: true });
       setValue('method', 'UPI', { shouldValidate: true });
       setValue('startDate', autoStart, { shouldValidate: true });
       setValue('expiryDate', autoExpiry, { shouldValidate: true });

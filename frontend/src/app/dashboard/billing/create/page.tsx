@@ -16,7 +16,7 @@ import { useGymStore } from '@/store';
 import toast from '@/lib/toast';
 import { formatDate, formatPhoneNumber, cleanPlanName } from '@/lib/utils';
 import OfficialInvoiceReceipt from '../../components/OfficialInvoiceReceipt';
-import { calculateUpgradeBill, extractPriceFromPlanString } from '@/services/billingService';
+import { calculateUpgradeBill, extractPriceFromPlanString, getDefaultPriceForPlan } from '@/services/billingService';
 
 // ─── CRM Blue Design Tokens ──────────────────────────────────────────
 const BLUE_PRIMARY = '#0B5CBE';
@@ -218,9 +218,10 @@ function UniversalBillingTerminalContent() {
 
     const rawPaid = lastInv?.amountPaid ?? lastInv?.paid ?? selectedMember.amountPaid ?? selectedMember.paid ?? selectedMember.totalPaid ?? selectedMember.paidAmount ?? selectedMember.amountPaidToday ?? 0;
     const rawBalance = lastInv?.pendingAmount ?? lastInv?.balanceAmount ?? selectedMember.balanceAmount ?? selectedMember.outstandingBalance ?? selectedMember.balance ?? selectedMember.dueAmount ?? selectedMember.pendingAmount ?? selectedMember.balanceDue ?? selectedMember.remainingBalance;
-    const rawPrice = lastInv?.netPayable ?? lastInv?.originalAmount ?? lastInv?.amount ?? selectedMember.price ?? selectedMember.totalBilled ?? selectedMember.packagePrice ?? selectedMember.amount ?? selectedMember.netPayable ?? 6500;
+    const fallbackPrice = getDefaultPriceForPlan(selectedMember.plan || selectedMember.packageName);
+    const rawPrice = lastInv?.netPayable ?? lastInv?.originalAmount ?? lastInv?.amount ?? selectedMember.price ?? selectedMember.totalBilled ?? selectedMember.packagePrice ?? selectedMember.amount ?? selectedMember.netPayable ?? fallbackPrice;
 
-    let parsedPrice = Number(rawPrice) || extractPriceFromPlanString(selectedMember.plan) || extractPriceFromPlanString(selectedMember.packageName) || 6500;
+    let parsedPrice = Number(rawPrice) || fallbackPrice;
     let paid = Number(rawPaid) || 0;
 
     let pending = 0;

@@ -13,6 +13,7 @@ import API from '@/services/api';
 import toast from '@/lib/toast';
 import { db } from '@/lib/firebase';
 import { doc, updateDoc } from 'firebase/firestore';
+import { getDefaultPriceForPlan } from '@/services/billingService';
 
 interface EditBillingModalProps {
   isOpen: boolean;
@@ -61,7 +62,7 @@ export default function EditBillingModal({
   const initialOrigAmt = Number(
     invoice?.originalAmount !== undefined
       ? invoice.originalAmount
-      : (invoice?.amount || invoice?.price || member?.amount || 6500)
+      : (invoice?.amount || invoice?.price || member?.amount || getDefaultPriceForPlan(invoice?.plan || member?.plan))
   );
   const initialDiscAmt = Number(invoice?.discountAmount !== undefined ? invoice.discountAmount : (invoice?.discount || 0));
   const initialTaxAmt = Number(invoice?.taxAmount !== undefined ? invoice.taxAmount : (invoice?.tax || invoice?.gst || 0));

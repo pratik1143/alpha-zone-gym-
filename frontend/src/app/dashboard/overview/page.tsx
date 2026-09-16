@@ -954,12 +954,12 @@ export default function OverviewCommandCenter() {
                     <label className="text-xs font-bold text-slate-600 block mb-1">Membership Plan</label>
                     <select value={memPlan} onChange={e => {
                       setMemPlan(e.target.value);
-                      if (e.target.value === '1 Month') setMemPaid('2500');
+                      if (e.target.value === '1 Month') setMemPaid('2000');
                       if (e.target.value === '3 Months') setMemPaid('6500');
                       if (e.target.value === '6 Months') setMemPaid('11500');
                       if (e.target.value === '12 Months') setMemPaid('18000');
                     }} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs font-bold text-slate-800 outline-none focus:border-blue-600 cursor-pointer">
-                      <option value="1 Month">1 Month (₹2,500)</option>
+                      <option value="1 Month">1 Month (₹2,000)</option>
                       <option value="3 Months">3 Months (₹6,500)</option>
                       <option value="6 Months">6 Months (₹11,500)</option>
                       <option value="12 Months">12 Months (₹18,000)</option>

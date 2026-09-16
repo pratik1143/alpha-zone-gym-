@@ -6,7 +6,7 @@ import { collection, onSnapshot, doc, updateDoc } from 'firebase/firestore';
 import { useAuthStore, useGymStore } from '@/store';
 import { migrateMissingBillingPhones } from '@/lib/migrations/migrateBillingPhones';
 
-import { extractPriceFromPlanString } from '@/services/billingService';
+import { extractPriceFromPlanString, getDefaultPriceForPlan } from '@/services/billingService';
 
 // ─── IST-aware today string (YYYY-MM-DD in Asia/Kolkata timezone) ───────────
 export function getISTDateStr(date: Date = new Date()): string {
@@ -190,26 +190,24 @@ export function useTodaysPayments(): UseTodaysPaymentsResult {
         // Skip if this member already has payment records in Firestore
         if (knownMemberIds.has(memId)) return;
 
-        const rawPaid = m.amountPaid ?? m.paid ?? m.totalPaid ?? m.paidAmount ?? m.amount ?? 0;
+        const rawPaid = m.amountPaid ?? m.paid ?? m.totalPaid ?? m.paidAmount ?? m.amountPaidToday ?? m.amount ?? 0;
         const rawBalance = m.balanceAmount ?? m.balance ?? m.outstandingBalance ?? m.balanceDue ?? m.dueAmount ?? m.pendingAmount ?? 0;
         const rawPrice = m.price ?? m.packagePrice ?? m.planPrice ?? m.planAmount ?? m.totalBilled ?? m.amount ?? 0;
 
-        let extractedPrice = Number(rawPrice) || extractPriceFromPlanString(m.plan) || extractPriceFromPlanString(m.packageName) || 0;
-        if (!extractedPrice && (m.plan || m.packageName)) {
-          extractedPrice = 6500;
-        }
+        let extractedPrice = Number(rawPrice) || getDefaultPriceForPlan(m.plan || m.packageName);
 
         let balanceAmount = Number(rawBalance) || 0;
         let amountPaid = Number(rawPaid) || 0;
 
         if (amountPaid === 0 && balanceAmount === 0) {
-          amountPaid = extractedPrice || 5000;
+          amountPaid = extractedPrice || 2000;
         }
 
-        const totalBilled = Number(m.totalBilled) || (amountPaid + balanceAmount) || extractedPrice || 5000;
-        const planPrice = totalBilled || extractedPrice || 5000;
-        const netPayable = planPrice;
+        const totalBilled = Number(m.totalBilled) || (amountPaid + balanceAmount) || extractedPrice || 2000;
+        const planPrice = totalBilled || extractedPrice || 2000;
         const payStatus = balanceAmount === 0 ? 'paid' : (amountPaid > 0 ? 'partial' : 'pending');
+        const displayAmount = (payStatus === 'paid' && amountPaid > 0) ? amountPaid : planPrice;
+        const netPayable = displayAmount;
         const membershipLabel = m.packageName || (typeof m.plan === 'string' ? m.plan.split('₹')[0].trim() : 'General Membership') || 'General Membership';
 
         const invNum = m.memberId
@@ -224,7 +222,7 @@ export function useTodaysPayments(): UseTodaysPaymentsResult {
             invoice: invNum,
             plan: membershipLabel,
             packageName: membershipLabel,
-            amount: planPrice,
+            amount: displayAmount,
             totalBilled: planPrice,
             packagePrice: planPrice,
             originalAmount: planPrice,
