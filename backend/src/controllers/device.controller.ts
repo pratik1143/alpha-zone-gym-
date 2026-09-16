@@ -3,6 +3,7 @@ import { db, admin, isFirebaseInitialized, getFirestoreDb, disableFirestore } fr
 import { simulateManualTap } from '../services/deviceSync.service';
 import { exec } from 'child_process';
 import path from 'path';
+import fs from 'fs';
 
 /**
  * Get all devices, including calculated summary stats for the dashboard.
@@ -347,14 +348,24 @@ export const getTesterStatus = async (req: Request, res: Response) => {
  */
 export const startEnrollFingerprint = async (req: Request, res: Response) => {
   try {
-    const { memberId, memberName, biometricId, fingerIndex } = req.body;
-    const bioId = Number(biometricId) || Number(memberId) || 1;
-    const nameStr = memberName || 'Member';
-    const docId = `enroll_${memberId || 'm'}_${Date.now()}`;
+    const { memberId, memberName, biometricId, fingerIndex, userId, name } = req.body;
+    const rawBio = biometricId || userId || memberId;
+    const bioId = Number(rawBio) || 1000;
+    const nameStr = memberName || name || 'New Member';
+    const docId = `enroll_${memberId || bioId}_${Date.now()}`;
 
     // Execute direct ZK socket enrollment command to physical ESSL K90 Pro hardware
-    const scriptPath = path.resolve(process.cwd(), 'device-service/enroll_hardware.py');
-    exec(`python "${scriptPath}" ${bioId} "${nameStr}"`, (err, stdout, stderr) => {
+    const possiblePaths = [
+      path.resolve(process.cwd(), '../device-service/enroll_hardware.py'),
+      path.resolve(process.cwd(), 'device-service/enroll_hardware.py'),
+      path.resolve(__dirname, '../../../device-service/enroll_hardware.py'),
+      path.resolve(__dirname, '../../device-service/enroll_hardware.py')
+    ];
+    const scriptPath = possiblePaths.find(p => fs.existsSync(p)) || possiblePaths[0];
+
+    console.log(`[Biometric Enrollment] Executing hardware enrollment script at: ${scriptPath} for bioId #${bioId} (${nameStr})`);
+
+    exec(`python -u "${scriptPath}" ${bioId} "${nameStr}"`, (err, stdout, stderr) => {
       if (err) {
         console.warn('[Biometric Enrollment] Hardware socket error:', err.message);
       } else {
@@ -369,7 +380,7 @@ export const startEnrollFingerprint = async (req: Request, res: Response) => {
           docId,
           command: 'enroll_fingerprint',
           status: 'pending',
-          memberId: memberId || 'AZ-2026-0001',
+          memberId: memberId || `AZ-2026-${bioId}`,
           memberName: nameStr,
           biometricId: bioId,
           fingerIndex: Number(fingerIndex) || 0,

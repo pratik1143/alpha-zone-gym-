@@ -52,7 +52,14 @@ export function getCanonicalISTDate(rawDate?: unknown): string {
       return str;
     }
 
-    // 5. Fallback Date parsing
+    // 5. Handle DD/MM/YYYY or DD-MM-YYYY
+    const ddmmyyyyMatch = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+    if (ddmmyyyyMatch) {
+      const [, day, month, year] = ddmmyyyyMatch;
+      return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+    }
+
+    // 6. Fallback Date parsing
     const parsed = new Date(str);
     if (!isNaN(parsed.getTime())) {
       return getISTDateStr(parsed);
@@ -339,7 +346,7 @@ export function useTodaysPayments(): UseTodaysPaymentsResult {
             startDate: autoDate,
             expiryDate: m.expiryDate || '',
             invoiceDate: autoDate,
-            createdAt: m.createdAt || m.joinDate || new Date().toISOString(),
+            createdAt: m.createdAt || (m.joinDate ? `${m.joinDate}T00:00:00.000Z` : '2026-08-01T00:00:00.000Z'),
             memberId: memId,
             memberName: m.name || 'Member',
             memberPhone: m.phone || '',
