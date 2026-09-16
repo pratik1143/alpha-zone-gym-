@@ -106,7 +106,7 @@ const renderGateHtml = (req: express.Request, res: express.Response) => {
 
       <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-col">
         <span class="text-[10px] font-black uppercase text-slate-400 tracking-wider">GATE RELAY ACTION</span>
-        <span class="text-sm font-black text-white mt-1">Direct Unlock (5s)</span>
+        <span class="text-sm font-black text-white mt-1">Direct Unlock (15s)</span>
         <span class="text-xs font-mono text-emerald-400 font-bold mt-0.5">Hardware Enabled</span>
       </div>
 
@@ -186,7 +186,7 @@ const renderGateHtml = (req: express.Request, res: express.Response) => {
 
         if (data.success) {
           banner.className = 'block bg-emerald-950 border-emerald-500 text-emerald-300 text-center max-w-md p-4 rounded-2xl border font-black text-sm shadow-xl';
-          banner.innerHTML = '✅ DOOR UNLOCKED FOR 5 SECONDS!<br><span class="text-xs font-normal text-emerald-400">Hardware relay signal triggered successfully.</span>';
+          banner.innerHTML = '✅ DOOR UNLOCKED FOR 15 SECONDS!<br><span class="text-xs font-normal text-emerald-400">Hardware relay signal triggered successfully.</span>';
           
           // Audio chime
           try {
@@ -211,7 +211,7 @@ const renderGateHtml = (req: express.Request, res: express.Response) => {
         setTimeout(() => {
           btn.disabled = false;
           btn.style.opacity = '1';
-        }, 3000);
+        }, 1000);
       }
     }
   </script>

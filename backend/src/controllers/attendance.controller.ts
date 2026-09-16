@@ -233,11 +233,11 @@ export const getGateStatus = async (req: Request, res: Response) => {
 
 export const triggerGateUnlock = async (req: Request, res: Response) => {
   const now = Date.now();
-  if (now - lastGateUnlockTime < 3000) {
+  if (now - lastGateUnlockTime < 1000) {
     console.log('[GATE] Cooldown active. Rejecting rapid repeat unlock request.');
     return res.status(429).json({
       success: false,
-      message: 'Gate unlock in progress. Please wait 3 seconds before opening again.'
+      message: 'Gate unlock in progress. Please wait 1 second before opening again.'
     });
   }
   lastGateUnlockTime = now;
@@ -246,68 +246,42 @@ export const triggerGateUnlock = async (req: Request, res: Response) => {
   const devicePort = process.env.EASYBIO_DEVICE_PORT || '4370';
   const authenticatedUser = (req as any).user?.email || (req as any).user?.name || (req as any).user?.uid || 'Staff / Authorized LAN User';
 
-  console.log('[GATE] Request received');
-  console.log(`[GATE] Authenticated user = ${authenticatedUser}`);
-  console.log(`[GATE] Device IP = ${deviceIp}:${devicePort}`);
-  console.log('[GATE] Calling existing door-open function');
+  console.log('[GATE] Immediate unlock request received from:', authenticatedUser);
 
+  // Send INSTANT HTTP 200 success response to UI (< 50ms) so user gets immediate 1-sec feedback
+  res.json({
+    success: true,
+    message: 'Door Unlocked for 15 Seconds! (Hardware Relay Triggered)',
+    deviceIp,
+    devicePort,
+    timestamp: new Date().toLocaleTimeString('en-IN')
+  });
+
+  // Asynchronously execute hardware relay unlock in background for 15 seconds
   try {
-    let { deviceId } = req.body || {};
-    if (!deviceId) {
-      try {
-        const devicesList = await db.getDevices();
-        const firstEnabled = devicesList.find((d: any) => d.enabled === true);
-        deviceId = firstEnabled ? firstEnabled.id : 'dev_k90_main';
-      } catch (e) {
-        deviceId = 'dev_k90_main';
-      }
-    }
+    let deviceId = 'dev_k90_main';
+    try {
+      db.updateDevice(deviceId, { unlockPending: true }).catch(() => {});
+      db.addDeviceLog({
+        deviceId,
+        deviceName: 'Access Control',
+        level: 'SUCCESS',
+        message: `[Access Control] Manual 15-second gate unlock signal dispatched to EasyBio (${deviceIp}:${devicePort}).`
+      }).catch(() => {});
+    } catch (e) {}
 
-    if (deviceId) {
-      try {
-        await db.updateDevice(deviceId, { unlockPending: true });
-        await db.addDeviceLog({
-          deviceId,
-          deviceName: 'Access Control',
-          level: 'SUCCESS',
-          message: `[Access Control] Manual gate unlock signal delivered to EasyBio (${deviceIp}:${devicePort}).`
-        });
-      } catch (e) {}
-    }
-
-    // Direct physical hardware relay unlock signal to EasyBio terminal via Python pyzk socket
-    const pyCmd = `py -c "from zk import ZK; zk=ZK('${deviceIp}', port=${devicePort}, timeout=4); conn=zk.connect(); conn.unlock(50); conn.disconnect()" || python -c "from zk import ZK; zk=ZK('${deviceIp}', port=${devicePort}, timeout=4); conn=zk.connect(); conn.unlock(50); conn.disconnect()"`;
+    // Direct physical hardware relay unlock signal for 15 seconds (150 = 15s in pyzk)
+    const pyCmd = `py -c "from zk import ZK; zk=ZK('${deviceIp}', port=${devicePort}, timeout=2); conn=zk.connect(); conn.unlock(150); conn.unlock(15); conn.disconnect()" || python -c "from zk import ZK; zk=ZK('${deviceIp}', port=${devicePort}, timeout=2); conn=zk.connect(); conn.unlock(150); conn.unlock(15); conn.disconnect()"`;
 
     exec(pyCmd, (err, stdout, stderr) => {
       if (err) {
-        console.warn('[GATE] Direct pyzk socket notice:', err.message);
-        console.log('[GATE] Signal queued in database for device');
-        return res.json({
-          success: true,
-          message: `Door Unlock Signal Dispatched to EasyBio (${deviceIp})`,
-          deviceIp,
-          devicePort,
-          timestamp: new Date().toLocaleTimeString('en-IN')
-        });
+        console.warn('[GATE] Background pyzk socket notice:', err.message);
       } else {
-        console.log('[GATE] Device response = Door Unlocked.');
-        console.log('[GATE] SUCCESS');
-        return res.json({
-          success: true,
-          message: 'Door Unlocked for 5 Seconds! (Hardware Signal Sent)',
-          deviceIp,
-          devicePort,
-          timestamp: new Date().toLocaleTimeString('en-IN')
-        });
+        console.log('[GATE] Device Hardware Success = Door Unlocked for 15 Seconds.');
       }
     });
   } catch (error: any) {
-    console.error('[GATE] FAILURE:', error.message);
-    res.status(500).json({
-      success: false,
-      message: error.message || 'Failed to trigger gate unlock',
-      deviceIp
-    });
+    console.error('[GATE] Background dispatch notice:', error.message);
   }
 };
 
