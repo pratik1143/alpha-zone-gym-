@@ -606,7 +606,7 @@ export default function BillingPage() {
                             </div>
                           ) : (
                             <div className="font-black text-slate-900 text-sm">
-                              ₹{(Number(payment.paid) || Number(payment.amount) || 0).toLocaleString('en-IN')}
+                              ₹{(Number(payment.amountPaid !== undefined ? payment.amountPaid : (payment.paid !== undefined ? payment.paid : payment.amount)) || 0).toLocaleString('en-IN')}
                             </div>
                           )}
                         </td>
@@ -724,7 +724,9 @@ export default function BillingPage() {
                         <div className="text-xs text-slate-500 font-medium">{phoneDisplay} • {p.plan || 'Membership'}</div>
                       </div>
                       <div className="text-right">
-                        <div className="text-base font-black text-slate-900">₹{(Number(p.paid) || Number(p.amount) || 0).toLocaleString('en-IN')}</div>
+                        <div className="text-base font-black text-slate-900">
+                          ₹{(Number(p.amountPaid !== undefined ? p.amountPaid : (p.paid !== undefined ? p.paid : p.amount)) || 0).toLocaleString('en-IN')}
+                        </div>
                         <div className="text-[11px] text-slate-400 font-mono">{dateDisplay} {timeDisplay}</div>
                       </div>
                     </div>
