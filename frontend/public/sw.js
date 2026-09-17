@@ -1,31 +1,30 @@
-const CACHE_NAME = 'alpha-crm-cache-v1';
-const ASSETS_TO_CACHE = [
+const CACHE_NAME = 'alpha-crm-v2';
+const STATIC_ASSETS = [
   '/',
   '/manifest.json',
   '/favicon.ico',
-  '/gymlogo.png',
-  '/gym_hero.png'
+  '/gymlogo.png'
 ];
 
-// Install event - cache core app shell
+// Install: precache core shell
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(ASSETS_TO_CACHE).catch((err) => {
-        console.warn('[SW] Caching app shell failed during install:', err);
+      return cache.addAll(STATIC_ASSETS).catch((err) => {
+        console.warn('[SW] Precache notice:', err);
       });
     }).then(() => self.skipWaiting())
   );
 });
 
-// Activate event - clean old caches
+// Activate: purge any old cache versions
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((cacheNames) => {
       return Promise.all(
         cacheNames.map((cache) => {
           if (cache !== CACHE_NAME) {
-            console.log('[SW] Clearing old cache:', cache);
+            console.log('[SW] Purging stale cache:', cache);
             return caches.delete(cache);
           }
         })
@@ -34,15 +33,14 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// Fetch event - Cache first for static assets, network first for HTML, skip API/Firebase
+// Fetch: Safe Network-First for HTML/routing and Next.js dynamic chunks
 self.addEventListener('fetch', (event) => {
   const { request } = event;
-  const url = new URL(request.url);
-
-  // Skip non-GET requests
   if (request.method !== 'GET') return;
 
-  // NEVER cache API requests, Firebase, socket connections, or sensitive data
+  const url = new URL(request.url);
+
+  // NEVER cache API requests, Firebase endpoints, sockets, or private user routes
   if (
     url.pathname.startsWith('/api') ||
     url.hostname.includes('firebase') ||
@@ -50,13 +48,30 @@ self.addEventListener('fetch', (event) => {
     url.hostname.includes('googleapis') ||
     url.hostname.includes('identitytoolkit') ||
     url.pathname.includes('/auth') ||
-    url.pathname.includes('/billing') ||
-    url.pathname.includes('/members')
+    url.pathname.includes('/dashboard')
   ) {
     return;
   }
 
-  // Handle HTML navigation requests (Network First -> Cache Fallback)
+  // Next.js static chunks / JS / CSS: Network First (prevents stale chunk crashes)
+  if (url.pathname.startsWith('/_next/')) {
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          if (response && response.status === 200) {
+            const responseClone = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, responseClone));
+          }
+          return response;
+        })
+        .catch(() => {
+          return caches.match(request).then((cached) => cached || fetch(request));
+        })
+    );
+    return;
+  }
+
+  // HTML Navigation: Network First -> Cache Fallback -> Root Shell Fallback
   if (request.mode === 'navigate') {
     event.respondWith(
       fetch(request)
@@ -68,8 +83,8 @@ self.addEventListener('fetch', (event) => {
           return response;
         })
         .catch(() => {
-          return caches.match(request).then((cachedResponse) => {
-            if (cachedResponse) return cachedResponse;
+          return caches.match(request).then((cached) => {
+            if (cached) return cached;
             return caches.match('/');
           });
         })
@@ -77,29 +92,21 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Handle static assets (Cache First -> Network Fallback)
+  // Static images / fonts: Cache First -> Network Fallback
   event.respondWith(
-    caches.match(request).then((cachedResponse) => {
-      if (cachedResponse) return cachedResponse;
-      return fetch(request).then((networkResponse) => {
-        if (
-          networkResponse &&
-          networkResponse.status === 200 &&
-          (request.destination === 'image' ||
-            request.destination === 'script' ||
-            request.destination === 'style' ||
-            request.destination === 'font')
-        ) {
-          const responseClone = networkResponse.clone();
+    caches.match(request).then((cached) => {
+      if (cached) return cached;
+      return fetch(request).then((response) => {
+        if (response && response.status === 200 && (request.destination === 'image' || request.destination === 'font')) {
+          const responseClone = response.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put(request, responseClone));
         }
-        return networkResponse;
-      });
+        return response;
+      }).catch(() => fetch(request));
     })
   );
 });
 
-// Listen for message events to handle SW update activation
 self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'SKIP_WAITING') {
     self.skipWaiting();

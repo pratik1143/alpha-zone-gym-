@@ -354,9 +354,12 @@ export default function DashboardLayout({
       {/* ─── Main Workspace Content Area ─── */}
       <main className="flex-1 min-w-0 w-full h-full p-4 sm:p-6 pb-24 md:pb-6 overflow-y-auto flex flex-col justify-between gap-6 text-left bg-[#FDFDFD]">
         <div className="flex flex-col gap-4 flex-1">
-          {/* Compact Mobile Top Header Bar (< md) */}
-          <div className="md:hidden sticky -top-4 z-30 bg-white/95 backdrop-blur-md border border-slate-200/80 rounded-2xl px-4 py-2.5 flex items-center justify-between shadow-2xs shrink-0">
-            <Link href="/dashboard/overview" className="flex items-center gap-2">
+          {/* Compact Mobile Top Header Bar (< md) with iOS Safe-Area Top Inset */}
+          <div 
+            className="md:hidden sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-slate-200/80 px-4 py-3 flex items-center justify-between shadow-2xs shrink-0"
+            style={{ paddingTop: 'max(env(safe-area-inset-top, 0px), 12px)' }}
+          >
+            <Link href="/dashboard/overview" className="flex items-center gap-2 cursor-pointer no-underline">
               <img src="/gymlogo.png" alt="Logo" className="h-8 w-8 object-contain rounded-full" />
               <span className="font-rowdies font-extrabold text-sm text-slate-900 tracking-tight uppercase leading-none">
                 Alpha <span className="text-[#0b5cbe]">CRM</span>
@@ -393,13 +396,13 @@ export default function DashboardLayout({
         return null;
       })()}
 
-      {/* AI Gym Copilot Pulsing FAB */}
+      {/* AI Gym Copilot Pulsing FAB (Repositioned above bottom-nav on mobile) */}
       <button
         onClick={() => setIsCopilotOpen(true)}
-        className="fixed bottom-8 right-8 z-[60] w-14 h-14 bg-gradient-to-tr from-purple-600 via-indigo-600 to-blue-500 rounded-full flex items-center justify-center shadow-[0_0_20px_rgba(139,92,246,0.6)] hover:scale-105 active:scale-95 transition-all animate-bounce cursor-pointer text-white border border-white/20"
+        className="fixed bottom-22 right-4 md:bottom-8 md:right-8 z-[45] w-12 h-12 md:w-14 md:h-14 bg-gradient-to-tr from-purple-600 via-indigo-600 to-blue-500 rounded-full flex items-center justify-center shadow-[0_0_20px_rgba(139,92,246,0.6)] hover:scale-105 active:scale-95 transition-all animate-bounce cursor-pointer text-white border border-white/20"
         title="Alpha AI Gym Copilot"
       >
-        <Sparkles size={24} className="animate-pulse" />
+        <Sparkles size={20} className="animate-pulse md:w-6 md:h-6" />
       </button>
 
       {/* Copilot Drawer Backdrop */}

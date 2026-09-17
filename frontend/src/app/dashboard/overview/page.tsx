@@ -501,8 +501,183 @@ export default function OverviewCommandCenter() {
   return (
     <div className="w-full space-y-4 pb-6 text-left">
 
-      {/* ── HERO HEADER CARD (Clean greeting, quick actions, date range filter with 2-way sync) ── */}
-      <div className="relative overflow-hidden bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 rounded-[24px] px-6 py-6 border border-slate-800 shadow-xl">
+      {/* ── MOBILE COMPACT COMMAND CENTER (VISIBLE ONLY ON MOBILE < md) ── */}
+      <div className="md:hidden space-y-3 text-left">
+        {/* Compact Header Greeting */}
+        <div className="bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 rounded-2xl p-4 text-white shadow-md relative overflow-hidden">
+          <div className="flex items-center justify-between">
+            <div>
+              <span className="text-[9px] font-black uppercase tracking-widest text-blue-300">Command Center</span>
+              <h2 className="text-lg font-black text-white leading-tight">
+                {getGreeting()}, <span className="text-blue-300">{user?.name?.split(' ')[0] || 'Admin'}</span> 👋
+              </h2>
+            </div>
+            <div className="flex items-center gap-1.5 bg-emerald-500/20 border border-emerald-500/30 px-2.5 py-1 rounded-full text-[9px] font-extrabold text-emerald-300">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              Live
+            </div>
+          </div>
+        </div>
+
+        {/* 2x2 KPI Grid (Compact cards ~90-110px height) */}
+        <div className="grid grid-cols-2 gap-2.5">
+          {/* Card 1: Today's Collection */}
+          <div
+            onClick={() => router.push('/dashboard/billing')}
+            className="bg-white border border-slate-200/90 rounded-2xl p-3 shadow-2xs flex flex-col justify-between cursor-pointer active:scale-98 transition-transform"
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Collection</span>
+              <div className="w-6 h-6 rounded-lg bg-blue-50 text-[#0b5cbe] flex items-center justify-center">
+                <IndianRupee size={13} />
+              </div>
+            </div>
+            <div className="mt-2">
+              <h3 className="text-xl font-black text-slate-900 tracking-tight font-mono">
+                ₹{todaysRealCollection.toLocaleString('en-IN')}
+              </h3>
+              <p className="text-[9px] font-bold text-emerald-600 mt-0.5">Today IST →</p>
+            </div>
+          </div>
+
+          {/* Card 2: Present Today */}
+          <div
+            onClick={() => setShowPresentModal(true)}
+            className="bg-white border border-slate-200/90 rounded-2xl p-3 shadow-2xs flex flex-col justify-between cursor-pointer active:scale-98 transition-transform"
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Present</span>
+              <div className="w-6 h-6 rounded-lg bg-blue-50 text-[#0b5cbe] flex items-center justify-center">
+                <UserCheck size={13} />
+              </div>
+            </div>
+            <div className="mt-2">
+              <h3 className="text-xl font-black text-slate-900 tracking-tight font-mono">{presentTodayCount}</h3>
+              <p className="text-[9px] font-bold text-[#0b5cbe] mt-0.5">View roster →</p>
+            </div>
+          </div>
+
+          {/* Card 3: Active Members */}
+          <div
+            onClick={() => router.push('/dashboard/members')}
+            className="bg-white border border-slate-200/90 rounded-2xl p-3 shadow-2xs flex flex-col justify-between cursor-pointer active:scale-98 transition-transform"
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Active</span>
+              <div className="w-6 h-6 rounded-lg bg-blue-50 text-[#0b5cbe] flex items-center justify-center">
+                <Activity size={13} />
+              </div>
+            </div>
+            <div className="mt-2">
+              <h3 className="text-xl font-black text-slate-900 tracking-tight font-mono">{activeMembersCount}</h3>
+              <p className="text-[9px] font-bold text-slate-500 mt-0.5">Gym Members →</p>
+            </div>
+          </div>
+
+          {/* Card 4: Today's Follow-ups */}
+          <div
+            onClick={() => router.push('/dashboard/follow-up')}
+            className="bg-white border border-slate-200/90 rounded-2xl p-3 shadow-2xs flex flex-col justify-between cursor-pointer active:scale-98 transition-transform"
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Follow-ups</span>
+              <div className="w-6 h-6 rounded-lg bg-blue-50 text-[#0b5cbe] flex items-center justify-center">
+                <PhoneCall size={13} />
+              </div>
+            </div>
+            <div className="mt-2">
+              <h3 className="text-xl font-black text-slate-900 tracking-tight font-mono">{todaysCount}</h3>
+              <p className="text-[9px] font-bold text-[#0b5cbe] mt-0.5">Due today →</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Compact Quick Actions */}
+        <div className="bg-white p-3 rounded-2xl border border-slate-200/80 shadow-xs">
+          <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-2">Quick Actions</span>
+          <div className="grid grid-cols-4 gap-2">
+            <button
+              onClick={() => router.push('/dashboard/members?action=add')}
+              className="flex flex-col items-center justify-center p-2 rounded-xl bg-blue-50 border border-blue-100 text-[#0b5cbe] hover:bg-blue-100 transition-all cursor-pointer active:scale-95 border-none"
+            >
+              <UserPlus size={16} />
+              <span className="text-[10px] font-bold mt-1 leading-tight">+ Member</span>
+            </button>
+
+            <button
+              onClick={() => router.push('/dashboard/billing')}
+              className="flex flex-col items-center justify-center p-2 rounded-xl bg-slate-50 border border-slate-200/80 text-slate-800 hover:bg-slate-100 transition-all cursor-pointer active:scale-95 border-none"
+            >
+              <Coins size={16} className="text-emerald-600" />
+              <span className="text-[10px] font-bold mt-1 leading-tight">Bill</span>
+            </button>
+
+            <button
+              onClick={() => router.push('/dashboard/attendance')}
+              className="flex flex-col items-center justify-center p-2 rounded-xl bg-slate-50 border border-slate-200/80 text-slate-800 hover:bg-slate-100 transition-all cursor-pointer active:scale-95 border-none"
+            >
+              <Fingerprint size={16} className="text-blue-600" />
+              <span className="text-[10px] font-bold mt-1 leading-tight">Attendance</span>
+            </button>
+
+            <button
+              onClick={() => router.push('/dashboard/gate-control')}
+              className="flex flex-col items-center justify-center p-2 rounded-xl bg-slate-50 border border-slate-200/80 text-slate-800 hover:bg-slate-100 transition-all cursor-pointer active:scale-95 border-none"
+            >
+              <Activity size={16} className="text-indigo-600" />
+              <span className="text-[10px] font-bold mt-1 leading-tight">Gate</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Compact Recent Attendance Feed */}
+        <div className="bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-xs space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-black text-slate-900 uppercase tracking-tight flex items-center gap-1.5">
+              <Activity size={14} className="text-[#0b5cbe]" /> Recent Live Punches
+            </span>
+            <button
+              onClick={() => router.push('/dashboard/attendance')}
+              className="text-[10px] font-bold text-[#0b5cbe] hover:underline border-none bg-transparent cursor-pointer"
+            >
+              View All →
+            </button>
+          </div>
+
+          {attendance && attendance.length > 0 ? (
+            <div className="divide-y divide-slate-100">
+              {attendance.slice(0, 3).map((item: any, idx: number) => {
+                const punchTime = item.checkIn || item.timestamp ? new Date(item.checkIn || item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Just now';
+                return (
+                  <div key={idx} className="py-2 flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-2 overflow-hidden">
+                      <div className="w-7 h-7 rounded-full bg-blue-100 text-[#0b5cbe] font-black text-[10px] flex items-center justify-center shrink-0">
+                        {(item.memberName || 'M').charAt(0)}
+                      </div>
+                      <div className="truncate">
+                        <p className="font-bold text-slate-900 truncate">{item.memberName || 'Gym Member'}</p>
+                        <p className="text-[9px] text-slate-400 font-medium">ID: {item.biometricId || item.memberId || 'N/A'}</p>
+                      </div>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">
+                        {punchTime} ENTRY
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="text-xs text-slate-400 py-2 text-center">No attendance punches recorded today.</p>
+          )}
+        </div>
+      </div>
+
+      {/* ── DESKTOP ONLY DASHBOARD (HIDDEN ON MOBILE < md) ── */}
+      <div className="hidden md:block space-y-4">
+        {/* HERO HEADER CARD (Clean greeting, quick actions, date range filter with 2-way sync) */}
+        <div className="relative overflow-hidden bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 rounded-[24px] px-6 py-6 border border-slate-800 shadow-xl">
         <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
         <div className="absolute -bottom-8 left-0 w-56 h-56 bg-violet-500/10 rounded-full blur-3xl pointer-events-none" />
 
@@ -616,7 +791,7 @@ export default function OverviewCommandCenter() {
         </div>
       </div>
 
-      {/* ── FLOATING KPI STRIP (REAL CALCULATED OPERATIONAL METRICS) ── */}
+      {/* FLOATING KPI STRIP (REAL CALCULATED OPERATIONAL METRICS) */}
       <motion.div
         {...fadeUp(0.2)}
         className="grid grid-cols-2 sm:grid-cols-4 gap-3 relative z-10"
@@ -647,6 +822,7 @@ export default function OverviewCommandCenter() {
           </div>
         ))}
       </motion.div>
+      </div>
 
       {/* ── MAIN BODY ── */}
       <div className="space-y-5">

@@ -272,8 +272,125 @@ export default function DashboardPage() {
   return (
     <div className="flex flex-col gap-5 w-full text-slate-800 text-left bg-[#FDFDFD]">
       
-      {/* ─── 1. PAGE HEADER ─── */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs">
+      {/* ── MOBILE COMPACT COMMAND CENTER (MOBILE ONLY < md) ── */}
+      <div className="md:hidden space-y-3 text-left">
+        {/* 2x2 KPI Grid */}
+        <div className="grid grid-cols-2 gap-2.5">
+          {/* Card 1: Today's Collection */}
+          <div
+            onClick={() => router.push('/dashboard/billing')}
+            className="bg-white border border-slate-200/90 rounded-2xl p-3 shadow-2xs flex flex-col justify-between cursor-pointer active:scale-98 transition-transform"
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Collection</span>
+              <div className="w-6 h-6 rounded-lg bg-blue-50 text-[#0b5cbe] flex items-center justify-center">
+                <DollarSign size={13} />
+              </div>
+            </div>
+            <div className="mt-2">
+              <h3 className="text-xl font-black text-slate-900 tracking-tight font-mono">
+                ₹{todaysCollection.toLocaleString('en-IN')}
+              </h3>
+              <p className="text-[9px] font-bold text-emerald-600 mt-0.5">Today IST →</p>
+            </div>
+          </div>
+
+          {/* Card 2: Present Today */}
+          <div
+            onClick={() => router.push('/dashboard/attendance')}
+            className="bg-white border border-slate-200/90 rounded-2xl p-3 shadow-2xs flex flex-col justify-between cursor-pointer active:scale-98 transition-transform"
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Present</span>
+              <div className="w-6 h-6 rounded-lg bg-blue-50 text-[#0b5cbe] flex items-center justify-center">
+                <Users size={13} />
+              </div>
+            </div>
+            <div className="mt-2">
+              <h3 className="text-xl font-black text-slate-900 tracking-tight font-mono">{liveCount}</h3>
+              <p className="text-[9px] font-bold text-[#0b5cbe] mt-0.5">Members inside →</p>
+            </div>
+          </div>
+
+          {/* Card 3: Active Members */}
+          <div
+            onClick={() => router.push('/dashboard/members')}
+            className="bg-white border border-slate-200/90 rounded-2xl p-3 shadow-2xs flex flex-col justify-between cursor-pointer active:scale-98 transition-transform"
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Active</span>
+              <div className="w-6 h-6 rounded-lg bg-blue-50 text-[#0b5cbe] flex items-center justify-center">
+                <Users size={13} />
+              </div>
+            </div>
+            <div className="mt-2">
+              <h3 className="text-xl font-black text-slate-900 tracking-tight font-mono">
+                {realtimeMembers ? realtimeMembers.filter(m => m.status === 'active').length : 0}
+              </h3>
+              <p className="text-[9px] font-bold text-slate-500 mt-0.5">Gym Members →</p>
+            </div>
+          </div>
+
+          {/* Card 4: Today's Follow-ups */}
+          <div
+            onClick={() => router.push('/dashboard/follow-up')}
+            className="bg-white border border-slate-200/90 rounded-2xl p-3 shadow-2xs flex flex-col justify-between cursor-pointer active:scale-98 transition-transform"
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Follow-ups</span>
+              <div className="w-6 h-6 rounded-lg bg-blue-50 text-[#0b5cbe] flex items-center justify-center">
+                <AlertTriangle size={13} />
+              </div>
+            </div>
+            <div className="mt-2">
+              <h3 className="text-xl font-black text-slate-900 tracking-tight font-mono">{todaysCount}</h3>
+              <p className="text-[9px] font-bold text-[#0b5cbe] mt-0.5">Due today →</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Compact Quick Actions */}
+        <div className="bg-white p-3 rounded-2xl border border-slate-200/80 shadow-xs">
+          <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-2">Quick Actions</span>
+          <div className="grid grid-cols-4 gap-2">
+            <button
+              onClick={() => router.push('/dashboard/members?action=add')}
+              className="flex flex-col items-center justify-center p-2 rounded-xl bg-blue-50 border border-blue-100 text-[#0b5cbe] hover:bg-blue-100 transition-all cursor-pointer active:scale-95 border-none"
+            >
+              <Plus size={16} />
+              <span className="text-[10px] font-bold mt-1 leading-tight">+ Member</span>
+            </button>
+
+            <button
+              onClick={() => router.push('/dashboard/billing')}
+              className="flex flex-col items-center justify-center p-2 rounded-xl bg-slate-50 border border-slate-200/80 text-slate-800 hover:bg-slate-100 transition-all cursor-pointer active:scale-95 border-none"
+            >
+              <DollarSign size={16} className="text-emerald-600" />
+              <span className="text-[10px] font-bold mt-1 leading-tight">Bill</span>
+            </button>
+
+            <button
+              onClick={() => router.push('/dashboard/attendance')}
+              className="flex flex-col items-center justify-center p-2 rounded-xl bg-slate-50 border border-slate-200/80 text-slate-800 hover:bg-slate-100 transition-all cursor-pointer active:scale-95 border-none"
+            >
+              <Clock size={16} className="text-blue-600" />
+              <span className="text-[10px] font-bold mt-1 leading-tight">Attendance</span>
+            </button>
+
+            <button
+              onClick={handleManualUnlock}
+              disabled={gateUnlocked}
+              className="flex flex-col items-center justify-center p-2 rounded-xl bg-slate-50 border border-slate-200/80 text-slate-800 hover:bg-slate-100 transition-all cursor-pointer active:scale-95 border-none"
+            >
+              <Unlock size={16} className="text-indigo-600" />
+              <span className="text-[10px] font-bold mt-1 leading-tight">Gate</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* ─── 1. PAGE HEADER (DESKTOP ONLY < md hidden) ─── */}
+      <div className="hidden md:flex flex-col md:flex-row md:items-center justify-between gap-3 bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs">
         <div>
           <h1 className="font-rowdies text-2xl font-bold text-slate-900 uppercase tracking-tight leading-none">
             Dashboard
@@ -292,8 +409,8 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* ─── 2. TOP KPI CARDS (ROW 1) ─── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 w-full">
+      {/* ─── 2. TOP KPI CARDS (DESKTOP ONLY) ─── */}
+      <div className="hidden md:grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 w-full">
         {/* Card 1: Today's Follow-ups */}
         <div 
           onClick={() => router.push('/dashboard/follow-up')}
@@ -357,7 +474,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* ─── 3. SECONDARY OPERATIONS CARDS (ROW 2) ─── */}
+      {/* ─── 3. SECONDARY OPERATIONS CARDS (DESKTOP ONLY) ─── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 w-full">
         {/* Card 1: Members Inside */}
         <div className="bg-white border border-slate-200/80 p-4 rounded-2xl shadow-xs flex flex-col justify-between min-h-[120px]">

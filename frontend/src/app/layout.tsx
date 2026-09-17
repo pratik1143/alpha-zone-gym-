@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import { GlobalToaster } from '@/lib/toast';
 import PwaRegistrar from '@/components/PwaRegistrar';
+import ChunkErrorRecovery from '@/components/ChunkErrorRecovery';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -47,6 +48,7 @@ export default function RootLayout({
       </head>
       <body className="bg-white text-slate-900 antialiased min-h-screen font-sans">
         <PwaRegistrar />
+        <ChunkErrorRecovery />
         <GlobalToaster />
         {children}
       </body>
