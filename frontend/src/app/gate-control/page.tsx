@@ -103,10 +103,35 @@ export default function GateControlPage() {
     return () => clearInterval(interval);
   }, [fetchMembers]);
 
+  // Clean Numeric Biometric ID extractor
+  const getCleanNumericId = (item: any): string => {
+    if (!item) return '0';
+    if (item.biometricId !== undefined && item.biometricId !== null && item.biometricId !== '') {
+      const bioStr = String(item.biometricId).trim();
+      if (/^\d+$/.test(bioStr)) return bioStr;
+      const digits = bioStr.replace(/\D/g, '');
+      if (digits) {
+        if (digits.length >= 7 && digits.startsWith('2026')) {
+          return String(parseInt(digits.substring(4), 10));
+        }
+        return String(parseInt(digits, 10));
+      }
+    }
+    const rawId = String(item.memberId || item.id || '').trim();
+    const digits = rawId.replace(/\D/g, '');
+    if (digits) {
+      if (digits.length >= 7 && digits.startsWith('2026')) {
+        return String(parseInt(digits.substring(4), 10));
+      }
+      return String(parseInt(digits, 10));
+    }
+    return '0';
+  };
+
   // Filter CRM members for enrollment
   const filteredMembers = useMemo(() => {
     return (members || []).filter((m: any) => {
-      const bioId = String(m.biometricId || m.memberId || m.id || '');
+      const bioId = getCleanNumericId(m);
       const name = String(m.name || '').toLowerCase();
       const phone = String(m.phone || '');
       const q = searchQuery.trim().toLowerCase();
@@ -124,7 +149,7 @@ export default function GateControlPage() {
   // Filter Employees for enrollment
   const filteredEmployees = useMemo(() => {
     return (employees || []).filter((e: any) => {
-      const bioId = String(e.biometricId || e.id || '');
+      const bioId = getCleanNumericId(e);
       const name = String(e.name || '').toLowerCase();
       const role = String(e.role || '').toLowerCase();
       const phone = String(e.phone || '');
@@ -186,7 +211,7 @@ export default function GateControlPage() {
 
   // Handle Fingerprint Enrollment Trigger
   const handleStartEnrollment = async (member: any) => {
-    const bioId = String(member.biometricId || member.memberId || member.id);
+    const bioId = getCleanNumericId(member);
     const sessionId = `sess_${bioId}_${Date.now()}`;
     
     setSelectedMember(member);
@@ -237,7 +262,7 @@ export default function GateControlPage() {
 
   // Handle Employee Fingerprint Enrollment Trigger
   const handleStartEmployeeEnrollment = async (emp: any) => {
-    const bioId = String(emp.biometricId || emp.id);
+    const bioId = getCleanNumericId(emp);
     const sessionId = `sess_${bioId}_${Date.now()}`;
     
     setSelectedEmployee(emp);
@@ -546,7 +571,7 @@ export default function GateControlPage() {
                 </div>
               ) : (
                 filteredMembers.map((m: any) => {
-                  const bioId = String(m.biometricId || m.memberId || m.id);
+                  const bioId = getCleanNumericId(m);
                   const isEnrolled = m.fingerprintStatus === 'ENROLLED' || m.fingerprintEnrolled === true;
                   const isSelected = selectedMember?.id === m.id;
 
@@ -710,7 +735,7 @@ export default function GateControlPage() {
                 </div>
               ) : (
                 filteredEmployees.map((e: any) => {
-                  const bioId = String(e.biometricId || e.id);
+                  const bioId = getCleanNumericId(e);
                   const isEnrolled = e.fingerprintStatus === 'ENROLLED' || e.fingerprintEnrolled === true;
                   const isSelected = selectedEmployee?.id === e.id;
 

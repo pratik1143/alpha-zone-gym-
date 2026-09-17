@@ -341,22 +341,82 @@ export const getTesterStatus = async (req: Request, res: Response) => {
 // SMART BIOMETRIC ENROLLMENT API
 // ═══════════════════════════════════════════════════════════════════════════════
 
+import net from 'net';
+
+function checkDeviceSocket(ip: string, port: number, timeoutMs = 2500): Promise<boolean> {
+  return new Promise((resolve) => {
+    const socket = new net.Socket();
+    let connected = false;
+    socket.setTimeout(timeoutMs);
+
+    socket.on('connect', () => {
+      connected = true;
+      socket.destroy();
+    });
+
+    socket.on('timeout', () => {
+      socket.destroy();
+    });
+
+    socket.on('error', () => {
+      socket.destroy();
+    });
+
+    socket.on('close', () => {
+      resolve(connected);
+    });
+
+    socket.connect(port, ip);
+  });
+}
+
 /**
- * Queue fingerprint enrollment for a member.
- * Creates a document in biometric_enrollment with status=pending.
- * Python device service watches this collection and executes the command.
+ * Queue fingerprint enrollment for a member or employee.
+ * Checks socket connectivity to hardware scanner before attempting enrollment.
  */
 export const startEnrollFingerprint = async (req: Request, res: Response) => {
   try {
     const { memberId, employeeId, isEmployee, memberName, biometricId, fingerIndex, userId, name, enrollmentSessionId } = req.body;
     const targetId = employeeId || memberId;
     const rawBio = biometricId || userId || targetId;
-    const bioId = String(rawBio || '1000').trim();
+    const cleanBioNum = String(rawBio).replace(/\D/g, '');
+    const bioId = cleanBioNum || '1000';
     const nameStr = memberName || name || (isEmployee ? 'Employee' : 'Member');
     const sessionId = enrollmentSessionId || `sess_${bioId}_${Date.now()}`;
     const docId = `enroll_${bioId}_${Date.now()}`;
     const nowIso = new Date().toISOString();
 
+    const deviceIp = process.env.EASYBIO_DEVICE_IP || '192.168.18.11';
+    const devicePort = Number(process.env.EASYBIO_DEVICE_PORT || 4370);
+
+    // 1. Socket Connectivity Pre-check
+    const isOnline = await checkDeviceSocket(deviceIp, devicePort, 2000);
+    if (!isOnline) {
+      console.warn(`[Biometric Enrollment] Hardware device offline at ${deviceIp}:${devicePort} for bioId #${bioId} (${nameStr})`);
+      
+      const firestore = getFirestoreDb();
+      if (firestore) {
+        await firestore.collection('biometric_audit_logs').doc(`log_${Date.now()}`).set({
+          sessionId,
+          targetId: targetId || bioId,
+          targetType: isEmployee ? 'EMPLOYEE' : 'MEMBER',
+          memberName: nameStr,
+          biometricId: bioId,
+          action: 'FINGERPRINT_ENROLLMENT',
+          status: 'DEVICE_OFFLINE',
+          deviceId: 'dev_k90_main',
+          timestamp: nowIso,
+          error: `Hardware scanner at ${deviceIp}:${devicePort} is offline or unreachable.`
+        }).catch(() => {});
+      }
+
+      return res.status(400).json({
+        success: false,
+        error: `Hardware Device Offline: Could not connect to EasyBio scanner at ${deviceIp}:${devicePort}. Ensure machine is powered on & connected to Gym LAN.`
+      });
+    }
+
+    // 2. Execute Python hardware enrollment script
     const possiblePaths = [
       path.resolve(process.cwd(), '../device-service/enroll_hardware.py'),
       path.resolve(process.cwd(), 'device-service/enroll_hardware.py'),
@@ -367,99 +427,79 @@ export const startEnrollFingerprint = async (req: Request, res: Response) => {
 
     console.log(`[Biometric Enrollment] Executing hardware enrollment script at: ${scriptPath} for ${isEmployee ? 'Employee' : 'Member'} bioId #${bioId} (${nameStr}) [Session: ${sessionId}]`);
 
-    exec(`python -u "${scriptPath}" ${bioId} "${nameStr}"`, async (err, stdout, stderr) => {
-      const output = (stdout || '') + ' ' + (stderr || '');
-      const isSuccess = output.includes('ENROLLED_SUCCESS') || (!err && output.includes('Fingerprint template captured'));
-
-      const updates = {
-        biometricId: isNaN(Number(bioId)) ? bioId : Number(bioId),
-        deviceUserId: bioId,
-        fingerprintStatus: 'ENROLLED',
-        fingerprintEnrolled: true,
-        fingerprintEnrolledAt: nowIso,
-        fingerprintDeviceId: 'dev_k90_main',
-        fingerprintMappingSource: 'LOCAL_ENROLLMENT',
-        updatedAt: nowIso
-      };
-
-      const targetCollection = isEmployee ? 'employees' : 'members';
-
-      // 1. Update DB / Firestore
-      if (!isEmployee) {
-        if (targetId) {
-          await db.updateMember(targetId, updates).catch(() => {});
+    const result = await new Promise<{ success: boolean; output: string; error?: string }>((resolve) => {
+      exec(`python -u "${scriptPath}" ${bioId} "${nameStr}"`, (err, stdout, stderr) => {
+        const output = (stdout || '') + ' ' + (stderr || '');
+        const isSuccess = output.includes('ENROLLED_SUCCESS') || output.includes('ENROLLED_WAITING') || (!err && output.includes('Fingerprint template captured'));
+        if (err || output.includes('Hardware Error') || output.includes('Errno 10061')) {
+          resolve({ success: false, output, error: err?.message || 'Hardware communication failed' });
+        } else {
+          resolve({ success: isSuccess, output });
         }
-      }
-      
-      const firestore = getFirestoreDb();
-      if (firestore) {
-        try {
-          // Primary update by target ID
-          if (targetId) {
-            await firestore.collection(targetCollection).doc(targetId).set(updates, { merge: true }).catch(() => {});
-          }
-          // Secondary lookup update by biometricId
-          const bioSnap = await firestore.collection(targetCollection).where('biometricId', '==', isNaN(Number(bioId)) ? bioId : Number(bioId)).get();
-          bioSnap.docs.forEach((d: any) => {
-            d.ref.set(updates, { merge: true }).catch(() => {});
-          });
-
-          // 2. Write Audit Log
-          await firestore.collection('biometric_audit_logs').doc(`log_${Date.now()}`).set({
-            sessionId,
-            targetId: targetId || bioId,
-            targetType: isEmployee ? 'EMPLOYEE' : 'MEMBER',
-            memberName: nameStr,
-            biometricId: bioId,
-            action: 'FINGERPRINT_ENROLLMENT',
-            status: isSuccess ? 'SUCCESS' : 'COMPLETED',
-            deviceId: 'dev_k90_main',
-            mappingSource: 'LOCAL_ENROLLMENT',
-            timestamp: nowIso,
-            output: output.substring(0, 500)
-          }).catch(() => {});
-
-          // 3. Update Enrollment Doc Status
-          await firestore.collection('biometric_enrollment').doc(docId).set({
-            status: 'completed',
-            isSuccess: true,
-            updatedAt: admin.firestore.FieldValue.serverTimestamp()
-          }, { merge: true }).catch(() => {});
-        } catch (fErr) {}
-      }
+      });
     });
 
-    if (isFirebaseInitialized && admin) {
-      try {
-        const firestore = admin.firestore();
-        await firestore.collection('biometric_enrollment').doc(docId).set({
-          docId,
-          sessionId,
-          command: 'enroll_fingerprint',
-          status: 'pending',
-          memberId: memberId || bioId,
-          memberName: nameStr,
-          biometricId: bioId,
-          fingerIndex: Number(fingerIndex) || 0,
-          scan: 1,
-          totalScans: 3,
-          message: `Enrollment initiated for ${nameStr} (ID #${bioId}). Place finger on device scanner.`,
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
-      } catch (e) {}
+    if (!result.success) {
+      return res.status(400).json({
+        success: false,
+        error: `Fingerprint capture failed on hardware scanner (${deviceIp}:${devicePort}). ${result.error || ''}`
+      });
     }
 
-    res.json({
+    // 3. ONLY if result.success is true, update DB & Firestore
+    const updates = {
+      biometricId: Number(bioId) || bioId,
+      deviceUserId: String(bioId),
+      fingerprintStatus: 'ENROLLED',
+      fingerprintEnrolled: true,
+      fingerprintEnrolledAt: nowIso,
+      fingerprintDeviceId: 'dev_k90_main',
+      fingerprintMappingSource: 'LOCAL_ENROLLMENT',
+      updatedAt: nowIso
+    };
+
+    const targetCollection = isEmployee ? 'employees' : 'members';
+
+    if (!isEmployee && targetId) {
+      await db.updateMember(targetId, updates).catch(() => {});
+    }
+
+    const firestore = getFirestoreDb();
+    if (firestore) {
+      try {
+        if (targetId) {
+          await firestore.collection(targetCollection).doc(targetId).set(updates, { merge: true }).catch(() => {});
+        }
+        const bioSnap = await firestore.collection(targetCollection).where('biometricId', '==', Number(bioId)).get();
+        bioSnap.docs.forEach((d: any) => {
+          d.ref.set(updates, { merge: true }).catch(() => {});
+        });
+
+        await firestore.collection('biometric_audit_logs').doc(`log_${Date.now()}`).set({
+          sessionId,
+          targetId: targetId || bioId,
+          targetType: isEmployee ? 'EMPLOYEE' : 'MEMBER',
+          memberName: nameStr,
+          biometricId: bioId,
+          action: 'FINGERPRINT_ENROLLMENT',
+          status: 'SUCCESS',
+          deviceId: 'dev_k90_main',
+          timestamp: nowIso
+        }).catch(() => {});
+      } catch (fErr) {}
+    }
+
+    return res.json({
       success: true,
       enrollmentDocId: docId,
       sessionId,
       biometricId: bioId,
-      status: 'ENROLLMENT_REQUESTED',
-      message: `Fingerprint enrollment command sent to ESSL K90 Pro for User ID #${bioId}`
+      status: 'ENROLLED',
+      message: `Fingerprint successfully captured & mapped to Biometric ID #${bioId} (${nameStr})`
     });
+
   } catch (error: any) {
-    res.json({ success: true, message: 'Enrollment initiated' });
+    return res.status(500).json({ success: false, error: error.message || 'Fingerprint enrollment error' });
   }
 };
 

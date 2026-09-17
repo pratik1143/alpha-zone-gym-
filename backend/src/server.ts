@@ -415,16 +415,35 @@ const renderGateHtml = (req: express.Request, res: express.Response) => {
         filterEmployee = filter;
         document.getElementById('btnFilterEmpPending').className = filter === 'pending' ? 'px-3 py-1.5 rounded-lg text-[11px] font-black uppercase transition-all bg-amber-500 text-slate-950' : 'px-3 py-1.5 rounded-lg text-[11px] font-black uppercase transition-all text-slate-400 hover:text-white';
         document.getElementById('btnFilterEmpEnrolled').className = filter === 'enrolled' ? 'px-3 py-1.5 rounded-lg text-[11px] font-black uppercase transition-all bg-emerald-500 text-slate-950' : 'px-3 py-1.5 rounded-lg text-[11px] font-black uppercase transition-all text-slate-400 hover:text-white';
-        document.getElementById('btnFilterEmpAll').className = filter === 'all' ? 'px-3 py-1.5 rounded-lg text-[11px] font-black uppercase transition-all bg-blue-600 text-white' : 'px-3 py-1.5 rounded-lg text-[11px] font-black uppercase transition-all text-slate-400 hover:text-white';
+        document.getElementById('btnFilterEmpAll').className = filter === 'all' ? 'px-3 py-1.5 rounded-lg text-[11px] font-black uppercase transition-all bg-blue-600 text-white' : 'px-3 py-1.5 rounded-lg text-[11px] font-black uppercase transition-all text-slate-400 hover    function getCleanNumericId(item) {
+      if (!item) return '0';
+      if (item.biometricId !== undefined && item.biometricId !== null && item.biometricId !== '') {
+        const bioStr = String(item.biometricId).trim();
+        if (/^\d+$/.test(bioStr)) return bioStr;
+        const digits = bioStr.replace(/\D/g, '');
+        if (digits) {
+          if (digits.length >= 7 && digits.startsWith('2026')) {
+            return String(parseInt(digits.substring(4), 10));
+          }
+          return String(parseInt(digits, 10));
+        }
       }
-      renderRoster();
+      const rawId = String(item.memberId || item.id || '').trim();
+      const digits = rawId.replace(/\D/g, '');
+      if (digits) {
+        if (digits.length >= 7 && digits.startsWith('2026')) {
+          return String(parseInt(digits.substring(4), 10));
+        }
+        return String(parseInt(digits, 10));
+      }
+      return '0';
     }
 
     function renderRoster() {
       // 1. Render Client Members
       const qClient = (document.getElementById('searchClient').value || '').trim().toLowerCase();
       const filteredMembers = membersData.filter(m => {
-        const bioId = String(m.biometricId || m.memberId || m.id || '');
+        const bioId = getCleanNumericId(m);
         const name = String(m.name || '').toLowerCase();
         const phone = String(m.phone || '');
         const matches = !qClient || bioId.includes(qClient) || name.includes(qClient) || phone.includes(qClient);
@@ -441,7 +460,7 @@ const renderGateHtml = (req: express.Request, res: express.Response) => {
         clientList.innerHTML = '<div class="p-8 text-center text-xs text-slate-500 bg-slate-800/40 rounded-2xl border border-slate-800">No members found matching selected filter & search keyword.</div>';
       } else {
         clientList.innerHTML = filteredMembers.map(m => {
-          const bioId = String(m.biometricId || m.memberId || m.id || 'N/A');
+          const bioId = getCleanNumericId(m);
           const isEnrolled = m.fingerprintStatus === 'ENROLLED' || m.fingerprintEnrolled === true;
           return \`
             <div class="p-3.5 rounded-2xl border bg-slate-800/60 border-slate-700/60 flex items-center justify-between hover:border-slate-700 transition-all">
@@ -465,7 +484,7 @@ const renderGateHtml = (req: express.Request, res: express.Response) => {
       // 2. Render Employees (Staff)
       const qEmp = (document.getElementById('searchEmployee').value || '').trim().toLowerCase();
       const filteredEmployees = employeesData.filter(e => {
-        const bioId = String(e.biometricId || e.id || '');
+        const bioId = getCleanNumericId(e);
         const name = String(e.name || '').toLowerCase();
         const role = String(e.role || '').toLowerCase();
         const phone = String(e.phone || '');
@@ -483,7 +502,7 @@ const renderGateHtml = (req: express.Request, res: express.Response) => {
         empList.innerHTML = '<div class="p-8 text-center text-xs text-slate-500 bg-slate-800/40 rounded-2xl border border-slate-800">No staff members found matching selected filter & search keyword.</div>';
       } else {
         empList.innerHTML = filteredEmployees.map(e => {
-          const bioId = String(e.biometricId || e.id || 'N/A');
+          const bioId = getCleanNumericId(e);
           const isEnrolled = e.fingerprintStatus === 'ENROLLED' || e.fingerprintEnrolled === true;
           return \`
             <div class="p-3.5 rounded-2xl border bg-slate-800/60 border-slate-700/60 flex items-center justify-between hover:border-slate-700 transition-all">
@@ -518,19 +537,15 @@ const renderGateHtml = (req: express.Request, res: express.Response) => {
       const step3 = document.getElementById(isEmployee ? 'scanStep3_emp' : 'scanStep3_client');
       const step4 = document.getElementById(isEmployee ? 'scanStep4_emp' : 'scanStep4_client');
 
-      banner.className = 'block p-4 bg-slate-800 border border-blue-500/40 rounded-2xl space-y-3 animate-pulse';
+      banner.className = 'block p-4 bg-slate-800 border border-blue-500/40 rounded-2xl space-y-3';
       targetText.innerText = 'TARGET ' + prefix.toUpperCase() + ': #' + bioId + ' — ' + name;
-      stateText.innerText = 'DEVICE READY';
-      msgText.innerText = 'Please place finger on physical ESSL K90 scanner 3 times...';
+      stateText.innerText = 'CONNECTING TO DEVICE...';
+      msgText.innerText = 'Testing connection to ESSL K90 scanner at 192.168.18.11:4370...';
 
       step1.className = 'p-2 rounded-xl border bg-slate-900 border-slate-800 text-slate-600';
       step2.className = 'p-2 rounded-xl border bg-slate-900 border-slate-800 text-slate-600';
       step3.className = 'p-2 rounded-xl border bg-slate-900 border-slate-800 text-slate-600';
       step4.className = 'p-2 rounded-xl border bg-slate-900 border-slate-800 text-slate-600';
-
-      setTimeout(() => { step1.className = 'p-2 rounded-xl border bg-blue-900/60 border-blue-500 text-blue-300'; }, 1000);
-      setTimeout(() => { step2.className = 'p-2 rounded-xl border bg-blue-900/60 border-blue-500 text-blue-300'; }, 2500);
-      setTimeout(() => { step3.className = 'p-2 rounded-xl border bg-blue-900/60 border-blue-500 text-blue-300'; }, 4000);
 
       try {
         const payload = {
@@ -551,20 +566,30 @@ const renderGateHtml = (req: express.Request, res: express.Response) => {
         const data = await res.json();
 
         if (data.success) {
+          step1.className = 'p-2 rounded-xl border bg-blue-900/60 border-blue-500 text-blue-300';
+          step2.className = 'p-2 rounded-xl border bg-blue-900/60 border-blue-500 text-blue-300';
+          step3.className = 'p-2 rounded-xl border bg-blue-900/60 border-blue-500 text-blue-300';
           step4.className = 'p-2 rounded-xl border bg-emerald-900/60 border-emerald-500 text-emerald-300';
           stateText.innerText = 'SUCCESS ✓';
           stateText.className = 'text-[10px] font-mono font-bold text-emerald-400 bg-emerald-950 border border-emerald-800 px-2 py-0.5 rounded-md';
           msgText.innerText = '✓ Fingerprint captured & mapped to Biometric ID #' + bioId + ' (' + name + ')';
           fetchRoster();
         } else {
-          stateText.innerText = 'FAILED';
+          step1.className = 'p-2 rounded-xl border bg-rose-950 border-rose-800 text-rose-400';
+          step2.className = 'p-2 rounded-xl border bg-rose-950 border-rose-800 text-rose-400';
+          step3.className = 'p-2 rounded-xl border bg-rose-950 border-rose-800 text-rose-400';
+          step4.className = 'p-2 rounded-xl border bg-rose-950 border-rose-800 text-rose-400';
+          stateText.innerText = 'HARDWARE OFFLINE ❌';
           stateText.className = 'text-[10px] font-mono font-bold text-rose-400 bg-rose-950 border border-rose-800 px-2 py-0.5 rounded-md';
-          msgText.innerText = data.error || data.message || 'Fingerprint capture failed on hardware device.';
+          msgText.innerText = '❌ ' + (data.error || data.message || 'Hardware Scanner (192.168.18.11:4370) is disconnected or offline!');
         }
       } catch (err) {
-        stateText.innerText = 'ERROR';
+        step1.className = 'p-2 rounded-xl border bg-rose-950 border-rose-800 text-rose-400';
+        stateText.innerText = 'ERROR ❌';
         stateText.className = 'text-[10px] font-mono font-bold text-rose-400 bg-rose-950 border border-rose-800 px-2 py-0.5 rounded-md';
-        msgText.innerText = 'Connection error during fingerprint enrollment.';
+        msgText.innerText = '❌ Hardware device connection error. Scanner at 192.168.18.11:4370 is unreachable.';
+      }
+    }t = 'Connection error during fingerprint enrollment.';
       }
     }
 
