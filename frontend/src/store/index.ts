@@ -274,10 +274,36 @@ export const useGymStore = create<GymStore>((set, get) => ({
   fetchDashboardAnalytics: async () => {
     try {
       const res = await API.get('/analytics/dashboard');
-      set({ dashboardAnalytics: res.data });
+      if (res.data) {
+        set({ dashboardAnalytics: res.data });
+        return;
+      }
     } catch (err) {
-      console.error('Failed to fetch dashboard analytics:', err);
+      console.warn('API fetch analytics failed/unreachable, calculating from store:', err);
     }
+
+    // Fallback calculation using members store state
+    const members = get().members;
+    const totalMembers = members.length;
+    const activeMembers = members.filter((m: any) => {
+      const st = String(m.status || '').toLowerCase();
+      return st === 'active' || st === 'expiring soon' || st === 'expiring';
+    }).length;
+    
+    let totalRevenue = 0;
+    const payments = get().payments;
+    payments.forEach((p: any) => {
+      if (p.amount) totalRevenue += Number(p.amount) || 0;
+    });
+
+    set({
+      dashboardAnalytics: {
+        totalMembers,
+        todayAttendance: get().attendance.length || 0,
+        activeMembers,
+        revenue: totalRevenue
+      }
+    });
   },
 
   fetchAttendanceSummary: async (memberId: string) => {
@@ -299,47 +325,96 @@ export const useGymStore = create<GymStore>((set, get) => ({
     if (!force && get().members.length > 0 && (now - _membersCacheTs) < STALE_MS) return;
     try {
       const res = await API.get('/members');
-      // STRICT: only use real server data — NEVER fall back to hardcoded mock members.
-      // If API returns empty or fails, show empty list. Do NOT fabricate member data.
       const rawData = (res.data && Array.isArray(res.data)) ? res.data : [];
-      const seen = new Set<string>();
-      const unique = (rawData as any[]).filter(m => {
-        const key = (m.memberId && m.memberId !== 'AZ-2026-0000')
-          ? `mid_${m.memberId.trim()}`
-          : (m.phone ? `phone_${m.phone.replace(/\D/g, '')}` : `id_${m.id}`);
-        if (seen.has(key)) return false;
-        seen.add(key);
-        return true;
-      });
+      if (rawData.length > 0) {
+        const seen = new Set<string>();
+        const unique = (rawData as any[]).filter(m => {
+          const key = (m.memberId && m.memberId !== 'AZ-2026-0000')
+            ? `mid_${m.memberId.trim()}`
+            : (m.phone ? `phone_${m.phone.replace(/\D/g, '')}` : `id_${m.id}`);
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
 
-      const getMemberSortTime = (m: any): number => {
-        if (m?.createdAt) {
-          const t = typeof m.createdAt === 'object' && m.createdAt.seconds
-            ? m.createdAt.seconds * 1000
-            : new Date(m.createdAt).getTime();
-          if (!isNaN(t) && t > 0) return t;
-        }
-        if (m?.joinDate) {
-          const t = new Date(m.joinDate).getTime();
-          if (!isNaN(t) && t > 0) return t;
-        }
-        if (m?.startDate) {
-          const t = new Date(m.startDate).getTime();
-          if (!isNaN(t) && t > 0) return t;
-        }
-        return 0;
-      };
-      unique.sort((a: any, b: any) => getMemberSortTime(b) - getMemberSortTime(a));
+        const getMemberSortTime = (m: any): number => {
+          if (m?.createdAt) {
+            const t = typeof m.createdAt === 'object' && m.createdAt.seconds
+              ? m.createdAt.seconds * 1000
+              : new Date(m.createdAt).getTime();
+            if (!isNaN(t) && t > 0) return t;
+          }
+          if (m?.joinDate) {
+            const t = new Date(m.joinDate).getTime();
+            if (!isNaN(t) && t > 0) return t;
+          }
+          if (m?.startDate) {
+            const t = new Date(m.startDate).getTime();
+            if (!isNaN(t) && t > 0) return t;
+          }
+          return 0;
+        };
+        unique.sort((a: any, b: any) => getMemberSortTime(b) - getMemberSortTime(a));
 
-      set({ members: unique });
-      _membersCacheTs = Date.now();
-    } catch (err) {
-      console.error('Failed to fetch members:', err);
-      // On error, do NOT replace real members with mocks. Keep existing state as-is.
-      // If store is empty and the API is down, show empty list.
-      if (get().members.length === 0) {
-        set({ members: [] });
+        set({ members: unique });
+        _membersCacheTs = Date.now();
+        return;
       }
+    } catch (err) {
+      console.warn('API fetch members failed or unreachable, attempting direct Firestore fallback:', err);
+    }
+
+    // Direct Firestore Fallback for production Vercel / serverless deployments
+    try {
+      const { db: fDb } = await import('../lib/firebase');
+      const { collection, getDocs } = await import('firebase/firestore');
+      const querySnapshot = await getDocs(collection(fDb, 'members'));
+      if (!querySnapshot.empty) {
+        const fsMembers: any[] = [];
+        querySnapshot.forEach((docSnap) => {
+          fsMembers.push({ id: docSnap.id, ...docSnap.data() });
+        });
+        const seen = new Set<string>();
+        const unique = fsMembers.filter(m => {
+          const key = (m.memberId && m.memberId !== 'AZ-2026-0000')
+            ? `mid_${m.memberId.trim()}`
+            : (m.phone ? `phone_${m.phone.replace(/\D/g, '')}` : `id_${m.id}`);
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+
+        const getMemberSortTime = (m: any): number => {
+          if (m?.createdAt) {
+            const t = typeof m.createdAt === 'object' && m.createdAt.seconds
+              ? m.createdAt.seconds * 1000
+              : new Date(m.createdAt).getTime();
+            if (!isNaN(t) && t > 0) return t;
+          }
+          if (m?.joinDate) {
+            const t = new Date(m.joinDate).getTime();
+            if (!isNaN(t) && t > 0) return t;
+          }
+          if (m?.startDate) {
+            const t = new Date(m.startDate).getTime();
+            if (!isNaN(t) && t > 0) return t;
+          }
+          return 0;
+        };
+        unique.sort((a: any, b: any) => getMemberSortTime(b) - getMemberSortTime(a));
+
+        set({ members: unique });
+        _membersCacheTs = Date.now();
+        // Recalculate dashboard analytics with fetched members
+        get().fetchDashboardAnalytics();
+        return;
+      }
+    } catch (fsErr) {
+      console.error('Direct Firestore members fetch failed:', fsErr);
+    }
+
+    if (get().members.length === 0) {
+      set({ members: [] });
     }
   },
   addMember: async (member) => {
@@ -395,10 +470,27 @@ export const useGymStore = create<GymStore>((set, get) => ({
     if (!force && get().attendance.length > 0 && (now - _attendanceCacheTs) < STALE_MS) return;
     try {
       const res = await API.get('/attendance');
-      set({ attendance: res.data });
-      _attendanceCacheTs = Date.now();
+      if (res.data && Array.isArray(res.data) && res.data.length > 0) {
+        set({ attendance: res.data });
+        _attendanceCacheTs = Date.now();
+        return;
+      }
     } catch (err) {
-      console.error('Failed to fetch attendance:', err);
+      console.warn('API fetch attendance failed, trying direct Firestore fallback:', err);
+    }
+
+    try {
+      const { db: fDb } = await import('../lib/firebase');
+      const { collection, getDocs } = await import('firebase/firestore');
+      const snap = await getDocs(collection(fDb, 'attendance'));
+      if (!snap.empty) {
+        const attendance: any[] = [];
+        snap.forEach(d => attendance.push({ id: d.id, ...d.data() }));
+        set({ attendance });
+        _attendanceCacheTs = Date.now();
+      }
+    } catch (fsErr) {
+      console.error('Direct Firestore attendance fetch failed:', fsErr);
     }
   },
   triggerCheckIn: async (payload) => {
@@ -464,10 +556,28 @@ export const useGymStore = create<GymStore>((set, get) => ({
     if (!force && get().payments.length > 0 && (now - _paymentsCacheTs) < STALE_MS) return;
     try {
       const res = await API.get('/billing');
-      set({ payments: res.data });
-      _paymentsCacheTs = Date.now();
+      if (res.data && Array.isArray(res.data) && res.data.length > 0) {
+        set({ payments: res.data });
+        _paymentsCacheTs = Date.now();
+        return;
+      }
     } catch (err) {
-      console.error('Failed to fetch invoices:', err);
+      console.warn('API fetch payments failed, trying direct Firestore fallback:', err);
+    }
+
+    try {
+      const { db: fDb } = await import('../lib/firebase');
+      const { collection, getDocs } = await import('firebase/firestore');
+      const snap = await getDocs(collection(fDb, 'payments'));
+      if (!snap.empty) {
+        const payments: any[] = [];
+        snap.forEach(d => payments.push({ id: d.id, ...d.data() }));
+        set({ payments });
+        _paymentsCacheTs = Date.now();
+        get().fetchDashboardAnalytics();
+      }
+    } catch (fsErr) {
+      console.error('Direct Firestore payments fetch failed:', fsErr);
     }
   },
   addPayment: async (payment) => {
@@ -487,9 +597,25 @@ export const useGymStore = create<GymStore>((set, get) => ({
   fetchPlans: async () => {
     try {
       const res = await API.get('/memberships');
-      set({ plans: res.data });
+      if (res.data && Array.isArray(res.data) && res.data.length > 0) {
+        set({ plans: res.data });
+        return;
+      }
     } catch (err) {
-      console.error('Failed to fetch plans:', err);
+      console.warn('API fetch plans failed, trying direct Firestore fallback:', err);
+    }
+
+    try {
+      const { db: fDb } = await import('../lib/firebase');
+      const { collection, getDocs } = await import('firebase/firestore');
+      const snap = await getDocs(collection(fDb, 'plans'));
+      if (!snap.empty) {
+        const plans: any[] = [];
+        snap.forEach(d => plans.push({ id: d.id, ...d.data() }));
+        set({ plans });
+      }
+    } catch (fsErr) {
+      console.error('Direct Firestore plans fetch failed:', fsErr);
     }
   },
   addPlan: async (plan) => {

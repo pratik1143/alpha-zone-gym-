@@ -1,8 +1,20 @@
 import axios from 'axios';
 import { auth } from '../lib/firebase';
 
+const getBaseURL = () => {
+  if (process.env.NEXT_PUBLIC_API_URL) {
+    return process.env.NEXT_PUBLIC_API_URL;
+  }
+  // In production browser environment where NEXT_PUBLIC_API_URL wasn't built in, default to relative /api
+  if (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+    return '/api';
+  }
+  return 'http://localhost:5000/api';
+};
+
 const API = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api',
+  baseURL: getBaseURL(),
+  timeout: 5000,
   headers: {
     'Content-Type': 'application/json'
   }
