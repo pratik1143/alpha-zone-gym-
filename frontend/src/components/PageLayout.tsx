@@ -7,6 +7,7 @@ import {
   Menu, X, MapPin, Phone, Mail, Globe,
   Dumbbell
 } from 'lucide-react';
+import PwaInstallButton from './PwaInstallButton';
 
 const navLinks = [
   { label: 'Home', href: '/' },
@@ -52,6 +53,7 @@ export default function PageLayout({ children }: { children: React.ReactNode }) 
           </nav>
 
           <div className="hidden sm:flex items-center gap-4">
+            <PwaInstallButton variant="compact" label="DOWNLOAD APP" />
             <Link
               href="/contact"
               className="bg-[#d4ff00] text-black font-extrabold text-xs px-6 py-3 rounded-full hover:bg-white transition-all cursor-pointer shadow-[0_0_15px_rgba(212,255,0,0.25)] hover:scale-105"
@@ -81,7 +83,8 @@ export default function PageLayout({ children }: { children: React.ReactNode }) 
                 {link.label}
               </Link>
             ))}
-            <div className="pt-4 border-t border-white/5">
+            <div className="pt-4 border-t border-white/5 space-y-3">
+              <PwaInstallButton variant="primary" className="w-full text-center" />
               <Link
                 href="/contact"
                 onClick={() => setMobileMenuOpen(false)}
@@ -120,10 +123,8 @@ export default function PageLayout({ children }: { children: React.ReactNode }) 
             <p className="text-slate-400 text-sm max-w-xl mx-auto font-poppins">
               Join thousands of members who chose Alpha Zone Gym to build strength, discipline, and a healthier life.
             </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Link href="/contact" className="bg-[#d4ff00] text-black font-extrabold text-sm px-8 py-4 rounded-full hover:bg-white transition-all shadow-[0_0_20px_rgba(212,255,0,0.3)] hover:scale-105">
-                Book Now →
-              </Link>
+            <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+              <PwaInstallButton variant="primary" />
               <Link href="/packages" className="border border-white/15 hover:border-[#d4ff00] text-white font-bold text-sm px-8 py-4 rounded-full transition-all hover:text-[#d4ff00]">
                 View Membership Plans
               </Link>

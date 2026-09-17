@@ -843,8 +843,85 @@ export default function MembersTable({
         </div>
       </div>
 
-      {/* Table */}
-      <div className="overflow-x-auto">
+      {/* Mobile Member Cards View (< md) */}
+      <div className="md:hidden p-3 space-y-3 bg-slate-50/50">
+        {paginatedMembers.length === 0 ? (
+          <div className="p-8 text-center text-xs text-slate-500 bg-white rounded-2xl border border-slate-200">
+            No members found matching selected search & filters.
+          </div>
+        ) : (
+          paginatedMembers.map(member => {
+            const displayId = member.clientId ? `AZ-${member.clientId}` : (member.memberId || member.id);
+            const days = member.daysLeft;
+            const isExpired = days < 0;
+            const amountPaid = Number(member.amountPaid ?? member.paid ?? member.totalPaid ?? 0);
+            const balance = Number(member.balanceAmount ?? member.balance ?? member.outstandingBalance ?? 0);
+
+            return (
+              <div
+                key={member.id}
+                className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-xs space-y-3 text-left"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <MemberAvatar member={member} className="w-12 h-12 rounded-full border border-slate-200 object-cover shrink-0" size={48} />
+                    <div>
+                      <div className="font-extrabold text-slate-900 text-sm flex items-center gap-1.5">
+                        <span>{member.name}</span>
+                        {member.isPt && <span className="px-1.5 py-0.2 bg-amber-100 text-amber-800 text-[9px] font-black rounded uppercase">PT</span>}
+                      </div>
+                      <div className="text-xs text-slate-500 font-mono mt-0.5">ID: <strong className="text-slate-800">#{displayId}</strong></div>
+                      <div className="text-[11px] text-slate-400 font-mono">{member.phone || 'No phone'}</div>
+                    </div>
+                  </div>
+
+                  <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                    isExpired ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-800'
+                  }`}>
+                    {isExpired ? 'Expired' : 'Active'}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100 text-xs font-bold">
+                  <div className="bg-slate-50 p-2 rounded-xl">
+                    <span className="text-[9px] text-slate-400 uppercase font-black block">Plan</span>
+                    <span className="text-slate-800">{member.packageName || member.plan || 'Standard'}</span>
+                  </div>
+                  <div className="bg-slate-50 p-2 rounded-xl">
+                    <span className="text-[9px] text-slate-400 uppercase font-black block">Paid</span>
+                    <span className="text-emerald-700 font-mono">₹{amountPaid.toLocaleString('en-IN')}</span>
+                    {balance > 0 && <span className="text-rose-600 font-mono block text-[10px]">Due: ₹{balance.toLocaleString('en-IN')}</span>}
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between pt-1">
+                  <button
+                    type="button"
+                    onClick={() => router.push(`/dashboard/members/${member.id}`)}
+                    className="flex-1 py-2.5 bg-[#0b5cbe] hover:bg-blue-700 text-white rounded-xl text-xs font-black uppercase tracking-wider text-center shadow-xs cursor-pointer border-none"
+                  >
+                    VIEW PROFILE →
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      setActionsMenu({ member, rect });
+                    }}
+                    className="ml-2 px-3 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center cursor-pointer border border-slate-200"
+                  >
+                    <MoreHorizontal size={16} />
+                  </button>
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      {/* Table (Desktop Only >= md) */}
+      <div className="hidden md:block overflow-x-auto">
         <table className="w-full text-left text-sm whitespace-nowrap border-separate border-spacing-0">
           <thead className="bg-[#0b5cbe] text-[#fdfdfd] font-bold">
             <tr className="bg-[#0b5cbe]">

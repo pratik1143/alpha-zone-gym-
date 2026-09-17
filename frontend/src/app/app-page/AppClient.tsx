@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import Image from 'next/image';
 import PageLayout from '../../components/PageLayout';
+import PwaInstallButton from '../../components/PwaInstallButton';
 import { motion } from 'framer-motion';
 import { getGymImage } from '../../lib/gymImages';
 import {
@@ -75,12 +76,10 @@ export default function AppPageRoute() {
               <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.25 }} className="text-slate-300 text-base md:text-lg leading-relaxed font-poppins max-w-lg">
                 Manage your fitness journey anytime, anywhere. Digital membership, AI coach, workout plans, diet tracking — all in one app.
               </motion.p>
-              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.4 }} className="flex flex-col sm:flex-row gap-4">
-                <a href="/AlphaZone.apk" download className="bg-[#d4ff00] text-black font-extrabold text-sm px-8 py-4 rounded-full hover:bg-white transition-all shadow-[0_0_20px_rgba(212,255,0,0.3)] flex items-center gap-2 justify-center hover:scale-105">
-                  <Smartphone size={16} /> Download Android App
-                </a>
-                <a href="/contact" className="border border-white/20 hover:border-[#d4ff00] text-white font-bold text-sm px-8 py-4 rounded-full transition-all hover:text-[#d4ff00] flex items-center gap-2 justify-center">
-                  <Star size={16} /> Join & Get Access
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.4 }} className="flex flex-col sm:flex-row gap-4 items-center">
+                <PwaInstallButton variant="primary" />
+                <a href="/AlphaZone.apk" download className="border border-white/20 hover:border-[#d4ff00] text-white font-bold text-sm px-7 py-3.5 rounded-full transition-all hover:text-[#d4ff00] flex items-center gap-2 justify-center">
+                  <Smartphone size={16} /> Download APK (Android)
                 </a>
               </motion.div>
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }} className="flex items-center gap-6 pt-2">

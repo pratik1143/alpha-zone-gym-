@@ -23,6 +23,8 @@ import EmployeePopupManager from './components/EmployeePopupManager';
 import UniversalSearchBar from './components/UniversalSearchBar';
 import LiveTimeCard from './components/LiveTimeCard';
 import SoftwareFooter from './components/SoftwareFooter';
+import MobileBottomNav from './components/MobileBottomNav';
+import AddMemberModal from './members/components/AddMemberModal';
 
 export default function DashboardLayout({
   children,
@@ -36,6 +38,7 @@ export default function DashboardLayout({
   const router = useRouter();
   const pathname = usePathname();
   
+  const [isMobileAddModalOpen, setIsMobileAddModalOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [currentTime, setCurrentTime] = useState<Date | null>(null);
   const [activeHeatmapFilter, setActiveHeatmapFilter] = useState('Yours');
@@ -254,8 +257,8 @@ export default function DashboardLayout({
 
   return (
     <div className="h-screen w-full flex font-sans text-slate-800 bg-[#FDFDFD] overflow-hidden relative">
-      {/* ─── Column 1: Left Navigation Sidebar ─── */}
-      <aside className="w-[230px] lg:w-[240px] flex-shrink-0 bg-white border-r border-slate-200/80 p-4 flex flex-col justify-between h-full overflow-y-auto z-40">
+      {/* ─── Column 1: Left Navigation Sidebar (Desktop Only) ─── */}
+      <aside className="hidden md:flex w-[230px] lg:w-[240px] flex-shrink-0 bg-white border-r border-slate-200/80 p-4 flex-col justify-between h-full overflow-y-auto z-40">
         <div className="space-y-6">
           {/* Branding Logo */}
           <div className="px-1 flex items-center justify-start border-b border-slate-100 pb-4">
@@ -349,14 +352,35 @@ export default function DashboardLayout({
       </aside>
 
       {/* ─── Main Workspace Content Area ─── */}
-      <main className="flex-1 min-w-0 w-full h-full p-4 sm:p-6 overflow-y-auto flex flex-col justify-between gap-6 text-left bg-[#FDFDFD]">
+      <main className="flex-1 min-w-0 w-full h-full p-4 sm:p-6 pb-24 md:pb-6 overflow-y-auto flex flex-col justify-between gap-6 text-left bg-[#FDFDFD]">
         <div className="flex flex-col gap-4 flex-1">
+          {/* Compact Mobile Top Header Bar (< md) */}
+          <div className="md:hidden sticky -top-4 z-30 bg-white/95 backdrop-blur-md border border-slate-200/80 rounded-2xl px-4 py-2.5 flex items-center justify-between shadow-2xs shrink-0">
+            <Link href="/dashboard/overview" className="flex items-center gap-2">
+              <img src="/gymlogo.png" alt="Logo" className="h-8 w-8 object-contain rounded-full" />
+              <span className="font-rowdies font-extrabold text-sm text-slate-900 tracking-tight uppercase leading-none">
+                Alpha <span className="text-[#0b5cbe]">CRM</span>
+              </span>
+            </Link>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setIsMobileAddModalOpen(true)}
+                className="px-3 py-1.5 bg-[#0b5cbe] text-white rounded-full text-[11px] font-extrabold uppercase tracking-wider flex items-center gap-1 cursor-pointer border-none shadow-xs"
+              >
+                <Plus size={14} /> Add Member
+              </button>
+            </div>
+          </div>
+
           {/* Top Header Bar: Universal Search (Left/Center) + Live Time Card (Right) */}
           <div className="w-full flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 shrink-0 pb-1">
             <div className="w-full sm:max-w-[460px] md:max-w-[500px]">
               <UniversalSearchBar />
             </div>
-            <LiveTimeCard />
+            <div className="hidden sm:block">
+              <LiveTimeCard />
+            </div>
           </div>
           {children}
         </div>
@@ -715,6 +739,8 @@ export default function DashboardLayout({
       </AnimatePresence>
     <AttendancePopupManager />
     <EmployeePopupManager />
+    <MobileBottomNav onOpenAddMember={() => setIsMobileAddModalOpen(true)} />
+    <AddMemberModal isOpen={isMobileAddModalOpen} onClose={() => setIsMobileAddModalOpen(false)} />
     </div>
   );
 }
