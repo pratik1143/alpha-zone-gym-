@@ -212,6 +212,9 @@ export const createMember = async (req: Request, res: Response) => {
 
     const idempotencyKey = req.body.idempotencyKey || `mem_${phone}_${plan || 'Monthly'}_${invoiceDate}`;
 
+    // Determine permanent biometric / member ID
+    const assignedBioId = String(biometricId || req.body.memberId || '').trim();
+
     const member = await db.addMember({
       uid, // align document ID with Auth UID
       name, phone, email: loginEmail, plan: plan || 'Monthly',
@@ -247,7 +250,15 @@ export const createMember = async (req: Request, res: Response) => {
       occupation: occupation || '',
       address: address || '',
       avatarUrl: avatarUrl || '',
-      biometricId: biometricId || '',
+      biometricId: assignedBioId,
+      deviceUserId: assignedBioId,
+      fingerprintStatus: req.body.fingerprintStatus || (req.body.fingerprintEnrolled ? 'ENROLLED' : 'NOT_ENROLLED'),
+      fingerprintEnrolled: req.body.fingerprintEnrolled === true || req.body.fingerprintStatus === 'ENROLLED',
+      fingerprintDeviceId: req.body.fingerprintDeviceId || null,
+      fingerprintEnrolledAt: req.body.fingerprintEnrolledAt || null,
+      fingerprintTemplateId: req.body.fingerprintTemplateId || null,
+      faceStatus: req.body.faceStatus || 'NOT_ENROLLED',
+      faceEnrolled: req.body.faceEnrolled === true,
       paymentStatus: finalPaymentStatus
     });
 

@@ -432,27 +432,56 @@ export const nextBiometricId = async (req: Request, res: Response) => {
   try {
     const members = await db.getMembers();
     let maxId = 0;
+    const usedIds = new Set<string>();
 
     members.forEach((m: any) => {
-      if (m.biometricId) {
-        const parsed = parseInt(m.biometricId, 10);
-        if (!isNaN(parsed) && parsed > maxId) maxId = parsed;
-      }
+      const candidates = [m.biometricId, m.memberId, m.clientId, m.customId, m.id];
+      candidates.forEach((c) => {
+        if (c) {
+          const strC = String(c).trim();
+          usedIds.add(strC);
+          const parsed = parseInt(strC.replace(/\D/g, ''), 10);
+          if (!isNaN(parsed) && parsed > 0 && parsed < 1000000 && parsed > maxId) {
+            maxId = parsed;
+          }
+        }
+      });
     });
 
     if (isFirebaseInitialized && admin) {
-      const snap = await admin.firestore().collection('device_users').get();
-      snap.docs.forEach((doc: any) => {
-        const data = doc.data();
-        if (data.userId) {
-          const parsed = parseInt(data.userId, 10);
-          if (!isNaN(parsed) && parsed > maxId) maxId = parsed;
-        }
-      });
+      try {
+        const snap = await admin.firestore().collection('device_users').get();
+        snap.docs.forEach((doc: any) => {
+          const data = doc.data();
+          const uId = data.userId || data.user_id || doc.id;
+          if (uId) {
+            const strU = String(uId).trim();
+            usedIds.add(strU);
+            const parsed = parseInt(strU.replace(/\D/g, ''), 10);
+            if (!isNaN(parsed) && parsed > 0 && parsed < 1000000 && parsed > maxId) {
+              maxId = parsed;
+            }
+          }
+        });
+      } catch (e) {}
     }
 
-    const nextId = maxId + 1;
-    res.json({ nextId });
+    // Default to 1 if no numeric ID exists yet
+    let candidate = maxId > 0 ? maxId + 1 : 1;
+
+    // Guaranteed collision prevention loop
+    while (usedIds.has(String(candidate)) || usedIds.has(`AZ-2026-${String(candidate).padStart(4, '0')}`)) {
+      candidate++;
+    }
+
+    const nextIdStr = String(candidate);
+    res.json({
+      success: true,
+      nextId: candidate,
+      nextBiometricId: nextIdStr,
+      nextMemberId: nextIdStr,
+      highestExistingId: maxId
+    });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }

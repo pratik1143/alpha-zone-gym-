@@ -143,6 +143,20 @@ export default function ProfileTab({ member, onOpenRenewModal }: { member: any; 
     member?.trainerName !== 'Unassigned'
   );
 
+  // Realtime Firestore listener for live biometric updates
+  React.useEffect(() => {
+    if (!member?.id) return;
+    try {
+      const { onSnapshot, doc } = require('firebase/firestore');
+      const unsub = onSnapshot(doc(db, 'members', member.id), (snap: any) => {
+        if (snap.exists()) {
+          fetchMembers(true);
+        }
+      });
+      return () => unsub();
+    } catch (_) {}
+  }, [member?.id, fetchMembers]);
+
   const handleUpdateExpiry = async (targetDateStr: string) => {
     setSavingExpiry(true);
     try {
@@ -370,6 +384,59 @@ export default function ProfileTab({ member, onOpenRenewModal }: { member: any; 
             <Field icon={User} label="Gender" value={member.gender || 'Not specified'} />
             <Field icon={Briefcase} label="Occupation" value={member.occupation || 'Not specified'} />
             <Field icon={HeartPulse} label="Emergency Contact" value={member.emergencyContact || 'N/A'} />
+          </div>
+        </div>
+      </div>
+
+      {/* BIOMETRIC & HARDWARE ACCESS CARD */}
+      <div className="bg-white rounded-[32px] shadow-[0_2px_20px_rgba(0,0,0,0.02)] border border-slate-100 p-8 space-y-4">
+        <div className="flex justify-between items-center">
+          <div className="flex items-center gap-2">
+            <div className="w-9 h-9 rounded-xl bg-blue-50 border border-blue-200 text-blue-600 flex items-center justify-center">
+              <Shield size={18} />
+            </div>
+            <div>
+              <h3 className="text-base font-black text-slate-900 tracking-tight">Biometric & Hardware Access</h3>
+              <p className="text-[11px] text-slate-500 font-medium">Permanent ESSL K90 Pro Gate User Mapping</p>
+            </div>
+          </div>
+          <span className="px-3 py-1 bg-slate-100 border border-slate-200 text-slate-700 text-[10px] font-mono font-black uppercase tracking-wider rounded-full">
+            PERMANENT ID #{member.biometricId || member.memberId || 'N/A'}
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 pt-1">
+          <div className="p-4 bg-slate-50/80 rounded-2xl border border-slate-200/80 flex flex-col justify-between space-y-2">
+            <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Biometric ID</span>
+            <span className="text-xl font-mono font-black text-blue-700">#{member.biometricId || member.memberId || 'N/A'}</span>
+          </div>
+
+          <div className="p-4 bg-slate-50/80 rounded-2xl border border-slate-200/80 flex flex-col justify-between space-y-2">
+            <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Fingerprint Status</span>
+            <div>
+              <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-black uppercase tracking-wider border ${
+                member.fingerprintStatus === 'ENROLLED' || member.fingerprintEnrolled
+                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                  : 'bg-amber-50 text-amber-700 border-amber-200'
+              }`}>
+                <span className={`w-2 h-2 rounded-full ${member.fingerprintStatus === 'ENROLLED' || member.fingerprintEnrolled ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                {member.fingerprintStatus === 'ENROLLED' || member.fingerprintEnrolled ? 'ENROLLED' : 'NOT ENROLLED'}
+              </span>
+            </div>
+          </div>
+
+          <div className="p-4 bg-slate-50/80 rounded-2xl border border-slate-200/80 flex flex-col justify-between space-y-2">
+            <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Hardware Mapping</span>
+            <span className="text-xs font-bold text-slate-700">
+              {member.fingerprintStatus === 'ENROLLED' || member.fingerprintEnrolled
+                ? `MAPPED (#${member.biometricId || member.memberId})`
+                : 'NOT MAPPED (Pending Terminal)'}
+            </span>
+          </div>
+
+          <div className="p-4 bg-slate-50/80 rounded-2xl border border-slate-200/80 flex flex-col justify-between space-y-2">
+            <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Target Device</span>
+            <span className="text-xs font-bold text-slate-700 font-mono">ESSL K90 Pro (192.168.18.11)</span>
           </div>
         </div>
       </div>

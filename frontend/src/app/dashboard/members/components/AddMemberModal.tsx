@@ -119,7 +119,7 @@ function deduplicatePackages(rawPlans: any[]) {
 }
 
 export default function AddMemberModal({ isOpen, onClose }: AddMemberModalProps) {
-  const { plans, fetchPlans, addMember, fetchPayments, members } = useGymStore();
+  const { plans, fetchPlans, addMember, fetchPayments, members, fetchNextBiometricId } = useGymStore();
 
   useEffect(() => {
     fetchPlans();
@@ -344,16 +344,17 @@ export default function AddMemberModal({ isOpen, onClose }: AddMemberModalProps)
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Auto-generate sequential Biometric ID
+  // Auto-generate permanent sequential Biometric ID
   useEffect(() => {
     if (isOpen) {
-      const nextId = (members.length + 101).toString();
-      setBiometricId(nextId);
+      fetchNextBiometricId().then((nextId) => {
+        if (nextId) setBiometricId(nextId);
+      }).catch(() => {});
       if (activePlans.length > 0 && !selectedPlan) {
         setSelectedPlan(activePlans[0]);
       }
     }
-  }, [isOpen, members.length]);
+  }, [isOpen, fetchNextBiometricId]);
 
   // Check duplicate phone
   const duplicateMember = useMemo(() => {
@@ -1372,27 +1373,42 @@ export default function AddMemberModal({ isOpen, onClose }: AddMemberModalProps)
                 <div className="bg-slate-50 p-6 rounded-3xl border border-slate-200/80 space-y-4">
                   <div className="flex items-center justify-center gap-3">
                     <span className="text-xs font-black uppercase tracking-wider text-slate-500">Biometric User ID:</span>
-                    <input 
-                      type="number"
-                      value={biometricId}
-                      onChange={(e) => setBiometricId(e.target.value)}
-                      className="w-32 h-11 bg-white border border-slate-300 rounded-xl text-center font-mono text-base font-black text-blue-700 focus:outline-none focus:border-blue-600 shadow-xs"
-                    />
+                    <div className="relative inline-flex items-center">
+                      <input 
+                        type="text"
+                        value={biometricId}
+                        readOnly
+                        className="w-32 h-11 bg-slate-100 border border-slate-300 rounded-xl text-center font-mono text-base font-black text-blue-700 cursor-not-allowed select-none shadow-xs pr-8"
+                      />
+                      <Lock size={14} className="absolute right-2.5 text-slate-400" />
+                    </div>
                   </div>
 
-                  <p className="text-[11px] text-slate-500 font-medium">
-                    This ID will be synced with local ESSL attendance software listener.
+                  <p className="text-[11px] text-slate-500 font-medium max-w-md mx-auto">
+                    Permanent auto-generated ID <strong className="text-blue-700 font-bold">#{biometricId}</strong>. You can enroll fingerprint now or skip and enroll later from the Local IP Terminal.
                   </p>
 
-                  <div className="pt-2">
+                  <div className="pt-2 flex items-center justify-center gap-3">
                     <button
                       type="button"
                       onClick={handleStartBiometricEnrollment}
                       disabled={enrollStatus === 'enrolling'}
-                      className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl text-xs font-black transition-all shadow-md border-none cursor-pointer inline-flex items-center gap-2"
+                      className="px-5 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl text-xs font-black transition-all shadow-md border-none cursor-pointer inline-flex items-center gap-2"
                     >
                       <Fingerprint size={16} />
-                      <span>{enrollStatus === 'enrolling' ? 'Connecting Scanner...' : 'Trigger ESSL Terminal Enrollment'}</span>
+                      <span>{enrollStatus === 'enrolling' ? 'Connecting Scanner...' : 'ENROLL NOW'}</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        toast.info('Fingerprint enrollment skipped. You can enroll later from Local IP Terminal.');
+                        setStep(4);
+                      }}
+                      className="px-5 py-3 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-2xl text-xs font-black transition-all border-none cursor-pointer inline-flex items-center gap-1.5"
+                    >
+                      <span>SKIP FOR NOW</span>
+                      <ChevronRight size={14} />
                     </button>
                   </div>
 
