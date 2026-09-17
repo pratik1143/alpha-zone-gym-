@@ -21,6 +21,7 @@ import { setDoc, doc } from 'firebase/firestore';
 import { auth, db as fDb } from '../lib/firebase';
 import CinematicHero from '../components/CinematicHero';
 import { getGymImage, getGymImages } from '../lib/gymImages';
+import PwaInstallButton from '../components/PwaInstallButton';
 
 
 const mobileProgressData = [
@@ -1521,52 +1522,38 @@ export default function AlphaZoneLandingPage() {
             <div className="flex-1 text-left space-y-6">
               <span className="inline-flex items-center gap-2 bg-[#d4ff00]/10 text-[#d4ff00] text-[10px] font-bold px-4 py-1.5 rounded-full uppercase tracking-widest border border-[#d4ff00]/20">
                 <span className="w-1.5 h-1.5 rounded-full bg-[#d4ff00] animate-pulse" />
-                Direct APK Installer (No Play Store Required)
+                Chrome PWA & Web App (No Store Required)
               </span>
               <h2 className="text-3xl md:text-5xl font-black uppercase tracking-tight leading-tight text-white">
                 Alpha Zone <br className="hidden md:inline" /> Member Super App
               </h2>
               <p className="text-slate-400 text-sm md:text-base leading-relaxed max-w-lg font-poppins">
-                Gain direct access to workouts, daily diet plans, live attendance tracking, and real-time support from your coaches. Download the Android app installer directly on your mobile device.
+                Gain direct access to workouts, daily diet plans, live attendance tracking, and real-time support from your coaches. Install the Chrome Application directly on your mobile or desktop device.
               </p>
               
               {/* Instructions */}
               <div className="space-y-3 pt-2 font-poppins">
                 <h4 className="text-xs font-bold uppercase tracking-widest text-[#d4ff00]">Installation Guide:</h4>
                 <ol className="list-decimal list-inside text-xs text-slate-400 space-y-1.5 bg-black/20 p-4 rounded-xl border border-white/5">
-                  <li>Click <span className="text-white font-semibold">Download Android App</span> on your mobile device.</li>
-                  <li>Open the downloaded <code className="text-[#d4ff00] font-mono">AlphaZone.apk</code> file.</li>
-                  <li>Enable <span className="text-white font-semibold">&ldquo;Install from Unknown Sources&rdquo;</span> if prompted.</li>
-                  <li>Tap <span className="text-white font-semibold">Install</span>, open the app, and login with your CRM account!</li>
+                  <li>Click <span className="text-white font-semibold">Download Chrome App</span> on your device.</li>
+                  <li>Confirm the browser prompt to <span className="text-white font-semibold">&ldquo;Install App&rdquo;</span> or <span className="text-white font-semibold">&ldquo;Add to Home Screen&rdquo;</span>.</li>
+                  <li>Launch <span className="text-[#d4ff00] font-mono">Alpha CRM</span> directly from your phone home screen or desktop menu!</li>
                 </ol>
               </div>
             </div>
 
-            {/* Right Action & APK Visual */}
+            {/* Right Action & Chrome PWA Visual */}
             <div className="w-full md:w-auto flex flex-col items-center justify-center shrink-0 space-y-4">
-              <div className="relative group p-1 bg-gradient-to-br from-[#d4ff00] to-teal-400 rounded-3xl transition-transform duration-300 hover:scale-105">
-                <a 
-                  href="/AlphaZone.apk" 
-                  download="AlphaZone.apk"
-                  className="flex flex-col items-center justify-center bg-[#0c0c0e] text-white px-8 py-10 rounded-[22px] min-w-[280px] text-center space-y-4 transition-colors"
-                >
-                  <div className="w-16 h-16 bg-[#d4ff00]/10 rounded-2xl flex items-center justify-center text-[#d4ff00] border border-[#d4ff00]/20">
-                    <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                    </svg>
-                  </div>
-                  <div>
-                    <span className="block font-black text-lg uppercase tracking-wider text-[#d4ff00]">Download Android App</span>
-                    <span className="block text-[10px] text-slate-500 mt-1 font-mono">v1.0.0 (Direct APK) • 37.3 MB</span>
-                  </div>
-                </a>
+              <div className="p-6 bg-[#0c0c0e] border border-[#d4ff00]/30 rounded-3xl min-w-[280px] text-center space-y-4 shadow-2xl">
+                <PwaInstallButton variant="primary" label="DOWNLOAD CHROME APP" />
+                <div className="text-[10px] text-slate-500 font-mono">v1.0.0 (Chrome Web App PWA)</div>
               </div>
               
               <span className="text-[10px] text-slate-500 font-mono flex items-center gap-1.5">
                 <svg className="w-3.5 h-3.5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                 </svg>
-                Verified Safe • Direct Installation
+                Verified Safe • Official PWA Web App
               </span>
             </div>
 

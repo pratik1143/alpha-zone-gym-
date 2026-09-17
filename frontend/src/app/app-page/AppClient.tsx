@@ -268,26 +268,23 @@ export default function AppPageRoute() {
                   <Smartphone size={36} />
                 </div>
                 <div className="space-y-4">
-                  <span className="text-xs font-black text-[#d4ff00] tracking-widest uppercase">Download Now</span>
+                  <span className="text-xs font-black text-[#d4ff00] tracking-widest uppercase">Install Now</span>
                   <h2 className="text-3xl md:text-5xl font-black text-white uppercase tracking-tighter">Alpha Zone Member Super App</h2>
-                  <p className="text-slate-400 max-w-xl mx-auto font-poppins">Direct APK installer. No Play Store required. Download directly on your Android device.</p>
+                  <p className="text-slate-400 max-w-xl mx-auto font-poppins">Chrome Application &amp; Standalone PWA. No App Store required. Install directly on your device.</p>
                 </div>
                 <div className="bg-black/40 border border-white/5 rounded-2xl p-5 text-left max-w-lg mx-auto">
                   <div className="text-xs font-black text-[#d4ff00] uppercase tracking-wider mb-3">Installation Guide</div>
                   <ol className="list-decimal list-inside text-xs text-slate-400 space-y-2 font-poppins">
-                    <li>Click <strong className="text-white">Download Android App</strong> below.</li>
-                    <li>Open the downloaded <code className="text-[#d4ff00] font-mono">AlphaZone.apk</code> file.</li>
-                    <li>Enable <strong className="text-white">"Install from Unknown Sources"</strong> if prompted.</li>
-                    <li>Tap <strong className="text-white">Install</strong>, open the app, and login with your member credentials!</li>
+                    <li>Click <strong className="text-white">DOWNLOAD CHROME APP</strong> below.</li>
+                    <li>Confirm the browser prompt to <strong className="text-white">&ldquo;Install App&rdquo;</strong> or <strong className="text-white">&ldquo;Add to Home Screen&rdquo;</strong>.</li>
+                    <li>Open <code className="text-[#d4ff00] font-mono">Alpha CRM</code> directly from your home screen!</li>
                   </ol>
                 </div>
                 <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
-                  <a href="/AlphaZone.apk" download className="bg-[#d4ff00] text-black font-extrabold text-sm px-10 py-4 rounded-full hover:bg-white transition-all shadow-[0_0_20px_rgba(212,255,0,0.3)] flex items-center gap-2 hover:scale-105">
-                    <Smartphone size={18} /> Download Android App
-                  </a>
+                  <PwaInstallButton variant="primary" label="DOWNLOAD CHROME APP" />
                 </div>
                 <p className="text-[11px] text-slate-600 font-poppins flex items-center justify-center gap-1">
-                  <Shield size={12} className="text-emerald-500" /> v1.0.0 · Direct APK · Verified Safe
+                  <Shield size={12} className="text-emerald-500" /> v1.0.0 · Official Chrome PWA · Verified Safe
                 </p>
               </div>
             </motion.div>
