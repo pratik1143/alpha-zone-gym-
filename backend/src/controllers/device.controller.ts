@@ -348,10 +348,11 @@ export const getTesterStatus = async (req: Request, res: Response) => {
  */
 export const startEnrollFingerprint = async (req: Request, res: Response) => {
   try {
-    const { memberId, memberName, biometricId, fingerIndex, userId, name, enrollmentSessionId } = req.body;
-    const rawBio = biometricId || userId || memberId;
+    const { memberId, employeeId, isEmployee, memberName, biometricId, fingerIndex, userId, name, enrollmentSessionId } = req.body;
+    const targetId = employeeId || memberId;
+    const rawBio = biometricId || userId || targetId;
     const bioId = String(rawBio || '1000').trim();
-    const nameStr = memberName || name || 'Member';
+    const nameStr = memberName || name || (isEmployee ? 'Employee' : 'Member');
     const sessionId = enrollmentSessionId || `sess_${bioId}_${Date.now()}`;
     const docId = `enroll_${bioId}_${Date.now()}`;
     const nowIso = new Date().toISOString();
@@ -364,15 +365,14 @@ export const startEnrollFingerprint = async (req: Request, res: Response) => {
     ];
     const scriptPath = possiblePaths.find(p => fs.existsSync(p)) || possiblePaths[0];
 
-    console.log(`[Biometric Enrollment] Executing hardware enrollment script at: ${scriptPath} for bioId #${bioId} (${nameStr}) [Session: ${sessionId}]`);
+    console.log(`[Biometric Enrollment] Executing hardware enrollment script at: ${scriptPath} for ${isEmployee ? 'Employee' : 'Member'} bioId #${bioId} (${nameStr}) [Session: ${sessionId}]`);
 
     exec(`python -u "${scriptPath}" ${bioId} "${nameStr}"`, async (err, stdout, stderr) => {
       const output = (stdout || '') + ' ' + (stderr || '');
       const isSuccess = output.includes('ENROLLED_SUCCESS') || (!err && output.includes('Fingerprint template captured'));
-      const status = isSuccess ? 'ENROLLED' : (err ? 'FAILED' : 'ENROLLED');
 
       const updates = {
-        biometricId: bioId,
+        biometricId: isNaN(Number(bioId)) ? bioId : Number(bioId),
         deviceUserId: bioId,
         fingerprintStatus: 'ENROLLED',
         fingerprintEnrolled: true,
@@ -382,20 +382,24 @@ export const startEnrollFingerprint = async (req: Request, res: Response) => {
         updatedAt: nowIso
       };
 
-      // 1. Update member in Database / Firestore
-      if (memberId) {
-        await db.updateMember(memberId, updates).catch(() => {});
+      const targetCollection = isEmployee ? 'employees' : 'members';
+
+      // 1. Update DB / Firestore
+      if (!isEmployee) {
+        if (targetId) {
+          await db.updateMember(targetId, updates).catch(() => {});
+        }
       }
       
       const firestore = getFirestoreDb();
       if (firestore) {
         try {
-          // Primary update by memberId or document ID
-          if (memberId) {
-            await firestore.collection('members').doc(memberId).set(updates, { merge: true }).catch(() => {});
+          // Primary update by target ID
+          if (targetId) {
+            await firestore.collection(targetCollection).doc(targetId).set(updates, { merge: true }).catch(() => {});
           }
           // Secondary lookup update by biometricId
-          const bioSnap = await firestore.collection('members').where('biometricId', '==', bioId).get();
+          const bioSnap = await firestore.collection(targetCollection).where('biometricId', '==', isNaN(Number(bioId)) ? bioId : Number(bioId)).get();
           bioSnap.docs.forEach((d: any) => {
             d.ref.set(updates, { merge: true }).catch(() => {});
           });
@@ -403,7 +407,8 @@ export const startEnrollFingerprint = async (req: Request, res: Response) => {
           // 2. Write Audit Log
           await firestore.collection('biometric_audit_logs').doc(`log_${Date.now()}`).set({
             sessionId,
-            memberId: memberId || bioId,
+            targetId: targetId || bioId,
+            targetType: isEmployee ? 'EMPLOYEE' : 'MEMBER',
             memberName: nameStr,
             biometricId: bioId,
             action: 'FINGERPRINT_ENROLLMENT',

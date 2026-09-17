@@ -22,7 +22,7 @@ type EnrollmentState =
   | 'CANCELLED';
 
 export default function GateControlPage() {
-  const [activeTab, setActiveTab] = useState<'gate' | 'enroll'>('gate');
+  const [activeTab, setActiveTab] = useState<'gate' | 'enroll' | 'employee'>('gate');
   const [deviceIp, setDeviceIp] = useState('192.168.18.11');
   const [devicePort, setDevicePort] = useState('4370');
   const [serverIp, setServerIp] = useState('Localhost');
@@ -47,10 +47,28 @@ export default function GateControlPage() {
   const [statusFilter, setStatusFilter] = useState<'pending' | 'enrolled' | 'all'>('pending');
   const [selectedMember, setSelectedMember] = useState<any | null>(null);
 
+  // Enroll Employee state
+  const [employees, setEmployees] = useState<any[]>([]);
+  const [empSearchQuery, setEmpSearchQuery] = useState('');
+  const [empStatusFilter, setEmpStatusFilter] = useState<'pending' | 'enrolled' | 'all'>('pending');
+  const [selectedEmployee, setSelectedEmployee] = useState<any | null>(null);
+
   // Fingerprint State Machine
   const [enrollState, setEnrollState] = useState<EnrollmentState>('NOT_ENROLLED');
   const [enrollMsg, setEnrollMsg] = useState('');
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+
+  // Fetch staff/employees
+  const fetchEmployees = async () => {
+    try {
+      const res = await API.get('/employees');
+      if (Array.isArray(res.data)) {
+        setEmployees(res.data);
+      }
+    } catch (err) {
+      console.warn('Failed to fetch employees:', err);
+    }
+  };
 
   // Fetch gate & server status
   const fetchStatus = async () => {
@@ -76,9 +94,11 @@ export default function GateControlPage() {
   useEffect(() => {
     fetchStatus();
     fetchMembers();
+    fetchEmployees();
     const interval = setInterval(() => {
       fetchStatus();
       fetchMembers();
+      fetchEmployees();
     }, 15000);
     return () => clearInterval(interval);
   }, [fetchMembers]);
@@ -100,6 +120,25 @@ export default function GateControlPage() {
       return true;
     });
   }, [members, searchQuery, statusFilter]);
+
+  // Filter Employees for enrollment
+  const filteredEmployees = useMemo(() => {
+    return (employees || []).filter((e: any) => {
+      const bioId = String(e.biometricId || e.id || '');
+      const name = String(e.name || '').toLowerCase();
+      const role = String(e.role || '').toLowerCase();
+      const phone = String(e.phone || '');
+      const q = empSearchQuery.trim().toLowerCase();
+
+      const matchesSearch = !q || bioId.includes(q) || name.includes(q) || role.includes(q) || phone.includes(q);
+      const isEnrolled = e.fingerprintStatus === 'ENROLLED' || e.fingerprintEnrolled === true;
+
+      if (!matchesSearch) return false;
+      if (empStatusFilter === 'pending') return !isEnrolled;
+      if (empStatusFilter === 'enrolled') return isEnrolled;
+      return true;
+    });
+  }, [employees, empSearchQuery, empStatusFilter]);
 
   // Handle Open Gate Button Click
   const handleOpenGate = async () => {
@@ -196,6 +235,56 @@ export default function GateControlPage() {
     }
   };
 
+  // Handle Employee Fingerprint Enrollment Trigger
+  const handleStartEmployeeEnrollment = async (emp: any) => {
+    const bioId = String(emp.biometricId || emp.id);
+    const sessionId = `sess_${bioId}_${Date.now()}`;
+    
+    setSelectedEmployee(emp);
+    setActiveSessionId(sessionId);
+    setEnrollState('ENROLLMENT_REQUESTED');
+    setEnrollMsg(`Connecting to ESSL K90 Pro at ${deviceIp} for Staff #${bioId} (${emp.name})...`);
+
+    try {
+      setEnrollState('DEVICE_READY');
+      setEnrollMsg('Device ready. Please place finger on physical ESSL scanner 3 times.');
+
+      setTimeout(() => setEnrollState('SCANNING_1'), 1500);
+      setTimeout(() => setEnrollState('SCANNING_2'), 3000);
+      setTimeout(() => setEnrollState('SCANNING_3'), 4500);
+      setTimeout(() => setEnrollState('VERIFYING'), 6000);
+
+      const res = await API.post('/devices/biometric/enroll-fingerprint', {
+        employeeId: emp.id || bioId,
+        isEmployee: true,
+        memberName: emp.name,
+        name: emp.name,
+        biometricId: bioId,
+        userId: bioId,
+        enrollmentSessionId: sessionId
+      });
+
+      if (res.data && res.data.success) {
+        setEnrollState('ENROLLMENT_SUCCESS');
+        setEnrollMsg(`✓ Fingerprint template captured & mapped to Staff #${bioId} (${emp.name})`);
+        toast.success(`Fingerprint enrolled for staff ${emp.name} (ID #${bioId})!`);
+        
+        fetchEmployees();
+        setTimeout(() => {
+          setEnrollState('COMPLETED');
+        }, 2500);
+      } else {
+        setEnrollState('FAILED');
+        setEnrollMsg(res.data?.message || 'Fingerprint enrollment failed or timed out on device scanner.');
+        toast.error('Enrollment failed. Please ensure finger is placed clearly 3 times.');
+      }
+    } catch (err: any) {
+      setEnrollState('FAILED');
+      setEnrollMsg(err?.response?.data?.message || err?.message || 'Device socket communication error.');
+      toast.error('Device error during fingerprint capture.');
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-start p-4 font-sans selection:bg-blue-600 selection:text-white">
       
@@ -223,7 +312,7 @@ export default function GateControlPage() {
           <div className="pt-3 flex items-center justify-center gap-2">
             <button
               onClick={() => setActiveTab('gate')}
-              className={`px-5 py-2.5 rounded-2xl text-xs font-black uppercase tracking-wider transition-all border cursor-pointer flex items-center gap-2 ${
+              className={`px-4 py-2 rounded-2xl text-xs font-black uppercase tracking-wider transition-all border cursor-pointer flex items-center gap-2 ${
                 activeTab === 'gate'
                   ? 'bg-blue-600 text-white border-blue-500 shadow-lg shadow-blue-900/40'
                   : 'bg-slate-800/80 text-slate-400 border-slate-700/80 hover:bg-slate-800 hover:text-slate-200'
@@ -235,7 +324,7 @@ export default function GateControlPage() {
 
             <button
               onClick={() => setActiveTab('enroll')}
-              className={`px-5 py-2.5 rounded-2xl text-xs font-black uppercase tracking-wider transition-all border cursor-pointer flex items-center gap-2 ${
+              className={`px-4 py-2 rounded-2xl text-xs font-black uppercase tracking-wider transition-all border cursor-pointer flex items-center gap-2 ${
                 activeTab === 'enroll'
                   ? 'bg-blue-600 text-white border-blue-500 shadow-lg shadow-blue-900/40'
                   : 'bg-slate-800/80 text-slate-400 border-slate-700/80 hover:bg-slate-800 hover:text-slate-200'
@@ -243,6 +332,18 @@ export default function GateControlPage() {
             >
               <Fingerprint size={15} />
               <span>Enroll Client</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('employee')}
+              className={`px-4 py-2 rounded-2xl text-xs font-black uppercase tracking-wider transition-all border cursor-pointer flex items-center gap-2 ${
+                activeTab === 'employee'
+                  ? 'bg-blue-600 text-white border-blue-500 shadow-lg shadow-blue-900/40'
+                  : 'bg-slate-800/80 text-slate-400 border-slate-700/80 hover:bg-slate-800 hover:text-slate-200'
+              }`}
+            >
+              <User size={15} />
+              <span>Enroll Employee</span>
             </button>
           </div>
         </div>
@@ -484,6 +585,170 @@ export default function GateControlPage() {
                           isEnrolled
                             ? 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
                             : 'bg-blue-600 hover:bg-blue-500 text-white border-blue-500 shadow-md shadow-blue-900/40'
+                        }`}
+                      >
+                        <Fingerprint size={14} />
+                        <span>{isEnrolled ? 'Re-Enroll' : 'Start Enroll'}</span>
+                      </button>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ── TAB 3: ENROLL EMPLOYEE MODULE ── */}
+        {activeTab === 'employee' && (
+          <div className="bg-slate-900/90 backdrop-blur-xl border border-slate-800/90 rounded-3xl p-6 shadow-2xl space-y-5">
+            <div>
+              <h2 className="text-lg font-black text-white uppercase tracking-tight flex items-center gap-2">
+                <User className="text-purple-400" size={20} /> Enroll Employee Fingerprint
+              </h2>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Select staff member to map their biometric ID to physical scanner
+              </p>
+            </div>
+
+            {/* SEARCH & FILTER CONTROLS */}
+            <div className="space-y-3">
+              <div className="relative">
+                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
+                <input
+                  type="text"
+                  value={empSearchQuery}
+                  onChange={(e) => setEmpSearchQuery(e.target.value)}
+                  placeholder="Search staff by Biometric ID, Name, Role, or Phone..."
+                  className="w-full h-11 bg-slate-800/90 border border-slate-700 rounded-2xl pl-10 pr-4 text-xs font-bold text-white placeholder-slate-500 focus:outline-none focus:border-purple-500"
+                />
+              </div>
+
+              <div className="flex items-center justify-between text-xs">
+                <div className="flex items-center gap-1.5 bg-slate-800/60 p-1 rounded-xl border border-slate-700/60">
+                  <button
+                    onClick={() => setEmpStatusFilter('pending')}
+                    className={`px-3 py-1.5 rounded-lg text-[11px] font-black uppercase transition-all border-none cursor-pointer ${
+                      empStatusFilter === 'pending'
+                        ? 'bg-amber-500 text-slate-950 font-extrabold'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    Pending ({employees.filter((e: any) => e.fingerprintStatus !== 'ENROLLED' && !e.fingerprintEnrolled).length})
+                  </button>
+
+                  <button
+                    onClick={() => setEmpStatusFilter('enrolled')}
+                    className={`px-3 py-1.5 rounded-lg text-[11px] font-black uppercase transition-all border-none cursor-pointer ${
+                      empStatusFilter === 'enrolled'
+                        ? 'bg-emerald-500 text-slate-950 font-extrabold'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    Enrolled ({employees.filter((e: any) => e.fingerprintStatus === 'ENROLLED' || e.fingerprintEnrolled).length})
+                  </button>
+
+                  <button
+                    onClick={() => setEmpStatusFilter('all')}
+                    className={`px-3 py-1.5 rounded-lg text-[11px] font-black uppercase transition-all border-none cursor-pointer ${
+                      empStatusFilter === 'all'
+                        ? 'bg-purple-600 text-white font-extrabold'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    All ({employees.length})
+                  </button>
+                </div>
+
+                <span className="text-[11px] text-slate-400 font-mono">
+                  Showing {filteredEmployees.length} staff
+                </span>
+              </div>
+            </div>
+
+            {/* FINGERPRINT ENROLLMENT PROGRESS & STATE MACHINE BANNER */}
+            {enrollState !== 'NOT_ENROLLED' && selectedEmployee && (
+              <div className="p-4 bg-slate-800 border border-purple-500/40 rounded-2xl space-y-3 animate-in fade-in duration-300">
+                <div className="flex items-center justify-between border-b border-slate-700 pb-2">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-purple-500 animate-ping" />
+                    <span className="text-xs font-black uppercase text-white tracking-wider">
+                      Selected Staff: #{selectedEmployee.biometricId || selectedEmployee.id} — {selectedEmployee.name}
+                    </span>
+                  </div>
+                  <span className="text-[10px] font-mono font-bold text-purple-400 bg-purple-950 border border-purple-800 px-2 py-0.5 rounded-md">
+                    STATE: {enrollState}
+                  </span>
+                </div>
+
+                <div className="text-xs font-semibold text-slate-300">
+                  {enrollMsg}
+                </div>
+
+                {/* VISUAL SCAN STEP INDICATORS */}
+                <div className="grid grid-cols-4 gap-2 pt-1 text-center text-[10px] font-mono font-bold">
+                  <div className={`p-2 rounded-xl border ${enrollState === 'SCANNING_1' || enrollState === 'SCANNING_2' || enrollState === 'SCANNING_3' || enrollState === 'ENROLLMENT_SUCCESS' || enrollState === 'COMPLETED' ? 'bg-purple-900/60 border-purple-500 text-purple-300' : 'bg-slate-900 border-slate-800 text-slate-600'}`}>
+                    SCAN 1
+                  </div>
+                  <div className={`p-2 rounded-xl border ${enrollState === 'SCANNING_2' || enrollState === 'SCANNING_3' || enrollState === 'ENROLLMENT_SUCCESS' || enrollState === 'COMPLETED' ? 'bg-purple-900/60 border-purple-500 text-purple-300' : 'bg-slate-900 border-slate-800 text-slate-600'}`}>
+                    SCAN 2
+                  </div>
+                  <div className={`p-2 rounded-xl border ${enrollState === 'SCANNING_3' || enrollState === 'ENROLLMENT_SUCCESS' || enrollState === 'COMPLETED' ? 'bg-purple-900/60 border-purple-500 text-purple-300' : 'bg-slate-900 border-slate-800 text-slate-600'}`}>
+                    SCAN 3
+                  </div>
+                  <div className={`p-2 rounded-xl border ${enrollState === 'ENROLLMENT_SUCCESS' || enrollState === 'COMPLETED' ? 'bg-emerald-900/60 border-emerald-500 text-emerald-300' : 'bg-slate-900 border-slate-800 text-slate-600'}`}>
+                    MAPPED ✓
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* EMPLOYEES LIST TABLE */}
+            <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
+              {filteredEmployees.length === 0 ? (
+                <div className="p-8 text-center text-xs text-slate-500 bg-slate-800/40 rounded-2xl border border-slate-800">
+                  No staff members found matching selected status & search keyword.
+                </div>
+              ) : (
+                filteredEmployees.map((e: any) => {
+                  const bioId = String(e.biometricId || e.id);
+                  const isEnrolled = e.fingerprintStatus === 'ENROLLED' || e.fingerprintEnrolled === true;
+                  const isSelected = selectedEmployee?.id === e.id;
+
+                  return (
+                    <div
+                      key={e.id || bioId}
+                      className={`p-3.5 rounded-2xl border transition-all flex items-center justify-between ${
+                        isSelected
+                          ? 'bg-purple-950/40 border-purple-500/80 shadow-md'
+                          : 'bg-slate-800/60 border-slate-700/60 hover:bg-slate-800 hover:border-slate-700'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-slate-900 border border-slate-700 flex items-center justify-center font-mono text-sm font-black text-purple-400 shrink-0">
+                          #{bioId}
+                        </div>
+                        <div>
+                          <div className="text-xs font-black text-white flex items-center gap-2">
+                            <span>{e.name}</span>
+                            <span className="text-[10px] font-mono text-purple-300">({e.role || 'Staff'})</span>
+                          </div>
+                          <div className="text-[11px] text-slate-400 flex items-center gap-2 mt-0.5">
+                            <span>{e.phone || 'No phone'}</span>
+                            <span>•</span>
+                            <span className={isEnrolled ? 'text-emerald-400 font-bold' : 'text-amber-400 font-bold'}>
+                              {isEnrolled ? '✓ Fingerprint Enrolled' : 'Fingerprint Pending'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={() => handleStartEmployeeEnrollment(e)}
+                        disabled={enrollState === 'ENROLLMENT_REQUESTED' || enrollState === 'SCANNING_1' || enrollState === 'SCANNING_2' || enrollState === 'SCANNING_3'}
+                        className={`px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all border cursor-pointer inline-flex items-center gap-1.5 active:scale-95 disabled:opacity-50 ${
+                          isEnrolled
+                            ? 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
+                            : 'bg-purple-600 hover:bg-purple-500 text-white border-purple-500 shadow-md shadow-purple-900/40'
                         }`}
                       >
                         <Fingerprint size={14} />
