@@ -1,4 +1,5 @@
-import Page, { metadata } from '../../weight-loss/page';
+import { redirect } from 'next/navigation';
 
-export { metadata };
-export default Page;
+export default function Page() {
+  redirect('/weight-loss-gym-mohali');
+}

@@ -1,21 +1,5 @@
-import { getSEO } from '../../lib/seo';
-import { packagesSchema } from '../../lib/schema';
-import PlansClient from '../plans/PlansClient';
-
-export const metadata = getSEO({
-  title: 'Affordable Gym Membership Plans in Mohali | Alpha Zone Gym',
-  description: 'Choose affordable gym membership plans at Alpha Zone Gym near Landran Road. Monthly, quarterly, half-yearly, and yearly fitness packages available.',
-  path: '/packages'
-});
+import { redirect } from 'next/navigation';
 
 export default function Page() {
-  return (
-    <>
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(packagesSchema) }}
-      />
-      <PlansClient />
-    </>
-  );
+  redirect('/gym-membership-mohali');
 }

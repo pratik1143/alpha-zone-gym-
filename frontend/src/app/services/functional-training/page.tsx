@@ -1,4 +1,5 @@
-import Page, { metadata } from '../../functional-training/page';
+import { redirect } from 'next/navigation';
 
-export { metadata };
-export default Page;
+export default function Page() {
+  redirect('/functional-training-mohali');
+}

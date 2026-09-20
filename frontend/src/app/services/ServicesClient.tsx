@@ -124,7 +124,7 @@ export default function ServicesPage() {
               <a href="https://wa.me/919779333155?text=Hello%20Alpha%20Zone%20Gym%2C%20I%20want%20to%20talk%20to%20a%20coach." target="_blank" rel="noopener noreferrer" className="bg-[#d4ff00] text-black font-extrabold text-xs tracking-wider uppercase px-10 py-4 rounded-full hover:bg-white transition-all shadow-[0_0_25px_rgba(212,255,0,0.3)] hover:scale-105">
                 Talk to a Coach
               </a>
-              <a href="/packages" className="border border-white/20 hover:border-[#d4ff00] text-white font-bold text-xs tracking-wider uppercase px-10 py-4 rounded-full transition-all hover:text-[#d4ff00] bg-white/5">
+              <a href="/gym-membership-mohali" className="border border-white/20 hover:border-[#d4ff00] text-white font-bold text-xs tracking-wider uppercase px-10 py-4 rounded-full transition-all hover:text-[#d4ff00] bg-white/5">
                 View Packages
               </a>
             </motion.div>
@@ -278,7 +278,7 @@ export default function ServicesPage() {
               Book your free assessment and let our coaches match you with the right programme.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center pt-2">
-              <a href="/packages" className="bg-[#d4ff00] text-black font-extrabold text-sm px-10 py-4 rounded-full hover:bg-white transition-all shadow-[0_0_20px_rgba(212,255,0,0.35)] hover:scale-105">
+              <a href="/gym-membership-mohali" className="bg-[#d4ff00] text-black font-extrabold text-sm px-10 py-4 rounded-full hover:bg-white transition-all shadow-[0_0_20px_rgba(212,255,0,0.35)] hover:scale-105">
                 View Packages →
               </a>
               <a href="https://wa.me/919779333155?text=Hello%20Alpha%20Zone%20Gym%2C%20I%20want%20to%20contact%20you." target="_blank" rel="noopener noreferrer" className="border border-white/15 hover:border-[#d4ff00] text-white font-bold text-sm px-10 py-4 rounded-full transition-all hover:text-[#d4ff00] bg-white/5">

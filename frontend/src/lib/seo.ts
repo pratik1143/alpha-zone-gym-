@@ -1,6 +1,6 @@
 import { Metadata } from 'next';
 
-const BASE_URL = 'https://alphazonegym.in';
+const BASE_URL = 'https://www.alphazonegym.in';
 
 const DEFAULT_KEYWORDS = [
   'Gym in Mohali',

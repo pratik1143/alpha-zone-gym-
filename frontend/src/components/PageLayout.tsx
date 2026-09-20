@@ -11,21 +11,21 @@ import PwaInstallButton from './PwaInstallButton';
 
 const navLinks = [
   { label: 'Home', href: '/' },
-  { label: 'About', href: '/about' },
+  { label: 'About', href: '/about-us' },
   { 
     label: 'Services', 
-    href: '/services',
+    href: '/gym-services',
     subLinks: [
-      { label: 'Weight Training', href: '/weight-training' },
-      { label: 'Personal Training', href: '/personal-training' },
-      { label: 'CrossFit', href: '/crossfit' },
-      { label: 'Functional Training', href: '/functional-training' },
-      { label: 'HIIT Training', href: '/hiit-training' },
-      { label: 'Weight Loss', href: '/weight-loss' },
+      { label: 'Weight Training', href: '/weight-training-mohali' },
+      { label: 'Personal Training', href: '/personal-training-mohali' },
+      { label: 'CrossFit', href: '/crossfit-mohali' },
+      { label: 'Functional Training', href: '/functional-training-mohali' },
+      { label: 'HIIT Training', href: '/hiit-training-mohali' },
+      { label: 'Weight Loss', href: '/weight-loss-gym-mohali' },
     ]
   },
-  { label: 'Packages', href: '/packages' },
-  { label: 'Contact', href: '/contact' },
+  { label: 'Packages', href: '/gym-membership-mohali' },
+  { label: 'Contact', href: '/contact-us' },
 ];
 
 export default function PageLayout({ children }: { children: React.ReactNode }) {
@@ -62,7 +62,7 @@ export default function PageLayout({ children }: { children: React.ReactNode }) 
                 >
                   <Link
                     href={link.href}
-                    className={`flex items-center gap-1 hover:text-[#d4ff00] hover:text-neon-glow transition-colors ${pathname.startsWith('/services') || ['/weight-training','/personal-training','/crossfit','/functional-training','/hiit-training','/weight-loss'].includes(pathname) ? 'text-[#d4ff00] text-neon-glow' : ''}`}
+                    className={`flex items-center gap-1 hover:text-[#d4ff00] hover:text-neon-glow transition-colors ${pathname.startsWith('/gym-services') || ['/weight-training-mohali','/personal-training-mohali','/crossfit-mohali','/functional-training-mohali','/hiit-training-mohali','/weight-loss-gym-mohali'].includes(pathname) ? 'text-[#d4ff00] text-neon-glow' : ''}`}
                   >
                     {link.label}
                     <svg className="w-3 h-3 transition-transform group-hover:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -187,7 +187,7 @@ export default function PageLayout({ children }: { children: React.ReactNode }) 
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
               <PwaInstallButton variant="primary" />
-              <Link href="/gym-membership" className="border border-white/15 hover:border-[#d4ff00] text-white font-bold text-sm px-8 py-4 rounded-full transition-all hover:text-[#d4ff00]">
+              <Link href="/gym-membership-mohali" className="border border-white/15 hover:border-[#d4ff00] text-white font-bold text-sm px-8 py-4 rounded-full transition-all hover:text-[#d4ff00]">
                 View Membership Plans
               </Link>
             </div>
@@ -245,7 +245,7 @@ export default function PageLayout({ children }: { children: React.ReactNode }) 
                 </div>
                 <div className="flex items-start gap-2">
                   <Globe size={12} className="text-[#d4ff00] shrink-0 mt-0.5" />
-                  <a href="https://alphazonegym.in" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">alphazonegym.in</a>
+                  <a href="https://www.alphazonegym.in" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">alphazonegym.in</a>
                 </div>
               </div>
             </div>
@@ -272,7 +272,7 @@ export default function PageLayout({ children }: { children: React.ReactNode }) 
             <div className="flex items-center gap-4">
               <Link href="/privacy-policy" className="hover:text-white transition-colors">Privacy Policy</Link>
               <span>|</span>
-              <Link href="/terms" className="hover:text-white transition-colors">Terms &amp; Conditions</Link>
+              <Link href="/terms-and-conditions" className="hover:text-white transition-colors">Terms &amp; Conditions</Link>
             </div>
           </div>
         </div>

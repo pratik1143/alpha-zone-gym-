@@ -1,21 +1,5 @@
-import { getSEO } from '../../lib/seo';
-import { termsSchema } from '../../lib/schema';
-import TermsClient from './TermsClient';
-
-export const metadata = getSEO({
-  title: 'Terms & Conditions | Alpha Zone Gym',
-  description: 'Terms & Conditions for membership and facilities at Alpha Zone Gym, Sohana, Mohali.',
-  path: '/terms'
-});
+import { redirect } from 'next/navigation';
 
 export default function Page() {
-  return (
-    <>
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(termsSchema) }}
-      />
-      <TermsClient />
-    </>
-  );
+  redirect('/terms-and-conditions');
 }

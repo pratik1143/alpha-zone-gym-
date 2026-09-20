@@ -230,14 +230,14 @@ export default function AlphaZoneLandingPage() {
           {/* Desktop Navigation Links */}
           <nav className="hidden lg:flex items-center gap-6 text-[11px] font-bold uppercase tracking-wider text-slate-400">
             <a href="/" className="hover:text-[#d4ff00] hover:text-neon-glow transition-colors">Home</a>
-            <a href="/about" className="hover:text-[#d4ff00] hover:text-neon-glow transition-colors">About</a>
+            <a href="/about-us" className="hover:text-[#d4ff00] hover:text-neon-glow transition-colors">About</a>
             <div 
               className="relative group py-6"
               onMouseEnter={() => setServicesDropdownOpen(true)}
               onMouseLeave={() => setServicesDropdownOpen(false)}
             >
               <a
-                href="/services"
+                href="/gym-services"
                 className="flex items-center gap-1 hover:text-[#d4ff00] hover:text-neon-glow transition-colors"
               >
                 Services
@@ -248,16 +248,16 @@ export default function AlphaZoneLandingPage() {
 
               {/* Dropdown Menu */}
               <div className="absolute top-full left-0 w-56 bg-[#0c0c0e] border border-white/10 rounded-xl p-2 shadow-2xl backdrop-blur-xl hidden group-hover:block transition-all">
-                <a href="/weight-training" className="block px-4 py-2.5 rounded-lg text-xs font-semibold normal-case tracking-normal hover:bg-[#d4ff00]/10 hover:text-[#d4ff00] transition-colors text-slate-300">Weight Training</a>
-                <a href="/personal-training" className="block px-4 py-2.5 rounded-lg text-xs font-semibold normal-case tracking-normal hover:bg-[#d4ff00]/10 hover:text-[#d4ff00] transition-colors text-slate-300">Personal Training</a>
-                <a href="/crossfit" className="block px-4 py-2.5 rounded-lg text-xs font-semibold normal-case tracking-normal hover:bg-[#d4ff00]/10 hover:text-[#d4ff00] transition-colors text-slate-300">CrossFit</a>
-                <a href="/functional-training" className="block px-4 py-2.5 rounded-lg text-xs font-semibold normal-case tracking-normal hover:bg-[#d4ff00]/10 hover:text-[#d4ff00] transition-colors text-slate-300">Functional Training</a>
-                <a href="/hiit-training" className="block px-4 py-2.5 rounded-lg text-xs font-semibold normal-case tracking-normal hover:bg-[#d4ff00]/10 hover:text-[#d4ff00] transition-colors text-slate-300">HIIT Training</a>
-                <a href="/weight-loss" className="block px-4 py-2.5 rounded-lg text-xs font-semibold normal-case tracking-normal hover:bg-[#d4ff00]/10 hover:text-[#d4ff00] transition-colors text-slate-300">Weight Loss</a>
+                <a href="/weight-training-mohali" className="block px-4 py-2.5 rounded-lg text-xs font-semibold normal-case tracking-normal hover:bg-[#d4ff00]/10 hover:text-[#d4ff00] transition-colors text-slate-300">Weight Training</a>
+                <a href="/personal-training-mohali" className="block px-4 py-2.5 rounded-lg text-xs font-semibold normal-case tracking-normal hover:bg-[#d4ff00]/10 hover:text-[#d4ff00] transition-colors text-slate-300">Personal Training</a>
+                <a href="/crossfit-mohali" className="block px-4 py-2.5 rounded-lg text-xs font-semibold normal-case tracking-normal hover:bg-[#d4ff00]/10 hover:text-[#d4ff00] transition-colors text-slate-300">CrossFit</a>
+                <a href="/functional-training-mohali" className="block px-4 py-2.5 rounded-lg text-xs font-semibold normal-case tracking-normal hover:bg-[#d4ff00]/10 hover:text-[#d4ff00] transition-colors text-slate-300">Functional Training</a>
+                <a href="/hiit-training-mohali" className="block px-4 py-2.5 rounded-lg text-xs font-semibold normal-case tracking-normal hover:bg-[#d4ff00]/10 hover:text-[#d4ff00] transition-colors text-slate-300">HIIT Training</a>
+                <a href="/weight-loss-gym-mohali" className="block px-4 py-2.5 rounded-lg text-xs font-semibold normal-case tracking-normal hover:bg-[#d4ff00]/10 hover:text-[#d4ff00] transition-colors text-slate-300">Weight Loss</a>
               </div>
             </div>
-            <a href="/packages" className="hover:text-[#d4ff00] hover:text-neon-glow transition-colors">Packages</a>
-            <a href="/contact" className="hover:text-[#d4ff00] hover:text-neon-glow transition-colors">Contact</a>
+            <a href="/gym-membership-mohali" className="hover:text-[#d4ff00] hover:text-neon-glow transition-colors">Packages</a>
+            <a href="/contact-us" className="hover:text-[#d4ff00] hover:text-neon-glow transition-colors">Contact</a>
           </nav>
 
           {/* Action buttons */}
@@ -297,18 +297,18 @@ export default function AlphaZoneLandingPage() {
               className="lg:hidden bg-[#0c0c0e] border-t border-white/10 px-6 py-6 space-y-4 flex flex-col"
             >
               <a href="/" onClick={() => setMobileMenuOpen(false)} className="text-slate-300 hover:text-[#d4ff00] font-bold text-sm tracking-wide uppercase">Home</a>
-              <a href="/about" onClick={() => setMobileMenuOpen(false)} className="text-slate-300 hover:text-[#d4ff00] font-bold text-sm tracking-wide uppercase">About</a>
-              <a href="/services" onClick={() => setMobileMenuOpen(false)} className="text-slate-300 hover:text-[#d4ff00] font-bold text-sm tracking-wide uppercase">Services</a>
+              <a href="/about-us" onClick={() => setMobileMenuOpen(false)} className="text-slate-300 hover:text-[#d4ff00] font-bold text-sm tracking-wide uppercase">About</a>
+              <a href="/gym-services" onClick={() => setMobileMenuOpen(false)} className="text-slate-300 hover:text-[#d4ff00] font-bold text-sm tracking-wide uppercase">Services</a>
               <div className="pl-4 space-y-2 border-l border-white/10 my-1">
-                <a href="/weight-training" onClick={() => setMobileMenuOpen(false)} className="block text-xs font-semibold text-slate-400 hover:text-[#d4ff00]">Weight Training</a>
-                <a href="/personal-training" onClick={() => setMobileMenuOpen(false)} className="block text-xs font-semibold text-slate-400 hover:text-[#d4ff00]">Personal Training</a>
-                <a href="/crossfit" onClick={() => setMobileMenuOpen(false)} className="block text-xs font-semibold text-slate-400 hover:text-[#d4ff00]">CrossFit</a>
-                <a href="/functional-training" onClick={() => setMobileMenuOpen(false)} className="block text-xs font-semibold text-slate-400 hover:text-[#d4ff00]">Functional Training</a>
-                <a href="/hiit-training" onClick={() => setMobileMenuOpen(false)} className="block text-xs font-semibold text-slate-400 hover:text-[#d4ff00]">HIIT Training</a>
-                <a href="/weight-loss" onClick={() => setMobileMenuOpen(false)} className="block text-xs font-semibold text-slate-400 hover:text-[#d4ff00]">Weight Loss</a>
+                <a href="/weight-training-mohali" onClick={() => setMobileMenuOpen(false)} className="block text-xs font-semibold text-slate-400 hover:text-[#d4ff00]">Weight Training</a>
+                <a href="/personal-training-mohali" onClick={() => setMobileMenuOpen(false)} className="block text-xs font-semibold text-slate-400 hover:text-[#d4ff00]">Personal Training</a>
+                <a href="/crossfit-mohali" onClick={() => setMobileMenuOpen(false)} className="block text-xs font-semibold text-slate-400 hover:text-[#d4ff00]">CrossFit</a>
+                <a href="/functional-training-mohali" onClick={() => setMobileMenuOpen(false)} className="block text-xs font-semibold text-slate-400 hover:text-[#d4ff00]">Functional Training</a>
+                <a href="/hiit-training-mohali" onClick={() => setMobileMenuOpen(false)} className="block text-xs font-semibold text-slate-400 hover:text-[#d4ff00]">HIIT Training</a>
+                <a href="/weight-loss-gym-mohali" onClick={() => setMobileMenuOpen(false)} className="block text-xs font-semibold text-slate-400 hover:text-[#d4ff00]">Weight Loss</a>
               </div>
-              <a href="/packages" onClick={() => setMobileMenuOpen(false)} className="text-slate-300 hover:text-[#d4ff00] font-bold text-sm tracking-wide uppercase">Packages</a>
-              <a href="/contact" onClick={() => setMobileMenuOpen(false)} className="text-slate-300 hover:text-[#d4ff00] font-bold text-sm tracking-wide uppercase">Contact</a>
+              <a href="/gym-membership-mohali" onClick={() => setMobileMenuOpen(false)} className="text-slate-300 hover:text-[#d4ff00] font-bold text-sm tracking-wide uppercase">Packages</a>
+              <a href="/contact-us" onClick={() => setMobileMenuOpen(false)} className="text-slate-300 hover:text-[#d4ff00] font-bold text-sm tracking-wide uppercase">Contact</a>
               <div className="pt-4 border-t border-white/5 flex gap-4">
                 <button onClick={() => { setEmail(''); setPassword(''); setMobileMenuOpen(false); setShowLoginModal(true); }} className="w-1/2 bg-slate-900 text-white font-bold py-3 rounded-full text-xs uppercase text-center cursor-pointer border-none">Login</button>
                 <a href="https://wa.me/919779333155?text=Hello%20Alpha%20Zone%20Gym%2C%20I%20want%20to%20join%20the%20gym." target="_blank" rel="noopener noreferrer" onClick={() => setMobileMenuOpen(false)} className="w-1/2 bg-[#d4ff00] text-black font-extrabold py-3 rounded-full text-xs uppercase text-center shadow-[0_0_15px_rgba(212,255,0,0.1)]">Join Now</a>
