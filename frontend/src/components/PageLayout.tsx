@@ -24,8 +24,7 @@ const navLinks = [
       { label: 'Weight Loss', href: '/weight-loss' },
     ]
   },
-  { label: 'Memberships', href: '/gym-membership' },
-  { label: 'Near Sector 77', href: '/gym-near-sector-77-mohali' },
+  { label: 'Packages', href: '/packages' },
   { label: 'Contact', href: '/contact' },
 ];
 
@@ -98,12 +97,14 @@ export default function PageLayout({ children }: { children: React.ReactNode }) 
 
           <div className="hidden sm:flex items-center gap-4">
             <PwaInstallButton variant="compact" label="DOWNLOAD APP" />
-            <Link
-              href="/contact"
+            <a
+              href="https://wa.me/919779333155?text=Hello%20Alpha%20Zone%20Gym%2C%20I%20want%20to%20join%20the%20gym."
+              target="_blank"
+              rel="noopener noreferrer"
               className="bg-[#d4ff00] text-black font-extrabold text-xs px-6 py-3 rounded-full hover:bg-white transition-all cursor-pointer shadow-[0_0_15px_rgba(212,255,0,0.25)] hover:scale-105"
             >
               JOIN ALPHA ZONE
-            </Link>
+            </a>
           </div>
 
           <button
@@ -144,13 +145,15 @@ export default function PageLayout({ children }: { children: React.ReactNode }) 
             ))}
             <div className="pt-4 border-t border-white/5 space-y-3">
               <PwaInstallButton variant="primary" className="w-full text-center" />
-              <Link
-                href="/contact"
+              <a
+                href="https://wa.me/919779333155?text=Hello%20Alpha%20Zone%20Gym%2C%20I%20want%20to%20join%20the%20gym."
+                target="_blank"
+                rel="noopener noreferrer"
                 onClick={() => setMobileMenuOpen(false)}
                 className="w-full bg-[#d4ff00] text-black font-extrabold py-3 rounded-full text-xs uppercase text-center block"
               >
                 Join Alpha Zone
-              </Link>
+              </a>
             </div>
           </div>
         )}

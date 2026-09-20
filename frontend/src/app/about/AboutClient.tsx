@@ -348,7 +348,7 @@ export default function AboutPage() {
               <a href="/packages" className="bg-[#d4ff00] text-black font-extrabold text-sm px-10 py-4 rounded-full hover:bg-white transition-all shadow-[0_0_20px_rgba(212,255,0,0.35)] hover:scale-105">
                 View Packages →
               </a>
-              <a href="/contact" className="border border-white/15 hover:border-[#d4ff00] text-white font-bold text-sm px-10 py-4 rounded-full transition-all hover:text-[#d4ff00] bg-white/5">
+              <a href="https://wa.me/919779333155?text=Hello%20Alpha%20Zone%20Gym%2C%20I%20want%20to%20contact%20you." target="_blank" rel="noopener noreferrer" className="border border-white/15 hover:border-[#d4ff00] text-white font-bold text-sm px-10 py-4 rounded-full transition-all hover:text-[#d4ff00] bg-white/5">
                 Contact Us
               </a>
             </div>

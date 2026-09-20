@@ -211,18 +211,22 @@ export default function ServiceLandingTemplate({
           </p>
           <div className="pt-2 flex flex-col sm:flex-row gap-4 justify-center items-center">
             <a
-              href="tel:+919779333155"
+              href="https://wa.me/919779333155?text=Hello%20Alpha%20Zone%20Gym%2C%20I%20want%20to%20inquire%20about%20your%20services."
+              target="_blank"
+              rel="noopener noreferrer"
               className="bg-[#d4ff00] text-black font-extrabold text-xs px-8 py-4 rounded-full hover:bg-white transition-all shadow-[0_0_15px_rgba(212,255,0,0.25)] flex items-center gap-2 uppercase tracking-wider"
             >
               <Phone className="w-4 h-4" />
               Call +91 97793 33155
             </a>
-            <Link
-              href="/contact"
+            <a
+              href="https://wa.me/919779333155?text=Hello%20Alpha%20Zone%20Gym%2C%20I%20want%20to%20contact%20you."
+              target="_blank"
+              rel="noopener noreferrer"
               className="border border-white/20 hover:border-[#d4ff00] text-white font-bold text-xs px-8 py-4 rounded-full transition-all hover:text-[#d4ff00] uppercase tracking-wider"
             >
               Contact Alpha Zone
-            </Link>
+            </a>
           </div>
         </div>
       </section>

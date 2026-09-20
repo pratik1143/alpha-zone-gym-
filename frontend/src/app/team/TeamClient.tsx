@@ -169,10 +169,10 @@ export default function TeamClient() {
               Book a session with one of our certified trainers and build a customized workout and nutrition plan built exactly for your schedule and genetics.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center pt-2">
-              <a href="/contact" className="bg-[#d4ff00] text-black font-extrabold text-sm px-10 py-4 rounded-full hover:bg-white transition-all shadow-[0_0_20px_rgba(212,255,0,0.35)] hover:scale-105">
+              <a href="https://wa.me/919779333155?text=Hello%20Alpha%20Zone%20Gym%2C%20I%20want%20to%20book%20a%20personal%20trainer%20session." target="_blank" rel="noopener noreferrer" className="bg-[#d4ff00] text-black font-extrabold text-sm px-10 py-4 rounded-full hover:bg-white transition-all shadow-[0_0_20px_rgba(212,255,0,0.35)] hover:scale-105">
                 Book Now
               </a>
-              <a href="tel:+919779333155" className="border border-white/15 hover:border-[#d4ff00] text-white font-bold text-sm px-10 py-4 rounded-full transition-all hover:text-[#d4ff00] bg-white/5 flex items-center gap-2 justify-center">
+              <a href="https://wa.me/919779333155?text=Hello%20Alpha%20Zone%20Gym%2C%20I%20want%20to%20speak%20with%20your%20coaching%20team." target="_blank" rel="noopener noreferrer" className="border border-white/15 hover:border-[#d4ff00] text-white font-bold text-sm px-10 py-4 rounded-full transition-all hover:text-[#d4ff00] bg-white/5 flex items-center gap-2 justify-center">
                 <Phone size={14} /> Call Our Team
               </a>
             </div>
