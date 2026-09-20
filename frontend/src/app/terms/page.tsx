@@ -3,8 +3,8 @@ import { termsSchema } from '../../lib/schema';
 import TermsClient from './TermsClient';
 
 export const metadata = getSEO({
-  title: 'Terms and Conditions | Alpha Zone Gym Mohali',
-  description: 'Review the membership agreements, payment terms, and facility rules for training at Alpha Zone Gym in Sohana, Mohali.',
+  title: 'Terms & Conditions | Alpha Zone Gym',
+  description: 'Terms & Conditions for membership and facilities at Alpha Zone Gym, Sohana, Mohali.',
   path: '/terms'
 });
 

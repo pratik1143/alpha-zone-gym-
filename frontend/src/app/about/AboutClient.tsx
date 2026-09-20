@@ -37,24 +37,27 @@ export default function AboutPage() {
 
           <div className="relative z-10 max-w-5xl mx-auto px-6 text-center space-y-8">
             <motion.span initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }} className="inline-block text-xs font-black text-[#d4ff00] tracking-widest uppercase border border-[#d4ff00]/30 px-5 py-2.5 rounded-full bg-[#d4ff00]/5">
-              EST. 2014 // ALPHA PERFORMANCE LAB
+              ALPHA ZONE GYM • SOHANA, MOHALI
             </motion.span>
             
             <motion.h1 initial={{ opacity: 0, y: 35 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8, delay: 0.1 }} className="text-4xl md:text-7xl font-black uppercase tracking-tighter leading-none">
-              Built For Athletes.<br />
-              <span className="text-[#d4ff00]">Driven By Results.</span>
+              About Alpha Zone Gym
             </motion.h1>
             
-            <motion.p initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, delay: 0.25 }} className="text-slate-305 text-base md:text-xl leading-relaxed max-w-3xl mx-auto font-poppins font-light">
-              Alpha Zone Gym was founded on one simple idea — every body has another level. We built a facility, a culture and a coaching system to help you find it.
+            <motion.h2 initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, delay: 0.25 }} className="text-xl md:text-3xl font-extrabold text-[#d4ff00] text-neon-glow uppercase tracking-tight">
+              More Than a Gym. A Performance Lab.
+            </motion.h2>
+
+            <motion.p initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, delay: 0.3 }} className="text-slate-300 text-base md:text-lg leading-relaxed max-w-3xl mx-auto font-poppins">
+              Alpha Zone Gym is a fitness and performance facility located on Landran Road in Sohana, Mohali. Our goal is simple: create a training environment where people can build strength, improve fitness and stay consistent. Whether you are stepping into a gym for the first time or have been training for years, Alpha Zone offers different training options to match different fitness goals.
             </motion.p>
             
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.4 }} className="flex flex-col sm:flex-row gap-4 justify-center pt-4">
-              <a href="/packages" className="bg-[#d4ff00] text-black font-extrabold text-xs tracking-wider uppercase px-10 py-4 rounded-full hover:bg-white transition-all shadow-[0_0_25px_rgba(212,255,0,0.3)] hover:scale-105">
-                View Packages
+              <a href="/contact" className="bg-[#d4ff00] text-black font-extrabold text-xs tracking-wider uppercase px-10 py-4 rounded-full hover:bg-white transition-all shadow-[0_0_25px_rgba(212,255,0,0.3)] hover:scale-105">
+                Visit Alpha Zone Gym
               </a>
-              <a href="/contact" className="border border-white/20 hover:border-[#d4ff00] text-white font-bold text-xs tracking-wider uppercase px-10 py-4 rounded-full transition-all hover:text-[#d4ff00] bg-white/5">
-                Contact Us
+              <a href="/gym-membership" className="border border-white/20 hover:border-[#d4ff00] text-white font-bold text-xs tracking-wider uppercase px-10 py-4 rounded-full transition-all hover:text-[#d4ff00] bg-white/5">
+                Explore Membership Plans
               </a>
             </motion.div>
           </div>
@@ -191,8 +194,40 @@ export default function AboutPage() {
                   </div>
                 </div>
               </div>
-              <div className="absolute -inset-2 border border-dashed border-[#d4ff00]/25 rounded-[34px] -z-10 pointer-events-none" />
             </motion.div>
+          </div>
+        </section>
+
+        {/* Section 3.5: Our Coaches */}
+        <section className="py-20 bg-[#0c0c0f] border-t border-white/5">
+          <div className="max-w-7xl mx-auto px-6 space-y-12">
+            <div className="text-center max-w-3xl mx-auto space-y-4">
+              <span className="text-xs font-black text-[#d4ff00] tracking-widest uppercase text-neon-glow">EXPERT GUIDANCE</span>
+              <h2 className="text-3xl md:text-5xl font-black uppercase tracking-tight">Meet Our Coaches</h2>
+              <p className="text-slate-400 text-sm md:text-base font-poppins">
+                Our coaching team helps members improve their training technique, understand their workouts and work towards their individual fitness goals.
+              </p>
+              <div className="w-16 h-1 bg-[#d4ff00] mx-auto rounded-full" />
+            </div>
+
+            <div className="grid md:grid-cols-3 gap-8">
+              {[
+                { name: 'Arshpreet Singh', role: 'Coach', desc: 'Specializes in strength programming, progressive overload, and powerlifting.' },
+                { name: 'Lovely Chaudhary', role: 'Coach', desc: 'Expert in functional movement, athletic conditioning, and group HIIT.' },
+                { name: 'Sourav Kumar', role: 'Coach', desc: 'Focuses on weight loss, body transformation, and personalized coaching.' }
+              ].map((coach, idx) => (
+                <div key={idx} className="bg-[#121217] border border-white/10 rounded-2xl p-8 card-neon-hover text-left space-y-4">
+                  <div className="w-14 h-14 rounded-2xl bg-[#d4ff00]/10 border border-[#d4ff00]/30 flex items-center justify-center text-[#d4ff00] font-black text-xl">
+                    {coach.name.charAt(0)}
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-white tracking-tight">{coach.name}</h3>
+                    <span className="text-xs font-bold text-[#d4ff00] uppercase tracking-wider">{coach.role}</span>
+                  </div>
+                  <p className="text-slate-400 text-xs leading-relaxed font-poppins">{coach.desc}</p>
+                </div>
+              ))}
+            </div>
           </div>
         </section>
 

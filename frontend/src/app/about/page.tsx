@@ -3,8 +3,8 @@ import { aboutSchema } from '../../lib/schema';
 import AboutClient from './AboutClient';
 
 export const metadata = getSEO({
-  title: 'About Alpha Zone Gym | Best Gym in Sohana, Mohali',
-  description: 'Learn about Alpha Zone Gym in Sohana, Mohali. Our certified trainers, premium equipment, and personalized fitness programs help members achieve their fitness goals.',
+  title: 'About Alpha Zone Gym | Gym in Sohana, Mohali',
+  description: 'Learn about Alpha Zone Gym in Sohana, Mohali, our training environment, equipment, coaches and approach to strength and fitness.',
   path: '/about'
 });
 

@@ -3,8 +3,8 @@ import { privacySchema } from '../../lib/schema';
 import PrivacyClient from './PrivacyClient';
 
 export const metadata = getSEO({
-  title: 'Privacy Policy | Alpha Zone Gym Mohali',
-  description: 'Read the privacy policy of Alpha Zone Gym. Learn how we collect, use, and protect your membership and fitness tracking data.',
+  title: 'Privacy Policy | Alpha Zone Gym',
+  description: 'Privacy Policy for Alpha Zone Gym in Sohana, Mohali.',
   path: '/privacy-policy'
 });
 

@@ -16,65 +16,58 @@ const fadeUp = {
 
 const disciplines = [
   { 
-    title: 'Strength Training', 
-    desc: 'Free weights, power racks, plate-loaded machines and everything you need to build serious strength.',
+    title: 'Weight Training', 
+    desc: 'Build strength and develop muscle with professional resistance-training equipment.',
     icon: Dumbbell,
+    href: '/weight-training',
     imgCat: 'strength' as const,
     imgIdx: 0
   },
   { 
-    title: 'Cardio & Conditioning', 
-    desc: 'Premium treadmills, rowers, bikes and ski ergs for endurance, fat loss and heart health.',
+    title: 'Cardio Zone', 
+    desc: 'Improve endurance and cardiovascular fitness with dedicated cardio equipment.',
     icon: Activity,
+    href: '/services',
     imgCat: 'cardio' as const,
     imgIdx: 0
   },
   { 
     title: 'Personal Training', 
-    desc: '1-on-1 coaching built around your body, goals and schedule — with accountability built in.',
+    desc: 'Work directly with a coach through customized one-on-one training.',
     icon: Target,
+    href: '/personal-training',
     imgCat: 'trainers' as const,
     imgIdx: 0
   },
   { 
-    title: 'CrossFit & Functional', 
-    desc: 'High-intensity functional training in a dedicated box — barbells, ropes, boxes and grit.',
+    title: 'CrossFit', 
+    desc: 'Challenge your conditioning, strength and athletic performance through functional high-intensity workouts.',
     icon: Flame,
+    href: '/crossfit',
     imgCat: 'functional' as const,
     imgIdx: 0
   },
   { 
-    title: 'Group Classes', 
-    desc: 'HIIT, strength, mobility and athletic conditioning classes led by expert coaches.',
-    icon: Award,
+    title: 'Functional Training', 
+    desc: 'Train movement, stability, coordination and functional strength.',
+    icon: Zap,
+    href: '/functional-training',
     imgCat: 'gallery' as const,
     imgIdx: 0
   },
   { 
-    title: 'Sports Performance', 
-    desc: 'Speed, agility, power and mobility programmes for competitive athletes.',
-    icon: Zap,
+    title: 'HIIT & Group Classes', 
+    desc: 'Join energetic group sessions focused on conditioning, strength and fitness.',
+    icon: Award,
+    href: '/hiit-training',
     imgCat: 'hero' as const,
     imgIdx: 1
   },
   { 
-    title: 'Nutrition Coaching', 
-    desc: 'Personalised nutrition plans and ongoing check-ins to fuel training and recovery.',
+    title: 'Weight Loss Program', 
+    desc: 'Combine strength training, cardio and structured workouts to build a sustainable fitness routine.',
     icon: Heart,
-    imgCat: 'reception' as const,
-    imgIdx: 1
-  },
-  { 
-    title: 'Injury Rehabilitation', 
-    desc: 'Physio-led recovery and prehab protocols to keep you training strong and pain-free.',
-    icon: Shield,
-    imgCat: 'about' as const,
-    imgIdx: 1
-  },
-  { 
-    title: 'Body Transformation', 
-    desc: '12-week transformation programmes that combine training, nutrition and tracking for real results.',
-    icon: ShieldCheck,
+    href: '/weight-loss',
     imgCat: 'cta' as const,
     imgIdx: 0
   }
@@ -116,17 +109,25 @@ export default function ServicesPage() {
 
           <div className="relative z-10 max-w-5xl mx-auto px-6 text-center space-y-8">
             <motion.span initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }} className="inline-block text-xs font-black text-[#d4ff00] tracking-widest uppercase border border-[#d4ff00]/30 px-5 py-2.5 rounded-full bg-[#d4ff00]/5">
-              TRAINING SERVICES // CORE DISCIPLINES
+              ALPHA ZONE GYM • SOHANA, MOHALI
             </motion.span>
             
             <motion.h1 initial={{ opacity: 0, y: 35 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8, delay: 0.1 }} className="text-4xl md:text-7xl font-black uppercase tracking-tighter leading-none">
-              Train Every Discipline.<br />
-              <span className="text-[#d4ff00]">Under One Roof.</span>
+              Gym Services in Mohali
             </motion.h1>
             
-            <motion.p initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, delay: 0.25 }} className="text-slate-300 text-base md:text-xl leading-relaxed max-w-3xl mx-auto font-poppins font-light">
-              From strength and conditioning to CrossFit, personal training and recovery — every service at Alpha Zone is designed to deliver measurable results.
+            <motion.p initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, delay: 0.25 }} className="text-slate-300 text-base md:text-xl leading-relaxed max-w-3xl mx-auto font-poppins">
+              At Alpha Zone Gym, you don't have to follow one type of workout. Our training environment gives you access to different fitness options so you can choose the training style that fits your goals.
             </motion.p>
+            
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.4 }} className="flex flex-col sm:flex-row gap-4 justify-center pt-4">
+              <a href="/contact" className="bg-[#d4ff00] text-black font-extrabold text-xs tracking-wider uppercase px-10 py-4 rounded-full hover:bg-white transition-all shadow-[0_0_25px_rgba(212,255,0,0.3)] hover:scale-105">
+                Talk to a Coach
+              </a>
+              <a href="/gym-membership" className="border border-white/20 hover:border-[#d4ff00] text-white font-bold text-xs tracking-wider uppercase px-10 py-4 rounded-full transition-all hover:text-[#d4ff00] bg-white/5">
+                View Membership Fees
+              </a>
+            </motion.div>
           </div>
         </section>
 

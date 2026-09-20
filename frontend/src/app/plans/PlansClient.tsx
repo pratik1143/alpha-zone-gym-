@@ -147,16 +147,18 @@ export default function PlansPage() {
 
           <div className="relative z-10 max-w-5xl mx-auto px-6 text-center space-y-8">
             <motion.span initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }} className="inline-block text-xs font-black text-[#d4ff00] tracking-widest uppercase border border-[#d4ff00]/30 px-5 py-2.5 rounded-full bg-[#d4ff00]/5">
-              MEMBERSHIP TIERS // PASSES
+              MEMBERSHIP TIERS & FEES
             </motion.span>
             
             <motion.h1 initial={{ opacity: 0, y: 35 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8, delay: 0.1 }} className="text-4xl md:text-7xl font-black uppercase tracking-tighter leading-none">
-              Choose Your<br />
-              <span className="text-[#d4ff00]">Commitment.</span>
+              Gym Membership & Fees in Mohali
             </motion.h1>
             
-            <motion.p initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, delay: 0.25 }} className="text-slate-300 text-base md:text-xl leading-relaxed max-w-3xl mx-auto font-poppins font-light font-poppins">
-              Flexible memberships built around how often you want to win. Every plan unlocks world-class equipment, expert coaches and the culture that makes Alpha Zone different.
+            <motion.p initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, delay: 0.25 }} className="text-[#d4ff00] text-xl md:text-2xl font-extrabold leading-relaxed max-w-3xl mx-auto font-poppins text-neon-glow">
+              Choose Your Commitment. Start Your Transformation.
+            </motion.p>
+            <motion.p initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, delay: 0.3 }} className="text-slate-300 text-base md:text-lg leading-relaxed max-w-3xl mx-auto font-poppins">
+              Whether you want to try the gym for a month or commit to a longer fitness journey, Alpha Zone offers different membership durations. Memberships include gym access, cardio and weight equipment, locker room access and a fitness assessment.
             </motion.p>
           </div>
         </section>

@@ -84,16 +84,19 @@ export default function ContactPage() {
 
           <div className="relative z-10 max-w-5xl mx-auto px-6 text-center space-y-8">
             <motion.span initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }} className="inline-block text-xs font-black text-[#d4ff00] tracking-widest uppercase border border-[#d4ff00]/30 px-5 py-2.5 rounded-full bg-[#d4ff00]/5">
-              GET IN TOUCH // TOUR THE FLOOR
+              ALPHA ZONE GYM • LANDRAN ROAD, SOHANA
             </motion.span>
             
             <motion.h1 initial={{ opacity: 0, y: 35 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8, delay: 0.1 }} className="text-4xl md:text-7xl font-black uppercase tracking-tighter leading-none">
-              Step Into<br />
-              <span className="text-[#d4ff00]">The Zone.</span>
+              Contact Alpha Zone Gym
             </motion.h1>
             
-            <motion.p initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, delay: 0.25 }} className="text-slate-300 text-base md:text-xl leading-relaxed max-w-3xl mx-auto font-poppins font-light">
-              Visit us, message the team or call now to book your free fitness assessment. Our coaches are ready to help you find the perfect programme.
+            <motion.h2 initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, delay: 0.25 }} className="text-xl md:text-3xl font-extrabold text-[#d4ff00] text-neon-glow uppercase tracking-tight">
+              Ready to Start Training?
+            </motion.h2>
+
+            <motion.p initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, delay: 0.3 }} className="text-slate-300 text-base md:text-xl leading-relaxed max-w-3xl mx-auto font-poppins">
+              Have questions about membership, personal training, facilities or our training programs? Get in touch with the Alpha Zone team.
             </motion.p>
           </div>
         </section>

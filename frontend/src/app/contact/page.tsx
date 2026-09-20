@@ -3,8 +3,8 @@ import { contactSchema } from '../../lib/schema';
 import ContactClient from './ContactClient';
 
 export const metadata = getSEO({
-  title: 'Contact Alpha Zone Gym | Best Gym Near Landran Road',
-  description: 'Visit Alpha Zone Gym at 2nd Floor, MNB Group, SCO 16-17, Landran Road, Sohana, Mohali. Call +91 97793 33155 to book your gym visit today.',
+  title: 'Contact Alpha Zone Gym | Gym Near Landran Road, Sohana',
+  description: 'Contact Alpha Zone Gym in Sohana, Mohali. Get directions, opening hours, membership information and training details.',
   path: '/contact'
 });
 

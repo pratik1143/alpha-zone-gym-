@@ -3,8 +3,8 @@ import { servicesSchema } from '../../lib/schema';
 import ServicesClient from './ServicesClient';
 
 export const metadata = getSEO({
-  title: 'Gym Services in Mohali | Personal Training & Fitness',
-  description: 'Explore personal training, weight loss, strength training, cardio, CrossFit, bodybuilding, and functional fitness services at Alpha Zone Gym in Mohali.',
+  title: 'Gym Services in Mohali | Alpha Zone Gym',
+  description: 'Explore gym services in Mohali at Alpha Zone Gym including weight training, cardio, personal training, CrossFit, functional training and HIIT.',
   path: '/services'
 });
 

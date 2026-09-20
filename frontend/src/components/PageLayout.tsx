@@ -12,14 +12,26 @@ import PwaInstallButton from './PwaInstallButton';
 const navLinks = [
   { label: 'Home', href: '/' },
   { label: 'About', href: '/about' },
-  { label: 'Services', href: '/services' },
-  { label: 'Packages', href: '/packages' },
-  { label: 'App', href: '/app' },
+  { 
+    label: 'Services', 
+    href: '/services',
+    subLinks: [
+      { label: 'Weight Training', href: '/weight-training' },
+      { label: 'Personal Training', href: '/personal-training' },
+      { label: 'CrossFit', href: '/crossfit' },
+      { label: 'Functional Training', href: '/functional-training' },
+      { label: 'HIIT Training', href: '/hiit-training' },
+      { label: 'Weight Loss', href: '/weight-loss' },
+    ]
+  },
+  { label: 'Memberships', href: '/gym-membership' },
+  { label: 'Near Sector 77', href: '/gym-near-sector-77-mohali' },
   { label: 'Contact', href: '/contact' },
 ];
 
 export default function PageLayout({ children }: { children: React.ReactNode }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [servicesDropdownOpen, setServicesDropdownOpen] = useState(false);
   const pathname = usePathname();
 
   return (
@@ -34,21 +46,53 @@ export default function PageLayout({ children }: { children: React.ReactNode }) 
       `}</style>
 
       {/* Sticky Header */}
-      <header className="fixed top-0 left-0 right-0 z-50 bg-[#08080a]/80 backdrop-blur-md border-b border-white/10 text-white shadow-lg">
+      <header className="fixed top-0 left-0 right-0 z-50 bg-[#08080a]/85 backdrop-blur-md border-b border-white/10 text-white shadow-lg">
         <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2 cursor-pointer hover:opacity-90 transition-opacity">
             <img src="/gymlogo.png" alt="Alpha Zone Logo" className="h-14 w-auto object-contain" />
           </Link>
 
-          <nav className="hidden lg:flex items-center gap-7 text-[11px] font-bold uppercase tracking-wider text-slate-400">
+          <nav className="hidden lg:flex items-center gap-6 text-[11px] font-bold uppercase tracking-wider text-slate-400">
             {navLinks.map(link => (
-              <Link
-                key={link.href}
-                href={link.href}
-                className={`hover:text-[#d4ff00] hover:text-neon-glow transition-colors ${pathname === link.href ? 'text-[#d4ff00] text-neon-glow' : ''}`}
-              >
-                {link.label}
-              </Link>
+              link.subLinks ? (
+                <div 
+                  key={link.href} 
+                  className="relative group py-6"
+                  onMouseEnter={() => setServicesDropdownOpen(true)}
+                  onMouseLeave={() => setServicesDropdownOpen(false)}
+                >
+                  <Link
+                    href={link.href}
+                    className={`flex items-center gap-1 hover:text-[#d4ff00] hover:text-neon-glow transition-colors ${pathname.startsWith('/services') || ['/weight-training','/personal-training','/crossfit','/functional-training','/hiit-training','/weight-loss'].includes(pathname) ? 'text-[#d4ff00] text-neon-glow' : ''}`}
+                  >
+                    {link.label}
+                    <svg className="w-3 h-3 transition-transform group-hover:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </Link>
+
+                  {/* Dropdown Menu */}
+                  <div className="absolute top-full left-0 w-56 bg-[#0c0c0e] border border-white/10 rounded-xl p-2 shadow-2xl backdrop-blur-xl hidden group-hover:block transition-all">
+                    {link.subLinks.map(sub => (
+                      <Link
+                        key={sub.href}
+                        href={sub.href}
+                        className={`block px-4 py-2.5 rounded-lg text-xs font-semibold normal-case tracking-normal hover:bg-[#d4ff00]/10 hover:text-[#d4ff00] transition-colors ${pathname === sub.href ? 'text-[#d4ff00] bg-[#d4ff00]/10' : 'text-slate-300'}`}
+                      >
+                        {sub.label}
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  className={`hover:text-[#d4ff00] hover:text-neon-glow transition-colors ${pathname === link.href ? 'text-[#d4ff00] text-neon-glow' : ''}`}
+                >
+                  {link.label}
+                </Link>
+              )
             ))}
           </nav>
 
@@ -58,7 +102,7 @@ export default function PageLayout({ children }: { children: React.ReactNode }) 
               href="/contact"
               className="bg-[#d4ff00] text-black font-extrabold text-xs px-6 py-3 rounded-full hover:bg-white transition-all cursor-pointer shadow-[0_0_15px_rgba(212,255,0,0.25)] hover:scale-105"
             >
-              BOOK NOW
+              JOIN ALPHA ZONE
             </Link>
           </div>
 
@@ -72,16 +116,31 @@ export default function PageLayout({ children }: { children: React.ReactNode }) 
 
         {/* Mobile Drawer */}
         {mobileMenuOpen && (
-          <div className="lg:hidden bg-[#0c0c0e] border-t border-white/10 px-6 py-6 space-y-4 flex flex-col">
+          <div className="lg:hidden bg-[#0c0c0e] border-t border-white/10 px-6 py-6 space-y-4 flex flex-col max-h-[85vh] overflow-y-auto">
             {navLinks.map(link => (
-              <Link
-                key={link.href}
-                href={link.href}
-                onClick={() => setMobileMenuOpen(false)}
-                className={`font-bold text-sm tracking-wide uppercase transition-colors ${pathname === link.href ? 'text-[#d4ff00]' : 'text-slate-300 hover:text-[#d4ff00]'}`}
-              >
-                {link.label}
-              </Link>
+              <React.Fragment key={link.href}>
+                <Link
+                  href={link.href}
+                  onClick={() => setMobileMenuOpen(false)}
+                  className={`font-bold text-sm tracking-wide uppercase transition-colors ${pathname === link.href ? 'text-[#d4ff00]' : 'text-slate-300 hover:text-[#d4ff00]'}`}
+                >
+                  {link.label}
+                </Link>
+                {link.subLinks && (
+                  <div className="pl-4 space-y-2 border-l border-white/10 my-1">
+                    {link.subLinks.map(sub => (
+                      <Link
+                        key={sub.href}
+                        href={sub.href}
+                        onClick={() => setMobileMenuOpen(false)}
+                        className={`block text-xs font-semibold transition-colors ${pathname === sub.href ? 'text-[#d4ff00]' : 'text-slate-400 hover:text-[#d4ff00]'}`}
+                      >
+                        {sub.label}
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </React.Fragment>
             ))}
             <div className="pt-4 border-t border-white/5 space-y-3">
               <PwaInstallButton variant="primary" className="w-full text-center" />
@@ -90,7 +149,7 @@ export default function PageLayout({ children }: { children: React.ReactNode }) 
                 onClick={() => setMobileMenuOpen(false)}
                 className="w-full bg-[#d4ff00] text-black font-extrabold py-3 rounded-full text-xs uppercase text-center block"
               >
-                Book Now
+                Join Alpha Zone
               </Link>
             </div>
           </div>
@@ -125,7 +184,7 @@ export default function PageLayout({ children }: { children: React.ReactNode }) 
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
               <PwaInstallButton variant="primary" />
-              <Link href="/packages" className="border border-white/15 hover:border-[#d4ff00] text-white font-bold text-sm px-8 py-4 rounded-full transition-all hover:text-[#d4ff00]">
+              <Link href="/gym-membership" className="border border-white/15 hover:border-[#d4ff00] text-white font-bold text-sm px-8 py-4 rounded-full transition-all hover:text-[#d4ff00]">
                 View Membership Plans
               </Link>
             </div>

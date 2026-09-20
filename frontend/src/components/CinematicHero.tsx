@@ -523,32 +523,34 @@ export default function CinematicHero() {
           <div className="relative z-20 text-center px-6 space-y-6 max-w-4xl mx-auto">
             <span className="inline-flex items-center gap-2 bg-[#d4ff00]/10 text-[#d4ff00] text-[9px] font-extrabold px-5 py-2 rounded-full uppercase tracking-[0.25em] border border-[#d4ff00]/30 backdrop-blur-md shadow-[0_0_15px_rgba(212,255,0,0.15)]">
               <span className="w-2 h-2 rounded-full bg-[#d4ff00] animate-pulse" />
-              ALPHA ZONE — SOHANA, MOHALI
+              ALPHA ZONE GYM — LANDRAN ROAD, SOHANA
             </span>
 
-            <h1 className="font-rowdies text-5xl md:text-8xl font-bold tracking-tight text-white uppercase leading-none">
-              Sculpt Your <span className="text-[#d4ff00] drop-shadow-[0_0_20px_rgba(212,255,0,0.4)]">Body</span>
+            <h1 className="font-rowdies text-4xl md:text-7xl font-bold tracking-tight text-white uppercase leading-none">
+              Premium Gym in <span className="text-[#d4ff00] drop-shadow-[0_0_20px_rgba(212,255,0,0.4)]">Sohana, Mohali</span>
             </h1>
-            <h2 className="font-rowdies text-3xl md:text-5xl font-bold tracking-wide text-slate-300 uppercase leading-none">
-              Elevate Your <span className="text-white border-b-4 border-[#d4ff00] pb-1">Spirit</span>
+            <h2 className="font-rowdies text-2xl md:text-4xl font-bold tracking-wide text-slate-200 uppercase leading-none">
+              Sculpt Your Body. <span className="text-[#d4ff00] border-b-4 border-[#d4ff00] pb-1">Elevate Your Spirit.</span>
             </h2>
 
-            <p className="text-slate-400 text-xs md:text-sm font-mono tracking-widest uppercase">
-              Premium Strength · Expert Coaches · Smart Programming
+            <p className="text-slate-300 text-sm md:text-base max-w-2xl mx-auto font-poppins leading-relaxed">
+              Welcome to Alpha Zone Gym, a premium fitness and performance facility located on Landran Road, Sohana, Mohali. With professional strength and cardio equipment, expert coaches and multiple training options, Alpha Zone is built for beginners, fitness enthusiasts and athletes alike.
             </p>
 
-            <div className="flex justify-center gap-4 pt-4">
+            <div className="flex flex-col sm:flex-row justify-center gap-4 pt-4">
               <a
-                href="#signup"
-                className="bg-[#d4ff00] text-black font-rowdies font-bold text-xs tracking-wider px-8 py-4 rounded-full hover:bg-white hover:scale-105 transition-all shadow-[0_0_25px_rgba(212,255,0,0.35)]"
+                href="/contact"
+                className="bg-[#d4ff00] text-black font-extrabold text-xs tracking-wider px-8 py-4 rounded-full hover:bg-white hover:scale-105 transition-all shadow-[0_0_25px_rgba(212,255,0,0.35)] uppercase"
               >
-                JOIN NOW →
+                Join Alpha Zone
               </a>
               <a
-                href="#gallery"
-                className="border border-white/20 text-white font-bold text-xs tracking-wider px-8 py-4 rounded-full hover:border-[#d4ff00] transition-all"
+                href="https://maps.google.com/?q=Alpha+Zone+Gym+Sohana+Mohali"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="border border-white/20 text-white font-bold text-xs tracking-wider px-8 py-4 rounded-full hover:border-[#d4ff00] transition-all uppercase"
               >
-                TAKE THE TOUR
+                Get Directions
               </a>
             </div>
           </div>
@@ -595,25 +597,42 @@ export default function CinematicHero() {
             {/* Section 1 Overlay */}
             <div
               ref={phase1Ref}
-              className="absolute inset-0 flex flex-col items-center justify-center text-center px-6 z-20 pointer-events-none"
+              className="absolute inset-0 flex flex-col items-center justify-center text-center px-6 z-20 pointer-events-none max-w-4xl mx-auto"
               style={{ display: 'flex' }}
             >
-              <span className="inline-flex items-center gap-2 bg-[#d4ff00]/10 text-[#d4ff00] text-[9px] font-extrabold px-5 py-2 rounded-full uppercase tracking-[0.25em] border border-[#d4ff00]/30 backdrop-blur-md shadow-[0_0_15px_rgba(212,255,0,0.15)] mb-6">
+              <span className="inline-flex items-center gap-2 bg-[#d4ff00]/10 text-[#d4ff00] text-[9px] font-extrabold px-5 py-2 rounded-full uppercase tracking-[0.25em] border border-[#d4ff00]/30 backdrop-blur-md shadow-[0_0_15px_rgba(212,255,0,0.15)] mb-4">
                 <span className="w-2 h-2 rounded-full bg-[#d4ff00] animate-pulse" />
-                SCROLL DOWN TO INITIATE EXPERIENCE
+                ALPHA ZONE GYM — LANDRAN ROAD, SOHANA
               </span>
               
-              <h1 className="font-rowdies text-5xl md:text-8xl font-bold tracking-tight text-white uppercase leading-none">
-                Sculpt Your <span className="text-[#d4ff00] drop-shadow-[0_0_20px_rgba(212,255,0,0.4)]">Body</span>
+              <h1 className="font-rowdies text-4xl md:text-7xl font-bold tracking-tight text-white uppercase leading-none">
+                Premium Gym in <span className="text-[#d4ff00] drop-shadow-[0_0_20px_rgba(212,255,0,0.4)]">Sohana, Mohali</span>
               </h1>
               
-              <h2 className="font-rowdies text-3xl md:text-5xl font-bold tracking-wide text-slate-300 uppercase leading-none mt-4">
-                Elevate Your <span className="text-white border-b-4 border-[#d4ff00] pb-1">Spirit</span>
+              <h2 className="font-rowdies text-2xl md:text-4xl font-bold tracking-wide text-slate-200 uppercase leading-none mt-3">
+                Sculpt Your Body. <span className="text-[#d4ff00]">Elevate Your Spirit.</span>
               </h2>
-              
-              <p className="text-slate-400 text-xs md:text-sm font-mono tracking-widest mt-8 uppercase animate-pulse">
-                [ The body emerges step by step ]
+
+              <p className="text-slate-300 text-xs md:text-sm mt-4 font-poppins max-w-2xl leading-relaxed">
+                Welcome to Alpha Zone Gym, a premium fitness and performance facility located on Landran Road, Sohana, Mohali. Whether your goal is to build muscle, lose weight, improve strength, increase endurance or live a healthier lifestyle, Alpha Zone provides the equipment, coaching and environment to help you stay consistent.
               </p>
+
+              <div className="mt-6 pointer-events-auto flex flex-col sm:flex-row gap-4">
+                <a
+                  href="/contact"
+                  className="bg-[#d4ff00] text-black font-extrabold text-xs tracking-wider px-8 py-3.5 rounded-full hover:bg-white hover:scale-105 transition-all shadow-[0_0_25px_rgba(212,255,0,0.35)] uppercase"
+                >
+                  Join Alpha Zone
+                </a>
+                <a
+                  href="https://maps.google.com/?q=Alpha+Zone+Gym+Sohana+Mohali"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="border border-white/20 text-white font-bold text-xs tracking-wider px-8 py-3.5 rounded-full hover:border-[#d4ff00] transition-all uppercase"
+                >
+                  Get Directions
+                </a>
+              </div>
             </div>
 
             {/* Section 2 & 3 HUD */}
