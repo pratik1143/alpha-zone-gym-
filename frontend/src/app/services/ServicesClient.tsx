@@ -164,7 +164,7 @@ export default function ServicesPage() {
                           <p className="text-slate-400 text-xs leading-relaxed font-poppins">{item.desc}</p>
                         </div>
                         <div className="pt-4 flex items-center gap-1.5 text-[10px] font-black uppercase text-[#d4ff00] transition-all">
-                          <span>Explore Programme</span> <ArrowRight size={12} className="group-hover:translate-x-1.5 transition-transform" />
+                          <span>Learn More</span> <ArrowRight size={12} className="group-hover:translate-x-1.5 transition-transform" />
                         </div>
                       </div>
                     </Link>
@@ -264,7 +264,7 @@ export default function ServicesPage() {
           </div>
         </section>
 
-        {/* Section 5: Find Your Perfect Service. (CTA) */}
+        {/* Section 5: Find the Right Training for You */}
         <section className="py-24 bg-[#0a0a0c] border-t border-white/5 relative overflow-hidden">
           <div className="absolute inset-0">
             <Image src={ctaImg.src} alt={ctaImg.alt} fill className="object-cover opacity-10" sizes="100vw" />
@@ -273,19 +273,19 @@ export default function ServicesPage() {
           <div className="relative z-10 max-w-4xl mx-auto px-6 text-center space-y-8">
             <span className="text-xs font-black text-[#d4ff00] tracking-widest uppercase">GET STARTED</span>
             <h2 className="text-3xl md:text-6xl font-black text-white uppercase tracking-tighter">
-              Find Your Perfect<br />
-              <span className="text-[#d4ff00]">Programme.</span>
+              Find the Right<br />
+              <span className="text-[#d4ff00]">Training for You</span>
             </h2>
             <div className="w-20 h-1 bg-[#d4ff00] mx-auto" />
-            <p className="text-slate-450 max-w-xl mx-auto font-poppins text-sm md:text-base leading-relaxed">
-              Book your free assessment and let our coaches match you with the right programme.
+            <p className="text-slate-300 max-w-xl mx-auto font-poppins text-sm md:text-base leading-relaxed">
+              Not sure which program fits your goals? Talk to our team and discuss your current fitness level, goals and preferred training style.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center pt-2">
-              <a href="/gym-membership-mohali" className="bg-[#d4ff00] text-black font-extrabold text-sm px-10 py-4 rounded-full hover:bg-white transition-all shadow-[0_0_20px_rgba(212,255,0,0.35)] hover:scale-105">
-                View Packages →
+              <a href="https://wa.me/919779333155?text=Hello%20Alpha%20Zone%20Gym%2C%20I%20want%20to%20talk%20to%20a%20coach." target="_blank" rel="noopener noreferrer" className="bg-[#d4ff00] text-black font-extrabold text-sm px-10 py-4 rounded-full hover:bg-white transition-all shadow-[0_0_20px_rgba(212,255,0,0.35)] hover:scale-105">
+                Talk to a Coach →
               </a>
-              <a href="https://wa.me/919779333155?text=Hello%20Alpha%20Zone%20Gym%2C%20I%20want%20to%20contact%20you." target="_blank" rel="noopener noreferrer" className="border border-white/15 hover:border-[#d4ff00] text-white font-bold text-sm px-10 py-4 rounded-full transition-all hover:text-[#d4ff00] bg-white/5">
-                Contact Us
+              <a href="/gym-membership-mohali" className="border border-white/15 hover:border-[#d4ff00] text-white font-bold text-sm px-10 py-4 rounded-full transition-all hover:text-[#d4ff00] bg-white/5">
+                View Membership Plans
               </a>
             </div>
           </div>

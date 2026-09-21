@@ -16,55 +16,55 @@ export default function Page() {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(gymSector77Schema) }}
       />
       <ServiceLandingTemplate
-      h1="Best Gym Near Sector 77, Mohali"
-      badge="LOCATION HIGHLIGHT • SECTOR 77 & SOHANA"
-      heroTagline="Looking for a Gym Near Sector 77, Mohali?"
-      heroDescription="Alpha Zone Gym is located on Landran Road, Sohana, Mohali, providing fitness and training facilities for members from Sohana and surrounding areas. If you're searching for a gym near Sector 77 with strength equipment, cardio, CrossFit, functional training and personal training options, Alpha Zone offers multiple ways to train."
-      imageBg="/gym_images/Best Gym near airport.jpg"
-      primaryCtaText="Visit Alpha Zone Gym"
-      primaryCtaHref="https://wa.me/919779333155?text=Hello%20Alpha%20Zone%20Gym%2C%20I%20am%20from%20Sector%2077%20and%20want%20to%20visit."
-      highlightsTitle="Why Sector 77 Residents Choose Alpha Zone"
-      highlights={[
-        "Convenient Location: Just minutes away on Landran Road, Sohana.",
-        "Professional Training Equipment: Imported strength machines & power cages.",
-        "Expert Certified Coaches: Hands-on guidance & structured workout plans.",
-        "Multiple Training Modalities: Weight training, CrossFit, HIIT & PT under one roof.",
-        "Clean & Comfortable Facility: Well-ventilated, hygienic, with locker room facilities.",
-        "Flexible Membership Plans: Options for monthly, quarterly, semi-annual, and annual."
-      ]}
-      sections={[
-        {
-          title: "Complete Training Options Available",
-          description: "Explore our versatile fitness zones built for all fitness levels.",
-          items: [
-            {
-              title: "Weight Training",
-              description: "Train with barbells, dumbbells, power cages and specialized resistance equipment."
-            },
-            {
-              title: "Cardio Zone",
-              description: "Use dedicated cardio equipment including rowers, treadmills, and assault bikes."
-            },
-            {
-              title: "Personal Training",
-              description: "Get one-on-one coaching, customized workout routines, and progress tracking."
-            },
-            {
-              title: "CrossFit Area",
-              description: "Take on high-intensity functional workouts designed for strength & power."
-            },
-            {
-              title: "Functional Training",
-              description: "Work on movement, core stability, balance, and athletic conditioning."
-            },
-            {
-              title: "HIIT & Group Classes",
-              description: "Join energetic high-intensity group fitness sessions guided by coaches."
-            }
-          ]
-        }
-      ]}
-    />
+        h1="Best Gym Near Sector 77, Mohali"
+        badge="LOCATION HIGHLIGHT • SECTOR 77 & SOHANA"
+        heroTagline="Looking for a Gym Near Sector 77, Mohali?"
+        heroDescription="Alpha Zone Gym is located on Landran Road, Sohana, Mohali, providing fitness and training facilities for members from Sohana and surrounding areas. If you're searching for a gym near Sector 77 with strength equipment, cardio, CrossFit, functional training and personal training options, Alpha Zone offers multiple ways to train."
+        imageBg="/gym_images/Best Gym near airport.jpg"
+        primaryCtaText="Visit Alpha Zone Gym"
+        primaryCtaHref="https://wa.me/919779333155?text=Hello%20Alpha%20Zone%20Gym%2C%20I%20am%20from%20Sector%2077%20and%20want%20to%20visit."
+        highlightsTitle="Why Choose Alpha Zone?"
+        highlights={[
+          "Professional training equipment",
+          "Expert coaches",
+          "Multiple training options",
+          "Personalised programming",
+          "Fitness assessment",
+          "Locker room access",
+          "Flexible membership plans"
+        ]}
+        sections={[
+          {
+            title: "Training Options",
+            items: [
+              {
+                title: "Weight Training",
+                description: "Train with barbells, dumbbells, power cages and specialized resistance equipment."
+              },
+              {
+                title: "Cardio",
+                description: "Use dedicated cardio equipment for endurance and conditioning."
+              },
+              {
+                title: "Personal Training",
+                description: "Get one-on-one coaching and structured training."
+              },
+              {
+                title: "CrossFit",
+                description: "Take on high-intensity functional workouts."
+              },
+              {
+                title: "Functional Training",
+                description: "Work on strength, movement, stability and conditioning."
+              },
+              {
+                title: "HIIT",
+                description: "Join high-intensity group fitness sessions."
+              }
+            ]
+          }
+        ]}
+      />
     </>
   );
 }

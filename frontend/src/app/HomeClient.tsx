@@ -1,4 +1,5 @@
 "use client";
+
 import Link from "next/link";
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
@@ -13,22 +14,30 @@ import {
   ArrowUpRight,
   ArrowRight,
   Dumbbell,
-  Users,
   Target,
   ShieldCheck,
   MoveUpRight,
   X,
   ChevronLeft,
   ChevronRight,
-  Plus,
-  Minus,
   MapPin,
+  Flame,
+  Activity,
+  Award,
+  Zap,
+  Phone,
+  Clock,
+  CheckCircle2,
+  Sparkles,
+  Heart,
+  TrendingUp
 } from "lucide-react";
 import {
   MarketingHeader,
   MarketingFooter,
   joinUrl,
 } from "@/components/MarketingChrome";
+
 const photos = [
   [
     "Strength Training Gym in Mohali.jpg",
@@ -49,61 +58,159 @@ const photos = [
     "Our space",
   ],
 ];
-const programs = [
-  [
-    "01",
-    "STRENGTH",
-    "Build a stronger foundation.",
-    "/program_strength.png",
-    "/weight-training-mohali",
-  ],
-  [
-    "02",
-    "PERSONAL TRAINING",
-    "Your goals. Your game plan.",
-    "/gym_hero_curl.png",
-    "/personal-training-mohali",
-  ],
-  [
-    "03",
-    "HIIT & CONDITIONING",
-    "Bring the energy. Feel the difference.",
-    "/program_hiit.png",
-    "/hiit-training-mohali",
-  ],
-  [
-    "04",
-    "FUNCTIONAL FITNESS",
-    "Move better, every day.",
-    "/program_endurance.png",
-    "/functional-training-mohali",
-  ],
+
+const whyTrainItems = [
+  {
+    icon: Dumbbell,
+    title: "Elite Equipment",
+    desc: "Train with professional strength and cardio equipment designed to support effective and safe workouts."
+  },
+  {
+    icon: Target,
+    title: "Expert Coaches",
+    desc: "Our coaches help members improve their form, structure their training and stay consistent with their fitness goals."
+  },
+  {
+    icon: Sparkles,
+    title: "Personalised Programming",
+    desc: "Your training should match your goals. Our approach focuses on structured workouts rather than random exercises."
+  },
+  {
+    icon: Zap,
+    title: "Multiple Training Options",
+    desc: "Choose from weight training, cardio, CrossFit, functional training, HIIT and personal training."
+  },
+  {
+    icon: ShieldCheck,
+    title: "Clean & Comfortable Environment",
+    desc: "We maintain a training environment designed to help you focus on your workout."
+  },
+  {
+    icon: Clock,
+    title: "Open 7 Days",
+    desc: "Flexible gym access makes it easier to build a consistent fitness routine."
+  }
 ];
-const faqs = [
-  [
-    "New to the gym? You belong here.",
-    "Absolutely. Visit us, meet the team, and tell us what you want to achieve. We will help you find a comfortable starting point and the right training approach.",
-  ],
-  [
-    "Can I see the gym before joining?",
-    "Yes. Use Book a visit to contact our team on WhatsApp and arrange a time to explore the gym in person.",
-  ],
-  [
-    "Which membership is right for me?",
-    "Explore our membership page for plan options, or speak with the team about your schedule, training goals, and personal training requirements.",
-  ],
+
+const services = [
+  {
+    title: "Weight Training",
+    desc: "Build strength and muscle with barbells, dumbbells, power cages and specialized strength equipment.",
+    cta: "Explore Weight Training →",
+    href: "/weight-training-mohali",
+    img: "/gym_images/Strength Training Gym in Mohali.jpg",
+    tag: "STRENGTH & HYPERTROPHY"
+  },
+  {
+    title: "Cardio Training",
+    desc: "Improve cardiovascular fitness and endurance with rowers, assault bikes, treadmills, StairMasters and other cardio equipment.",
+    cta: "Explore Cardio →",
+    href: "/weight-loss-gym-mohali",
+    img: "/gym_images/Weight Loss Gym Mohali.jpg",
+    tag: "ENDURANCE & STAMINA"
+  },
+  {
+    title: "Personal Training",
+    desc: "Get one-on-one coaching with customized training blocks, goal tracking and direct guidance.",
+    cta: "Explore Personal Training →",
+    href: "/personal-training-mohali",
+    img: "/gym_images/Best Gym Near Landran Road.jpeg",
+    tag: "1-ON-1 COACHING"
+  },
+  {
+    title: "CrossFit",
+    desc: "Challenge your strength, endurance and conditioning with high-intensity functional workouts.",
+    cta: "Explore CrossFit →",
+    href: "/crossfit-mohali",
+    img: "/gym_images/Best Gym in Mohali.jpg",
+    tag: "POWER & CONDITIONING"
+  },
+  {
+    title: "Functional Training",
+    desc: "Improve movement, stability, coordination and overall physical performance through functional exercises.",
+    cta: "Explore Functional Training →",
+    href: "/functional-training-mohali",
+    img: "/gym_images/Best Gym nearby.jpg",
+    tag: "MOBILITY & STABILITY"
+  },
+  {
+    title: "HIIT & Group Classes",
+    desc: "Take part in energetic group sessions designed around conditioning, strength and fitness.",
+    cta: "Explore HIIT →",
+    href: "/hiit-training-mohali",
+    img: "/gym_images/gym near airport.jpg",
+    tag: "HIGH ENERGY BURN"
+  }
 ];
+
+const goals = [
+  {
+    icon: Dumbbell,
+    title: "Build Muscle",
+    desc: "Structured resistance and weight training can help you work towards greater strength and muscle development."
+  },
+  {
+    icon: Heart,
+    title: "Lose Weight",
+    desc: "Combine strength training, cardio and structured workouts to build a sustainable fitness routine."
+  },
+  {
+    icon: TrendingUp,
+    title: "Get Stronger",
+    desc: "Progressive strength training helps you improve performance and build confidence in the gym."
+  },
+  {
+    icon: Activity,
+    title: "Improve Fitness",
+    desc: "Build endurance, mobility, conditioning and overall physical fitness."
+  }
+];
+
+const memberships = [
+  {
+    duration: "1 Month",
+    originalPrice: "₹3,500",
+    price: "₹3,000",
+    period: "/ month",
+    popular: false
+  },
+  {
+    duration: "3 Months",
+    originalPrice: "₹8,000",
+    price: "₹6,000",
+    period: "/ 3 months",
+    popular: true
+  },
+  {
+    duration: "6 Months",
+    originalPrice: "₹12,000",
+    price: "₹9,000",
+    period: "/ 6 months",
+    popular: false
+  },
+  {
+    duration: "12 Months",
+    originalPrice: "₹18,000",
+    price: "₹14,000",
+    period: "/ year",
+    popular: false
+  }
+];
+
 function Reveal({
   children,
   className = "",
+  style,
 }: {
   children: React.ReactNode;
   className?: string;
+  style?: React.CSSProperties;
 }) {
   const reduced = useReducedMotion();
   return (
     <motion.div
       className={className}
+      style={style}
       initial={reduced ? false : { opacity: 0, y: 28 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, amount: 0.1 }}
@@ -113,25 +220,29 @@ function Reveal({
     </motion.div>
   );
 }
+
 export default function HomeClient() {
   const reduced = useReducedMotion();
   const { scrollY } = useScroll();
   const heroY = useTransform(scrollY, [0, 800], [0, reduced ? 0 : 160]);
   const [selected, setSelected] = useState<number | null>(null);
-  const [faq, setFaq] = useState<number | null>(0);
   const gallery = useRef<HTMLDialogElement>(null);
+
   useEffect(() => {
     if (selected !== null) gallery.current?.showModal();
     else gallery.current?.close();
   }, [selected]);
+
   const changePhoto = (direction: number) =>
     setSelected((n) =>
       n === null ? 0 : (n + direction + photos.length) % photos.length,
     );
+
   return (
     <div className="az-site">
       <MarketingHeader />
       <main>
+        {/* Hero Section */}
         <section className="az-hero">
           <motion.div className="az-hero-image" style={{ y: heroY }} />
           <div className="az-hero-shade" />
@@ -142,35 +253,57 @@ export default function HomeClient() {
               transition={{ duration: 0.8 }}
             >
               <p className="az-eyebrow">
-                <span /> DISCIPLINE BUILDS FREEDOM
+                <span /> LANDRAN ROAD, SOHANA · MOHALI
               </p>
-              <h1>
-                MORE THAN
-                <br />A <em>GYM.</em>
+              <h1 style={{ fontSize: "clamp(32px, 5.5vw, 68px)", lineHeight: 1.05 }}>
+                Premium Gym in Sohana, Mohali
               </h1>
-              <p className="az-hero-description">
-                A stronger body. A clearer mind.
-                <br />A version of you that doesn’t give up.
+              <p
+                style={{
+                  fontSize: "clamp(18px, 2.5vw, 24px)",
+                  fontWeight: 800,
+                  color: "var(--az-lime)",
+                  letterSpacing: "-0.5px",
+                  margin: "12px 0 16px"
+                }}
+              >
+                Sculpt Your Body. Elevate Your Spirit.
+              </p>
+              <p className="az-hero-description" style={{ maxWidth: 640, margin: "0 auto 28px" }}>
+                Welcome to Alpha Zone Gym, a premium fitness and performance facility located on Landran Road, Sohana, Mohali. Whether your goal is to build muscle, lose weight, improve strength, increase endurance or simply live a healthier lifestyle, Alpha Zone provides the equipment, coaching and training environment to help you stay consistent.
+              </p>
+              <p
+                style={{
+                  fontSize: 13,
+                  color: "#cbd5e1",
+                  maxWidth: 620,
+                  margin: "0 auto 32px",
+                  lineHeight: 1.6
+                }}
+              >
+                With professional strength and cardio equipment, expert coaches and multiple training options, Alpha Zone is built for beginners, fitness enthusiasts and athletes alike.
               </p>
               <div className="az-actions">
                 <a
                   className="az-button"
-                  href={joinUrl}
+                  href="https://wa.me/919779333155?text=Hello%20Alpha%20Zone%20Gym%2C%20I%20want%20to%20join."
                   target="_blank"
                   rel="noreferrer"
                 >
-                  Find your stronger <ArrowUpRight size={20} />
+                  Join Alpha Zone <ArrowUpRight size={20} />
                 </a>
-                <a className="az-text-link" href="#gallery">
-                  <span className="az-circle">
-                    <ArrowDown size={17} />
-                  </span>
-                  Explore the zone
+                <a
+                  className="az-button az-button-dark"
+                  href="https://maps.app.goo.gl/pX8VZNoXNu4YAeBW6"
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{ border: "1px solid rgba(255,255,255,0.18)" }}
+                >
+                  <MapPin size={16} /> Get Directions
                 </a>
               </div>
-              <div className="az-location">
-                <MapPin size={14} /> SOHANA, MOHALI{" "}
-                <span>YOUR NEXT CHAPTER STARTS HERE</span>
+              <div className="az-location" style={{ marginTop: 24 }}>
+                <MapPin size={14} /> 2ND FLOOR, MNB GROUP, SCO 16-17, LANDRAN ROAD, SOHANA
               </div>
             </motion.div>
           </div>
@@ -179,78 +312,402 @@ export default function HomeClient() {
             <br />
             TRANSFORM.
             <br />
-            <span>BELONG.</span>
+            <span>CONSISTENCY.</span>
           </div>
           <div className="az-hero-bottom">
-            <span>01 / THE ALPHA MINDSET</span>
+            <span>PERFORMANCE LAB</span>
             <a href="#about">
-              SCROLL TO DISCOVER <ArrowDown size={14} />
+              SCROLL TO EXPLORE <ArrowDown size={14} />
             </a>
           </div>
         </section>
+
+        {/* Ticker */}
         <div className="az-ticker" aria-hidden="true">
           <div>
             {Array.from({ length: 4 }, (_, i) => (
               <span key={i}>
-                STRONGER EVERY DAY <b>✳</b> BUILT DIFFERENT <b>✳</b> ALPHA ZONE{" "}
-                <b>✳</b>
+                WEIGHT TRAINING <b>✳</b> CARDIO <b>✳</b> CROSSFIT <b>✳</b> FUNCTIONAL TRAINING <b>✳</b> HIIT <b>✳</b> PERSONAL TRAINING <b>✳</b>
               </span>
             ))}
           </div>
         </div>
+
+        {/* Section 1: More Than a Gym. A Performance Lab. */}
         <section className="az-container az-section" id="about">
           <Reveal className="az-intro">
             <div>
-              <p className="az-eyebrow">THE ALPHA MINDSET</p>
-              <h2>
-                REAL PEOPLE.
+              <p className="az-eyebrow">ABOUT OUR APPROACH</p>
+              <h2 style={{ fontSize: "clamp(28px, 4vw, 48px)", lineHeight: 1.15 }}>
+                MORE THAN A GYM.
                 <br />
-                <span className="az-muted">EXTRAORDINARY</span>
+                <span className="az-muted">A PERFORMANCE</span>
                 <br />
-                POTENTIAL.
+                LAB.
               </h2>
             </div>
             <div className="az-intro-copy">
-              <p>
-                This is your space to show up, put in the work, and become a
-                little better than yesterday.
+              <p style={{ fontSize: 16, lineHeight: 1.7, color: "#fff" }}>
+                Alpha Zone Gym is designed for people who want more from their training. Our approach combines professional equipment, structured programming and expert coaching to create a focused fitness environment.
               </p>
-              <p className="az-secondary">
-                From your first rep to your next personal best, find the
-                equipment, guidance, and community to keep moving forward.
+              <p className="az-secondary" style={{ fontSize: 14, lineHeight: 1.7 }}>
+                From strength and weight training to cardio, CrossFit, functional training, HIIT and personal training, you can build your fitness routine around your individual goals.
               </p>
               <Link className="az-text-link" href="/about-us">
-                Get to know Alpha Zone <ArrowUpRight size={18} />
+                Learn more about Alpha Zone <ArrowUpRight size={18} />
               </Link>
             </div>
           </Reveal>
-          <Reveal className="az-values">
-            {[
-              [Dumbbell, "Strength", "Build real strength"],
-              [Target, "Confidence", "Back yourself"],
-              [ShieldCheck, "Guidance", "Make every rep count"],
-              [Users, "Community", "Find your people"],
-            ].map(([Icon, title, desc]) => {
-              const I = Icon as typeof Dumbbell;
+        </section>
+
+        {/* Section 2: Why Train at Alpha Zone? */}
+        <section className="az-container az-section" style={{ paddingTop: 0 }}>
+          <Reveal className="az-section-heading">
+            <div>
+              <p className="az-eyebrow">THE ALPHA ADVANTAGE</p>
+              <h2 style={{ fontSize: "clamp(26px, 3.5vw, 42px)" }}>
+                Why Train at
+                <br />
+                <em>Alpha Zone?</em>
+              </h2>
+            </div>
+            <p style={{ maxWidth: 460 }}>
+              Everything in our facility is calibrated to give you the most safe, motivating, and progressive workout experience.
+            </p>
+          </Reveal>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+              gap: 20,
+              marginTop: 32
+            }}
+          >
+            {whyTrainItems.map((item, idx) => {
+              const Icon = item.icon;
               return (
-                <div key={String(title)}>
-                  <I size={29} />
-                  <div>
-                    <h3>{String(title)}</h3>
-                    <p>{String(desc)}</p>
+                <Reveal key={idx}>
+                  <div
+                    style={{
+                      background: "#0e1315",
+                      border: "1px solid rgba(255,255,255,0.08)",
+                      borderRadius: 16,
+                      padding: 28,
+                      height: "100%",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 14,
+                      transition: "all 0.3s"
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: 44,
+                        height: 44,
+                        borderRadius: 10,
+                        background: "rgba(229,250,25,0.1)",
+                        border: "1px solid rgba(229,250,25,0.25)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        color: "var(--az-lime)"
+                      }}
+                    >
+                      <Icon size={22} />
+                    </div>
+                    <h3 style={{ fontSize: 17, fontWeight: 800, margin: 0, textTransform: "uppercase" }}>
+                      {item.title}
+                    </h3>
+                    <p style={{ fontSize: 13, color: "#9ca3af", margin: 0, lineHeight: 1.6 }}>
+                      {item.desc}
+                    </p>
                   </div>
-                </div>
+                </Reveal>
               );
             })}
-          </Reveal>
+          </div>
         </section>
+
+        {/* Section 3: Our Gym Services */}
+        <section className="az-program-section">
+          <div className="az-container az-section">
+            <Reveal className="az-section-heading">
+              <div>
+                <p className="az-eyebrow">VERSATILE DISCIPLINES</p>
+                <h2 style={{ fontSize: "clamp(26px, 3.5vw, 42px)" }}>
+                  Our Gym
+                  <br />
+                  <em>Services</em>
+                </h2>
+              </div>
+              <Link className="az-text-link" href="/gym-services">
+                Explore all services <ArrowUpRight size={18} />
+              </Link>
+            </Reveal>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
+                gap: 24,
+                marginTop: 36
+              }}
+            >
+              {services.map((svc, idx) => (
+                <Reveal key={idx}>
+                  <Link
+                    href={svc.href}
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      justifyContent: "space-between",
+                      height: "100%",
+                      background: "#0c1012",
+                      border: "1px solid rgba(255,255,255,0.08)",
+                      borderRadius: 20,
+                      overflow: "hidden",
+                      transition: "all 0.3s",
+                      color: "#fff"
+                    }}
+                    className="az-service-card"
+                  >
+                    <div style={{ position: "relative", height: 210, overflow: "hidden" }}>
+                      <Image
+                        src={svc.img}
+                        alt={svc.title}
+                        fill
+                        className="object-cover"
+                        sizes="(max-width: 768px) 100vw, 33vw"
+                        style={{ filter: "brightness(0.75)" }}
+                      />
+                      <div
+                        style={{
+                          position: "absolute",
+                          inset: 0,
+                          background: "linear-gradient(to top, #0c1012 0%, transparent 60%)"
+                        }}
+                      />
+                      <span
+                        style={{
+                          position: "absolute",
+                          top: 16,
+                          left: 16,
+                          fontSize: 9,
+                          fontWeight: 800,
+                          letterSpacing: "1px",
+                          textTransform: "uppercase",
+                          background: "rgba(0,0,0,0.7)",
+                          backdropFilter: "blur(6px)",
+                          color: "var(--az-lime)",
+                          padding: "4px 10px",
+                          borderRadius: 6,
+                          border: "1px solid rgba(229,250,25,0.3)"
+                        }}
+                      >
+                        {svc.tag}
+                      </span>
+                    </div>
+                    <div style={{ padding: "24px", flex: 1, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+                      <div>
+                        <h3 style={{ fontSize: 20, fontWeight: 800, textTransform: "uppercase", margin: "0 0 10px" }}>
+                          {svc.title}
+                        </h3>
+                        <p style={{ fontSize: 13, color: "#9ca3af", lineHeight: 1.6, margin: "0 0 16px" }}>
+                          {svc.desc}
+                        </p>
+                      </div>
+                      <div
+                        style={{
+                          fontSize: 12,
+                          fontWeight: 800,
+                          color: "var(--az-lime)",
+                          textTransform: "uppercase",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 6,
+                          marginTop: 12
+                        }}
+                      >
+                        <span>{svc.cta}</span>
+                      </div>
+                    </div>
+                  </Link>
+                </Reveal>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* Section 4: Train for Your Goal */}
+        <section className="az-container az-section">
+          <Reveal className="az-section-heading">
+            <div>
+              <p className="az-eyebrow">TARGETED OUTCOMES</p>
+              <h2 style={{ fontSize: "clamp(26px, 3.5vw, 42px)" }}>
+                Train for
+                <br />
+                <em>Your Goal</em>
+              </h2>
+            </div>
+            <p style={{ maxWidth: 440 }}>
+              Whatever your personal milestone, our coaching structure helps you build real, sustainable physical capacity.
+            </p>
+          </Reveal>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+              gap: 20,
+              marginTop: 32
+            }}
+          >
+            {goals.map((g, idx) => {
+              const Icon = g.icon;
+              return (
+                <Reveal key={idx}>
+                  <div
+                    style={{
+                      background: "#0e1315",
+                      border: "1px solid rgba(255,255,255,0.08)",
+                      borderRadius: 16,
+                      padding: 26,
+                      height: "100%",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 12
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: 40,
+                        height: 40,
+                        borderRadius: 10,
+                        background: "rgba(229,250,25,0.08)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        color: "var(--az-lime)"
+                      }}
+                    >
+                      <Icon size={20} />
+                    </div>
+                    <h3 style={{ fontSize: 18, fontWeight: 800, textTransform: "uppercase", margin: 0 }}>
+                      {g.title}
+                    </h3>
+                    <p style={{ fontSize: 13, color: "#9ca3af", margin: 0, lineHeight: 1.6 }}>
+                      {g.desc}
+                    </p>
+                  </div>
+                </Reveal>
+              );
+            })}
+          </div>
+        </section>
+
+        {/* Section 5: Gym Memberships */}
+        <section className="az-membership" style={{ borderTop: "1px solid rgba(255,255,255,0.08)", padding: "80px 0" }}>
+          <div className="az-container">
+            <Reveal className="az-section-heading" style={{ marginBottom: 40 }}>
+              <div>
+                <p className="az-eyebrow">TRANSPARENT PRICING</p>
+                <h2 style={{ fontSize: "clamp(28px, 4vw, 48px)" }}>
+                  Gym Memberships
+                </h2>
+              </div>
+              <p style={{ maxWidth: 460 }}>
+                Choose a membership based on your training commitment. Memberships include gym access, cardio and weight equipment, locker room access and a fitness assessment.
+              </p>
+            </Reveal>
+
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+                gap: 20,
+                marginTop: 32
+              }}
+            >
+              {memberships.map((m, idx) => (
+                <Reveal key={idx}>
+                  <div
+                    style={{
+                      background: m.popular ? "#0a130f" : "#0d1113",
+                      border: m.popular ? "2px solid var(--az-lime)" : "1px solid rgba(255,255,255,0.08)",
+                      borderRadius: 18,
+                      padding: 28,
+                      position: "relative",
+                      display: "flex",
+                      flexDirection: "column",
+                      justifyContent: "space-between",
+                      height: "100%"
+                    }}
+                  >
+                    {m.popular && (
+                      <span
+                        style={{
+                          position: "absolute",
+                          top: -12,
+                          left: 24,
+                          background: "var(--az-lime)",
+                          color: "#000",
+                          fontSize: 10,
+                          fontWeight: 900,
+                          padding: "3px 10px",
+                          borderRadius: 20,
+                          letterSpacing: "1px"
+                        }}
+                      >
+                        RECOMMENDED
+                      </span>
+                    )}
+                    <div>
+                      <h3 style={{ fontSize: 16, fontWeight: 800, textTransform: "uppercase", margin: "0 0 12px" }}>
+                        {m.duration}
+                      </h3>
+                      <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 8 }}>
+                        <span style={{ fontSize: 14, textDecoration: "line-through", color: "#64748b" }}>
+                          {m.originalPrice}
+                        </span>
+                        <span style={{ fontSize: 32, fontWeight: 900, color: "var(--az-lime)" }}>
+                          {m.price}
+                        </span>
+                      </div>
+                      <span style={{ fontSize: 12, color: "#9ca3af" }}>{m.period}</span>
+                      <div style={{ borderTop: "1px solid rgba(255,255,255,0.08)", marginTop: 20, paddingTop: 16 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "#cbd5e1", marginBottom: 8 }}>
+                          <CheckCircle2 size={14} color="var(--az-lime)" /> Gym & Cardio Access
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "#cbd5e1", marginBottom: 8 }}>
+                          <CheckCircle2 size={14} color="var(--az-lime)" /> Weight Equipment Access
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "#cbd5e1", marginBottom: 8 }}>
+                          <CheckCircle2 size={14} color="var(--az-lime)" /> Locker Room Access
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "#cbd5e1" }}>
+                          <CheckCircle2 size={14} color="var(--az-lime)" /> Fitness Assessment
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </Reveal>
+              ))}
+            </div>
+
+            <div style={{ textAlign: "center", marginTop: 44 }}>
+              <Link href="/gym-membership-mohali" className="az-button" style={{ display: "inline-flex" }}>
+                View Membership Plans <ArrowUpRight size={18} />
+              </Link>
+            </div>
+          </div>
+        </section>
+
+        {/* Section 6: Photo Gallery */}
         <section
           id="gallery"
           className="az-container az-section az-gallery-section"
         >
           <Reveal className="az-section-heading">
             <div>
-              <p className="az-eyebrow">YOUR GYM. YOUR ZONE.</p>
+              <p className="az-eyebrow">INSIDE ALPHA ZONE</p>
               <h2>
                 LOOK INSIDE.
                 <br />
@@ -296,142 +753,73 @@ export default function HomeClient() {
             </button>
           </div>
         </section>
-        <section className="az-program-section">
-          <div className="az-container az-section">
-            <Reveal className="az-section-heading">
-              <div>
-                <p className="az-eyebrow">FIND YOUR WAY TO STRONG</p>
-                <h2>
-                  YOUR GOALS.
-                  <br />
-                  <em>YOUR TRAINING.</em>
-                </h2>
-              </div>
-              <Link className="az-text-link" href="/gym-services">
-                Explore all programs <ArrowUpRight size={18} />
-              </Link>
-            </Reveal>
-            <div className="az-programs">
-              {programs.map(([number, title, desc, img, href]) => (
-                <Reveal key={number}>
-                  <Link className="az-program" href={href}>
-                    <Image
-                      width={1200}
-                      height={1200}
-                      sizes="(max-width: 600px) 90vw, (max-width: 850px) 45vw, 33vw"
-                      loading="lazy"
-                      src={img}
-                      alt={title.toLowerCase() + " training"}
-                    />
-                    <span className="az-program-number">/ {number}</span>
-                    <div>
-                      <h3>{title}</h3>
-                      <p>{desc}</p>
-                    </div>
-                    <span className="az-program-arrow">
-                      <ArrowUpRight />
-                    </span>
-                  </Link>
-                </Reveal>
-              ))}
-            </div>
-          </div>
-        </section>
-        <section className="az-container az-section">
-          <Reveal className="az-visit">
-            <div className="az-visit-photo">
-              <Image
-                width={1200}
-                height={1200}
-                sizes="(max-width: 600px) 90vw, (max-width: 850px) 45vw, 33vw"
-                loading="lazy"
-                src="/gym_images/Best Gym in Mohali.jpg"
-                alt="Alpha Zone reception with the gym logo on the brick wall"
-              />
-              <span>YOUR FIRST STEP IS THROUGH THIS DOOR.</span>
-            </div>
-            <div className="az-visit-copy">
-              <p className="az-eyebrow">LESS SOMEDAY. MORE TODAY.</p>
-              <h2>
-                COME AS
-                <br />
-                YOU ARE.
-                <br />
-                <em>LEAVE STRONGER.</em>
-              </h2>
-              <p>
-                You don’t need to be fit to start. You just need a place that
-                helps you keep going. Let’s make Alpha Zone yours.
-              </p>
-              <a
-                href={joinUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="az-button"
-              >
-                Book a visit <ArrowUpRight size={19} />
-              </a>
-            </div>
-          </Reveal>
-        </section>
-        <section className="az-membership">
-          <div className="az-container">
-            <Reveal className="az-membership-inner">
-              <div>
-                <p className="az-eyebrow">MAKE THE COMMITMENT TO YOU</p>
-                <h2>
-                  YOUR NEXT LEVEL
-                  <br />
-                  STARTS <span>HERE.</span>
-                </h2>
-              </div>
-              <div>
-                <p>
-                  A plan for your pace.
-                  <br />A space for your ambition.
-                </p>
-                <Link
-                  href="/gym-membership-mohali"
-                  className="az-button az-button-dark"
-                >
-                  Explore memberships <ArrowUpRight size={20} />
-                </Link>
-              </div>
-            </Reveal>
-          </div>
-        </section>
-        <section className="az-container az-section az-faq">
+
+        {/* Section 7: Located in Sohana, Mohali */}
+        <section className="az-container az-section" style={{ borderTop: "1px solid rgba(255,255,255,0.08)" }}>
           <Reveal>
-            <p className="az-eyebrow">BEFORE YOUR FIRST REP</p>
-            <h2>
-              LET’S CLEAR
-              <br />
-              THINGS UP.
-            </h2>
-            <Link href="/contact-us" className="az-text-link">
-              Talk to our team <ArrowUpRight size={18} />
-            </Link>
-          </Reveal>
-          <div>
-            {faqs.map(([question, answer], i) => (
-              <div className="az-faq-item" key={question}>
-                <button
-                  aria-expanded={faq === i}
-                  aria-controls={`answer-${i}`}
-                  onClick={() => setFaq(faq === i ? null : i)}
-                >
-                  {question}
-                  {faq === i ? <Minus size={20} /> : <Plus size={20} />}
-                </button>
-                <div id={`answer-${i}`} hidden={faq !== i}>
-                  <p>{answer}</p>
-                </div>
+            <div
+              style={{
+                background: "#0e1315",
+                border: "1px solid rgba(229,250,25,0.25)",
+                borderRadius: 24,
+                padding: "48px 36px",
+                textAlign: "center",
+                maxWidth: 920,
+                margin: "0 auto",
+                boxShadow: "0 0 50px rgba(0,0,0,0.5)"
+              }}
+            >
+              <p className="az-eyebrow">VISIT US TODAY</p>
+              <h2 style={{ fontSize: "clamp(26px, 3.5vw, 44px)", margin: "8px 0 16px" }}>
+                Located in Sohana, Mohali
+              </h2>
+              <p style={{ fontSize: 15, color: "#cbd5e1", maxWidth: 650, margin: "0 auto 12px", lineHeight: 1.7 }}>
+                Alpha Zone Gym is located at:
+                <br />
+                <strong style={{ color: "#fff" }}>
+                  2nd Floor, MNB Group, SCO 16-17, Landran Road, Sohana, Mohali, Punjab 140308
+                </strong>
+              </p>
+              <p style={{ fontSize: 14, color: "#9ca3af", margin: "0 auto 20px" }}>
+                We serve members from Sohana and surrounding areas of Mohali.
+              </p>
+              <div
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 8,
+                  fontSize: 16,
+                  fontWeight: 800,
+                  color: "var(--az-lime)",
+                  marginBottom: 28
+                }}
+              >
+                <Phone size={18} />
+                <a href="tel:+919779333155" style={{ color: "inherit" }}>
+                  +91 97793 33155
+                </a>
               </div>
-            ))}
-          </div>
+              <div style={{ display: "flex", gap: 14, justifyContent: "center", flexWrap: "wrap" }}>
+                <Link href="/contact-us" className="az-button">
+                  Contact Alpha Zone <ArrowUpRight size={18} />
+                </Link>
+                <a
+                  href="https://maps.app.goo.gl/pX8VZNoXNu4YAeBW6"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="az-button az-button-dark"
+                  style={{ border: "1px solid rgba(255,255,255,0.2)" }}
+                >
+                  <MapPin size={16} /> Open in Google Maps
+                </a>
+              </div>
+            </div>
+          </Reveal>
         </section>
       </main>
       <MarketingFooter />
+
+      {/* Lightbox Dialog */}
       <dialog
         ref={gallery}
         className="az-dialog az-lightbox"

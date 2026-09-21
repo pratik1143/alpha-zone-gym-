@@ -16,46 +16,27 @@ export default function Page() {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(functionalTrainingSchema) }}
       />
       <ServiceLandingTemplate
-      h1="Functional Training in Mohali"
-      badge="MOVEMENT • MOBILITY & STABILITY"
-      heroTagline="Train Your Body to Move Better."
-      heroDescription="Functional training focuses on movement patterns that can help develop strength, coordination, stability and overall physical performance. At Alpha Zone, functional training can include kettlebell movements, medicine ball exercises, core work and other movement-based exercises."
-      imageBg="/gym_images/Best Gym nearby.jpg"
-      primaryCtaText="Explore Functional Training"
-      primaryCtaHref="https://wa.me/919779333155?text=Hello%20Alpha%20Zone%20Gym%2C%20I%20want%20to%20explore%20functional%20training."
-      highlightsTitle="Benefits of Functional Training"
-      highlights={[
-        "Better Movement: Develop control and coordination through multi-directional movement patterns.",
-        "Core Strength: Strengthen deep abdominal, lower back, and pelvic stabilizer muscles.",
-        "Balance & Coordination: Challenge joint position sense and motor recruitment.",
-        "Athletic Conditioning: Develop physical stamina useful for both recreational sports and daily activities.",
-        "Joint Longevity: Protect shoulders, knees, and hips through functional alignment training."
-      ]}
-      sections={[
-        {
-          title: "Functional Equipment & Tools",
-          description: "Our dedicated functional zone is packed with versatile tools to challenge your movement.",
-          items: [
-            {
-              title: "Kettlebells & Dumbbells",
-              description: "Swings, Turkish get-ups, and asymmetric carries for total body stability."
-            },
-            {
-              title: "Slam Balls & Medicine Balls",
-              description: "Rotational power, wall balls, and core rotational strength."
-            },
-            {
-              title: "Suspension & TRX Systems",
-              description: "Bodyweight resistance training that scales dynamically for all skill levels."
-            }
-          ]
-        },
-        {
-          title: "Functional Training for Different Fitness Levels",
-          description: "Training can be adjusted based on your current fitness level and goals. Our coaches can help you understand the appropriate exercises, progressions, and movement adaptations."
-        }
-      ]}
-    />
+        h1="Functional Training in Mohali"
+        badge="MOVEMENT • MOBILITY & STABILITY"
+        heroTagline="Train Your Body to Move Better."
+        heroDescription="Functional training focuses on movement patterns that can help develop strength, coordination, stability and overall physical performance. At Alpha Zone, functional training can include kettlebell movements, medicine ball exercises, core work and other movement-based exercises."
+        imageBg="/gym_images/Best Gym nearby.jpg"
+        primaryCtaText="Explore Functional Training"
+        primaryCtaHref="https://wa.me/919779333155?text=Hello%20Alpha%20Zone%20Gym%2C%20I%20want%20to%20explore%20functional%20training."
+        highlightsTitle="Benefits of Functional Training"
+        highlights={[
+          "Better Movement: Develop control and coordination through different movement patterns.",
+          "Core Strength: Strengthen your core and improve stability.",
+          "Balance & Coordination: Challenge your body through dynamic movements.",
+          "Athletic Conditioning: Develop physical qualities useful for sports and everyday activity."
+        ]}
+        sections={[
+          {
+            title: "Functional Training for Different Fitness Levels",
+            description: "Training can be adjusted based on your current fitness level and goals. Our coaches can help you understand the appropriate exercises and progression."
+          }
+        ]}
+      />
     </>
   );
 }
