@@ -1,5 +1,6 @@
 import { getSEO } from '../../lib/seo';
 import ServiceLandingTemplate from '../../components/ServiceLandingTemplate';
+import { weightTrainingSchema } from '../../lib/schema';
 
 export const metadata = getSEO({
   title: 'Weight Training Gym in Mohali | Alpha Zone Gym',
@@ -9,7 +10,12 @@ export const metadata = getSEO({
 
 export default function Page() {
   return (
-    <ServiceLandingTemplate
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(weightTrainingSchema) }}
+      />
+      <ServiceLandingTemplate
       h1="Weight Training Gym in Mohali"
       badge="HEAVY RESISTANCE • POWERLIFTING & HYPERTROPHY"
       heroTagline="Build Strength. Build Muscle. Build Confidence."
@@ -51,5 +57,6 @@ export default function Page() {
         }
       ]}
     />
+    </>
   );
 }

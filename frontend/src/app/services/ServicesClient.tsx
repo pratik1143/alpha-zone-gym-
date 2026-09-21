@@ -1,5 +1,6 @@
 'use client';
 import React from 'react';
+import Link from 'next/link';
 import Image from 'next/image';
 import PageLayout from '../../components/PageLayout';
 import { motion } from 'framer-motion';
@@ -19,7 +20,7 @@ const disciplines = [
     title: 'Weight Training', 
     desc: 'Build strength and develop muscle with professional resistance-training equipment.',
     icon: Dumbbell,
-    href: '/weight-training',
+    href: '/weight-training-mohali',
     imgCat: 'strength' as const,
     imgIdx: 0
   },
@@ -27,7 +28,7 @@ const disciplines = [
     title: 'Cardio Zone', 
     desc: 'Improve endurance and cardiovascular fitness with dedicated cardio equipment.',
     icon: Activity,
-    href: '/services',
+    href: '/weight-loss-gym-mohali',
     imgCat: 'cardio' as const,
     imgIdx: 0
   },
@@ -35,7 +36,7 @@ const disciplines = [
     title: 'Personal Training', 
     desc: 'Work directly with a coach through customized one-on-one training.',
     icon: Target,
-    href: '/personal-training',
+    href: '/personal-training-mohali',
     imgCat: 'trainers' as const,
     imgIdx: 0
   },
@@ -43,7 +44,7 @@ const disciplines = [
     title: 'CrossFit', 
     desc: 'Challenge your conditioning, strength and athletic performance through functional high-intensity workouts.',
     icon: Flame,
-    href: '/crossfit',
+    href: '/crossfit-mohali',
     imgCat: 'functional' as const,
     imgIdx: 0
   },
@@ -51,7 +52,7 @@ const disciplines = [
     title: 'Functional Training', 
     desc: 'Train movement, stability, coordination and functional strength.',
     icon: Zap,
-    href: '/functional-training',
+    href: '/functional-training-mohali',
     imgCat: 'gallery' as const,
     imgIdx: 0
   },
@@ -59,7 +60,7 @@ const disciplines = [
     title: 'HIIT & Group Classes', 
     desc: 'Join energetic group sessions focused on conditioning, strength and fitness.',
     icon: Award,
-    href: '/hiit-training',
+    href: '/hiit-training-mohali',
     imgCat: 'hero' as const,
     imgIdx: 1
   },
@@ -67,7 +68,7 @@ const disciplines = [
     title: 'Weight Loss Program', 
     desc: 'Combine strength training, cardio and structured workouts to build a sustainable fitness routine.',
     icon: Heart,
-    href: '/weight-loss',
+    href: '/weight-loss-gym-mohali',
     imgCat: 'cta' as const,
     imgIdx: 0
   }
@@ -145,26 +146,28 @@ export default function ServicesPage() {
                 const img = getGymImage(item.imgCat, item.imgIdx);
                 return (
                   <motion.div key={i} custom={i} variants={fadeUp} initial="hidden" whileInView="visible" viewport={{ once: true }}
-                    className="relative bg-slate-900/40 border border-white/5 rounded-3xl overflow-hidden group card-neon-hover text-left flex flex-col justify-between"
+                    className="relative bg-slate-900/40 border border-white/5 rounded-3xl overflow-hidden group card-neon-hover text-left flex flex-col justify-between transition-all hover:border-[#d4ff00]/40"
                   >
-                    <div className="relative h-48 overflow-hidden">
-                      <Image src={img.src} alt={img.alt} fill className="object-cover group-hover:scale-105 transition-transform duration-700 opacity-60 group-hover:opacity-75" sizes="(max-width: 768px) 100vw, 33vw" />
-                      <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/40 to-transparent" />
-                    </div>
-                    <div className="p-8 space-y-4 flex-1 flex flex-col justify-between">
-                      <div className="space-y-3">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 bg-slate-950 border border-white/10 rounded-xl flex items-center justify-center text-[#d4ff00] group-hover:bg-[#d4ff00] group-hover:text-black transition-all">
-                            <item.icon size={18} />
+                    <Link href={item.href} className="flex flex-col h-full cursor-pointer">
+                      <div className="relative h-48 overflow-hidden">
+                        <Image src={img.src} alt={img.alt} fill className="object-cover group-hover:scale-105 transition-transform duration-700 opacity-60 group-hover:opacity-75" sizes="(max-width: 768px) 100vw, 33vw" />
+                        <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/40 to-transparent" />
+                      </div>
+                      <div className="p-8 space-y-4 flex-1 flex flex-col justify-between">
+                        <div className="space-y-3">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-slate-950 border border-white/10 rounded-xl flex items-center justify-center text-[#d4ff00] group-hover:bg-[#d4ff00] group-hover:text-black transition-all">
+                              <item.icon size={18} />
+                            </div>
+                            <h3 className="text-base font-bold text-white uppercase tracking-wide group-hover:text-[#d4ff00] transition-colors">{item.title}</h3>
                           </div>
-                          <h3 className="text-base font-bold text-white uppercase tracking-wide">{item.title}</h3>
+                          <p className="text-slate-400 text-xs leading-relaxed font-poppins">{item.desc}</p>
                         </div>
-                        <p className="text-slate-450 text-xs leading-relaxed font-poppins">{item.desc}</p>
+                        <div className="pt-4 flex items-center gap-1.5 text-[10px] font-black uppercase text-[#d4ff00] transition-all">
+                          <span>Explore Programme</span> <ArrowRight size={12} className="group-hover:translate-x-1.5 transition-transform" />
+                        </div>
                       </div>
-                      <div className="pt-4 flex items-center gap-1.5 text-[10px] font-black uppercase text-[#d4ff00] opacity-0 group-hover:opacity-100 transition-opacity">
-                        Learn More <ArrowRight size={10} />
-                      </div>
-                    </div>
+                    </Link>
                   </motion.div>
                 );
               })}

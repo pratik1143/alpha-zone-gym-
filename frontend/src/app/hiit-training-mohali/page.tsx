@@ -1,5 +1,6 @@
 import { getSEO } from '../../lib/seo';
 import ServiceLandingTemplate from '../../components/ServiceLandingTemplate';
+import { hiitTrainingSchema } from '../../lib/schema';
 
 export const metadata = getSEO({
   title: 'HIIT Training in Mohali | HIIT Classes | Alpha Zone Gym',
@@ -9,7 +10,12 @@ export const metadata = getSEO({
 
 export default function Page() {
   return (
-    <ServiceLandingTemplate
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(hiitTrainingSchema) }}
+      />
+      <ServiceLandingTemplate
       h1="HIIT Training in Mohali"
       badge="CARDIO CONDITIONING • METABOLIC BURN"
       heroTagline="High Intensity. Focused Training. Real Effort."
@@ -50,5 +56,6 @@ export default function Page() {
         }
       ]}
     />
+    </>
   );
 }

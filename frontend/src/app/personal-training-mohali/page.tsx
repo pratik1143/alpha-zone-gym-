@@ -1,5 +1,6 @@
 import { getSEO } from '../../lib/seo';
 import ServiceLandingTemplate from '../../components/ServiceLandingTemplate';
+import { personalTrainingSchema } from '../../lib/schema';
 
 export const metadata = getSEO({
   title: 'Personal Trainer in Mohali | Personal Training | Alpha Zone Gym',
@@ -9,7 +10,12 @@ export const metadata = getSEO({
 
 export default function Page() {
   return (
-    <ServiceLandingTemplate
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(personalTrainingSchema) }}
+      />
+      <ServiceLandingTemplate
       h1="Personal Training in Mohali"
       badge="1-ON-1 COACHING • CUSTOMIZED PROGRAMMING"
       heroTagline="Train With a Plan. Train With a Coach."
@@ -50,5 +56,6 @@ export default function Page() {
         }
       ]}
     />
+    </>
   );
 }

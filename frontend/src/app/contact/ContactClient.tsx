@@ -314,7 +314,7 @@ export default function ContactPage() {
                 </div>
 
                 <div className="pt-2">
-                  <a href="https://maps.google.com/?q=2nd+Floor+MNB+Group+SCO+16-17+Landran+Road+Sohana+Punjab+140308" target="_blank" rel="noopener noreferrer"
+                  <a href="https://maps.app.goo.gl/pX8VZNoXNu4YAeBW6" target="_blank" rel="noopener noreferrer"
                     className="inline-flex items-center gap-2 border border-white/10 hover:border-[#d4ff00] text-white hover:text-black hover:bg-[#d4ff00] font-bold text-xs tracking-wider uppercase px-6 py-3.5 rounded-xl transition-all">
                     Open in Google Maps
                   </a>
@@ -323,10 +323,15 @@ export default function ContactPage() {
 
               {/* Map Frame Right (8 cols) */}
               <div className="lg:col-span-8">
-                <div className="rounded-3xl overflow-hidden border border-white/10 shadow-2xl h-[400px]">
+                <div className="alpha-map rounded-3xl overflow-hidden border border-white/10 shadow-2xl h-[450px]">
                   <iframe
-                    src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3430.730386629088!2d76.68334467554907!3d30.697880974600127!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x390fee8c3a24f3c3%3A0x5c7f1f15b5f3b8a0!2sSohana%2C%20Punjab!5e0!3m2!1sen!2sin!4v1715420000000!5m2!1sen!2sin"
-                    width="100%" height="100%" style={{ border: 0 }} allowFullScreen={true} loading="lazy" referrerPolicy="no-referrer-when-downgrade"
+                    src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3104.8514251621427!2d76.70673337942134!3d30.6910467!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x390fef891d181545%3A0x8cc850603c393f09!2sALPHA%20ZONE%20GYM!5e1!3m2!1sen!2sin!4v1789923641966!5m2!1sen!2sin"
+                    width="100%"
+                    height="450"
+                    style={{ border: 0 }}
+                    allowFullScreen={true}
+                    loading="lazy"
+                    referrerPolicy="strict-origin-when-cross-origin"
                   />
                 </div>
               </div>

@@ -1,5 +1,6 @@
 import { getSEO } from '../../lib/seo';
 import ServiceLandingTemplate from '../../components/ServiceLandingTemplate';
+import { crossfitSchema } from '../../lib/schema';
 
 export const metadata = getSEO({
   title: 'CrossFit Gym in Mohali | CrossFit Training | Alpha Zone',
@@ -9,7 +10,12 @@ export const metadata = getSEO({
 
 export default function Page() {
   return (
-    <ServiceLandingTemplate
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(crossfitSchema) }}
+      />
+      <ServiceLandingTemplate
       h1="CrossFit Gym in Mohali"
       badge="HIGH-INTENSITY • ATHLETIC CONDITIONING"
       heroTagline="Train Hard. Move Better. Get Stronger."
@@ -51,5 +57,6 @@ export default function Page() {
         }
       ]}
     />
+    </>
   );
 }

@@ -1,5 +1,6 @@
 import { getSEO } from '../../lib/seo';
 import ServiceLandingTemplate from '../../components/ServiceLandingTemplate';
+import { gymSector77Schema } from '../../lib/schema';
 
 export const metadata = getSEO({
   title: 'Best Gym in Sector 77, Mohali | Alpha Zone Gym',
@@ -9,7 +10,12 @@ export const metadata = getSEO({
 
 export default function Page() {
   return (
-    <ServiceLandingTemplate
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(gymSector77Schema) }}
+      />
+      <ServiceLandingTemplate
       h1="Best Gym Near Sector 77, Mohali"
       badge="LOCATION HIGHLIGHT • SECTOR 77 & SOHANA"
       heroTagline="Looking for a Gym Near Sector 77, Mohali?"
@@ -59,5 +65,6 @@ export default function Page() {
         }
       ]}
     />
+    </>
   );
 }

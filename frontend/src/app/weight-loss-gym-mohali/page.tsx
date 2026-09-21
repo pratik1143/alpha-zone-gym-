@@ -1,5 +1,6 @@
 import { getSEO } from '../../lib/seo';
 import ServiceLandingTemplate from '../../components/ServiceLandingTemplate';
+import { weightLossSchema } from '../../lib/schema';
 
 export const metadata = getSEO({
   title: 'Weight Loss Gym in Mohali | Fat Loss Training | Alpha Zone',
@@ -9,7 +10,12 @@ export const metadata = getSEO({
 
 export default function Page() {
   return (
-    <ServiceLandingTemplate
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(weightLossSchema) }}
+      />
+      <ServiceLandingTemplate
       h1="Weight Loss Gym in Mohali"
       badge="SUSTAINABLE FAT LOSS • STRUCTURED PROGRAMMING"
       heroTagline="Your Goal. Your Training. Your Progress."
@@ -50,5 +56,6 @@ export default function Page() {
         }
       ]}
     />
+    </>
   );
 }

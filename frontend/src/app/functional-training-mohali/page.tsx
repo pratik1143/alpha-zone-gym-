@@ -1,5 +1,6 @@
 import { getSEO } from '../../lib/seo';
 import ServiceLandingTemplate from '../../components/ServiceLandingTemplate';
+import { functionalTrainingSchema } from '../../lib/schema';
 
 export const metadata = getSEO({
   title: 'Functional Training in Mohali | Alpha Zone Gym',
@@ -9,7 +10,12 @@ export const metadata = getSEO({
 
 export default function Page() {
   return (
-    <ServiceLandingTemplate
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(functionalTrainingSchema) }}
+      />
+      <ServiceLandingTemplate
       h1="Functional Training in Mohali"
       badge="MOVEMENT • MOBILITY & STABILITY"
       heroTagline="Train Your Body to Move Better."
@@ -50,5 +56,6 @@ export default function Page() {
         }
       ]}
     />
+    </>
   );
 }
