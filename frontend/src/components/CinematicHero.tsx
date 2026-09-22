@@ -534,7 +534,7 @@ export default function CinematicHero() {
             </h2>
 
             <p className="text-slate-300 text-sm md:text-base max-w-2xl mx-auto font-poppins leading-relaxed">
-              Welcome to Alpha Zone Gym, a premium fitness and performance facility located on Landran Road, Sohana, Mohali. With professional strength and cardio equipment, expert coaches and multiple training options, Alpha Zone is built for beginners, fitness enthusiasts and athletes alike.
+              Welcome to Alpha Zone Gym, a premium fitness and performance facility located on Landran Road, Sohana, Mohali.
             </p>
 
             <div className="flex flex-col sm:flex-row justify-center gap-4 pt-4">

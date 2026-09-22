@@ -269,19 +269,8 @@ export default function HomeClient() {
               >
                 Sculpt Your Body. Elevate Your Spirit.
               </p>
-              <p className="az-hero-description" style={{ maxWidth: 640, margin: "0 auto 28px" }}>
+              <p className="az-hero-description" style={{ maxWidth: 640, margin: "0 auto 32px" }}>
                 Welcome to Alpha Zone Gym, a premium fitness and performance facility located on Landran Road, Sohana, Mohali. Whether your goal is to build muscle, lose weight, improve strength, increase endurance or simply live a healthier lifestyle, Alpha Zone provides the equipment, coaching and training environment to help you stay consistent.
-              </p>
-              <p
-                style={{
-                  fontSize: 13,
-                  color: "#cbd5e1",
-                  maxWidth: 620,
-                  margin: "0 auto 32px",
-                  lineHeight: 1.6
-                }}
-              >
-                With professional strength and cardio equipment, expert coaches and multiple training options, Alpha Zone is built for beginners, fitness enthusiasts and athletes alike.
               </p>
               <div className="az-actions">
                 <a
@@ -365,10 +354,10 @@ export default function HomeClient() {
           <Reveal className="az-section-heading">
             <div>
               <p className="az-eyebrow">THE ALPHA ADVANTAGE</p>
-              <h2 style={{ fontSize: "clamp(26px, 3.5vw, 42px)" }}>
-                Why Train at
+              <h2 style={{ fontSize: "clamp(26px, 3.5vw, 42px)", textTransform: "uppercase" }}>
+                WHY TRAIN AT
                 <br />
-                <em>Alpha Zone?</em>
+                <em>ALPHA ZONE?</em>
               </h2>
             </div>
             <p style={{ maxWidth: 460 }}>
@@ -434,10 +423,10 @@ export default function HomeClient() {
             <Reveal className="az-section-heading">
               <div>
                 <p className="az-eyebrow">VERSATILE DISCIPLINES</p>
-                <h2 style={{ fontSize: "clamp(26px, 3.5vw, 42px)" }}>
-                  Our Gym
+                <h2 style={{ fontSize: "clamp(26px, 3.5vw, 42px)", textTransform: "uppercase" }}>
+                  OUR GYM
                   <br />
-                  <em>Services</em>
+                  <em>SERVICES</em>
                 </h2>
               </div>
               <Link className="az-text-link" href="/gym-services">
@@ -542,10 +531,10 @@ export default function HomeClient() {
           <Reveal className="az-section-heading">
             <div>
               <p className="az-eyebrow">TARGETED OUTCOMES</p>
-              <h2 style={{ fontSize: "clamp(26px, 3.5vw, 42px)" }}>
-                Train for
+              <h2 style={{ fontSize: "clamp(26px, 3.5vw, 42px)", textTransform: "uppercase" }}>
+                TRAIN FOR
                 <br />
-                <em>Your Goal</em>
+                <em>YOUR GOAL</em>
               </h2>
             </div>
             <p style={{ maxWidth: 440 }}>
@@ -609,8 +598,8 @@ export default function HomeClient() {
             <Reveal className="az-section-heading" style={{ marginBottom: 40 }}>
               <div>
                 <p className="az-eyebrow">TRANSPARENT PRICING</p>
-                <h2 style={{ fontSize: "clamp(28px, 4vw, 48px)" }}>
-                  Gym Memberships
+                <h2 style={{ fontSize: "clamp(28px, 4vw, 48px)", textTransform: "uppercase" }}>
+                  GYM MEMBERSHIPS
                 </h2>
               </div>
               <p style={{ maxWidth: 460 }}>
@@ -755,66 +744,76 @@ export default function HomeClient() {
         </section>
 
         {/* Section 7: Located in Sohana, Mohali */}
-        <section className="az-container az-section" style={{ borderTop: "1px solid rgba(255,255,255,0.08)" }}>
-          <Reveal>
-            <div
-              style={{
-                background: "#0e1315",
-                border: "1px solid rgba(229,250,25,0.25)",
-                borderRadius: 24,
-                padding: "48px 36px",
-                textAlign: "center",
-                maxWidth: 920,
-                margin: "0 auto",
-                boxShadow: "0 0 50px rgba(0,0,0,0.5)"
-              }}
-            >
-              <p className="az-eyebrow">VISIT US TODAY</p>
-              <h2 style={{ fontSize: "clamp(26px, 3.5vw, 44px)", margin: "8px 0 16px" }}>
-                Located in Sohana, Mohali
-              </h2>
-              <p style={{ fontSize: 15, color: "#cbd5e1", maxWidth: 650, margin: "0 auto 12px", lineHeight: 1.7 }}>
-                Alpha Zone Gym is located at:
-                <br />
-                <strong style={{ color: "#fff" }}>
-                  2nd Floor, MNB Group, SCO 16-17, Landran Road, Sohana, Mohali, Punjab 140308
-                </strong>
-              </p>
-              <p style={{ fontSize: 14, color: "#9ca3af", margin: "0 auto 20px" }}>
-                We serve members from Sohana and surrounding areas of Mohali.
-              </p>
+        <section
+          className="az-location-section"
+          style={{
+            borderTop: "1px solid rgba(255,255,255,0.08)",
+            padding: "85px 0"
+          }}
+        >
+          <div className="az-container">
+            <Reveal>
               <div
                 style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 8,
-                  fontSize: 16,
-                  fontWeight: 800,
-                  color: "var(--az-lime)",
-                  marginBottom: 28
+                  background: "#0c1113",
+                  border: "1px solid rgba(0,0,0,0.2)",
+                  borderRadius: 24,
+                  padding: "52px 36px",
+                  textAlign: "center",
+                  maxWidth: 920,
+                  margin: "0 auto",
+                  boxShadow: "0 25px 60px rgba(0,0,0,0.35)",
+                  position: "relative",
+                  zIndex: 1
                 }}
               >
-                <Phone size={18} />
-                <a href="tel:+919779333155" style={{ color: "inherit" }}>
-                  +91 97793 33155
-                </a>
-              </div>
-              <div style={{ display: "flex", gap: 14, justifyContent: "center", flexWrap: "wrap" }}>
-                <Link href="/contact-us" className="az-button">
-                  Contact Alpha Zone <ArrowUpRight size={18} />
-                </Link>
-                <a
-                  href="https://maps.app.goo.gl/pX8VZNoXNu4YAeBW6"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="az-button az-button-dark"
-                  style={{ border: "1px solid rgba(255,255,255,0.2)" }}
+                <p className="az-eyebrow" style={{ color: "var(--az-lime)" }}>VISIT US TODAY</p>
+                <h2 style={{ fontSize: "clamp(26px, 3.5vw, 44px)", margin: "8px 0 16px", textTransform: "uppercase", color: "#fff" }}>
+                  LOCATED IN SOHANA, MOHALI
+                </h2>
+                <p style={{ fontSize: 15, color: "#cbd5e1", maxWidth: 650, margin: "0 auto 12px", lineHeight: 1.7 }}>
+                  Alpha Zone Gym is located at:
+                  <br />
+                  <strong style={{ color: "#fff" }}>
+                    2nd Floor, MNB Group, SCO 16-17, Landran Road, Sohana, Mohali, Punjab 140308
+                  </strong>
+                </p>
+                <p style={{ fontSize: 14, color: "#9ca3af", margin: "0 auto 20px" }}>
+                  We serve members from Sohana and surrounding areas of Mohali.
+                </p>
+                <div
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 8,
+                    fontSize: 16,
+                    fontWeight: 800,
+                    color: "var(--az-lime)",
+                    marginBottom: 28
+                  }}
                 >
-                  <MapPin size={16} /> Open in Google Maps
-                </a>
+                  <Phone size={18} />
+                  <a href="tel:+919779333155" style={{ color: "inherit" }}>
+                    +91 97793 33155
+                  </a>
+                </div>
+                <div style={{ display: "flex", gap: 14, justifyContent: "center", flexWrap: "wrap" }}>
+                  <Link href="/contact-us" className="az-button">
+                    Contact Alpha Zone <ArrowUpRight size={18} />
+                  </Link>
+                  <a
+                    href="https://maps.app.goo.gl/pX8VZNoXNu4YAeBW6"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="az-button az-button-dark"
+                    style={{ border: "1px solid rgba(255,255,255,0.2)" }}
+                  >
+                    <MapPin size={16} /> Open in Google Maps
+                  </a>
+                </div>
               </div>
-            </div>
-          </Reveal>
+            </Reveal>
+          </div>
         </section>
       </main>
       <MarketingFooter />

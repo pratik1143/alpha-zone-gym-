@@ -85,6 +85,142 @@
 .az-nav a[aria-current] {
   color: var(--az-lime);
 }
+
+/* Gym Services Dropdown */
+.az-nav-dropdown-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  height: 100%;
+}
+.az-nav-dropdown-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #d2d5d4;
+  cursor: pointer;
+  transition: color 0.2s;
+  padding: 8px 0;
+  text-decoration: none;
+}
+.az-nav-dropdown-trigger:hover,
+.az-nav-dropdown-trigger[aria-current] {
+  color: var(--az-lime);
+}
+.az-chevron {
+  transition: transform 0.25s ease;
+}
+.az-chevron.is-open {
+  transform: rotate(180deg);
+}
+.az-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 10px);
+  left: 50%;
+  transform: translateX(-50%) translateY(8px);
+  min-width: 320px;
+  background: rgba(11, 16, 18, 0.97);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.75), 0 0 25px rgba(229, 250, 25, 0.05);
+  padding: 10px;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.2s ease, visibility 0.2s;
+  z-index: 100;
+}
+.az-dropdown-menu::before {
+  content: "";
+  position: absolute;
+  top: -14px;
+  left: 0;
+  right: 0;
+  height: 14px;
+}
+.az-dropdown-menu.is-visible {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transform: translateX(-50%) translateY(0);
+}
+.az-dropdown-header {
+  padding: 6px 10px 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  margin-bottom: 4px;
+}
+.az-dropdown-eyebrow {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  color: var(--az-lime);
+  text-transform: uppercase;
+}
+.az-dropdown-items {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.az-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  text-decoration: none;
+  color: #d2d5d4;
+  transition: all 0.2s ease;
+}
+.az-dropdown-item:hover,
+.az-dropdown-item.is-active {
+  background: rgba(229, 250, 25, 0.08);
+  color: #fff;
+}
+.az-dropdown-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--az-lime);
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+}
+.az-dropdown-item:hover .az-dropdown-icon,
+.az-dropdown-item.is-active .az-dropdown-icon {
+  background: rgba(229, 250, 25, 0.18);
+  border-color: rgba(229, 250, 25, 0.35);
+  transform: scale(1.05);
+}
+.az-dropdown-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.az-dropdown-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #f1f5f9;
+  transition: color 0.2s;
+}
+.az-dropdown-item:hover .az-dropdown-title {
+  color: var(--az-lime);
+}
+.az-dropdown-desc {
+  font-size: 11px;
+  color: #94a3b8;
+  font-weight: 400;
+}
+.az-mobile-dropdown {
+  display: none;
+}
 .az-header-actions {
   display: flex;
   align-items: center;
@@ -382,6 +518,9 @@
   gap: 30px;
   margin-bottom: 36px;
 }
+.az-section-heading h2 {
+  text-transform: uppercase;
+}
 .az-section-heading > p {
   color: #9ca49f;
   font-size: 14px;
@@ -576,22 +715,10 @@
   margin: 26px 0;
 }
 .az-membership {
-  background: var(--az-lime);
-  color: #0a1004;
+  background: transparent;
+  color: #fff;
   padding: 65px 0;
   position: relative;
-  overflow: hidden;
-}
-.az-membership:after {
-  content: "AZ";
-  position: absolute;
-  right: 25%;
-  top: -40px;
-  font-size: 300px;
-  font-weight: 900;
-  opacity: 0.035;
-  line-height: 1;
-  pointer-events: none;
 }
 .az-membership-inner {
   display: flex;
@@ -600,19 +727,39 @@
   gap: 30px;
 }
 .az-membership .az-eyebrow {
-  color: #4a531a;
+  color: var(--az-lime);
 }
 .az-membership .az-eyebrow:before {
-  background: #111;
+  background: var(--az-lime);
 }
 .az-membership h2 span {
-  -webkit-text-stroke: 1px #101604;
+  -webkit-text-stroke: 1px var(--az-lime);
   color: transparent;
 }
 .az-membership p:not(.az-eyebrow) {
-  font-size: 16px;
-  line-height: 1.5;
+  font-size: 15px;
+  line-height: 1.6;
   margin: 0 0 24px;
+  color: #9ca3af;
+}
+.az-location-section {
+  background: var(--az-lime);
+  color: #0a1004;
+  padding: 85px 0;
+  position: relative;
+  overflow: hidden;
+}
+.az-location-section:after {
+  content: "AZ";
+  position: absolute;
+  right: 15%;
+  top: -40px;
+  font-size: 320px;
+  font-weight: 900;
+  opacity: 0.05;
+  line-height: 1;
+  pointer-events: none;
+  color: #000;
 }
 .az-button-dark {
   background: #0b1107;
@@ -880,6 +1027,57 @@
   .az-nav a {
     padding: 14px 0;
     font-size: 15px;
+  }
+  .az-nav-dropdown-wrap {
+    display: none;
+  }
+  .az-mobile-dropdown {
+    display: flex;
+    flex-direction: column;
+  }
+  .az-mobile-dropdown-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+  }
+  .az-mobile-expand-btn {
+    background: none;
+    border: none;
+    color: #d2d5d4;
+    padding: 10px 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+  }
+  .az-mobile-chevron {
+    transition: transform 0.25s ease;
+  }
+  .az-mobile-chevron.is-rotated {
+    transform: rotate(180deg);
+    color: var(--az-lime);
+  }
+  .az-mobile-subnav {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 4px 0 12px 14px;
+    border-left: 2px solid rgba(229, 250, 25, 0.25);
+    margin: 0 0 10px 4px;
+  }
+  .az-mobile-sublink {
+    display: flex !important;
+    align-items: center !important;
+    gap: 10px !important;
+    padding: 8px 0 !important;
+    font-size: 13px !important;
+    color: #9ca3af !important;
+  }
+  .az-mobile-sublink:hover,
+  .az-mobile-sublink.is-active,
+  .az-mobile-sublink[aria-current] {
+    color: var(--az-lime) !important;
   }
   .az-menu {
     display: block;
