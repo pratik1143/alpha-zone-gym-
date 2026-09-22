@@ -73,20 +73,44 @@ export default function AboutPage() {
             <div className="w-[800px] h-[800px] bg-[#d4ff00]/5 rounded-full blur-3xl animate-pulse" />
           </div>
 
-          <div className="relative z-10 max-w-5xl mx-auto px-6 text-center space-y-6">
-            <motion.span initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }} className="inline-block text-xs font-black text-[#d4ff00] tracking-widest uppercase border border-[#d4ff00]/30 px-5 py-2 rounded-full bg-[#d4ff00]/5">
+          <div className="relative z-10 max-w-5xl mx-auto px-6 text-left space-y-6" style={{ textAlign: "left" }}>
+            <motion.span
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6 }}
+              className="inline-block text-xs font-black text-[#d4ff00] tracking-widest uppercase border border-[#d4ff00]/30 px-5 py-2 rounded-full bg-[#d4ff00]/5"
+            >
               ALPHA ZONE GYM • SOHANA, MOHALI
             </motion.span>
             
-            <motion.h1 initial={{ opacity: 0, y: 35 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8, delay: 0.1 }} className="text-4xl md:text-7xl font-black uppercase tracking-tighter leading-none">
-              About Alpha Zone Gym
+            <motion.h1
+              initial={{ opacity: 0, y: 35 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.8, delay: 0.1 }}
+              className="text-4xl md:text-7xl font-black uppercase tracking-tight leading-none"
+              style={{ textAlign: "left", letterSpacing: "-1px" }}
+            >
+              About Alpha Zone <br />
+              <span style={{ color: "var(--az-lime, #d4ff00)" }}>Gym</span>
             </motion.h1>
             
-            <motion.h2 initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, delay: 0.25 }} className="text-xl md:text-3xl font-extrabold text-[#d4ff00] text-neon-glow uppercase tracking-tight">
+            <motion.h2
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.7, delay: 0.25 }}
+              className="text-xl md:text-3xl font-extrabold text-[#d4ff00] text-neon-glow uppercase tracking-tight"
+              style={{ textAlign: "left" }}
+            >
               More Than a Gym. A Performance Lab.
             </motion.h2>
 
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, delay: 0.3 }} className="text-slate-300 text-base md:text-lg leading-relaxed max-w-3xl mx-auto font-poppins space-y-3">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.7, delay: 0.3 }}
+              className="text-slate-300 text-base md:text-lg leading-relaxed max-w-2xl font-poppins space-y-3"
+              style={{ textAlign: "left", margin: 0 }}
+            >
               <p>
                 Alpha Zone Gym is a fitness and performance facility located on Landran Road in Sohana, Mohali.
               </p>
@@ -98,11 +122,23 @@ export default function AboutPage() {
               </p>
             </motion.div>
             
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.4 }} className="flex flex-col sm:flex-row gap-4 justify-center pt-4">
-              <Link href="/contact-us" className="bg-[#d4ff00] text-black font-extrabold text-xs tracking-wider uppercase px-10 py-4 rounded-full hover:bg-white transition-all shadow-[0_0_25px_rgba(212,255,0,0.3)] hover:scale-105">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.4 }}
+              className="flex flex-col sm:flex-row gap-4 justify-start items-center pt-4"
+              style={{ justifyContent: "flex-start", display: "flex" }}
+            >
+              <Link
+                href="/contact-us"
+                className="bg-[#d4ff00] text-black font-extrabold text-xs tracking-wider uppercase px-10 py-4 rounded-full hover:bg-white transition-all shadow-[0_0_25px_rgba(212,255,0,0.3)] hover:scale-105"
+              >
                 Visit Alpha Zone Gym
               </Link>
-              <Link href="/gym-membership-mohali" className="border border-white/20 hover:border-[#d4ff00] text-white font-bold text-xs tracking-wider uppercase px-10 py-4 rounded-full transition-all hover:text-[#d4ff00] bg-white/5">
+              <Link
+                href="/gym-membership-mohali"
+                className="border border-white/20 hover:border-[#d4ff00] text-white font-bold text-xs tracking-wider uppercase px-10 py-4 rounded-full transition-all hover:text-[#d4ff00] bg-white/5"
+              >
                 Explore Membership Plans
               </Link>
             </motion.div>
