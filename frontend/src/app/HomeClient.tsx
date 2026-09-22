@@ -248,6 +248,7 @@ export default function HomeClient() {
           <div className="az-hero-shade" />
           <div className="az-container az-hero-content">
             <motion.div
+              style={{ maxWidth: 600 }}
               initial={reduced ? false : { opacity: 0, y: 24 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.8 }}
@@ -255,31 +256,51 @@ export default function HomeClient() {
               <p className="az-eyebrow">
                 <span /> LANDRAN ROAD, SOHANA · MOHALI
               </p>
-              <h1 style={{ fontSize: "clamp(32px, 5.5vw, 68px)", lineHeight: 1.05 }}>
-                Premium Gym in Sohana, Mohali
+              <h1
+                style={{
+                  fontSize: "clamp(34px, 4.8vw, 62px)",
+                  fontWeight: 900,
+                  lineHeight: 1.1,
+                  letterSpacing: "-0.5px",
+                  textTransform: "uppercase",
+                  margin: "0 0 14px",
+                }}
+              >
+                PREMIUM GYM IN
+                <br />
+                <em>SOHANA, MOHALI</em>
               </h1>
               <p
                 style={{
-                  fontSize: "clamp(18px, 2.5vw, 24px)",
-                  fontWeight: 800,
-                  color: "var(--az-lime)",
-                  letterSpacing: "-0.5px",
-                  margin: "12px 0 16px"
+                  fontSize: "clamp(16px, 2vw, 20px)",
+                  fontWeight: 700,
+                  color: "#e2e8f0",
+                  letterSpacing: "0.2px",
+                  margin: "0 0 18px",
                 }}
               >
-                Sculpt Your Body. Elevate Your Spirit.
+                Sculpt Your Body. <span style={{ color: "var(--az-lime)" }}>Elevate Your Spirit.</span>
               </p>
-              <p className="az-hero-description" style={{ maxWidth: 640, margin: "0 auto 32px" }}>
+              <p
+                className="az-hero-description"
+                style={{
+                  maxWidth: 540,
+                  margin: "0 0 30px",
+                  fontSize: 15,
+                  lineHeight: 1.7,
+                  color: "#cbd5e1",
+                }}
+              >
                 Welcome to Alpha Zone Gym, a premium fitness and performance facility located on Landran Road, Sohana, Mohali. Whether your goal is to build muscle, lose weight, improve strength, increase endurance or simply live a healthier lifestyle, Alpha Zone provides the equipment, coaching and training environment to help you stay consistent.
               </p>
-              <div className="az-actions">
+              <div className="az-actions" style={{ display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
                 <a
                   className="az-button"
                   href="https://wa.me/919779333155?text=Hello%20Alpha%20Zone%20Gym%2C%20I%20want%20to%20join."
                   target="_blank"
                   rel="noreferrer"
                 >
-                  Join Alpha Zone <ArrowUpRight size={20} />
+                  Join Alpha Zone <ArrowUpRight size={18} />
                 </a>
                 <a
                   className="az-button az-button-dark"

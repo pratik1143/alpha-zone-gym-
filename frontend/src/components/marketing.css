@@ -317,21 +317,23 @@
   display: none;
 }
 .az-hero h1 {
-  font-size: clamp(80px, 8.8vw, 139px);
+  font-size: clamp(34px, 5.5vw, 64px);
   font-weight: 900;
-  letter-spacing: -6px;
-  line-height: 0.9;
-  margin: 0 0 28px;
+  letter-spacing: -0.5px;
+  line-height: 1.1;
+  margin: 0 0 16px;
+  text-transform: uppercase;
 }
 .az-site em {
   font-style: normal;
   color: var(--az-lime);
 }
 .az-hero-description {
-  font-size: 18px;
-  line-height: 1.55;
-  color: #c1c6c4;
+  font-size: 15px;
+  line-height: 1.7;
+  color: #cbd5e1;
   margin: 0 0 30px;
+  max-width: 560px;
 }
 .az-actions {
   display: flex;
@@ -1091,7 +1093,9 @@
     min-height: 0;
   }
   .az-hero h1 {
-    font-size: 95px;
+    font-size: clamp(32px, 7vw, 48px);
+    letter-spacing: -0.5px;
+    line-height: 1.15;
   }
   .az-hero-image {
     background-position: 62% center;
