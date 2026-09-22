@@ -14,6 +14,9 @@ export default function sitemap(): MetadataRoute.Sitemap {
     '/gym-membership-mohali',
     '/gym-sector-77-mohali',
     '/contact-us',
+    '/blog',
+    '/best-gym-in-sohana-mohali',
+    '/weight-training-for-beginners-mohali',
     '/privacy-policy',
     '/terms-and-conditions'
   ];

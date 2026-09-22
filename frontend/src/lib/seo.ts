@@ -21,16 +21,21 @@ interface SEOOptions {
   title: string;
   description: string;
   path: string;
+  keywords?: string[];
+  image?: string;
+  type?: 'website' | 'article';
 }
 
-export function getSEO({ title, description, path }: SEOOptions): Metadata {
+export function getSEO({ title, description, path, keywords, image, type = 'website' }: SEOOptions): Metadata {
   const cleanPath = path.startsWith('/') ? path : `/${path}`;
   const canonicalUrl = `${BASE_URL}${cleanPath === '/' ? '' : cleanPath}`;
+  const kw = keywords && keywords.length > 0 ? keywords.join(', ') : DEFAULT_KEYWORDS.join(', ');
+  const ogImg = image ? (image.startsWith('http') ? image : `${BASE_URL}${image}`) : `${BASE_URL}/gym_images/Best Gym in Mohali.jpg`;
 
   return {
     title,
     description,
-    keywords: DEFAULT_KEYWORDS.join(', '),
+    keywords: kw,
     alternates: {
       canonical: canonicalUrl,
     },
@@ -44,13 +49,13 @@ export function getSEO({ title, description, path }: SEOOptions): Metadata {
       url: canonicalUrl,
       siteName: 'Alpha Zone Gym',
       locale: 'en_IN',
-      type: 'website',
+      type,
       images: [
         {
-          url: `${BASE_URL}/gym_images/Best Gym in Mohali.jpg`,
+          url: ogImg,
           width: 1200,
           height: 630,
-          alt: 'Alpha Zone Gym - Premium Fitness Center in Sohana, Mohali',
+          alt: `${title} | Alpha Zone Gym Mohali`,
         },
       ],
     },
@@ -58,7 +63,7 @@ export function getSEO({ title, description, path }: SEOOptions): Metadata {
       card: 'summary_large_image',
       title,
       description,
-      images: [`${BASE_URL}/gym_images/Best Gym in Mohali.jpg`],
+      images: [ogImg],
     },
     other: {
       'theme-color': '#08080a',

@@ -387,6 +387,9 @@ export function MarketingFooter() {
           <Link href="/app-page">
             Get the app <ArrowUpRight size={14} />
           </Link>
+          <Link href="/blog">
+            Fitness blog <ArrowUpRight size={14} />
+          </Link>
           <Link href="/contact-us">
             Find us <ArrowUpRight size={14} />
           </Link>

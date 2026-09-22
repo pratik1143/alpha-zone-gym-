@@ -1,0 +1,331 @@
+/* Blog & Article Styles for Alpha Zone Gym */
+
+.az-blog-hub {
+  padding: 130px 0 90px;
+}
+
+.az-blog-header {
+  text-align: center;
+  max-width: 780px;
+  margin: 0 auto 50px;
+}
+
+.az-blog-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  gap: 30px;
+  margin-top: 40px;
+}
+
+.az-blog-card {
+  background: #0d1214;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 20px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+  text-decoration: none;
+  color: inherit;
+}
+
+.az-blog-card:hover {
+  transform: translateY(-5px);
+  border-color: rgba(229, 250, 25, 0.35);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6), 0 0 25px rgba(229, 250, 25, 0.06);
+}
+
+.az-blog-card-image {
+  position: relative;
+  height: 220px;
+  width: 100%;
+  overflow: hidden;
+  background: #141a1c;
+}
+
+.az-blog-card-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.6s ease;
+}
+
+.az-blog-card:hover .az-blog-card-image img {
+  transform: scale(1.05);
+}
+
+.az-blog-card-content {
+  padding: 26px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.az-blog-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--az-lime, #e5fa19);
+  background: rgba(229, 250, 25, 0.08);
+  border: 1px solid rgba(229, 250, 25, 0.25);
+  padding: 4px 10px;
+  border-radius: 6px;
+  margin-bottom: 14px;
+}
+
+.az-blog-card-title {
+  font-size: 20px;
+  font-weight: 800;
+  line-height: 1.35;
+  color: #fff;
+  margin: 0 0 12px;
+  transition: color 0.2s;
+}
+
+.az-blog-card:hover .az-blog-card-title {
+  color: var(--az-lime, #e5fa19);
+}
+
+.az-blog-card-desc {
+  font-size: 13px;
+  color: #94a3b8;
+  line-height: 1.65;
+  margin: 0 0 20px;
+  flex-grow: 1;
+}
+
+.az-blog-meta {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-size: 11px;
+  color: #64748b;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  padding-top: 16px;
+}
+
+.az-blog-read-more {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--az-lime, #e5fa19);
+  text-transform: uppercase;
+  margin-left: auto;
+}
+
+/* Article Single View */
+.az-article-wrap {
+  padding: 120px 0 80px;
+}
+
+.az-breadcrumbs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #64748b;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+
+.az-breadcrumbs a {
+  color: #94a3b8;
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+.az-breadcrumbs a:hover {
+  color: var(--az-lime, #e5fa19);
+}
+
+.az-article-header {
+  max-width: 860px;
+  margin-bottom: 40px;
+}
+
+.az-article-title {
+  font-size: clamp(28px, 4.5vw, 52px);
+  font-weight: 900;
+  line-height: 1.15;
+  color: #fff;
+  text-transform: uppercase;
+  letter-spacing: -0.5px;
+  margin: 14px 0 20px;
+}
+
+.az-article-meta-bar {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  font-size: 12px;
+  color: #94a3b8;
+  flex-wrap: wrap;
+  padding: 12px 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.az-article-hero-image {
+  position: relative;
+  width: 100%;
+  height: clamp(280px, 45vw, 480px);
+  border-radius: 24px;
+  overflow: hidden;
+  margin: 36px 0 50px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.az-article-hero-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.az-article-content {
+  max-width: 860px;
+  margin: 0 auto;
+  font-size: 16px;
+  line-height: 1.8;
+  color: #cbd5e1;
+}
+
+.az-article-content h2 {
+  font-size: clamp(22px, 3vw, 32px);
+  font-weight: 800;
+  color: #fff;
+  text-transform: uppercase;
+  letter-spacing: -0.5px;
+  margin: 45px 0 18px;
+  border-left: 4px solid var(--az-lime, #e5fa19);
+  padding-left: 16px;
+}
+
+.az-article-content h3 {
+  font-size: 20px;
+  font-weight: 800;
+  color: #f1f5f9;
+  margin: 30px 0 12px;
+}
+
+.az-article-content p {
+  margin: 0 0 20px;
+}
+
+.az-article-content ul,
+.az-article-content ol {
+  margin: 0 0 24px;
+  padding-left: 24px;
+}
+
+.az-article-content li {
+  margin-bottom: 10px;
+  color: #cbd5e1;
+}
+
+.az-callout-box {
+  background: #0f1517;
+  border: 1px solid rgba(229, 250, 25, 0.25);
+  border-radius: 16px;
+  padding: 24px 28px;
+  margin: 32px 0;
+}
+
+.az-callout-title {
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--az-lime, #e5fa19);
+  text-transform: uppercase;
+  margin: 0 0 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.az-faq-list {
+  margin: 36px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.az-faq-card {
+  background: #0c1012;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  padding: 22px 26px;
+}
+
+.az-faq-q {
+  font-size: 17px;
+  font-weight: 800;
+  color: #fff;
+  margin: 0 0 10px;
+}
+
+.az-faq-a {
+  font-size: 14px;
+  color: #94a3b8;
+  line-height: 1.7;
+  margin: 0;
+}
+
+.az-internal-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 24px 0 40px;
+}
+
+.az-pill-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #111719;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #cbd5e1;
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+  transition: all 0.2s ease;
+}
+
+.az-pill-link:hover {
+  background: rgba(229, 250, 25, 0.12);
+  border-color: var(--az-lime, #e5fa19);
+  color: var(--az-lime, #e5fa19);
+  transform: translateY(-2px);
+}
+
+.az-cta-banner {
+  background: linear-gradient(135deg, #0c1214 0%, #151e21 100%);
+  border: 1px solid rgba(229, 250, 25, 0.3);
+  border-radius: 24px;
+  padding: 44px 36px;
+  text-align: center;
+  margin: 50px 0 20px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+}
+
+.az-cta-banner h3 {
+  font-size: clamp(24px, 3.5vw, 36px);
+  font-weight: 900;
+  text-transform: uppercase;
+  color: #fff;
+  margin: 0 0 14px;
+}
+
+@media (max-width: 768px) {
+  .az-blog-grid {
+    grid-template-columns: 1fr;
+  }
+  .az-cta-banner {
+    padding: 32px 20px;
+  }
+}
