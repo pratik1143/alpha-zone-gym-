@@ -133,15 +133,50 @@ export default function MembersPage() {
   } = useGymStore();
 
   const members = useMemo(() => {
-    const seenKeys = new Set<string>();
+    const seenIds = new Set<string>();
+    const seenClientIds = new Set<string>();
+    const seenMemberIds = new Set<string>();
+    const seenPhones = new Set<string>();
+
     const uniqueRaw = (rawMembers || []).filter((m: any) => {
-      const key = m.clientId
-        ? `cid_${String(m.clientId).trim()}`
-        : (m.memberId && m.memberId !== 'AZ-2026-0000')
-          ? `mid_${String(m.memberId).trim()}`
-          : (m.id ? `id_${String(m.id).trim()}` : (m.phone ? `phone_${m.phone.replace(/\D/g, '')}` : `rnd_${Math.random()}`));
-      if (seenKeys.has(key)) return false;
-      seenKeys.add(key);
+      if (!m) return false;
+
+      // 1. Primary document ID check
+      if (m.id) {
+        const idKey = String(m.id).trim();
+        if (idKey) {
+          if (seenIds.has(idKey)) return false;
+          seenIds.add(idKey);
+        }
+      }
+
+      // 2. Client ID check
+      if (m.clientId) {
+        const cId = String(m.clientId).trim();
+        if (cId) {
+          if (seenClientIds.has(cId)) return false;
+          seenClientIds.add(cId);
+        }
+      }
+
+      // 3. Member ID check (ignoring placeholder AZ-2026-0000)
+      if (m.memberId && String(m.memberId).trim() !== 'AZ-2026-0000') {
+        const mId = String(m.memberId).trim();
+        if (mId) {
+          if (seenMemberIds.has(mId)) return false;
+          seenMemberIds.add(mId);
+        }
+      }
+
+      // 4. Phone check (valid numbers with >= 7 digits)
+      if (m.phone) {
+        const cleanPhone = String(m.phone).replace(/\D/g, '');
+        if (cleanPhone.length >= 7) {
+          if (seenPhones.has(cleanPhone)) return false;
+          seenPhones.add(cleanPhone);
+        }
+      }
+
       return true;
     });
 
@@ -233,6 +268,8 @@ export default function MembersPage() {
   );
   const [newAvatarUrl, setNewAvatarUrl] = useState("");
   const [newBiometricId, setNewBiometricId] = useState("");
+  const [unmappedPunchDeviceId, setUnmappedPunchDeviceId] = useState("");
+  const [isExistingPunchBiometric, setIsExistingPunchBiometric] = useState(false);
 
   const [trainers, setTrainers] = useState<any[]>([]);
   const [selectedTrainerForView, setSelectedTrainerForView] = useState<
@@ -250,10 +287,21 @@ export default function MembersPage() {
   useEffect(() => {
     fetchMembers();
     fetchPlans();
-    if (typeof window !== 'undefined' && window.location.search.includes('action=add')) {
-      setShowAddModal(true);
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('action') === 'add') {
+        const requestedBiometricId = params.get('biometricId') || params.get('deviceUserId') || '';
+        const fromUnmappedPunch = params.get('source') === 'unmapped-punch';
+        if (fromUnmappedPunch && /^\d{1,5}$/.test(requestedBiometricId) && Number(requestedBiometricId) > 0) {
+          setNewBiometricId(requestedBiometricId);
+          setUnmappedPunchDeviceId(params.get('deviceId') || 'dev_k90_main');
+          setIsExistingPunchBiometric(true);
+        }
+        setShowAddModal(true);
+        if (fromUnmappedPunch) router.replace('/dashboard/members');
+      }
     }
-  }, [fetchMembers, fetchPlans]);
+  }, [fetchMembers, fetchPlans, router]);
 
   // Realtime Firestore listener for new/updated members
   useEffect(() => {
@@ -659,9 +707,9 @@ export default function MembersPage() {
           // If no invite was sent, create a new referral document starting at step 4
           const referrerMember = freshMembers.find(
             (m: any) =>
-              m.name.toUpperCase() + "2026" === newReferralCode.toUpperCase() ||
-              (m.memberId &&
-                m.memberId.toUpperCase() === newReferralCode.toUpperCase()),
+              (m?.name ? String(m.name).toUpperCase() + "2026" === newReferralCode.toUpperCase() : false) ||
+              (m?.memberId &&
+                String(m.memberId).toUpperCase() === newReferralCode.toUpperCase()),
           );
           await addDoc(collection(fDb, "referrals"), {
             referrerId: referrerMember ? referrerMember.id : "m1",
@@ -812,19 +860,20 @@ export default function MembersPage() {
   };
 
   const filtered = members.filter((m) => {
+    const s = (search || "").toLowerCase();
     const ms =
-      m.name.toLowerCase().includes(search.toLowerCase()) ||
-      m.phone.includes(search);
-    const st = statusFilter === "all" || m.status === statusFilter;
+      (m?.name || "").toLowerCase().includes(s) ||
+      String(m?.phone || "").includes(search || "");
+    const st = statusFilter === "all" || m?.status === statusFilter;
     return ms && st;
   });
 
   const counts = {
     all: members.length,
-    active: members.filter((m) => m.status === "active").length,
-    expiring: members.filter((m) => m.status === "expiring").length,
-    expired: members.filter((m) => m.status === "expired").length,
-    frozen: members.filter((m) => m.status === "frozen").length,
+    active: members.filter((m) => m?.status === "active").length,
+    expiring: members.filter((m) => m?.status === "expiring").length,
+    expired: members.filter((m) => m?.status === "expired").length,
+    frozen: members.filter((m) => m?.status === "frozen").length,
   };
 
   const handleExportCSV = () => {
@@ -886,13 +935,13 @@ export default function MembersPage() {
   };
 
   const expiredMembers = members.filter(m => {
-    if (m.status === 'blocked' || m.status === 'blacklisted') return false;
-    return membershipEngine.calculateDaysLeft(m.expiryDate) < 0;
+    if (m?.status === 'blocked' || m?.status === 'blacklisted') return false;
+    return membershipEngine.calculateDaysLeft(m?.expiryDate) < 0;
   });
 
   const urgentMembers = members.filter(m => {
-    if (m.status === 'blocked' || m.status === 'blacklisted') return false;
-    const days = membershipEngine.calculateDaysLeft(m.expiryDate);
+    if (m?.status === 'blocked' || m?.status === 'blacklisted') return false;
+    const days = membershipEngine.calculateDaysLeft(m?.expiryDate);
     return days >= 0 && days <= 7;
   });
 
@@ -1240,9 +1289,14 @@ export default function MembersPage() {
       {/* ─── Add Member Modal — Premium White Theme ─── */}
       <AddMemberModal
         isOpen={showAddModal}
+        initialBiometricId={isExistingPunchBiometric ? newBiometricId : ''}
+        biometricAlreadyOnDevice={isExistingPunchBiometric}
+        fingerprintDeviceId={unmappedPunchDeviceId}
         onClose={() => {
           setShowAddModal(false);
           setNewCreatedMember(null);
+          setIsExistingPunchBiometric(false);
+          setUnmappedPunchDeviceId('');
         }}
       />
 

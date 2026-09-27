@@ -105,6 +105,7 @@ biometric_lock = threading.Lock()
 # Cooldown tracker to prevent duplicate unlocks (UserID -> last_unlock_epoch)
 last_unlock_time = {}
 processed_fingerprints = set()
+processed_unlock_requests = set()
 
 def check_internet_connection():
     """Checks real internet connectivity by attempting socket connection to DNS servers."""
@@ -185,8 +186,8 @@ def check_tcp_connection(ip, port):
     except Exception:
         return False
 
-DEVICE_IP = "192.168.18.11"
-DEVICE_PORT = 4370
+DEVICE_IP = os.getenv("EASYBIO_DEVICE_IP") or os.getenv("DEVICE_IP") or "192.168.18.11"
+DEVICE_PORT = int(os.getenv("EASYBIO_DEVICE_PORT") or os.getenv("DEVICE_PORT") or "4370")
 
 def check_ping(ip):
     """Pings the target IP and returns True if reachable."""
@@ -690,155 +691,192 @@ def make_diagnostics_listener():
 # SMART BIOMETRIC ENROLLMENT ENGINE
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def run_enroll_fingerprint(enrollment_doc_id, member_id, member_name, biometric_uid, finger_index=0):
-    """
-    Enrolls a fingerprint on the ESSL K90 Pro device.
-    - biometric_uid: integer user slot on the device (1-65535)
-    - finger_index: finger template index (0=Right Thumb, 1=Right Index, ..., 9=Left Little)
-    - Updates Firestore enrollment doc in real-time with scan progress.
+def run_enroll_fingerprint(enrollment_doc_id, member_id, member_name, biometric_uid, finger_index=0, target_collection='members', device_id='dev_k90_main'):
+    """Run an enrollment command on the persistent local device service.
+
+    Completion is reported only after the selected user's fingerprint template
+    has been read back from the ESSL device and its CRM record is updated.
     """
     enroll_ref = db.collection('biometric_enrollment').document(enrollment_doc_id)
-    member_ref = db.collection('members').document(member_id)
+    target_collection = target_collection if target_collection in ('members', 'employees') else 'members'
+    member_ref = db.collection(target_collection).document(member_id)
     profile_ref = db.collection('biometric_profiles').document(member_id)
+    template_verified = False
 
     def push_status(status, message, extra=None):
-        payload = {
-            'status': status,
-            'message': message,
-            'updatedAt': datetime.utcnow().isoformat() + 'Z'
-        }
+        payload = {'status': status, 'message': message, 'updatedAt': datetime.utcnow().isoformat() + 'Z'}
         if extra:
             payload.update(extra)
         enroll_ref.update(payload)
 
     with biometric_lock:
+        conn = None
         try:
-            push_status('connecting', 'Connecting to ESSL K90 Pro...', {'scan': 0, 'totalScans': 3})
-            logging.info(f"[Enrollment] Starting fingerprint enrollment for {member_name} (biometric UID: {biometric_uid})")
+            uid_value = int(biometric_uid)
+            finger_value = int(finger_index)
+            if not 1 <= uid_value <= 65535 or not 0 <= finger_value <= 9:
+                raise ValueError("Biometric ID must be 1..65535 and finger index must be 0..9.")
 
+            push_status('connecting', 'Connecting to configured EasyBio terminal...', {'scan': 0, 'totalScans': 3})
+            logging.info(f"[ENROLLMENT] Selected {target_collection[:-1]} {member_id}, device user {uid_value}, name {member_name}")
             zk = ZK(DEVICE_IP, port=DEVICE_PORT, timeout=15)
             conn = zk.connect()
+            users = conn.get_users()
+            device_user = next((u for u in users if str(u.user_id).strip() == str(uid_value)), None)
 
-            # Ensure user slot exists on device before starting enrollment (pyzk enroll_user requires this)
-            try:
+            if not device_user:
+                push_status('user_creating', f'Creating device user {uid_value}...', {'deviceUserId': str(uid_value)})
+                conn.set_user(uid=uid_value, name=member_name[:24].strip(), privilege=0,
+                              password='', group_id='', user_id=str(uid_value))
                 users = conn.get_users()
-                slot_exists = any(str(u.user_id) == str(biometric_uid) for u in users)
-            except Exception as e:
-                logging.error(f"[Enrollment] Error fetching users from device: {e}")
-                slot_exists = False
-
-            if not slot_exists:
-                logging.info(f"[Enrollment] Creating user slot {biometric_uid} on device for {member_name}")
-                conn.set_user(
-                    uid=int(biometric_uid),
-                    name=member_name[:24].strip(),
-                    privilege=0,
-                    password='',
-                    group_id='',
-                    user_id=str(biometric_uid)
+                device_user = next((u for u in users if str(u.user_id).strip() == str(uid_value)), None)
+            if not device_user:
+                raise RuntimeError(f'Device did not return user {uid_value} after user creation.')
+            device_name_key = ' '.join(str(device_user.name or '').casefold().split())
+            crm_name_key = ' '.join(str(member_name[:24] or '').casefold().split())
+            if device_name_key != crm_name_key:
+                raise RuntimeError(
+                    f'Device user {uid_value} is already assigned to "{device_user.name or ""}", '
+                    'which does not match the selected CRM record.'
                 )
+            push_status('user_created', f'Device user {uid_value} verified.', {'deviceUserId': str(uid_value)})
 
-            push_status('ready', 'Device ready. Place finger on sensor...', {'scan': 0})
+            templates = conn.get_templates()
+            user_templates = [t for t in templates if int(t.uid) == int(device_user.uid)]
+            used_finger_indexes = {int(t.fid) for t in user_templates}
+            if finger_value in used_finger_indexes:
+                # CRM says this employee is pending while the device already has a
+                # template at the requested slot. Preserve that template and enroll
+                # the new scan into the first free slot instead of silently syncing
+                # an old device template as a new enrollment.
+                free_slots = [slot for slot in range(10) if slot not in used_finger_indexes]
+                if not free_slots:
+                    raise RuntimeError(
+                        f'Device user {uid_value} already has templates in all 10 finger slots; '
+                        'cannot safely add a new enrollment.'
+                    )
+                finger_value = free_slots[0]
+                enroll_ref.update({'fingerIndex': finger_value})
+                logging.info(
+                    f'[FINGERPRINT] Device user {uid_value} already has a template; '
+                    f'preserving it and enrolling the new scan in free slot {finger_value}.'
+                )
+            template_verified = False
 
-            # Cancel any existing enrollment first
-            try:
-                conn.cancel_capture()
-            except Exception:
-                pass
+            if not template_verified:
+                push_status('device_ready', 'Device ready. Follow the terminal prompts for fingerprint scans.', {'scan': 0})
+                push_status('enrollment_requested', 'Fingerprint enrollment started on the device.', {'scan': 0})
+                push_status('scanning', 'Waiting for the device to complete fingerprint capture.', {'scan': 0})
+                logging.info(f"[FINGERPRINT] Enrollment requested for device user {uid_value}, finger {finger_value}")
+                conn.enroll_user(uid=int(device_user.uid), temp_id=finger_value, user_id=str(uid_value))
 
-            # Start enrollment — device will wait for 3 scans
-            # pyzk enroll_user: uid is the device user slot, temp_id is finger index
-            push_status('scanning', 'Scan 1/3 — Place finger on sensor', {'scan': 1})
-            logging.info(f"[Enrollment] Calling enroll_user(uid={biometric_uid}, temp_id={finger_index}, user_id={biometric_uid})")
-
-            try:
-                # Pass user_id explicitly so pyzk doesn't try to look up non-existing user or fail
-                result = conn.enroll_user(uid=int(biometric_uid), temp_id=int(finger_index), user_id=str(biometric_uid))
-                if result:
-                    push_status('scanning', 'Scan 2/3 — Lift and place again', {'scan': 2})
-                    time.sleep(0.5)
-                    push_status('scanning', 'Scan 3/3 — Final scan...', {'scan': 3})
-                    time.sleep(0.5)
-                else:
-                    logging.warning(f"[Enrollment] enroll_user returned False")
-            except Exception as enroll_ex:
-                # Some firmware versions raise exception on enrollment — check if user was saved
-                logging.warning(f"[Enrollment] enroll_ex: {enroll_ex} — checking templates list...")
-                result = None
-
-            # Verify the fingerprint was enrolled by reading templates
-            has_template = False
-            try:
+                users = conn.get_users()
+                device_user = next((u for u in users if str(u.user_id).strip() == str(uid_value)), None)
                 templates = conn.get_templates()
-                for t in templates:
-                    if int(t.uid) == int(biometric_uid) and int(t.fid) == int(finger_index):
-                        has_template = True
-                        break
-            except Exception as e:
-                logging.error(f"[Enrollment] Error fetching templates to verify: {e}")
-                has_template = False
+                user_templates = [
+                    t for t in templates
+                    if device_user is not None and int(t.uid) == int(device_user.uid)
+                ]
+                template_verified = any(int(t.fid) == finger_value for t in user_templates)
 
+            if not template_verified:
+                raise RuntimeError(f'Device read-back did not find fingerprint template for user {uid_value}, finger {finger_value}.')
+
+            fingerprint_count = len(user_templates)
+            device_uid = int(device_user.uid)
             conn.disconnect()
+            conn = None
 
-            # Treat as success if result was explicitly True OR the template exists on the device
-            if result is True or has_template:
-                # SUCCESS — update Firebase
-                now_iso = datetime.utcnow().isoformat() + 'Z'
-                push_status('success', f'Fingerprint enrolled! Biometric ID: {biometric_uid}', {
-                    'scan': 3, 'biometricId': str(biometric_uid), 'completedAt': now_iso
-                })
-                logging.info(f"[Enrollment] SUCCESS for {member_name} — biometric UID {biometric_uid}")
+            now_iso = datetime.utcnow().isoformat() + 'Z'
+            push_status('device_enrolled_crm_sync_pending', 'Device user and fingerprint template verified; saving CRM mapping.', {
+                'scan': 3, 'deviceEnrolled': True, 'templateVerified': True,
+                'fingerIndex': finger_value,
+                'biometricId': str(uid_value), 'deviceUid': device_uid,
+                'fingerprintsCount': fingerprint_count
+            })
+            logging.info(f"[VERIFY] Device user {uid_value} and fingerprint template {finger_value} confirmed.")
 
-                # Update member document
-                member_ref.update({
-                    'biometricId': str(biometric_uid),
-                    'biometricEnrolled': True,
-                    'fingerprintStatus': 'enrolled',
-                    'lastBiometricSync': now_iso
-                })
+            db.collection('deviceUsers').document(f'dev_{device_id}_usr_{uid_value}').set({
+                'deviceId': device_id,
+                'deviceName': 'EasyBio Biometric',
+                'userId': uid_value,
+                'uid': device_uid,
+                'userName': member_name,
+                'fingerprintsCount': fingerprint_count,
+                'enrollmentStatus': 'Enrolled',
+                'lastActivity': now_iso
+            }, merge=True)
 
-                # Write / update biometric_profiles
-                profile_data = {
-                    'memberId': member_id,
-                    'memberName': member_name,
-                    'biometricId': str(biometric_uid),
-                    'fingerIndex': int(finger_index),
-                    'fingerprintStatus': 'enrolled',
-                    'faceStatus': 'not_enrolled',
-                    'enrollmentDate': now_iso,
-                    'deviceName': 'ESSL K90 Pro',
-                    'deviceIp': DEVICE_IP,
-                    'devicePort': DEVICE_PORT,
-                    'lastSync': now_iso,
-                    'enrolledBy': 'CRM Admin'
-                }
-                profile_ref.set(profile_data, merge=True)
+            member_ref.update({
+                'biometricId': uid_value,
+                'deviceUserId': str(uid_value),
+                'biometricEnrolled': True,
+                'fingerprintStatus': 'ENROLLED',
+                'fingerprintEnrolled': True,
+                'fingerprintEnrolledAt': now_iso,
+                'fingerprintDeviceId': device_id,
+                'fingerprintMappingSource': 'LOCAL_ENROLLMENT',
+                'lastBiometricSync': now_iso
+            })
+            profile_ref.set({
+                'memberId': member_id,
+                'memberName': member_name,
+                'biometricId': uid_value,
+                'fingerIndex': finger_value,
+                'fingerprintStatus': 'ENROLLED',
+                'faceStatus': 'not_enrolled',
+                'enrollmentDate': now_iso,
+                'deviceName': 'EasyBio Biometric',
+                'deviceIp': DEVICE_IP,
+                'devicePort': DEVICE_PORT,
+                'lastSync': now_iso,
+                'enrolledBy': 'Local Terminal'
+            }, merge=True)
 
-                # Notification
+            push_status('success', f'Fingerprint template verified and mapped to device user {uid_value}.', {
+                'scan': 3, 'biometricId': str(uid_value), 'completedAt': now_iso,
+                'deviceEnrolled': True, 'templateVerified': True,
+                'targetCollection': target_collection
+            })
+            logging.info(f"[CRM] SUCCESS: {target_collection}/{member_id} mapped to device user {uid_value}.")
+            try:
                 db.collection('notifications').add({
-                    'title': '✅ Biometric Enrollment Successful',
-                    'body': f'{member_name} fingerprint registered. Biometric ID: {biometric_uid}',
+                    'title': 'Biometric Enrollment Successful',
+                    'body': f'{member_name} fingerprint registered. Biometric ID: {uid_value}',
                     'memberId': member_id,
                     'type': 'enrollment',
                     'timestamp': now_iso,
                     'read': False
                 })
-            else:
-                raise Exception("Fingerprint template not found on device after enrollment attempt. Try again.")
+            except Exception as notification_error:
+                logging.warning(f"[ENROLLMENT] Notification write failed: {notification_error}")
 
         except Exception as e:
             err_msg = str(e)
-            logging.error(f"[Enrollment] FAILED for {member_name}: {err_msg}")
-            push_status('failed', f'Enrollment failed: {err_msg}', {'scan': 0})
-            db.collection('notifications').add({
-                'title': '❌ Enrollment Failed',
-                'body': f'{member_name} fingerprint enrollment failed: {err_msg}',
-                'memberId': member_id,
-                'type': 'enrollment_error',
-                'timestamp': datetime.utcnow().isoformat() + 'Z',
-                'read': False
-            })
-
+            logging.error(f"[ENROLLMENT] FAILED for {target_collection}/{member_id}: {err_msg}")
+            if conn:
+                try:
+                    conn.disconnect()
+                except Exception:
+                    pass
+            if template_verified:
+                push_status('crm_sync_pending', f'Device enrollment succeeded; CRM sync needs retry: {err_msg}', {
+                    'scan': 3, 'deviceEnrolled': True, 'templateVerified': True,
+                    'targetCollection': target_collection, 'error': err_msg
+                })
+            else:
+                push_status('failed', f'Enrollment failed: {err_msg}', {'scan': 0, 'error': err_msg})
+            try:
+                db.collection('notifications').add({
+                    'title': 'Biometric Enrollment Failed',
+                    'body': f'{member_name} fingerprint enrollment failed: {err_msg}',
+                    'memberId': member_id,
+                    'type': 'enrollment_error',
+                    'timestamp': datetime.utcnow().isoformat() + 'Z',
+                    'read': False
+                })
+            except Exception:
+                pass
 
 def run_delete_biometric(enrollment_doc_id, member_id, member_name, biometric_uid):
     """Deletes a user's fingerprint templates from the ESSL device."""
@@ -941,12 +979,16 @@ def make_enrollment_listener():
             member_name = data.get('memberName', 'Unknown')
             biometric_uid = data.get('biometricId', 1)
             finger_index = data.get('fingerIndex', 0)
+            device_id = data.get('deviceId') or 'dev_k90_main'
+            target_collection = data.get('targetCollection')
+            if target_collection not in ('members', 'employees'):
+                target_collection = 'employees' if data.get('targetType') == 'EMPLOYEE' or data.get('isEmployee') else 'members'
 
             if command == 'enroll_fingerprint':
-                logging.info(f"[Enrollment Listener] Fingerprint enrollment triggered for {member_name}")
+                logging.info(f"[Enrollment Listener] Fingerprint enrollment triggered for {target_collection}/{member_id}")
                 threading.Thread(
                     target=run_enroll_fingerprint,
-                    args=(doc_id, member_id, member_name, biometric_uid, finger_index),
+                    args=(doc_id, member_id, member_name, biometric_uid, finger_index, target_collection, device_id),
                     daemon=True
                 ).start()
 
@@ -975,7 +1017,8 @@ def trigger_door_relay(conn, device_name="Main Gate", duration_seconds=3):
     """
     try:
         logging.info(f"[Relay Control] Sending unlock signal to {device_name} for {duration_seconds}s...")
-        conn.unlock(duration_seconds * 10)
+        # pyzk.unlock() accepts seconds and converts them to tenths internally.
+        conn.unlock(duration_seconds)
         logging.info(f"🟢 [Relay Control Success] Gate opened for {duration_seconds}s on {device_name}.")
         try:
             db.collection('deviceLogs').add({
@@ -1191,14 +1234,18 @@ def run_membership_validation(user_id, device_id, device_name, branch, timestamp
                 'memberId': member_id_str,
                 'memberCode': member_code_str,
                 'plan': plan_name,
+                'membershipDuration': (member.get('duration') or member.get('planDuration') or plan_name) if member else 'Unknown',
                 'startDate': member.get('startDate', member.get('joinDate', 'N/A')) if member else 'N/A',
                 'expiryDate': member.get('expiryDate', 'N/A') if member else 'N/A',
                 'dob': member.get('dob', member.get('dateOfBirth', 'N/A')) if member else 'N/A',
+                'age': member.get('age', '') if member else '',
+                'phone': member.get('phone', '') if member else '',
                 'daysRemaining': days_left if status in ('granted', 'already_inside') else 0,
                 'expiredDays': expired_days,
                 'visitCount': member.get('attendanceCount', 1) if member else 1,
                 'avatarUrl': avatar_url,
-                'deviceId': device_name,
+                'deviceId': device_id,
+                'deviceName': device_name,
                 'biometricId': user_id_str,
                 'timestamp': timestamp_iso,
                 'firstCheckInTime': first_checkin_time,
@@ -1312,10 +1359,12 @@ def sync_device_data(conn, device_id, device_name, branch):
             pass
 
         users = []
+        users_read_succeeded = False
         try:
             users = conn.get_users()
-        except Exception:
-            pass
+            users_read_succeeded = True
+        except Exception as user_read_error:
+            logging.warning(f"Could not read live users for {device_name}; preserving existing device user mappings: {user_read_error}")
 
         templates = []
         try:
@@ -1336,7 +1385,11 @@ def sync_device_data(conn, device_id, device_name, branch):
             batch = db.batch()
             batch_count = 0
             for user in users:
-                user_templates = [t for t in templates if str(t.uid) == str(user.user_id)]
+                user_templates = [
+                    t for t in templates
+                    if str(t.uid) == str(user.uid)
+                    or str(getattr(t, 'user_id', '')) == str(user.user_id)
+                ]
                 doc_ref = db.collection('deviceUsers').document(f"dev_{device_id}_usr_{user.user_id}")
                 batch.set(doc_ref, {
                     'deviceId': device_id,
@@ -1356,6 +1409,31 @@ def sync_device_data(conn, device_id, device_name, branch):
                     batch_count = 0
             if batch_count > 0:
                 batch.commit()
+
+            # A successful full device read is authoritative. Remove only this
+            # device's cache entries whose user IDs no longer exist on-device.
+            # If the read failed, preserve the cache rather than treating an
+            # empty result as a real device state.
+            if users_read_succeeded:
+                live_user_ids = {str(user.user_id).strip() for user in users}
+                stale_docs = db.collection('deviceUsers').where('deviceId', '==', device_id).stream()
+                delete_batch = db.batch()
+                delete_count = 0
+                deleted_total = 0
+                for stale_doc in stale_docs:
+                    stale_user_id = str((stale_doc.to_dict() or {}).get('userId', '')).strip()
+                    if stale_user_id and stale_user_id not in live_user_ids:
+                        delete_batch.delete(stale_doc.reference)
+                        delete_count += 1
+                        deleted_total += 1
+                        if delete_count >= 400:
+                            delete_batch.commit()
+                            delete_batch = db.batch()
+                            delete_count = 0
+                if delete_count:
+                    delete_batch.commit()
+                if deleted_total:
+                    logging.info(f"Removed {deleted_total} stale cached user mappings for {device_name} after full device sync.")
 
         # Update Device info in Firestore
         db.collection('devices').document(device_id).update({
@@ -1412,25 +1490,100 @@ def make_device_listener(conn, device_id, device_name):
             if not data:
                 continue
             if data.get('unlockPending', False):
-                # Reset the flag in Firestore first
+                request_id = data.get('unlockRequestId') or 'legacy'
+                if request_id in processed_unlock_requests:
+                    continue
+                processed_unlock_requests.add(request_id)
+                if len(processed_unlock_requests) > 1000:
+                    processed_unlock_requests.clear()
+                    processed_unlock_requests.add(request_id)
+                expires_at = data.get('unlockExpiresAt')
                 try:
-                    db.collection('devices').document(device_id).update({
-                        'unlockPending': False
+                    device_ref = db.collection('devices').document(device_id)
+                    if expires_at:
+                        try:
+                            expires_naive = datetime.fromisoformat(str(expires_at).replace('Z', '+00:00')).replace(tzinfo=None)
+                            if expires_naive <= datetime.utcnow():
+                                device_ref.update({
+                                    'unlockPending': False,
+                                    'unlockStatus': 'failed',
+                                    'unlockError': 'Unlock request expired before the device processed it.',
+                                    'unlockCompletedAt': datetime.utcnow().isoformat() + 'Z'
+                                })
+                                logging.warning(f"[GATE] Expired unlock request {request_id}; command not sent.")
+                                continue
+                        except (TypeError, ValueError):
+                            logging.warning(f"[GATE] Invalid expiry on unlock request {request_id}; command not sent.")
+                            device_ref.update({
+                                'unlockPending': False,
+                                'unlockStatus': 'failed',
+                                'unlockError': 'Invalid request expiry.',
+                                'unlockCompletedAt': datetime.utcnow().isoformat() + 'Z'
+                            })
+                            continue
+
+                    duration = int(data.get('unlockDurationSeconds', 5))
+                    if duration < 1 or duration > 30:
+                        raise ValueError(f"Unsupported relay duration: {duration}s")
+
+                    device_ref.update({
+                        'unlockPending': False,
+                        'unlockStatus': 'processing',
+                        'unlockError': None
                     })
-                    logging.info(f"[Firestore Trigger] Manual unlock requested for {device_name}. Sending unlock signal...")
-                    conn.unlock(50)  # 50 = 5 seconds
-                    logging.info(f"[Firestore Trigger] Unlock signal sent successfully to {device_name}.")
-                    
-                    # Add device control success log
+                    logging.info(f"[GATE] Request {request_id}: sending {duration}s relay command to {device_name}.")
+                    with biometric_lock:
+                        latest = device_ref.get().to_dict() or {}
+                        if latest.get('unlockRequestId') != request_id or latest.get('unlockStatus') != 'processing':
+                            logging.info(f"[GATE] Request {request_id} was cancelled or superseded before relay execution.")
+                            continue
+                        latest_expiry = latest.get('unlockExpiresAt')
+                        if latest_expiry:
+                            expiry_time = datetime.fromisoformat(str(latest_expiry).replace('Z', '+00:00')).replace(tzinfo=None)
+                            if expiry_time <= datetime.utcnow():
+                                device_ref.update({
+                                    'unlockStatus': 'failed',
+                                    'unlockError': 'Unlock request expired while waiting for the device.',
+                                    'unlockCompletedAt': datetime.utcnow().isoformat() + 'Z'
+                                })
+                                continue
+                        # pyzk.unlock() accepts seconds; do not scale this again.
+                        result = conn.unlock(duration)
+                    if result is False:
+                        raise RuntimeError("Device library returned a negative relay command result.")
+                    response = repr(result)[:240]
+                    logging.info(f"[GATE] Request {request_id}: relay command acknowledged; response={response}")
+                    device_ref.update({
+                        'unlockStatus': 'success',
+                        'unlockResult': 'pyzk unlock({}) returned without device error; result={}'.format(duration, response),
+                        'unlockCompletedAt': datetime.utcnow().isoformat() + 'Z'
+                    })
                     db.collection('deviceLogs').add({
                         'deviceId': device_id,
                         'deviceName': device_name,
                         'level': 'SUCCESS',
-                        'message': f"[Device Control] Manual gate unlock executed successfully on {device_name}.",
+                        'message': f"[GATE] Request {request_id}: device acknowledged {duration}s relay command.",
                         'timestamp': datetime.utcnow().isoformat() + 'Z'
                     })
                 except Exception as ex:
-                    logging.error(f"Failed to execute manual unlock on {device_name}: {ex}")
+                    error = str(ex)
+                    logging.error(f"[GATE ERROR] Request {request_id} on {device_name}: {error}")
+                    try:
+                        db.collection('devices').document(device_id).update({
+                            'unlockPending': False,
+                            'unlockStatus': 'failed',
+                            'unlockError': error,
+                            'unlockCompletedAt': datetime.utcnow().isoformat() + 'Z'
+                        })
+                        db.collection('deviceLogs').add({
+                            'deviceId': device_id,
+                            'deviceName': device_name,
+                            'level': 'ERROR',
+                            'message': f"[GATE ERROR] Request {request_id}: {error}",
+                            'timestamp': datetime.utcnow().isoformat() + 'Z'
+                        })
+                    except Exception as status_error:
+                        logging.error(f"[GATE ERROR] Could not persist failure result for {request_id}: {status_error}")
     return device_snapshot_listener
 
 def device_worker_thread(device_id, ip, port, device_name, branch, sync_interval=30):

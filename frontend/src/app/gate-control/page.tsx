@@ -105,27 +105,10 @@ export default function GateControlPage() {
 
   // Clean Numeric Biometric ID extractor
   const getCleanNumericId = (item: any): string => {
-    if (!item) return '0';
-    if (item.biometricId !== undefined && item.biometricId !== null && item.biometricId !== '') {
-      const bioStr = String(item.biometricId).trim();
-      if (/^\d+$/.test(bioStr)) return bioStr;
-      const digits = bioStr.replace(/\D/g, '');
-      if (digits) {
-        if (digits.length >= 7 && digits.startsWith('2026')) {
-          return String(parseInt(digits.substring(4), 10));
-        }
-        return String(parseInt(digits, 10));
-      }
-    }
-    const rawId = String(item.memberId || item.id || '').trim();
-    const digits = rawId.replace(/\D/g, '');
-    if (digits) {
-      if (digits.length >= 7 && digits.startsWith('2026')) {
-        return String(parseInt(digits.substring(4), 10));
-      }
-      return String(parseInt(digits, 10));
-    }
-    return '0';
+    const biometricId = item?.biometricId;
+    if (biometricId === undefined || biometricId === null || biometricId === '') return '';
+    const bioId = String(biometricId).trim();
+    return /^\d{1,5}$/.test(bioId) && Number(bioId) > 0 ? bioId : '';
   };
 
   // Filter CRM members for enrollment
@@ -220,18 +203,10 @@ export default function GateControlPage() {
     setEnrollMsg(`Connecting to ESSL K90 Pro at ${deviceIp} for User #${bioId}...`);
 
     try {
-      // Step 1: Request hardware scanner activation
-      setEnrollState('DEVICE_READY');
-      setEnrollMsg('Device ready. Please place finger on physical ESSL scanner 3 times.');
-
-      // Simulate live scan progress steps for visual operator feedback
-      setTimeout(() => setEnrollState('SCANNING_1'), 1500);
-      setTimeout(() => setEnrollState('SCANNING_2'), 3000);
-      setTimeout(() => setEnrollState('SCANNING_3'), 4500);
-      setTimeout(() => setEnrollState('VERIFYING'), 6000);
+      setEnrollMsg('Enrollment request submitted. Follow the physical terminal prompts; waiting for device template verification.');
 
       const res = await API.post('/devices/biometric/enroll-fingerprint', {
-        memberId: member.id || bioId,
+        memberId: member.id,
         memberName: member.name,
         biometricId: bioId,
         userId: bioId,
@@ -250,13 +225,13 @@ export default function GateControlPage() {
         }, 2500);
       } else {
         setEnrollState('FAILED');
-        setEnrollMsg(res.data?.message || 'Fingerprint enrollment failed or timed out on device scanner.');
-        toast.error('Enrollment failed. Please ensure finger is placed clearly 3 times.');
+        setEnrollMsg(res.data?.error || res.data?.message || 'Device did not confirm a saved fingerprint template.');
+        toast.error('Enrollment failed. Device template was not confirmed.');
       }
     } catch (err: any) {
       setEnrollState('FAILED');
-      setEnrollMsg(err?.response?.data?.message || err?.message || 'Device socket communication error.');
-      toast.error('Device error during fingerprint capture.');
+      setEnrollMsg(err?.response?.data?.error || err?.response?.data?.message || err?.message || 'Device socket communication error.');
+      toast.error('Device error during fingerprint enrollment.');
     }
   };
 
@@ -271,16 +246,10 @@ export default function GateControlPage() {
     setEnrollMsg(`Connecting to ESSL K90 Pro at ${deviceIp} for Staff #${bioId} (${emp.name})...`);
 
     try {
-      setEnrollState('DEVICE_READY');
-      setEnrollMsg('Device ready. Please place finger on physical ESSL scanner 3 times.');
-
-      setTimeout(() => setEnrollState('SCANNING_1'), 1500);
-      setTimeout(() => setEnrollState('SCANNING_2'), 3000);
-      setTimeout(() => setEnrollState('SCANNING_3'), 4500);
-      setTimeout(() => setEnrollState('VERIFYING'), 6000);
+      setEnrollMsg('Enrollment request submitted. Follow the physical terminal prompts; waiting for device template verification.');
 
       const res = await API.post('/devices/biometric/enroll-fingerprint', {
-        employeeId: emp.id || bioId,
+        employeeId: emp.id,
         isEmployee: true,
         memberName: emp.name,
         name: emp.name,
@@ -300,13 +269,13 @@ export default function GateControlPage() {
         }, 2500);
       } else {
         setEnrollState('FAILED');
-        setEnrollMsg(res.data?.message || 'Fingerprint enrollment failed or timed out on device scanner.');
-        toast.error('Enrollment failed. Please ensure finger is placed clearly 3 times.');
+        setEnrollMsg(res.data?.error || res.data?.message || 'Device did not confirm a saved fingerprint template.');
+        toast.error('Enrollment failed. Device template was not confirmed.');
       }
     } catch (err: any) {
       setEnrollState('FAILED');
-      setEnrollMsg(err?.response?.data?.message || err?.message || 'Device socket communication error.');
-      toast.error('Device error during fingerprint capture.');
+      setEnrollMsg(err?.response?.data?.error || err?.response?.data?.message || err?.message || 'Device socket communication error.');
+      toast.error('Device error during fingerprint enrollment.');
     }
   };
 

@@ -384,7 +384,7 @@ export default function MembersTable({
 
   // Combined Search & 9-Field Filtering Logic
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
+    const q = (search || '').trim().toLowerCase();
     const digitsOnly = q.replace(/\D/g, '');
 
     return members.filter(m => {
@@ -850,7 +850,7 @@ export default function MembersTable({
             No members found matching selected search & filters.
           </div>
         ) : (
-          paginatedMembers.map(member => {
+          paginatedMembers.map((member, idx) => {
             const displayId = member.clientId ? `AZ-${member.clientId}` : (member.memberId || member.id);
             const days = member.daysLeft;
             const isExpired = days < 0;
@@ -859,7 +859,7 @@ export default function MembersTable({
 
             return (
               <div
-                key={member.id}
+                key={member.id ? `${member.id}_${idx}` : `mem_${idx}`}
                 className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-xs space-y-3 text-left"
               >
                 <div className="flex items-start justify-between gap-3">
@@ -961,9 +961,9 @@ export default function MembersTable({
                 </td>
               </tr>
             ) : (
-              paginatedMembers.map(member => (
+              paginatedMembers.map((member, idx) => (
                 <MemberTableRow
-                  key={member.id}
+                  key={member.id ? `${member.id}_${idx}` : `mem_${idx}`}
                   member={member}
                   isSelected={selectedMemberId === member.id}
                   onRowClick={() => router.push(`/dashboard/members/${member.id}`)}

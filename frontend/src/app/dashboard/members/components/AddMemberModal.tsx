@@ -21,6 +21,9 @@ import { getActiveTrainers } from '@/services/staff.service';
 interface AddMemberModalProps {
   isOpen: boolean;
   onClose: () => void;
+  initialBiometricId?: string;
+  biometricAlreadyOnDevice?: boolean;
+  fingerprintDeviceId?: string;
 }
 
 // ─── ZOD SCHEMAS ───
@@ -118,7 +121,7 @@ function deduplicatePackages(rawPlans: any[]) {
   return Array.from(map.values());
 }
 
-export default function AddMemberModal({ isOpen, onClose }: AddMemberModalProps) {
+export default function AddMemberModal({ isOpen, onClose, initialBiometricId = '', biometricAlreadyOnDevice = false, fingerprintDeviceId = '' }: AddMemberModalProps) {
   const { plans, fetchPlans, addMember, fetchPayments, members, fetchNextBiometricId } = useGymStore();
 
   useEffect(() => {
@@ -346,15 +349,21 @@ export default function AddMemberModal({ isOpen, onClose }: AddMemberModalProps)
 
   // Auto-generate permanent sequential Biometric ID
   useEffect(() => {
+    let active = true;
     if (isOpen) {
-      fetchNextBiometricId().then((nextId) => {
-        if (nextId) setBiometricId(nextId);
-      }).catch(() => {});
+      if (/^\d{1,5}$/.test(initialBiometricId) && Number(initialBiometricId) > 0) {
+        setBiometricId(initialBiometricId);
+      } else {
+        fetchNextBiometricId().then((nextId) => {
+          if (active && nextId) setBiometricId(nextId);
+        }).catch(() => {});
+      }
       if (activePlans.length > 0 && !selectedPlan) {
         setSelectedPlan(activePlans[0]);
       }
     }
-  }, [isOpen, fetchNextBiometricId]);
+    return () => { active = false; };
+  }, [isOpen, fetchNextBiometricId, initialBiometricId]);
 
   // Check duplicate phone
   const duplicateMember = useMemo(() => {
@@ -686,6 +695,7 @@ export default function AddMemberModal({ isOpen, onClose }: AddMemberModalProps)
         totalPaid: paidAmtNum,
         biometricId: biometricId,
         deviceUserId: biometricId,
+        fingerprintDeviceId: biometricAlreadyOnDevice ? (fingerprintDeviceId || 'dev_k90_main') : null,
         trainerId: selectedTrainerId || 'null',
         trainer: trnName,
         trainerName: trnName,
@@ -1366,7 +1376,9 @@ export default function AddMemberModal({ isOpen, onClose }: AddMemberModalProps)
                   </span>
                   <h3 className="text-xl font-black text-slate-900 tracking-tight">Biometric Gate ID Enrollment</h3>
                   <p className="text-xs text-slate-500 mt-1">
-                    Assign a unique numeric Biometric User ID for physical ESSL K90 Pro / Access Control Gate scanners
+                    {biometricAlreadyOnDevice
+                      ? `Biometric ID #${biometricId} was read from the EasyBio terminal. Saving this member will link the existing device user; no second fingerprint scan is needed.`
+                      : 'Assign a unique numeric Biometric User ID for physical ESSL K90 Pro / Access Control Gate scanners'}
                   </p>
                 </div>
 
@@ -1385,21 +1397,21 @@ export default function AddMemberModal({ isOpen, onClose }: AddMemberModalProps)
                   </div>
 
                   <p className="text-[11px] text-slate-500 font-medium max-w-md mx-auto">
-                    Permanent auto-generated ID <strong className="text-blue-700 font-bold">#{biometricId}</strong>. You can enroll fingerprint now or skip and enroll later from the Local IP Terminal.
+                    {biometricAlreadyOnDevice ? 'Existing terminal ID ' : 'Permanent auto-generated ID '}<strong className="text-blue-700 font-bold">#{biometricId}</strong>{biometricAlreadyOnDevice ? ' will stay mapped to this member.' : '. You can enroll fingerprint now or skip and enroll later from the Local IP Terminal.'}
                   </p>
 
                   <div className="pt-2 flex items-center justify-center gap-3">
                     <button
                       type="button"
-                      onClick={handleStartBiometricEnrollment}
+                      onClick={biometricAlreadyOnDevice ? () => setStep(4) : handleStartBiometricEnrollment}
                       disabled={enrollStatus === 'enrolling'}
                       className="px-5 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl text-xs font-black transition-all shadow-md border-none cursor-pointer inline-flex items-center gap-2"
                     >
                       <Fingerprint size={16} />
-                      <span>{enrollStatus === 'enrolling' ? 'Connecting Scanner...' : 'ENROLL NOW'}</span>
+                      <span>{biometricAlreadyOnDevice ? 'LINK EXISTING ID & CONTINUE' : enrollStatus === 'enrolling' ? 'Connecting Scanner...' : 'ENROLL NOW'}</span>
                     </button>
 
-                    <button
+                    {!biometricAlreadyOnDevice && <button
                       type="button"
                       onClick={() => {
                         toast.info('Fingerprint enrollment skipped. You can enroll later from Local IP Terminal.');
@@ -1409,7 +1421,7 @@ export default function AddMemberModal({ isOpen, onClose }: AddMemberModalProps)
                     >
                       <span>SKIP FOR NOW</span>
                       <ChevronRight size={14} />
-                    </button>
+                    </button>}
                   </div>
 
                   {enrollMsg && (

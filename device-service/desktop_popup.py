@@ -1,21 +1,22 @@
-import sys
-import os
-import time
-import threading
-import urllib.request
+import base64
 import io
 import logging
+import os
+import re
+import sys
+import threading
+import urllib.parse
+import urllib.request
 from datetime import datetime
 
 try:
     import tkinter as tk
-    from PIL import Image, ImageTk, ImageDraw
+    from PIL import Image, ImageDraw, ImageTk
     HAS_GUI = True
-except Exception as e:
+except Exception as exc:
     HAS_GUI = False
-    logging.warning(f"Tkinter/PIL GUI unavailable: {e}")
+    logging.warning(f"Tkinter/PIL GUI unavailable: {exc}")
 
-# Enable High-DPI Scaling Awareness on Windows for crisp typography & graphics
 if sys.platform == 'win32':
     try:
         import ctypes
@@ -26,360 +27,210 @@ if sys.platform == 'win32':
         except Exception:
             pass
 
-CRM_BASE_URL = os.getenv("CRM_BASE_URL", "https://alphazonegym.in").rstrip('/')
+CRM_BASE_URL = os.getenv('CRM_BASE_URL', 'https://alphazonegym.in').rstrip('/')
 
 
-def _create_circular_image(image_bytes_or_pil, size=(96, 96)):
-    """Converts image bytes or PIL object to a circular PhotoImage."""
+def _create_circular_image(image_bytes, size=(104, 104)):
     try:
-        if isinstance(image_bytes_or_pil, bytes):
-            img = Image.open(io.BytesIO(image_bytes_or_pil)).convert("RGBA")
-        elif isinstance(image_bytes_or_pil, Image.Image):
-            img = image_bytes_or_pil.convert("RGBA")
-        else:
-            return None
-
-        img = img.resize(size, Image.Resampling.LANCZOS)
-        
-        # Create smooth anti-aliased circular mask
+        image = Image.open(io.BytesIO(image_bytes)).convert('RGBA').resize(size, Image.Resampling.LANCZOS)
         mask = Image.new('L', size, 0)
-        draw = ImageDraw.Draw(mask)
-        draw.ellipse((0, 0, size[0], size[1]), fill=255)
-        
+        ImageDraw.Draw(mask).ellipse((0, 0, size[0] - 1, size[1] - 1), fill=255)
         output = Image.new('RGBA', size, (0, 0, 0, 0))
-        output.paste(img, (0, 0), mask=mask)
+        output.paste(image, (0, 0), mask=mask)
         return ImageTk.PhotoImage(output)
-    except Exception as e:
-        logging.error(f"Error making circular image: {e}")
+    except Exception as exc:
+        logging.warning(f"Could not render member photo: {exc}")
         return None
 
 
-def show_attendance_popup(popup_data):
-    """
-    Triggers a Premium Always-On-Top Windows Desktop Overlay Popup Window.
-    Appears above Chrome, Excel, Word, or any minimized desktop app.
-    
-    popup_data dict keys:
-    - status: 'granted' | 'denied' | 'unknown' | 'expired' | 'frozen'
-    - memberName: str
-    - memberId / memberCode: str
-    - plan: str
-    - daysRemaining: int or str
-    - visitCount: int or str
-    - avatarUrl: str (optional)
-    - deviceId / deviceName: str
-    - biometricId: str
-    - timestamp: str
-    """
-    if not HAS_GUI:
-        logging.warning("[Popup] Skipping popup because Tkinter/GUI is not available.")
-        return
+def _load_photo(photo_url):
+    try:
+        if photo_url.startswith('data:image') and ',' in photo_url:
+            return _create_circular_image(base64.b64decode(photo_url.split(',', 1)[1]))
+        if photo_url.startswith('https://') or photo_url.startswith('http://'):
+            request = urllib.request.Request(photo_url, headers={'User-Agent': 'AlphaZoneGym-Terminal/1.0'})
+            with urllib.request.urlopen(request, timeout=3) as response:
+                return _create_circular_image(response.read(5 * 1024 * 1024))
+    except Exception as exc:
+        logging.warning(f"Could not load member photo: {exc}")
+    return None
+
+
+def _age_from_dob(dob):
+    try:
+        born = datetime.strptime(str(dob).split('T')[0], '%Y-%m-%d').date()
+        today = datetime.now().date()
+        return today.year - born.year - ((today.month, today.day) < (born.month, born.day))
+    except Exception:
+        return ''
+
+
+def _duration_label(duration, plan):
+    value = str(duration or '').strip()
+    if value and value.lower() not in ('unknown', 'n/a', 'none'):
+        day_match = re.fullmatch(r'(\d+)\s*days?', value, re.IGNORECASE)
+        if day_match and int(day_match.group(1)) >= 28:
+            months = max(1, round(int(day_match.group(1)) / 30))
+            return f'{months} ' + ('MONTH' if months == 1 else 'MONTHS')
+        return value
+    plan_text = str(plan or '').strip()
+    match = re.search(r'(\d+)\s*(\+\s*\d+)?\s*(months?|mos?)', plan_text, re.IGNORECASE)
+    if match:
+        months = int(match.group(1)) + (int(match.group(2).replace('+', '').strip()) if match.group(2) else 0)
+        return f'{months} ' + ('MONTH' if months == 1 else 'MONTHS')
+    day_match = re.search(r'(\d+)\s*days?', plan_text, re.IGNORECASE)
+    if day_match and int(day_match.group(1)) >= 28:
+        months = max(1, round(int(day_match.group(1)) / 30))
+        return f'{months} ' + ('MONTH' if months == 1 else 'MONTHS')
+    return plan_text or 'Unknown'
+
 
 def show_attendance_popup(popup_data):
-    """
-    Triggers a Premium Always-On-Top Windows Desktop Overlay Popup Window.
-    Appears above Chrome, Excel, Word, or any minimized desktop app.
-    White & Royal Blue Theme displaying complete member information.
-    """
+    """Show a landscape member check-in card above other desktop windows."""
     if not HAS_GUI:
-        logging.warning("[Popup] Skipping popup because Tkinter/GUI is not available.")
+        logging.warning('[Popup] Skipping popup because Tkinter/GUI is not available.')
         return
 
     def _gui_thread():
         try:
             root = tk.Tk()
-            root.title("Alpha Zone Gym OS")
-
-            # Always on top & borderless window
-            root.attributes("-topmost", True)
+            root.title('Alpha Zone Gym OS')
+            root.attributes('-topmost', True)
             root.overrideredirect(True)
 
             status = str(popup_data.get('status', 'granted')).lower()
-            member_name = popup_data.get('memberName', 'Gym Member')
-            member_code = popup_data.get('memberCode', popup_data.get('memberId', ''))
-            plan_name = popup_data.get('plan', 'Standard Membership')
-            start_date = popup_data.get('startDate', 'N/A')
-            expiry_date = popup_data.get('expiryDate', 'N/A')
-            dob_str = popup_data.get('dob', 'N/A')
-            days_left = popup_data.get('daysRemaining', popup_data.get('daysLeft', 'N/A'))
-            visit_count = popup_data.get('visitCount', 1)
-            avatar_url = popup_data.get('avatarUrl', '')
-            biometric_id = popup_data.get('biometricId', popup_data.get('deviceId', 'N/A'))
-            expired_days = popup_data.get('expiredDays', 0)
+            name = str(popup_data.get('memberName') or 'Gym Member')
+            member_code = str(popup_data.get('memberCode') or popup_data.get('memberId') or '')
+            biometric_id = str(popup_data.get('biometricId') or 'N/A')
+            plan = str(popup_data.get('plan') or 'Membership unavailable')
+            duration = _duration_label(popup_data.get('membershipDuration'), plan)
+            phone = str(popup_data.get('phone') or 'Not on file')
+            age = str(popup_data.get('age') or _age_from_dob(popup_data.get('dob')) or '—')
+            expiry = str(popup_data.get('expiryDate') or 'N/A').split('T')[0]
+            days_left = popup_data.get('daysRemaining', '—')
+            device_name = str(popup_data.get('deviceName') or 'EasyBio Biometric')
 
-            # Check Birthday
-            is_bday = False
-            if dob_str and dob_str != 'N/A':
-                try:
-                    today = datetime.now()
-                    d = datetime.strptime(str(dob_str).split('T')[0], "%Y-%m-%d")
-                    if d.month == today.month and d.day == today.day:
-                        is_bday = True
-                except Exception:
-                    pass
-
-            # White & Blue Theme Palette
-            bg_color = "#ffffff"       # Pure White background
-            card_border = "#2563eb"    # Royal Blue Outer Border
-            header_bg = "#1e40af"      # Deep Royal Blue Header
-            
             if status == 'granted':
-                status_text = "✓ ACCESS GRANTED"
-                status_fg = "#1e40af"     # Deep Blue
-                badge_bg = "#dbeafe"      # Light Blue
-                message = "Welcome Back! 💪" if not is_bday else "🎉 HAPPY BIRTHDAY! 🎂"
+                status_text, status_fg, badge_bg = '✓ ACCESS GRANTED', '#1553B7', '#EAF2FF'
+                message = 'Welcome back. Have a great workout!'
             elif status == 'already_inside':
-                first_checkin = popup_data.get('firstCheckInTime', popup_data.get('checkIn', ''))
-                status_text = "✓ ALREADY INSIDE"
-                status_fg = "#0369a1"
-                badge_bg = "#e0f2fe"
-                message = f"First Check-in Today: {first_checkin[11:16] if len(first_checkin)>=16 else 'Today'}"
+                status_text, status_fg, badge_bg = '✓ ALREADY CHECKED IN', '#0369A1', '#E0F2FE'
+                first = str(popup_data.get('firstCheckInTime') or '')
+                message = f"First check-in today: {first[11:16] if len(first) >= 16 else 'Today'}"
             elif status in ('denied', 'expired', 'frozen'):
-                status_text = "⚠ ACCESS DENIED"
-                status_fg = "#991b1b"
-                badge_bg = "#fee2e2"
-                message = f"Expired {expired_days} days ago" if expired_days else "Membership Expired"
-            else: # unmapped
-                status_text = "⚠ UNMAPPED MEMBER"
-                status_fg = "#92400e"
-                badge_bg = "#fef3c7"
-                message = f"Biometric ID #{biometric_id} needs CRM mapping"
-
-            # Window Dimensions & Top-Right Screen Position
-            win_width = 410
-            win_height = 510
-            screen_w = root.winfo_screenwidth()
-            
-            x_pos = screen_w - win_width - 25
-            y_pos = 35
-            root.geometry(f"{win_width}x{win_height}+{x_pos}+{y_pos}")
-            root.configure(bg=card_border)
-
-            # Outer Border Wrapper
-            main_frame = tk.Frame(root, bg=bg_color, bd=0)
-            main_frame.pack(fill=tk.BOTH, expand=True, padx=2, pady=2)
-
-            # 1. Header Bar
-            header_frame = tk.Frame(main_frame, bg=header_bg, height=44)
-            header_frame.pack(fill=tk.X, side=tk.TOP)
-            header_frame.pack_propagate(False)
-
-            header_title = tk.Label(
-                header_frame, 
-                text="⚡ ALPHA ZONE GYM OS", 
-                font=("Segoe UI", 10, "bold"), 
-                fg="#ffffff", 
-                bg=header_bg
-            )
-            header_title.pack(side=tk.LEFT, padx=14)
-
-            close_btn = tk.Label(
-                header_frame, 
-                text="✕", 
-                font=("Segoe UI", 12, "bold"), 
-                fg="#bfdbfe", 
-                bg=header_bg,
-                cursor="hand2"
-            )
-            close_btn.pack(side=tk.RIGHT, padx=14)
-            close_btn.bind("<Button-1>", lambda e: root.destroy())
-
-            # 2. Status Badge Banner
-            status_badge_frame = tk.Frame(main_frame, bg=badge_bg, bd=0)
-            status_badge_frame.pack(fill=tk.X, padx=14, pady=(12, 4))
-
-            status_label = tk.Label(
-                status_badge_frame, 
-                text=status_text, 
-                font=("Segoe UI", 10, "bold"), 
-                fg=status_fg, 
-                bg=badge_bg,
-                pady=5
-            )
-            status_label.pack()
-
-            # 3. Circular Member Avatar
-            photo_img = None
-            if avatar_url and avatar_url.startswith("http"):
-                try:
-                    req = urllib.request.Request(avatar_url, headers={'User-Agent': 'Mozilla/5.0'})
-                    with urllib.request.urlopen(req, timeout=3) as resp:
-                        img_data = resp.read()
-                        photo_img = _create_circular_image(img_data, size=(86, 86))
-                except Exception as e:
-                    logging.warning(f"Could not download member avatar: {e}")
-
-            avatar_canvas = tk.Canvas(main_frame, width=86, height=86, bg=bg_color, highlightthickness=0)
-            avatar_canvas.pack(pady=4)
-
-            if photo_img:
-                avatar_canvas.create_image(43, 43, image=photo_img)
-                avatar_canvas.image = photo_img
+                status_text, status_fg, badge_bg = '⚠ ACCESS DENIED', '#991B1B', '#FEF2F2'
+                message = str(popup_data.get('reason') or 'Membership needs attention.')
             else:
-                clean_name = member_name.replace("Unmapped Biometric User #", "ID ")
-                parts = clean_name.split()
-                initials = (parts[0][0] + (parts[1][0] if len(parts) > 1 else '')).upper() if parts else "AZ"
-                avatar_canvas.create_oval(2, 2, 84, 84, fill="#eff6ff", outline="#2563eb", width=2)
-                avatar_canvas.create_text(43, 43, text=initials[:2], font=("Segoe UI", 18, "bold"), fill="#1e40af")
+                status_text, status_fg, badge_bg = '⚠ UNMAPPED BIOMETRIC', '#92400E', '#FEF3C7'
+                message = f'New biometric punch · ID #{biometric_id}'
 
-            # 4. Member Name & Reference Code
-            name_label = tk.Label(
-                main_frame, 
-                text=member_name, 
-                font=("Segoe UI", 13, "bold"), 
-                fg="#0f172a", 
-                bg=bg_color
-            )
-            name_label.pack(pady=(1, 0))
+            width, height = 700, 344
+            screen_w = root.winfo_screenwidth()
+            root.geometry(f'{width}x{height}+{max(8, screen_w - width - 24)}+28')
+            root.configure(bg='#1D4ED8')
 
-            sub_info = f"Ref: {member_code}" if member_code else ""
-            if biometric_id and biometric_id != 'N/A':
-                sub_info += f"  •  Bio ID: #{biometric_id}"
+            shell = tk.Frame(root, bg='#FFFFFF')
+            shell.pack(fill=tk.BOTH, expand=True, padx=2, pady=2)
 
-            code_label = tk.Label(
-                main_frame, 
-                text=sub_info, 
-                font=("Consolas", 9, "bold"), 
-                fg="#2563eb", 
-                bg=bg_color
-            )
-            code_label.pack()
+            header = tk.Frame(shell, bg='#173FA8', height=42)
+            header.pack(fill=tk.X)
+            header.pack_propagate(False)
+            tk.Label(header, text='⚡  ALPHA ZONE GYM OS', font=('Segoe UI', 11, 'bold'), fg='white', bg='#173FA8').pack(side=tk.LEFT, padx=16)
+            tk.Label(header, text=device_name.upper(), font=('Segoe UI', 8, 'bold'), fg='#C7D9FF', bg='#173FA8').pack(side=tk.LEFT, padx=10)
+            close = tk.Label(header, text='✕', font=('Segoe UI', 13, 'bold'), fg='white', bg='#173FA8', cursor='hand2')
+            close.pack(side=tk.RIGHT, padx=14)
+            close.bind('<Button-1>', lambda _event: root.destroy())
 
-            # 5. Complete 2-Column Details Info Box
-            info_box = tk.Frame(main_frame, bg="#f0f9ff", bd=1, highlightbackground="#bfdbfe", highlightthickness=1)
-            info_box.pack(fill=tk.X, padx=14, pady=8)
+            banner = tk.Frame(shell, bg=badge_bg, height=34)
+            banner.pack(fill=tk.X, padx=14, pady=(10, 6))
+            banner.pack_propagate(False)
+            tk.Label(banner, text=status_text, font=('Segoe UI', 10, 'bold'), fg=status_fg, bg=badge_bg).pack(side=tk.LEFT, padx=12, pady=5)
+            tk.Label(banner, text=message, font=('Segoe UI', 9, 'bold'), fg=status_fg, bg=badge_bg).pack(side=tk.RIGHT, padx=12, pady=5)
 
-            # Row 1: Plan / Package
-            r1_frame = tk.Frame(info_box, bg="#f0f9ff")
-            r1_frame.pack(fill=tk.X, padx=10, pady=(6, 2))
-            tk.Label(r1_frame, text="PACKAGE:", font=("Segoe UI", 8, "bold"), fg="#64748b", bg="#f0f9ff").pack(side=tk.LEFT)
-            tk.Label(r1_frame, text=plan_name, font=("Segoe UI", 9, "bold"), fg="#0f172a", bg="#f0f9ff").pack(side=tk.LEFT, padx=6)
+            content = tk.Frame(shell, bg='#FFFFFF')
+            content.pack(fill=tk.BOTH, expand=True, padx=14)
+            identity = tk.Frame(content, bg='#FFFFFF', width=210)
+            identity.pack(side=tk.LEFT, fill=tk.Y, padx=(2, 14), pady=2)
+            identity.pack_propagate(False)
 
-            # Row 2: Start Date & Expiry Date
-            r2_frame = tk.Frame(info_box, bg="#f0f9ff")
-            r2_frame.pack(fill=tk.X, padx=10, pady=2)
-            tk.Label(r2_frame, text=f"Start: {str(start_date).split('T')[0]}", font=("Segoe UI", 8, "bold"), fg="#334155", bg="#f0f9ff").pack(side=tk.LEFT)
-            tk.Label(r2_frame, text=f"Expiry: {str(expiry_date).split('T')[0]}", font=("Segoe UI", 8, "bold"), fg="#dc2626" if status in ('expired','denied') else "#166534", bg="#f0f9ff").pack(side=tk.RIGHT)
+            photo = _load_photo(str(popup_data.get('avatarUrl') or ''))
+            avatar = tk.Canvas(identity, width=108, height=108, bg='#FFFFFF', highlightthickness=0)
+            avatar.pack(pady=(0, 4))
+            if photo:
+                avatar.create_image(54, 54, image=photo)
+                avatar.image = photo
+            else:
+                initials = ''.join(part[0] for part in name.split()[:2]).upper() or 'AZ'
+                avatar.create_oval(4, 4, 104, 104, fill='#EEF4FF', outline='#2563EB', width=2)
+                avatar.create_text(54, 54, text=initials, font=('Segoe UI', 24, 'bold'), fill='#1E40AF')
 
-            # Row 3: Birthday & Days Left / Visit Count
-            r3_frame = tk.Frame(info_box, bg="#f0f9ff")
-            r3_frame.pack(fill=tk.X, padx=10, pady=(2, 6))
-            
-            bday_display = f"DOB: {str(dob_str).split('T')[0]}" if dob_str and dob_str != 'N/A' else "DOB: N/A"
-            if is_bday:
-                bday_display += " 🎂"
-            tk.Label(r3_frame, text=bday_display, font=("Segoe UI", 8, "bold"), fg="#9333ea" if is_bday else "#475569", bg="#f0f9ff").pack(side=tk.LEFT)
+            tk.Label(identity, text=name, font=('Segoe UI', 15, 'bold'), fg='#0F172A', bg='#FFFFFF', wraplength=204, justify=tk.CENTER).pack(fill=tk.X, pady=(0, 3))
+            ref_text = f'CRM {member_code}' if status != 'unmapped' else f'BIO ID  #{biometric_id}'
+            tk.Label(identity, text=ref_text, font=('Consolas', 9, 'bold'), fg='#2563EB', bg='#FFFFFF').pack()
 
-            if status in ('granted', 'already_inside'):
-                tk.Label(r3_frame, text=f"{days_left} Days Left (Visit #{visit_count})", font=("Segoe UI", 8, "bold"), fg="#2563eb", bg="#f0f9ff").pack(side=tk.RIGHT)
-            elif status in ('denied', 'expired'):
-                tk.Label(r3_frame, text=f"Expired ({expired_days}d ago)", font=("Segoe UI", 8, "bold"), fg="#dc2626", bg="#f0f9ff").pack(side=tk.RIGHT)
+            details = tk.Frame(content, bg='#F5F9FF', highlightbackground='#CFE0FF', highlightthickness=1)
+            details.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, pady=3)
 
-            # 6. Action Button Footer
-            if status in ('granted', 'already_inside'):
-                msg_label = tk.Label(
-                    main_frame, 
-                    text=message, 
-                    font=("Segoe UI", 10, "bold"), 
-                    fg="#1e40af", 
-                    bg=bg_color
-                )
-                msg_label.pack(pady=4)
+            fields = [
+                ('PHONE', phone), ('AGE', f'{age} years' if str(age).isdigit() else str(age)),
+                ('MEMBERSHIP', duration), ('PACKAGE', plan),
+                ('EXPIRY', expiry), ('REMAINING', f'{days_left} days' if status in ('granted', 'already_inside') else '—')
+            ]
+            for index, (label, value) in enumerate(fields):
+                row, col = divmod(index, 2)
+                field = tk.Frame(details, bg='#F5F9FF')
+                field.grid(row=row, column=col, sticky='nsew', padx=(12, 8), pady=(12 if row == 0 else 8, 5))
+                tk.Label(field, text=label, font=('Segoe UI', 8, 'bold'), fg='#64748B', bg='#F5F9FF', anchor='w').pack(fill=tk.X)
+                tk.Label(field, text=value, font=('Segoe UI', 10, 'bold'), fg='#0F172A', bg='#F5F9FF', anchor='w', wraplength=205).pack(fill=tk.X, pady=(2, 0))
+            details.grid_columnconfigure(0, weight=1)
+            details.grid_columnconfigure(1, weight=1)
+            details.grid_rowconfigure(2, weight=1)
+
+            footer = tk.Frame(shell, bg='#FFFFFF', height=54)
+            footer.pack(fill=tk.X, padx=14, pady=(8, 10))
+            footer.pack_propagate(False)
+            if status == 'unmapped':
+                def open_add_member():
+                    if not biometric_id.isdigit():
+                        logging.error('[Popup] Cannot open Add Member flow: biometric ID is not numeric.')
+                        return
+                    query = urllib.parse.urlencode({
+                        'action': 'add',
+                        'biometricId': biometric_id,
+                        'deviceUserId': biometric_id,
+                        'deviceId': str(popup_data.get('deviceId') or 'dev_k90_main'),
+                        'source': 'unmapped-punch'
+                    })
+                    import webbrowser
+                    webbrowser.open(f'{CRM_BASE_URL}/dashboard/members?{query}')
+                    root.destroy()
+
+                tk.Label(footer, text=f'NEW MEMBER? Add the member and keep biometric ID #{biometric_id}.', font=('Segoe UI', 8, 'bold'), fg='#475569', bg='#FFFFFF').pack(side=tk.LEFT, padx=4)
+                tk.Button(footer, text='ADD MEMBER  ·  MAP THIS ID', font=('Segoe UI', 9, 'bold'), fg='white', bg='#D97706', activebackground='#B45309', activeforeground='white', bd=0, padx=16, pady=9, cursor='hand2', command=open_add_member).pack(side=tk.RIGHT, padx=4)
             elif status in ('denied', 'expired', 'frozen'):
-                def open_renew():
+                def open_renewal():
                     import webbrowser
-                    member_id = popup_data.get('memberId', '')
-                    url = f"{CRM_BASE_URL}/dashboard/billing/create?mode=renew&id={member_id}" if member_id else f"{CRM_BASE_URL}/dashboard/billing/create"
-                    webbrowser.open(url)
+                    member_id = str(popup_data.get('memberId') or '')
+                    suffix = '?mode=renew&id=' + urllib.parse.quote(member_id) if member_id else ''
+                    webbrowser.open(f'{CRM_BASE_URL}/dashboard/billing/create{suffix}')
                     root.destroy()
 
-                btn = tk.Button(
-                    main_frame, 
-                    text="⚡ RENEW MEMBERSHIP", 
-                    font=("Segoe UI", 9, "bold"), 
-                    fg="#ffffff", 
-                    bg="#dc2626", 
-                    activebackground="#b91c1c",
-                    activeforeground="#ffffff",
-                    bd=0, 
-                    padx=16, 
-                    pady=6, 
-                    cursor="hand2",
-                    command=open_renew
-                )
-                btn.pack(pady=4)
-            else: # unmapped
-                btn_box = tk.Frame(main_frame, bg=bg_color)
-                btn_box.pack(pady=4)
+                tk.Button(footer, text='RENEW MEMBERSHIP', font=('Segoe UI', 9, 'bold'), fg='white', bg='#DC2626', activebackground='#B91C1C', activeforeground='white', bd=0, padx=18, pady=9, cursor='hand2', command=open_renewal).pack(side=tk.RIGHT, padx=4)
+            else:
+                tk.Label(footer, text=f"Punch time  {str(popup_data.get('currentPunchTime') or popup_data.get('timestamp') or '').replace('T', ' ')[:19]}", font=('Segoe UI', 8), fg='#64748B', bg='#FFFFFF').pack(side=tk.LEFT, padx=4)
+                tk.Label(footer, text=f"VISIT  #{popup_data.get('visitCount', 1)}", font=('Segoe UI', 9, 'bold'), fg='#1D4ED8', bg='#FFFFFF').pack(side=tk.RIGHT, padx=4)
 
-                def trigger_automap():
-                    import webbrowser
-                    try:
-                        req = urllib.request.Request("http://localhost:5000/api/devices/auto-map-biometrics", method="POST")
-                        urllib.request.urlopen(req, timeout=3)
-                    except Exception:
-                        pass
-                    webbrowser.open(f"{CRM_BASE_URL}/dashboard/settings/member-migration")
-                    root.destroy()
-
-                def open_mapping():
-                    import webbrowser
-                    webbrowser.open(f"{CRM_BASE_URL}/dashboard/settings/member-migration")
-                    root.destroy()
-
-                btn_auto = tk.Button(
-                    btn_box, 
-                    text="⚡ AUTO MAP", 
-                    font=("Segoe UI", 9, "bold"), 
-                    fg="#ffffff", 
-                    bg="#2563eb", 
-                    activebackground="#1d4ed8",
-                    activeforeground="#ffffff",
-                    bd=0, 
-                    padx=12, 
-                    pady=6, 
-                    cursor="hand2",
-                    command=trigger_automap
-                )
-                btn_auto.pack(side=tk.LEFT, padx=6)
-
-                btn_map = tk.Button(
-                    btn_box, 
-                    text="⚡ MAP MEMBER", 
-                    font=("Segoe UI", 9, "bold"), 
-                    fg="#ffffff", 
-                    bg="#d97706", 
-                    activebackground="#b45309",
-                    activeforeground="#ffffff",
-                    bd=0, 
-                    padx=12, 
-                    pady=6, 
-                    cursor="hand2",
-                    command=open_mapping
-                )
-                btn_map.pack(side=tk.LEFT, padx=6)
-
-            # Auto close after 7 seconds
-            root.after(7000, lambda: root.destroy() if root.winfo_exists() else None)
-            
+            root.after(45000 if status == 'unmapped' else (12000 if status in ('denied', 'expired', 'frozen') else 8000), lambda: root.destroy() if root.winfo_exists() else None)
             root.mainloop()
-        except Exception as ex:
-            logging.error(f"[Popup Thread Error]: {ex}")
+        except Exception as exc:
+            logging.error(f'[Popup Thread Error]: {exc}')
 
-    t = threading.Thread(target=_gui_thread, daemon=True)
-    t.start()
+    threading.Thread(target=_gui_thread, daemon=True).start()
 
 
-# Standalone Test
-if __name__ == "__main__":
+if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
-    print("Testing Popup...")
     show_attendance_popup({
-        'status': 'unknown',
-        'memberName': 'Unmapped Biometric User #1145',
-        'memberCode': 'ID #1145',
-        'plan': 'Unmapped Biometric ID',
-        'deviceId': 'Main Gate',
-        'biometricId': '1145'
+        'status': 'unmapped', 'memberName': 'Unmapped Biometric User #2321',
+        'memberCode': 'ID #2321', 'biometricId': '2321', 'deviceName': 'Main Gate'
     })
-    time.sleep(3)

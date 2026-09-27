@@ -1,7 +1,9 @@
 import { Request, Response } from 'express';
-import { db } from '../firebase';
+import { db, getFirestoreDb } from '../firebase';
 import { exec } from 'child_process';
 import os from 'os';
+import net from 'net';
+import { randomUUID } from 'crypto';
 
 let latestPunchEvent: any = null;
 
@@ -166,11 +168,17 @@ export const createCheckIn = async (req: Request, res: Response) => {
       return res.status(403).json({ success: false, access: 'denied', status: 'denied', reason, error: `Access Denied: ${reason}` });
     }
 
-    // Direct hardware relay unlock signal for verified check-in
-    exec(`python -c "from zk import ZK; zk=ZK('192.168.18.11', port=4370, timeout=3); conn=zk.connect(); conn.unlock(30); conn.disconnect()"`, (err) => {
-      if (err) console.warn('[CheckIn Gate Unlock Hardware Exec Warning]:', err.message);
-      else console.log('[CheckIn Gate Unlock Success] Gate relay unlocked for member checkin.');
-    });
+    // Biometric punches are unlocked by the persistent EasyBio service after
+    // its authoritative membership check. Avoid opening a second session and
+    // sending a duplicate pulse for those events.
+    if (req.body?.method !== 'ESSL K90 Pro Biometric') {
+      const deviceIp = process.env.EASYBIO_DEVICE_IP || '192.168.18.11';
+      const devicePort = Number(process.env.EASYBIO_DEVICE_PORT || 4370);
+      exec(`python -c "from zk import ZK; zk=ZK('${deviceIp}', port=${devicePort}, timeout=3); conn=zk.connect(); conn.unlock(3); conn.disconnect()"`, (err) => {
+        if (err) console.warn('[CheckIn Gate Unlock Hardware Exec Warning]:', err.message);
+        else console.log('[CheckIn Gate Unlock Success] Gate relay unlocked for member checkin.');
+      });
+    }
 
     res.status(201).json({ success: true, log, memberName: member.name });
   } catch (error: any) {
@@ -212,15 +220,25 @@ export function getLocalIpAddress(): string {
 export const getGateStatus = async (req: Request, res: Response) => {
   try {
     const deviceIp = process.env.EASYBIO_DEVICE_IP || '192.168.18.11';
-    const devicePort = process.env.EASYBIO_DEVICE_PORT || '4370';
+    const devicePort = Number(process.env.EASYBIO_DEVICE_PORT || 4370);
     const serverIp = getLocalIpAddress();
     const serverPort = process.env.PORT || '8000';
+    const connected = await new Promise<boolean>((resolve) => {
+      const socket = new net.Socket();
+      let result = false;
+      socket.setTimeout(1500);
+      socket.once('connect', () => { result = true; socket.destroy(); });
+      socket.once('error', () => socket.destroy());
+      socket.once('timeout', () => socket.destroy());
+      socket.once('close', () => resolve(result));
+      socket.connect(devicePort, deviceIp);
+    });
 
     res.json({
       device: 'EasyBio Access Control',
       ip: deviceIp,
       port: devicePort,
-      connected: true,
+      connected,
       serverIp,
       serverPort,
       accessUrl: `http://${serverIp}:${serverPort}/gate-control`,
@@ -235,56 +253,103 @@ export const triggerGateUnlock = async (req: Request, res: Response) => {
   const now = Date.now();
   if (now - lastGateUnlockTime < 1000) {
     console.log('[GATE] Cooldown active. Rejecting rapid repeat unlock request.');
-    return res.status(429).json({
-      success: false,
-      message: 'Gate unlock in progress. Please wait 1 second before opening again.'
-    });
+    return res.status(429).json({ success: false, status: 'COOLDOWN', message: 'Gate unlock in progress. Please wait 1 second before opening again.' });
   }
-  lastGateUnlockTime = now;
 
   const deviceIp = process.env.EASYBIO_DEVICE_IP || '192.168.18.11';
-  const devicePort = process.env.EASYBIO_DEVICE_PORT || '4370';
+  const devicePort = Number(process.env.EASYBIO_DEVICE_PORT || 4370);
+  const deviceId = process.env.EASYBIO_DEVICE_ID || 'dev_k90_main';
+  const durationSeconds = 15;
+  const requestId = randomUUID();
   const authenticatedUser = (req as any).user?.email || (req as any).user?.name || (req as any).user?.uid || 'Staff / Authorized LAN User';
+  const firestore = getFirestoreDb();
+  console.log('[GATE] Request received from ' + authenticatedUser);
+  console.log('[GATE] Device IP: ' + deviceIp);
+  console.log('[GATE] Device Port: ' + devicePort);
+  console.log('[GATE] Connecting through the existing local device service...');
+  if (!firestore) {
+    console.error('[GATE ERROR] Firebase/device service bridge is unavailable.');
+    return res.status(503).json({ success: false, status: 'DEVICE_SERVICE_UNAVAILABLE', message: 'Local EasyBio device service is unavailable.' });
+  }
 
-  console.log('[GATE] Immediate unlock request received from:', authenticatedUser);
-
-  // Send INSTANT HTTP 200 success response to UI (< 50ms) so user gets immediate 1-sec feedback
-  res.json({
-    success: true,
-    message: 'Door Unlocked for 15 Seconds! (Hardware Relay Triggered)',
-    deviceIp,
-    devicePort,
-    timestamp: new Date().toLocaleTimeString('en-IN')
-  });
-
-  // Asynchronously execute hardware relay unlock in background for 15 seconds
+  const deviceRef = firestore.collection('devices').doc(deviceId);
   try {
-    let deviceId = 'dev_k90_main';
-    try {
-      db.updateDevice(deviceId, { unlockPending: true }).catch(() => {});
-      db.addDeviceLog({
-        deviceId,
-        deviceName: 'Access Control',
-        level: 'SUCCESS',
-        message: `[Access Control] Manual 15-second gate unlock signal dispatched to EasyBio (${deviceIp}:${devicePort}).`
+    const deviceSnap = await deviceRef.get();
+    if (!deviceSnap.exists) {
+      console.error('[GATE ERROR] Existing device record ' + deviceId + ' is missing.');
+      return res.status(503).json({ success: false, status: 'DEVICE_SERVICE_UNAVAILABLE', message: 'The EasyBio device is not registered with the local device service.' });
+    }
+
+    console.log('[GATE] Connected to local device service.');
+    console.log('[GATE] Sending relay/door unlock command...');
+    lastGateUnlockTime = now;
+    await deviceRef.set({
+      unlockPending: true,
+      unlockRequestId: requestId,
+      unlockDurationSeconds: durationSeconds,
+      unlockStatus: 'pending',
+      unlockRequestedAt: new Date().toISOString(),
+      unlockRequestedBy: authenticatedUser,
+      unlockExpiresAt: new Date(Date.now() + 30000).toISOString()
+    }, { merge: true });
+
+    const result = await new Promise<{ status: 'success' | 'failed' | 'timeout'; message?: string }>((resolve) => {
+      let settled = false;
+      let unsubscribe: (() => void) | undefined;
+      const finish = (value: { status: 'success' | 'failed' | 'timeout'; message?: string }) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        if (unsubscribe) unsubscribe();
+        resolve(value);
+      };
+      const timer = setTimeout(() => finish({ status: 'timeout', message: 'No relay command acknowledgement was received from the local device service.' }), 20000);
+      unsubscribe = deviceRef.onSnapshot((snapshot) => {
+        const data = snapshot.data();
+        if (!data || data.unlockRequestId !== requestId) return;
+        if (data.unlockStatus === 'success') finish({ status: 'success', message: data.unlockResult || 'Device acknowledged the relay command.' });
+        if (data.unlockStatus === 'failed') finish({ status: 'failed', message: data.unlockError || 'Device rejected the relay command.' });
+      }, (error) => finish({ status: 'failed', message: 'Device acknowledgement read failed: ' + error.message }));
+    });
+
+    if (result.status !== 'success') {
+      console.error('[GATE ERROR] ' + result.status.toUpperCase() + ': ' + result.message);
+      await deviceRef.set({
+        unlockPending: false,
+        unlockStatus: result.status,
+        unlockError: result.message,
+        unlockExpiresAt: new Date().toISOString()
+      }, { merge: true }).catch(() => {});
+      await db.addDeviceLog({
+        deviceId, deviceName: 'Access Control', level: 'ERROR',
+        message: '[GATE ERROR] Relay command ' + result.status + ': ' + result.message
       }).catch(() => {});
-    } catch (e) {}
+      return res.status(result.status === 'timeout' ? 504 : 502).json({
+        success: false, status: result.status === 'timeout' ? 'DEVICE_ACK_TIMEOUT' : 'RELAY_COMMAND_FAILED',
+        message: result.message, deviceIp, devicePort
+      });
+    }
 
-    // Direct physical hardware relay unlock signal for 15 seconds (150 = 15s in pyzk)
-    const pyCmd = `py -c "from zk import ZK; zk=ZK('${deviceIp}', port=${devicePort}, timeout=2); conn=zk.connect(); conn.unlock(150); conn.unlock(15); conn.disconnect()" || python -c "from zk import ZK; zk=ZK('${deviceIp}', port=${devicePort}, timeout=2); conn=zk.connect(); conn.unlock(150); conn.unlock(15); conn.disconnect()"`;
-
-    exec(pyCmd, (err, stdout, stderr) => {
-      if (err) {
-        console.warn('[GATE] Background pyzk socket notice:', err.message);
-      } else {
-        console.log('[GATE] Device Hardware Success = Door Unlocked for 15 Seconds.');
-      }
+    console.log('[GATE] Device response: ' + result.message);
+    console.log('[GATE] Relay command result: SUCCESS');
+    await db.addDeviceLog({
+      deviceId, deviceName: 'Access Control', level: 'SUCCESS',
+      message: '[GATE] EasyBio acknowledged ' + durationSeconds + '-second relay command (' + deviceIp + ':' + devicePort + ').'
+    });
+    return res.json({
+      success: true, status: 'UNLOCK_COMMAND_ACKNOWLEDGED',
+      message: 'EasyBio acknowledged the ' + durationSeconds + '-second gate relay command.',
+      deviceIp, devicePort, durationSeconds, timestamp: new Date().toLocaleTimeString('en-IN')
     });
   } catch (error: any) {
-    console.error('[GATE] Background dispatch notice:', error.message);
+    console.error('[GATE ERROR] ' + error.message);
+    await db.addDeviceLog({
+      deviceId, deviceName: 'Access Control', level: 'ERROR',
+      message: '[GATE ERROR] ' + error.message
+    }).catch(() => {});
+    if (!res.headersSent) return res.status(502).json({ success: false, status: 'CONNECTION_FAILED', message: error.message, deviceIp, devicePort });
   }
 };
-
 export const getAccessLogs = async (req: Request, res: Response) => {
   try {
     const list = await db.getAccessLogs();
@@ -302,4 +367,3 @@ export const getDoorStatus = async (req: Request, res: Response) => {
     res.status(500).json({ error: error.message });
   }
 };
-

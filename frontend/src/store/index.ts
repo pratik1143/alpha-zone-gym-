@@ -328,8 +328,17 @@ export const useGymStore = create<GymStore>((set, get) => ({
       const res = await API.get('/members');
       const rawData = (res.data && Array.isArray(res.data)) ? res.data : [];
       if (rawData.length > 0) {
+        const seenIds = new Set<string>();
         const seen = new Set<string>();
         const unique = (rawData as any[]).filter(m => {
+          if (!m) return false;
+          if (m.id) {
+            const idKey = String(m.id).trim();
+            if (idKey) {
+              if (seenIds.has(idKey)) return false;
+              seenIds.add(idKey);
+            }
+          }
           const key = (m.memberId && m.memberId !== 'AZ-2026-0000')
             ? `mid_${m.memberId.trim()}`
             : (m.phone ? `phone_${m.phone.replace(/\D/g, '')}` : `id_${m.id}`);
@@ -375,8 +384,17 @@ export const useGymStore = create<GymStore>((set, get) => ({
         querySnapshot.forEach((docSnap) => {
           fsMembers.push({ id: docSnap.id, ...docSnap.data() });
         });
+        const seenIds = new Set<string>();
         const seen = new Set<string>();
         const unique = fsMembers.filter(m => {
+          if (!m) return false;
+          if (m.id) {
+            const idKey = String(m.id).trim();
+            if (idKey) {
+              if (seenIds.has(idKey)) return false;
+              seenIds.add(idKey);
+            }
+          }
           const key = (m.memberId && m.memberId !== 'AZ-2026-0000')
             ? `mid_${m.memberId.trim()}`
             : (m.phone ? `phone_${m.phone.replace(/\D/g, '')}` : `id_${m.id}`);

@@ -56,36 +56,83 @@ app.post('/api/devices/biometric/enroll-fingerprint', startEnrollFingerprint);
 
 app.get('/api/gate/roster', async (req: express.Request, res: express.Response) => {
   try {
-    let members: any[] = [];
-    let employees: any[] = [];
-    
-    try {
-      members = await db.getMembers();
-    } catch (e) {
-      const firestore = getFirestoreDb();
-      if (firestore) {
-        const snap = await firestore.collection('members').get();
-        members = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const firestore = getFirestoreDb();
+    if (!firestore) return res.status(503).json({ success: false, error: 'CRM/Firebase connection is unavailable.' });
+    const deviceId = process.env.EASYBIO_DEVICE_ID || 'dev_k90_main';
+    const [memberSnap, employeeSnap, deviceUserSnap, deviceSnap] = await Promise.all([
+      firestore.collection('members').get(),
+      firestore.collection('employees').get(),
+      firestore.collection('deviceUsers').where('deviceId', '==', deviceId).get(),
+      firestore.collection('devices').doc(deviceId).get()
+    ]);
+    const members = memberSnap.docs
+      .filter(doc => !doc.data().isDeleted && !doc.data().deletedAt)
+      .map(doc => {
+        const member = doc.data();
+        return {
+          id: doc.id,
+          memberId: member.memberId || '',
+          name: member.name || '',
+          phone: member.phone || '',
+          biometricId: member.biometricId ?? null,
+          deviceUserId: member.deviceUserId ?? null,
+          fingerprintStatus: member.fingerprintStatus || member.fingerprint?.status || '',
+          fingerprintEnrolled: member.fingerprintEnrolled ?? member.fingerprint?.enrolled ?? false,
+          biometricStatus: member.biometricStatus || member.biometric?.status || ''
+        };
+      });
+    const employees = employeeSnap.docs.map(doc => {
+      const employee = doc.data();
+      const bioId = employee.biometricId ?? null;
+      const derivedEmpId = employee.employeeId || (bioId ? `EMP-${bioId}` : (doc.id.startsWith('emp_') ? `EMP-${doc.id.replace('emp_', '')}` : ''));
+      return {
+        id: doc.id,
+        name: employee.name || '',
+        employeeId: derivedEmpId,
+        status: employee.status || 'Active',
+        phone: employee.phone || '',
+        role: employee.role || '',
+        biometricId: bioId,
+        deviceUserId: employee.deviceUserId ?? (bioId ? String(bioId) : null),
+        fingerprintStatus: employee.fingerprintStatus || employee.fingerprint?.status || '',
+        fingerprintEnrolled: employee.fingerprintEnrolled ?? employee.fingerprint?.enrolled ?? false,
+        biometricStatus: employee.biometricStatus || employee.biometric?.status || ''
+      };
+    });
+    const deviceUsers = deviceUserSnap.docs.map(doc => {
+      const user = doc.data();
+      return {
+        userId: user.userId,
+        deviceId: user.deviceId,
+        deviceName: user.deviceName,
+        userName: user.userName,
+        enrollmentStatus: user.enrollmentStatus,
+        fingerprintsCount: user.fingerprintsCount,
+        lastActivity: user.lastActivity
+      };
+    });
+    const device = deviceSnap.exists ? deviceSnap.data() : null;
+    res.json({
+      success: true, members, employees, deviceUsers,
+      device: {
+        id: deviceId,
+        ip: process.env.EASYBIO_DEVICE_IP || '192.168.18.11',
+        port: Number(process.env.EASYBIO_DEVICE_PORT || 4370),
+        status: device?.status || 'unknown',
+        lastSync: device?.lastSync || null
       }
-    }
-
-    try {
-      const firestore = getFirestoreDb();
-      if (firestore) {
-        const snap = await firestore.collection('employees').get();
-        employees = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      }
-    } catch (e) {}
-
-    res.json({ success: true, members, employees });
+    });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    console.error('[CRM ROSTER ERROR] ' + err.message);
+    res.status(503).json({ success: false, error: 'Could not load the live CRM roster: ' + err.message });
   }
 });
 
 // Dedicated Standalone LAN Gate Control & Biometric Enrollment Web Application Served directly on Port 8000 / 5000
 const renderGateHtml = (req: express.Request, res: express.Response) => {
   const lanIp = getLocalIpAddress();
+  const deviceIp = process.env.EASYBIO_DEVICE_IP || '192.168.18.11';
+  const devicePort = Number(process.env.EASYBIO_DEVICE_PORT || 4370);
   const crmUrl = "https://www.alphazonegym.in/dashboard";
   
   const html = `<!DOCTYPE html>
@@ -142,9 +189,9 @@ const renderGateHtml = (req: express.Request, res: express.Response) => {
         <div class="flex items-center gap-2 bg-slate-800/90 border border-slate-700 px-3.5 py-1.5 rounded-full shadow-inner">
           <span class="relative flex h-2.5 w-2.5">
             <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-            <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+          <span id="deviceStatusDot" class="relative inline-flex rounded-full h-2.5 w-2.5 bg-slate-500"></span>
           </span>
-          <span class="text-xs font-mono font-black text-emerald-400">
+          <span id="deviceStatusText" class="text-xs font-mono font-black text-slate-300">
             ${lanIp}
           </span>
         </div>
@@ -189,7 +236,7 @@ const renderGateHtml = (req: express.Request, res: express.Response) => {
         </div>
         <div>
           <div class="text-base font-black text-white">EasyBio Biometric</div>
-          <div class="text-xs font-mono text-blue-400 font-bold mt-1 bg-blue-950/60 px-2 py-0.5 rounded-md inline-block border border-blue-800">192.168.18.11:4370</div>
+          <div id="deviceEndpointText" class="text-xs font-mono text-blue-400 font-bold mt-1 bg-blue-950/60 px-2 py-0.5 rounded-md inline-block border border-blue-800">Checking device...</div>
         </div>
       </div>
 
@@ -280,7 +327,10 @@ const renderGateHtml = (req: express.Request, res: express.Response) => {
             <button onclick="setFilter('client', 'enrolled')" id="btnFilterClientEnrolled" class="px-3 py-1.5 rounded-lg text-[11px] font-black uppercase transition-all text-slate-400 hover:text-white">Enrolled</button>
             <button onclick="setFilter('client', 'all')" id="btnFilterClientAll" class="px-3 py-1.5 rounded-lg text-[11px] font-black uppercase transition-all text-slate-400 hover:text-white">All</button>
           </div>
+        <div class="flex items-center gap-2">
           <span id="clientCountText" class="text-[11px] text-slate-400 font-mono">Loading members...</span>
+          <button onclick="refreshAll()" class="px-3 py-1.5 rounded-lg bg-slate-800 text-slate-200 text-[10px] font-black uppercase border border-slate-700">Refresh</button>
+        </div>
         </div>
       </div>
 
@@ -331,7 +381,10 @@ const renderGateHtml = (req: express.Request, res: express.Response) => {
             <button onclick="setFilter('employee', 'enrolled')" id="btnFilterEmpEnrolled" class="px-3 py-1.5 rounded-lg text-[11px] font-black uppercase transition-all text-slate-400 hover:text-white">Enrolled</button>
             <button onclick="setFilter('employee', 'all')" id="btnFilterEmpAll" class="px-3 py-1.5 rounded-lg text-[11px] font-black uppercase transition-all text-slate-400 hover:text-white">All</button>
           </div>
-          <span id="employeeCountText" class="text-[11px] text-slate-400 font-mono">Loading staff...</span>
+          <div class="flex items-center gap-2">
+            <span id="employeeCountText" class="text-[11px] text-slate-400 font-mono">Loading staff...</span>
+            <button onclick="refreshAll()" class="px-3 py-1.5 rounded-lg bg-slate-800 text-slate-200 text-[10px] font-black uppercase border border-slate-700">Refresh</button>
+          </div>
         </div>
       </div>
 
@@ -374,6 +427,7 @@ const renderGateHtml = (req: express.Request, res: express.Response) => {
     let filterEmployee = 'pending';
     let membersData = [];
     let employeesData = [];
+    let deviceUsersData = [];
     let countdownInterval = null;
 
     function switchTab(tab) {
@@ -394,15 +448,70 @@ const renderGateHtml = (req: express.Request, res: express.Response) => {
     async function fetchRoster() {
       try {
         const res = await fetch('/api/gate/roster');
-        const data = await res.json();
-        if (data.success) {
-          membersData = data.members || [];
-          employeesData = data.employees || [];
-          renderRoster();
-        }
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.success) throw new Error(data.error || 'CRM roster request failed.');
+        membersData = data.members || [];
+        employeesData = data.employees || [];
+        deviceUsersData = data.deviceUsers || [];
+        renderRoster();
+        return true;
       } catch (err) {
-        console.error('Failed to fetch gate roster:', err);
+        document.getElementById('clientCountText').innerText = 'CRM CONNECTION FAILED';
+        document.getElementById('employeeCountText').innerText = String(err && err.message || '').includes('Could not load the live CRM roster') ? 'EMPLOYEE DATA FETCH FAILED' : 'CRM CONNECTION ERROR';
+        const message = err && err.message ? err.message : 'CRM connection failed.';
+        for (const listId of ['clientRosterList', 'employeeRosterList']) {
+          const errorBox = document.createElement('div');
+          errorBox.className = 'p-8 text-center text-xs text-rose-300 bg-rose-950/40 rounded-2xl border border-rose-800';
+          errorBox.textContent = message;
+          document.getElementById(listId).replaceChildren(errorBox);
+        }
+        console.error('Failed to fetch live CRM roster:', err);
+        return false;
       }
+    }
+
+    async function refreshDeviceStatus() {
+      try {
+        const response = await fetch('/api/gate/status');
+        const status = await response.json();
+        const online = response.ok && status.connected === true;
+        document.getElementById('deviceStatusDot').className = 'relative inline-flex rounded-full h-2.5 w-2.5 ' + (online ? 'bg-emerald-500' : 'bg-rose-500');
+        document.getElementById('deviceStatusText').innerText = status.serverIp + ' · ' + (online ? 'DEVICE ONLINE' : 'DEVICE OFFLINE');
+        document.getElementById('deviceEndpointText').innerText = status.ip + ':' + status.port;
+      } catch (error) {
+        document.getElementById('deviceStatusDot').className = 'relative inline-flex rounded-full h-2.5 w-2.5 bg-rose-500';
+        document.getElementById('deviceStatusText').innerText = 'DEVICE STATUS FAILED';
+        document.getElementById('deviceEndpointText').innerText = 'Unable to read device configuration';
+      }
+    }
+
+    async function refreshAll() {
+      const employeeCount = document.getElementById('employeeCountText');
+      const employeeList = document.getElementById('employeeRosterList');
+      employeeCount.innerText = 'Refreshing...';
+      employeeList.innerHTML = '<div class="p-8 text-center text-xs text-blue-200 bg-slate-800/40 rounded-2xl border border-slate-800">Fetching CRM employees...</div>';
+      await refreshDeviceStatus();
+      employeeCount.innerText = 'Reconciling device users and CRM enrollment...';
+      employeeList.innerHTML = '<div class="p-8 text-center text-xs text-blue-200 bg-slate-800/40 rounded-2xl border border-slate-800">Updating enrollment status...</div>';
+      await fetchRoster();
+    }
+
+    function hasFingerprintTemplate(item) {
+      const bioId = getCleanNumericId(item);
+      const deviceUser = deviceUsersData.find(user => String(user.userId).trim() === bioId);
+      if (deviceUser) return Number(deviceUser.fingerprintsCount || 0) > 0;
+      const status = String(item.fingerprintStatus || '').toUpperCase();
+      return item.fingerprintEnrolled === true || status === 'ENROLLED';
+    }
+
+    function isEmployeeEnrollmentComplete(employee) {
+      const crmStatus = String(employee.fingerprintStatus || employee.fingerprint?.status || employee.biometricStatus || '').toUpperCase();
+      return employee.fingerprintEnrolled === true || crmStatus === 'ENROLLED';
+    }
+
+    function hasMappedDeviceUser(item) {
+      const bioId = getCleanNumericId(item);
+      return deviceUsersData.some(user => String(user.userId).trim() === bioId);
     }
 
     function setFilter(type, filter) {
@@ -415,28 +524,29 @@ const renderGateHtml = (req: express.Request, res: express.Response) => {
         filterEmployee = filter;
         document.getElementById('btnFilterEmpPending').className = filter === 'pending' ? 'px-3 py-1.5 rounded-lg text-[11px] font-black uppercase transition-all bg-amber-500 text-slate-950' : 'px-3 py-1.5 rounded-lg text-[11px] font-black uppercase transition-all text-slate-400 hover:text-white';
         document.getElementById('btnFilterEmpEnrolled').className = filter === 'enrolled' ? 'px-3 py-1.5 rounded-lg text-[11px] font-black uppercase transition-all bg-emerald-500 text-slate-950' : 'px-3 py-1.5 rounded-lg text-[11px] font-black uppercase transition-all text-slate-400 hover:text-white';
-        document.getElementById('btnFilterEmpAll').className = filter === 'all' ? 'px-3 py-1.5 rounded-lg text-[11px] font-black uppercase transition-all bg-blue-600 text-white' : 'px-3 py-1.5 rounded-lg text-[11px] font-black uppercase transition-all text-slate-400 hover    function getCleanNumericId(item) {
-      if (!item) return '0';
-      if (item.biometricId !== undefined && item.biometricId !== null && item.biometricId !== '') {
-        const bioStr = String(item.biometricId).trim();
-        if (/^\d+$/.test(bioStr)) return bioStr;
-        const digits = bioStr.replace(/\D/g, '');
-        if (digits) {
-          if (digits.length >= 7 && digits.startsWith('2026')) {
-            return String(parseInt(digits.substring(4), 10));
-          }
-          return String(parseInt(digits, 10));
-        }
+        document.getElementById('btnFilterEmpAll').className = filter === 'all' ? 'px-3 py-1.5 rounded-lg text-[11px] font-black uppercase transition-all bg-blue-600 text-white' : 'px-3 py-1.5 rounded-lg text-[11px] font-black uppercase transition-all text-slate-400 hover:text-white';
       }
-      const rawId = String(item.memberId || item.id || '').trim();
-      const digits = rawId.replace(/\D/g, '');
-      if (digits) {
-        if (digits.length >= 7 && digits.startsWith('2026')) {
-          return String(parseInt(digits.substring(4), 10));
-        }
-        return String(parseInt(digits, 10));
+    }
+
+    function getCleanNumericId(item) {
+      if (!item) return '';
+      if (item.biometricId !== undefined && item.biometricId !== null) {
+        const bioId = String(item.biometricId).trim();
+        if (/^\\d{1,5}$/.test(bioId) && Number(bioId) > 0) return bioId;
       }
-      return '0';
+      if (item.deviceUserId) {
+        const devId = String(item.deviceUserId).trim();
+        if (/^\\d{1,5}$/.test(devId) && Number(devId) > 0) return devId;
+      }
+      if (item.employeeId) {
+        const match = String(item.employeeId).match(/\\d+/);
+        if (match && Number(match[0]) > 0) return match[0];
+      }
+      if (item.id && typeof item.id === 'string' && item.id.startsWith('emp_')) {
+        const match = item.id.match(/\\d+/);
+        if (match && Number(match[0]) > 0) return match[0];
+      }
+      return '';
     }
 
     function renderRoster() {
@@ -446,35 +556,38 @@ const renderGateHtml = (req: express.Request, res: express.Response) => {
         const bioId = getCleanNumericId(m);
         const name = String(m.name || '').toLowerCase();
         const phone = String(m.phone || '');
-        const matches = !qClient || bioId.includes(qClient) || name.includes(qClient) || phone.includes(qClient);
-        const isEnrolled = m.fingerprintStatus === 'ENROLLED' || m.fingerprintEnrolled === true;
+        const memberId = String(m.memberId || m.id || '').toLowerCase();
+        const matches = !qClient || bioId.includes(qClient) || memberId.includes(qClient) || name.includes(qClient) || phone.includes(qClient);
+        const isEnrolled = hasFingerprintTemplate(m);
         if (!matches) return false;
         if (filterClient === 'pending') return !isEnrolled;
         if (filterClient === 'enrolled') return isEnrolled;
         return true;
       });
 
-      document.getElementById('clientCountText').innerText = 'Showing ' + filteredMembers.length + ' members';
+      const totalPendingClients = membersData.filter(m => !hasFingerprintTemplate(m)).length;
+      document.getElementById('clientCountText').innerText = 'TOTAL PENDING: ' + totalPendingClients + ' · SHOWING ' + filteredMembers.length;
       const clientList = document.getElementById('clientRosterList');
       if (filteredMembers.length === 0) {
         clientList.innerHTML = '<div class="p-8 text-center text-xs text-slate-500 bg-slate-800/40 rounded-2xl border border-slate-800">No members found matching selected filter & search keyword.</div>';
       } else {
         clientList.innerHTML = filteredMembers.map(m => {
           const bioId = getCleanNumericId(m);
-          const isEnrolled = m.fingerprintStatus === 'ENROLLED' || m.fingerprintEnrolled === true;
+          const isEnrolled = hasFingerprintTemplate(m);
+          const isMapped = hasMappedDeviceUser(m);
           return \`
             <div class="p-3.5 rounded-2xl border bg-slate-800/60 border-slate-700/60 flex items-center justify-between hover:border-slate-700 transition-all">
               <div class="flex items-center gap-3">
                 <div class="w-10 h-10 rounded-xl bg-slate-900 border border-slate-700 flex items-center justify-center font-mono text-xs font-black text-blue-400 shrink-0">
-                  #\${bioId}
+                  #\${bioId || '—'}
                 </div>
                 <div>
                   <div class="text-xs font-black text-white">\${m.name || 'Member'} <span class="text-[10px] font-mono text-slate-400">(\${m.phone || 'No phone'})</span></div>
-                  <div class="text-[11px] text-slate-400 mt-0.5">\${m.plan || 'Standard'} • <span class="\${isEnrolled ? 'text-emerald-400 font-bold' : 'text-amber-400 font-bold'}">\${isEnrolled ? '✓ Enrolled' : 'Pending'}</span></div>
+                  <div class="text-[11px] text-slate-400 mt-0.5">Fingerprint: <span class="\${isEnrolled ? 'text-emerald-400 font-bold' : 'text-amber-400 font-bold'}">\${isEnrolled ? 'ENROLLED' : 'NOT ENROLLED'}</span> • Device: <span class="\${isMapped ? 'text-emerald-400 font-bold' : 'text-slate-400'}">\${isMapped ? 'MAPPED' : 'NOT MAPPED'}</span></div>
                 </div>
               </div>
-              <button onclick="triggerEnroll('\${m.id}', '\${bioId}', '\${encodeURIComponent(m.name || '')}', false)" class="px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider border cursor-pointer \${isEnrolled ? 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700' : 'bg-blue-600 hover:bg-blue-500 text-white border-blue-500 shadow-md'}">
-                \${isEnrolled ? 'Re-Enroll' : 'Start Enroll'}
+              <button \${bioId ? '' : 'disabled'} onclick="triggerEnroll('\${m.id}', '\${bioId}', '\${encodeURIComponent(m.name || '')}', false)" class="px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider border cursor-pointer \${bioId ? (isEnrolled ? 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700' : 'bg-blue-600 hover:bg-blue-500 text-white border-blue-500 shadow-md') : 'bg-slate-800 text-slate-500 border-slate-700 cursor-not-allowed'}">
+                \${bioId ? (isEnrolled ? 'Re-Enroll' : 'Start Enroll') : 'Assign Biometric ID'}
               </button>
             </div>
           \`;
@@ -486,10 +599,12 @@ const renderGateHtml = (req: express.Request, res: express.Response) => {
       const filteredEmployees = employeesData.filter(e => {
         const bioId = getCleanNumericId(e);
         const name = String(e.name || '').toLowerCase();
+        const employeeId = String(e.employeeId || '').toLowerCase();
         const role = String(e.role || '').toLowerCase();
         const phone = String(e.phone || '');
-        const matches = !qEmp || bioId.includes(qEmp) || name.includes(qEmp) || role.includes(qEmp) || phone.includes(qEmp);
-        const isEnrolled = e.fingerprintStatus === 'ENROLLED' || e.fingerprintEnrolled === true;
+        const crmId = String(e.id || '').toLowerCase();
+        const matches = !qEmp || bioId.includes(qEmp) || employeeId.includes(qEmp) || crmId.includes(qEmp) || name.includes(qEmp) || role.includes(qEmp) || phone.includes(qEmp);
+        const isEnrolled = isEmployeeEnrollmentComplete(e);
         if (!matches) return false;
         if (filterEmployee === 'pending') return !isEnrolled;
         if (filterEmployee === 'enrolled') return isEnrolled;
@@ -503,20 +618,23 @@ const renderGateHtml = (req: express.Request, res: express.Response) => {
       } else {
         empList.innerHTML = filteredEmployees.map(e => {
           const bioId = getCleanNumericId(e);
-          const isEnrolled = e.fingerprintStatus === 'ENROLLED' || e.fingerprintEnrolled === true;
+          const isEnrolled = isEmployeeEnrollmentComplete(e);
+          const hasDeviceTemplate = hasFingerprintTemplate(e);
+          const employeeCode = e.employeeId || (bioId ? 'EMP-' + bioId : e.id);
           return \`
             <div class="p-3.5 rounded-2xl border bg-slate-800/60 border-slate-700/60 flex items-center justify-between hover:border-slate-700 transition-all">
               <div class="flex items-center gap-3">
                 <div class="w-10 h-10 rounded-xl bg-slate-900 border border-slate-700 flex items-center justify-center font-mono text-xs font-black text-purple-400 shrink-0">
-                  #\${bioId}
+                  #\${bioId || '—'}
                 </div>
                 <div>
                   <div class="text-xs font-black text-white">\${e.name || 'Staff'} <span class="text-[10px] font-mono text-purple-300">(\${e.role || 'Staff'})</span></div>
-                  <div class="text-[11px] text-slate-400 mt-0.5">\${e.phone || 'No Phone'} • <span class="\${isEnrolled ? 'text-emerald-400 font-bold' : 'text-amber-400 font-bold'}">\${isEnrolled ? '✓ Enrolled' : 'Pending'}</span></div>
+                  <div class="text-[10px] font-mono text-slate-400 mt-0.5">\${employeeCode} · \${e.status || 'Status unavailable'}</div>
+                  <div class="text-[11px] text-slate-400 mt-0.5">\${e.phone || 'No Phone'} • <span class="\${isEnrolled ? 'text-emerald-400 font-bold' : 'text-amber-400 font-bold'}">\${isEnrolled ? '✓ Enrolled' : (hasDeviceTemplate ? 'Pending · device template needs CRM verification' : 'Pending')}</span></div>
                 </div>
               </div>
-              <button onclick="triggerEnroll('\${e.id}', '\${bioId}', '\${encodeURIComponent(e.name || '')}', true)" class="px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider border cursor-pointer \${isEnrolled ? 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700' : 'bg-purple-600 hover:bg-purple-500 text-white border-purple-500 shadow-md'}">
-                \${isEnrolled ? 'Re-Enroll' : 'Start Enroll'}
+              <button \${bioId ? '' : 'disabled'} onclick="triggerEnroll('\${e.id}', '\${bioId}', '\${encodeURIComponent(e.name || '')}', true)" class="px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider border cursor-pointer \${bioId ? (isEnrolled ? 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700' : 'bg-purple-600 hover:bg-purple-500 text-white border-purple-500 shadow-md') : 'bg-slate-800 text-slate-500 border-slate-700 cursor-not-allowed'}">
+                \${bioId ? (isEnrolled ? 'Re-Enroll' : 'Start Enroll') : 'Assign Biometric ID'}
               </button>
             </div>
           \`;
@@ -524,7 +642,7 @@ const renderGateHtml = (req: express.Request, res: express.Response) => {
       }
     }
 
-    async function triggerEnroll(targetId, bioId, encodedName, isEmployee) {
+    async function triggerEnroll(targetId, bioId, encodedName, isEmployee, retryCrmSync = false) {
       const name = decodeURIComponent(encodedName);
       const prefix = isEmployee ? 'Employee' : 'Client';
       const banner = document.getElementById(isEmployee ? 'enrollProgressBannerEmployee' : 'enrollProgressBannerClient');
@@ -539,8 +657,10 @@ const renderGateHtml = (req: express.Request, res: express.Response) => {
 
       banner.className = 'block p-4 bg-slate-800 border border-blue-500/40 rounded-2xl space-y-3';
       targetText.innerText = 'TARGET ' + prefix.toUpperCase() + ': #' + bioId + ' — ' + name;
-      stateText.innerText = 'CONNECTING TO DEVICE...';
-      msgText.innerText = 'Testing connection to ESSL K90 scanner at 192.168.18.11:4370...';
+      stateText.innerText = retryCrmSync ? 'VERIFYING DEVICE TEMPLATE...' : 'CONNECTING TO DEVICE...';
+      msgText.innerText = retryCrmSync ? 'Verifying the saved template before retrying CRM sync...' : 'Waiting for the device. Follow its prompts and complete the fingerprint scans.';
+      const oldRetryButton = document.getElementById(isEmployee ? 'crmRetryButtonEmployee' : 'crmRetryButtonClient');
+      if (oldRetryButton) oldRetryButton.remove();
 
       step1.className = 'p-2 rounded-xl border bg-slate-900 border-slate-800 text-slate-600';
       step2.className = 'p-2 rounded-xl border bg-slate-900 border-slate-800 text-slate-600';
@@ -553,7 +673,8 @@ const renderGateHtml = (req: express.Request, res: express.Response) => {
           memberName: name,
           name: name,
           enrollmentSessionId: 'sess_' + bioId + '_' + Date.now(),
-          isEmployee: isEmployee
+          isEmployee: isEmployee,
+          retryCrmSync: retryCrmSync
         };
         if (isEmployee) payload.employeeId = targetId;
         else payload.memberId = targetId;
@@ -563,33 +684,40 @@ const renderGateHtml = (req: express.Request, res: express.Response) => {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
         });
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
 
         if (data.success) {
           step1.className = 'p-2 rounded-xl border bg-blue-900/60 border-blue-500 text-blue-300';
           step2.className = 'p-2 rounded-xl border bg-blue-900/60 border-blue-500 text-blue-300';
           step3.className = 'p-2 rounded-xl border bg-blue-900/60 border-blue-500 text-blue-300';
           step4.className = 'p-2 rounded-xl border bg-emerald-900/60 border-emerald-500 text-emerald-300';
-          stateText.innerText = 'SUCCESS ✓';
+          stateText.innerText = 'TEMPLATE VERIFIED · MAPPED ✓';
           stateText.className = 'text-[10px] font-mono font-bold text-emerald-400 bg-emerald-950 border border-emerald-800 px-2 py-0.5 rounded-md';
-          msgText.innerText = '✓ Fingerprint captured & mapped to Biometric ID #' + bioId + ' (' + name + ')';
+          msgText.innerText = data.message || 'Fingerprint template verified on the device and mapped to CRM ID #' + bioId + ' (' + name + ')';
           fetchRoster();
         } else {
           step1.className = 'p-2 rounded-xl border bg-rose-950 border-rose-800 text-rose-400';
           step2.className = 'p-2 rounded-xl border bg-rose-950 border-rose-800 text-rose-400';
           step3.className = 'p-2 rounded-xl border bg-rose-950 border-rose-800 text-rose-400';
           step4.className = 'p-2 rounded-xl border bg-rose-950 border-rose-800 text-rose-400';
-          stateText.innerText = 'HARDWARE OFFLINE ❌';
+          stateText.innerText = data.status || 'ENROLLMENT FAILED';
           stateText.className = 'text-[10px] font-mono font-bold text-rose-400 bg-rose-950 border border-rose-800 px-2 py-0.5 rounded-md';
-          msgText.innerText = '❌ ' + (data.error || data.message || 'Hardware Scanner (192.168.18.11:4370) is disconnected or offline!');
+          msgText.innerText = '❌ ' + (data.error || data.message || 'Device did not confirm a saved fingerprint template.');
+          if (data.deviceEnrolled && data.retryable) {
+            stateText.innerText = 'CRM SYNC PENDING';
+            const retryButton = document.createElement('button');
+            retryButton.id = isEmployee ? 'crmRetryButtonEmployee' : 'crmRetryButtonClient';
+            retryButton.className = 'px-3 py-2 rounded-lg bg-amber-500 text-slate-950 text-xs font-black uppercase';
+            retryButton.textContent = 'Retry CRM Sync (No New Scan)';
+            retryButton.onclick = () => triggerEnroll(targetId, bioId, encodeURIComponent(name), isEmployee, true);
+            banner.appendChild(retryButton);
+          }
         }
       } catch (err) {
         step1.className = 'p-2 rounded-xl border bg-rose-950 border-rose-800 text-rose-400';
         stateText.innerText = 'ERROR ❌';
         stateText.className = 'text-[10px] font-mono font-bold text-rose-400 bg-rose-950 border border-rose-800 px-2 py-0.5 rounded-md';
-        msgText.innerText = '❌ Hardware device connection error. Scanner at 192.168.18.11:4370 is unreachable.';
-      }
-    }t = 'Connection error during fingerprint enrollment.';
+        msgText.innerText = '❌ ' + (err && err.message ? err.message : 'Unable to reach the local enrollment service.');
       }
     }
 
@@ -608,42 +736,36 @@ const renderGateHtml = (req: express.Request, res: express.Response) => {
 
       banner.className = 'block w-full bg-slate-900 border border-slate-800 p-5 rounded-3xl shadow-xl space-y-3 transition-all text-center';
       bannerTitle.innerText = '⏳ TRANSMITTING UNLOCK SIGNAL...';
-      bannerDesc.innerText = 'Sending signal to EasyBio hardware at 192.168.18.11...';
+      bannerDesc.innerText = 'Sending signal to EasyBio hardware at ${deviceIp}...';
       timerText.innerText = '15s';
       progressBar.style.width = '100%';
 
       try {
-        let res = await fetch('/api/attendance/gate-unlock', {
+        const res = await fetch('/api/attendance/gate-unlock', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ source: 'lan_web_app' })
         });
-        if (!res.ok) {
-          res = await fetch('/api/gate/open', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ source: 'lan_web_app' })
-          });
-        }
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
 
-        if (data.success) {
-          bannerTitle.innerText = '✅ DOOR UNLOCKED FOR 15 SECONDS!';
-          bannerDesc.innerText = 'Hardware relay open. Access granted.';
+        if (res.ok && data.success) {
+          bannerTitle.innerText = '✅ DOOR UNLOCKED — DEVICE ACKNOWLEDGED';
+          bannerDesc.innerText = data.message || 'EasyBio acknowledged the relay command.';
+          const durationSeconds = Number(data.durationSeconds) || 15;
           
-          let secondsLeft = 15;
+          let secondsLeft = durationSeconds;
           if (countdownInterval) clearInterval(countdownInterval);
 
           countdownInterval = setInterval(() => {
             secondsLeft -= 1;
             timerText.innerText = secondsLeft + 's Left';
-            const pct = (secondsLeft / 15) * 100;
+            const pct = (secondsLeft / durationSeconds) * 100;
             progressBar.style.width = pct + '%';
 
             if (secondsLeft <= 0) {
               clearInterval(countdownInterval);
               bannerTitle.innerText = '🔒 GATE RELAY LOCKED';
-              bannerDesc.innerText = '15 seconds elapsed. Gate relay auto-locked.';
+              bannerDesc.innerText = durationSeconds + ' seconds elapsed. Device relay pulse finished.';
               timerText.innerText = 'Locked';
               lockIcon.innerText = '🔒';
               progressBar.style.width = '0%';
@@ -651,12 +773,12 @@ const renderGateHtml = (req: express.Request, res: express.Response) => {
           }, 1000);
 
         } else {
-          bannerTitle.innerText = '⚠️ UNLOCK FAILED';
-          bannerDesc.innerText = data.message || 'Gate Unlock Request Failed';
+          bannerTitle.innerText = '⚠️ GATE FAILED — ' + (data.status || 'RELAY COMMAND FAILED');
+          bannerDesc.innerText = data.message || 'The device service did not confirm the relay command.';
         }
       } catch (err) {
         bannerTitle.innerText = '❌ CONNECTION ERROR';
-        bannerDesc.innerText = 'Unable to reach Gate Controller API.';
+        bannerDesc.innerText = err && err.message ? err.message : 'Unable to reach the local device service.';
       } finally {
         setTimeout(() => {
           btn.disabled = false;
@@ -666,6 +788,7 @@ const renderGateHtml = (req: express.Request, res: express.Response) => {
     }
 
     // Initial load
+    refreshDeviceStatus();
     fetchRoster();
   </script>
 </body>

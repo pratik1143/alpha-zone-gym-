@@ -26,11 +26,14 @@ export default function RenewalCenterModal({ isOpen, onClose, onOpenRenewWizard 
     return days < 0;
   });
 
-  const filteredExpired = expiredMembers.filter(m => 
-    m.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-    m.phone.includes(searchQuery) ||
-    (m.memberId || m.id).toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredExpired = expiredMembers.filter(m => {
+    const q = (searchQuery || '').toLowerCase();
+    return (
+      (m?.name || '').toLowerCase().includes(q) || 
+      String(m?.phone || '').includes(searchQuery || '') ||
+      String(m?.memberId || m?.id || '').toLowerCase().includes(q)
+    );
+  });
 
   const handleBlockAccess = async (m: any) => {
     if (confirm(`Are you sure you want to BLOCK facility access for ${m.name}? This will update their status to Blocked.`)) {
