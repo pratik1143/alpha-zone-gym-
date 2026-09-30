@@ -10,6 +10,7 @@ import { initQueueJob } from './jobs/whatsappQueue.job';
 import { startFollowupAutomationJob } from './jobs/followupAutomation.job';
 import { startEnrollFingerprint } from './controllers/device.controller';
 import { getLocalIpAddress, triggerGateUnlock } from './controllers/attendance.controller';
+import { getNextAvailableBiometricId, isValidDeviceBiometricId } from './services/biometricId.service';
 
 // Trigger reload after Firestore activation by user
 dotenv.config();
@@ -125,6 +126,33 @@ app.get('/api/gate/roster', async (req: express.Request, res: express.Response) 
   } catch (err: any) {
     console.error('[CRM ROSTER ERROR] ' + err.message);
     res.status(503).json({ success: false, error: 'Could not load the live CRM roster: ' + err.message });
+  }
+});
+
+app.post('/api/gate/members/:memberId/assign-biometric-id', async (req: express.Request, res: express.Response) => {
+  try {
+    const firestore = getFirestoreDb();
+    if (!firestore) return res.status(503).json({ success: false, error: 'CRM/Firebase connection is unavailable.' });
+    const memberRef = firestore.collection('members').doc(String(req.params.memberId || ''));
+    const memberSnap = await memberRef.get();
+    if (!memberSnap.exists) return res.status(404).json({ success: false, error: 'CRM member was not found.' });
+    const member = memberSnap.data() || {};
+    if (isValidDeviceBiometricId(member.biometricId)) {
+      return res.json({ success: true, biometricId: String(member.biometricId), alreadyAssigned: true });
+    }
+
+    const biometricId = await getNextAvailableBiometricId();
+    await memberRef.update({
+      biometricId: String(biometricId),
+      deviceUserId: String(biometricId),
+      fingerprintStatus: member.fingerprintStatus || 'NOT_ENROLLED',
+      fingerprintEnrolled: member.fingerprintEnrolled === true,
+      updatedAt: new Date().toISOString()
+    });
+    res.json({ success: true, biometricId: String(biometricId), alreadyAssigned: false });
+  } catch (err: any) {
+    console.error('[CRM BIOMETRIC ID ASSIGNMENT ERROR] ' + err.message);
+    res.status(503).json({ success: false, error: 'Could not assign a valid device biometric ID: ' + err.message });
   }
 });
 
@@ -532,11 +560,11 @@ const renderGateHtml = (req: express.Request, res: express.Response) => {
       if (!item) return '';
       if (item.biometricId !== undefined && item.biometricId !== null) {
         const bioId = String(item.biometricId).trim();
-        if (/^\\d{1,5}$/.test(bioId) && Number(bioId) > 0) return bioId;
+        if (/^\\d{1,5}$/.test(bioId) && Number(bioId) > 0 && Number(bioId) <= 65535) return bioId;
       }
       if (item.deviceUserId) {
         const devId = String(item.deviceUserId).trim();
-        if (/^\\d{1,5}$/.test(devId) && Number(devId) > 0) return devId;
+        if (/^\\d{1,5}$/.test(devId) && Number(devId) > 0 && Number(devId) <= 65535) return devId;
       }
       if (item.employeeId) {
         const match = String(item.employeeId).match(/\\d+/);
@@ -547,6 +575,25 @@ const renderGateHtml = (req: express.Request, res: express.Response) => {
         if (match && Number(match[0]) > 0) return match[0];
       }
       return '';
+    }
+
+    async function assignMemberBiometricId(memberId, button) {
+      const originalText = button.textContent;
+      button.disabled = true;
+      button.textContent = 'ASSIGNING...';
+      try {
+        const response = await fetch('/api/gate/members/' + encodeURIComponent(memberId) + '/assign-biometric-id', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}'
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok || !result.success || !result.biometricId) throw new Error(result.error || 'Biometric ID assignment failed');
+        await fetchRoster();
+      } catch (error) {
+        button.disabled = false;
+        button.textContent = originalText;
+        document.getElementById('clientCountText').innerText = 'ID ASSIGNMENT FAILED';
+        console.error('[CLIENT] Biometric ID assignment failed:', error);
+      }
     }
 
     function renderRoster() {
@@ -575,6 +622,9 @@ const renderGateHtml = (req: express.Request, res: express.Response) => {
           const bioId = getCleanNumericId(m);
           const isEnrolled = hasFingerprintTemplate(m);
           const isMapped = hasMappedDeviceUser(m);
+          const memberIdArg = JSON.stringify(String(m.id || ''));
+          const enrollAction = 'triggerEnroll(' + memberIdArg + ', ' + JSON.stringify(bioId) + ', ' + JSON.stringify(encodeURIComponent(m.name || '')) + ', false)';
+          const rowAction = bioId ? enrollAction : 'assignMemberBiometricId(' + memberIdArg + ', this)';
           return \`
             <div class="p-3.5 rounded-2xl border bg-slate-800/60 border-slate-700/60 flex items-center justify-between hover:border-slate-700 transition-all">
               <div class="flex items-center gap-3">
@@ -586,7 +636,7 @@ const renderGateHtml = (req: express.Request, res: express.Response) => {
                   <div class="text-[11px] text-slate-400 mt-0.5">Fingerprint: <span class="\${isEnrolled ? 'text-emerald-400 font-bold' : 'text-amber-400 font-bold'}">\${isEnrolled ? 'ENROLLED' : 'NOT ENROLLED'}</span> • Device: <span class="\${isMapped ? 'text-emerald-400 font-bold' : 'text-slate-400'}">\${isMapped ? 'MAPPED' : 'NOT MAPPED'}</span></div>
                 </div>
               </div>
-              <button \${bioId ? '' : 'disabled'} onclick="triggerEnroll('\${m.id}', '\${bioId}', '\${encodeURIComponent(m.name || '')}', false)" class="px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider border cursor-pointer \${bioId ? (isEnrolled ? 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700' : 'bg-blue-600 hover:bg-blue-500 text-white border-blue-500 shadow-md') : 'bg-slate-800 text-slate-500 border-slate-700 cursor-not-allowed'}">
+              <button onclick="\${rowAction}" class="px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider border cursor-pointer \${bioId ? (isEnrolled ? 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700' : 'bg-blue-600 hover:bg-blue-500 text-white border-blue-500 shadow-md') : 'bg-amber-600 hover:bg-amber-500 text-white border-amber-500'}">
                 \${bioId ? (isEnrolled ? 'Re-Enroll' : 'Start Enroll') : 'Assign Biometric ID'}
               </button>
             </div>

@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { db, admin, isFirebaseInitialized } from '../firebase';
 import { triggerWelcomeEmail, triggerPaymentEmail, triggerPtWelcomeEmail } from '../services/automation.service';
 import { resolveStaleRenewalFollowups } from '../services/followupAutomation.service';
+import { getNextAvailableBiometricId, isValidDeviceBiometricId } from '../services/biometricId.service';
 
 export const getMembers = async (req: Request, res: Response) => {
   try {
@@ -123,6 +124,15 @@ export const createMember = async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Name and Phone are required' });
     }
 
+    let assignedBioId = String(biometricId || req.body.memberId || '').trim();
+    if (!isValidDeviceBiometricId(assignedBioId)) {
+      try {
+        assignedBioId = String(await getNextAvailableBiometricId());
+      } catch (allocationError: any) {
+        return res.status(503).json({ error: `Could not assign a valid EasyBio ID: ${allocationError.message}` });
+      }
+    }
+
     let uid = 'm' + Date.now();
     const loginEmail = email || `${phone}@alphagym.com`;
 
@@ -211,9 +221,6 @@ export const createMember = async (req: Request, res: Response) => {
     const initialStatus = memStartDate > todayStr ? 'upcoming' : (req.body.status || 'active');
 
     const idempotencyKey = req.body.idempotencyKey || `mem_${phone}_${plan || 'Monthly'}_${invoiceDate}`;
-
-    // Determine permanent biometric / member ID
-    const assignedBioId = String(biometricId || req.body.memberId || '').trim();
 
     const member = await db.addMember({
       uid, // align document ID with Auth UID

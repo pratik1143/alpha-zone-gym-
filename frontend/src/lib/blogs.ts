@@ -36,30 +36,30 @@ export const blogs: BlogArticle[] = [
     ],
     category: 'Gym Guide & Local Fitness',
     readTime: '6 min read',
-    publishedDate: '2026-09-22',
+    publishedDate: '2026-09-30',
     author: 'Alpha Zone Fitness Team',
-    excerpt: 'Finding the right gym in Sohana, Mohali is about more than simply finding weights and treadmills. Learn what equipment, coaching, training disciplines and environment match your fitness goals.',
-    image: '/gym_images/Best Gym in Mohali.jpg',
+    excerpt: 'Finding the right gym in Sohana, Mohali is about more than simply finding a place with weights and treadmills. Learn what equipment, coaching, training disciplines and environment match your fitness goals.',
+    image: '/gym_images/best-gym-in-sohana-mohali.jpg',
     faqs: [
       {
         question: 'Which is a good gym in Sohana, Mohali?',
-        answer: 'When choosing a gym in Sohana, consider equipment quality, training programs, coaching support, cleanliness, location, timings, and flexible membership options. Alpha Zone Gym on Landran Road provides multi-discipline training with professional coaches.'
+        answer: 'When choosing a gym in Sohana, consider equipment, training programs, coaching, cleanliness, location, timings and membership options. Alpha Zone Gym provides state-of-the-art facilities across all these areas.'
       },
       {
         question: 'Is there a gym near Landran Road?',
-        answer: 'Yes. Alpha Zone Gym is conveniently located on Landran Road in Sohana, Mohali (2nd Floor, MNB Group, SCO 16-17).'
+        answer: 'Yes. Alpha Zone Gym is located on Landran Road in Sohana, Mohali (2nd Floor, MNB Group, SCO 16-17).'
       },
       {
         question: 'Is personal training available in Sohana?',
-        answer: 'Personal training is available at Alpha Zone Gym for members looking for individualized coaching, tailored workout progression, and technique guidance.'
+        answer: 'Personal training is available at Alpha Zone Gym for members looking for individualized training guidance and progressive coaching.'
       },
       {
         question: 'Does Alpha Zone Gym offer CrossFit?',
-        answer: 'Yes, functional CrossFit training is one of the specialized disciplines offered at Alpha Zone Gym alongside weight training, HIIT, and cardio.'
+        answer: 'Yes, CrossFit is one of the training options offered by Alpha Zone Gym.'
       },
       {
         question: 'Is Alpha Zone Gym suitable for beginners?',
-        answer: 'Yes. Beginners start with a fitness assessment and receive guidance on proper movement mechanics, machine usage, and gradual training progression.'
+        answer: 'Yes. Beginners can start with appropriate exercises and gradually progress according to their fitness level and goals.'
       }
     ]
   },
@@ -82,34 +82,34 @@ export const blogs: BlogArticle[] = [
     ],
     category: 'Strength & Conditioning',
     readTime: '7 min read',
-    publishedDate: '2026-09-22',
+    publishedDate: '2026-09-30',
     author: 'Alpha Zone Coaching Staff',
-    excerpt: 'New to weight training? Discover the core movement patterns, beginner full-body workout routine, progressive overload principles, and how to avoid the common lifting mistakes.',
-    image: '/gym_images/Strength Training Gym in Mohali.jpg',
+    excerpt: 'New to weight training? Discover foundational movement patterns, a beginner workout routine, progressive overload, and essential mistakes to avoid for safe progress.',
+    image: '/gym_images/weight-training-for-beginners-mohali.jpg',
     faqs: [
       {
         question: 'Is weight training good for beginners?',
-        answer: 'Yes. Beginners can start resistance training safely with foundational movements, manageable weights, and proper form to build baseline strength and bone density.'
+        answer: 'Yes. Beginners can start resistance training with appropriate exercises, manageable resistance and proper technique.'
       },
       {
         question: 'Where can I do weight training in Mohali?',
-        answer: 'Alpha Zone Gym in Sohana, Mohali features a dedicated strength training facility with Olympic barbells, power racks, dumbbells, and imported resistance machines.'
+        answer: 'Alpha Zone Gym in Sohana, Mohali offers weight and strength training facilities.'
       },
       {
         question: 'Can weight training help with weight loss?',
-        answer: 'Yes. Weight training preserves and builds lean muscle mass, which raises resting metabolic rate and optimizes body composition when paired with proper nutrition and cardio.'
+        answer: 'Weight training can be part of a comprehensive weight-loss program alongside appropriate nutrition, cardiovascular activity and overall physical activity.'
       },
       {
         question: 'How often should beginners do weight training?',
-        answer: 'For beginners, 3 to 4 days per week of structured resistance training with adequate recovery days between sessions yields the best sustainable results.'
+        answer: 'Training frequency depends on fitness level, goals, schedule and recovery. A sustainable routine is generally more useful than an excessive workload.'
       },
       {
         question: 'Can I do cardio and weight training together?',
-        answer: 'Yes. Combining strength training with cardiovascular exercise provides comprehensive fitness, endurance, and heart health benefits.'
+        answer: 'Yes. Many fitness programs combine resistance training and cardiovascular exercise.'
       },
       {
         question: 'Should beginners get a personal trainer?',
-        answer: 'A personal trainer helps beginners learn correct biomechanics, prevent injury, establish tailored workout routines, and stay accountable to their goals.'
+        answer: 'A personal trainer can be useful if you\'re new to the gym, unsure about exercise technique or working toward a specific goal.'
       }
     ]
   }

@@ -150,85 +150,106 @@ export default function WeightTrainingForBeginnersPage() {
             </li>
           </ol>
 
-          <h2>Sample Beginner Weight Training Routine</h2>
+          <h2>Beginner Weight Training Routine</h2>
           <p>
-            A 3-day alternating full-body split ensures balanced muscular development while allowing sufficient rest between sessions:
+            A beginner may start with a simple full-body workout:
           </p>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 20, margin: '24px 0 36px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 20, margin: '24px 0 20px' }}>
             <div style={{ background: '#0c1113', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 16, padding: 24 }}>
               <div style={{ fontSize: 16, fontWeight: 900, color: 'var(--az-lime, #e5fa19)', textTransform: 'uppercase', marginBottom: 12 }}>
-                Workout A (Monday & Friday)
+                Workout A
               </div>
               <ul style={{ margin: 0, paddingLeft: 18, fontSize: 14 }}>
-                <li>Goblet Squat (3 sets × 8–10 reps)</li>
-                <li>Flat Dumbbell Bench Press (3 sets × 8–10 reps)</li>
-                <li>Lat Pulldown (3 sets × 10–12 reps)</li>
-                <li>Dumbbell Overhead Shoulder Press (3 sets × 10 reps)</li>
-                <li>Seated Cable Row (3 sets × 10–12 reps)</li>
-                <li>Plank Hold (3 sets × 30–45 seconds)</li>
+                <li>Squat variation</li>
+                <li>Chest press</li>
+                <li>Lat pulldown</li>
+                <li>Shoulder press</li>
+                <li>Seated row</li>
+                <li>Core exercise</li>
               </ul>
             </div>
 
             <div style={{ background: '#0c1113', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 16, padding: 24 }}>
               <div style={{ fontSize: 16, fontWeight: 900, color: 'var(--az-lime, #e5fa19)', textTransform: 'uppercase', marginBottom: 12 }}>
-                Workout B (Wednesday)
+                Workout B
               </div>
               <ul style={{ margin: 0, paddingLeft: 18, fontSize: 14 }}>
-                <li>Leg Press (3 sets × 10–12 reps)</li>
-                <li>Incline Dumbbell Press (3 sets × 8–10 reps)</li>
-                <li>Dumbbell Romanian Deadlift (3 sets × 8–10 reps)</li>
-                <li>Cable Face Pulls (3 sets × 12–15 reps)</li>
-                <li>Dumbbell Lateral Raises (3 sets × 12–15 reps)</li>
-                <li>Farmer Walk Carry (3 sets × 30 meters)</li>
+                <li>Leg press</li>
+                <li>Dumbbell press</li>
+                <li>Cable row</li>
+                <li>Hamstring exercise</li>
+                <li>Lateral raise</li>
+                <li>Core exercise</li>
               </ul>
             </div>
           </div>
+          <p style={{ fontStyle: 'italic', color: '#94a3b8', fontSize: 14 }}>
+            The exact exercises, sets, repetitions and resistance should be adjusted according to the individual's fitness level and experience.
+          </p>
 
           <h2>How Many Days Should Beginners Train?</h2>
           <p>
-            You do not need to train seven days a week. For beginners, <strong>3 non-consecutive days per week</strong> (e.g., Monday, Wednesday, Friday) allows muscles 48 hours to recover and repair. Recovery is the phase where muscles actually adapt and grow stronger.
+            You don't need to train seven days a week. Start with a manageable number of sessions and allow sufficient recovery. As your fitness improves, your schedule can be adjusted.
           </p>
 
           <h2>What Is Progressive Overload?</h2>
           <p>
-            Progressive overload is the golden rule of resistance training. It means systematically increasing the demands placed on the musculoskeletal system over time so your body continues to adapt. Progress can be achieved by:
+            Progressive overload means gradually increasing the training challenge over time. Progress can come from increasing resistance, performing additional repetitions, improving technique, increasing training volume, improving control or increasing training difficulty.
           </p>
-          <ul>
-            <li>Adding a small increment of weight to the bar or dumbbell (e.g., 1–2.5 kg)</li>
-            <li>Performing 1 to 2 additional repetitions with the same weight</li>
-            <li>Improving movement tempo, control, and range of motion</li>
-            <li>Reducing rest times between sets while maintaining exercise execution</li>
-          </ul>
 
-          <div className="az-callout-box" style={{ borderColor: 'rgba(239, 68, 68, 0.3)' }}>
+          <h2>Common Weight Training Mistakes Beginners Should Avoid</h2>
+          <div className="az-callout-box" style={{ borderColor: 'rgba(239, 68, 68, 0.35)' }}>
             <h3 className="az-callout-title" style={{ color: '#f87171' }}>
-              <AlertTriangle size={18} /> Common Weight Training Mistakes to Avoid
+              <AlertTriangle size={18} /> Common Mistakes to Avoid
             </h3>
-            <ul style={{ margin: '10px 0 0', paddingLeft: 20, fontSize: 14 }}>
-              <li><strong>Lifting with Ego:</strong> Using excessive weight that forces momentum and breaks joint alignment.</li>
-              <li><strong>Ignoring Proper Warm-Ups:</strong> Skipping 5–10 minutes of dynamic mobility and warm-up sets.</li>
-              <li><strong>Random Workout Hopping:</strong> Changing exercises every workout instead of sticking to a proven routine for 6–8 weeks.</li>
-              <li><strong>Neglecting Protein & Hydration:</strong> Failing to fuel muscle repair with adequate daily protein and water.</li>
-              <li><strong>Expecting Overnight Miracles:</strong> Meaningful body composition transformation requires consistent adherence for 3–6 months.</li>
+            <ul style={{ margin: '12px 0 0', paddingLeft: 20, fontSize: 14 }}>
+              <li><strong>Lifting Too Heavy:</strong> Trying to lift more than you can control can compromise technique.</li>
+              <li><strong>Ignoring Technique:</strong> Learn the movement before worrying about how much weight you're lifting.</li>
+              <li><strong>Training the Same Muscles Every Day:</strong> Muscles also need recovery.</li>
+              <li><strong>Skipping Warm-Up:</strong> A suitable warm-up can prepare you for your workout.</li>
+              <li><strong>Changing Your Program Every Few Days:</strong> Constantly changing exercises makes it harder to track progress.</li>
+              <li><strong>Expecting Results Immediately:</strong> Strength and body-composition changes take time and consistency.</li>
             </ul>
           </div>
 
-          <h2>Weight Training vs Cardio: Do You Need Both?</h2>
+          <h2>Weight Training for Muscle Building</h2>
           <p>
-            You do not need to choose between weight training and cardio. Strength training builds skeletal muscle and dense bones, while cardiovascular training enhances heart health and stamina. At <strong>Alpha Zone Gym in Mohali</strong>, we encourage members to pair 3 days of resistance training with 2 days of cardio or functional conditioning for optimal total-body fitness.
+            If your goal is muscle development, resistance training should be supported by appropriate nutrition, adequate protein, sufficient recovery, progressive training and consistency.
+          </p>
+
+          <h2>Weight Training for Weight Loss</h2>
+          <p>
+            Weight training can be included in a weight-loss program. A comprehensive approach may combine resistance training, cardio, daily activity, nutrition and recovery.
+          </p>
+
+          <h2>Weight Training vs Cardio</h2>
+          <p>
+            You don't necessarily have to choose one. Weight training is useful for developing strength and muscle, while cardio is useful for improving cardiovascular fitness and endurance. Many people can benefit from incorporating both.
           </p>
 
           <h2>Weight Training in Mohali at Alpha Zone Gym</h2>
           <p>
-            Located on Landran Road in Sohana, <Link href="/weight-training-mohali" style={{ color: 'var(--az-lime, #e5fa19)' }}>Alpha Zone Gym</Link> is engineered specifically for serious fitness enthusiasts and beginners seeking structured guidance. The strength zone features:
+            <strong>Alpha Zone Gym</strong> in Sohana, Mohali provides an environment for strength and weight training. Members can combine resistance training with other fitness programs depending on their goals.
           </p>
-          <ul>
-            <li>Heavy-duty power cages, squat stations, and Olympic lifting platforms</li>
-            <li>Commercial dumbbell rack ranging from light beginner weights to 40+ kg</li>
-            <li>Biomechanically calibrated pin-loaded and plate-loaded resistance machines</li>
-            <li>On-floor certified personal trainers available to check posture and mechanics</li>
-          </ul>
+          <p>
+            Training options include <Link href="/weight-training-mohali" style={{ color: 'var(--az-lime, #e5fa19)', textDecoration: 'underline' }}>Weight Training</Link>, Strength Training, Cardio, <Link href="/personal-training-mohali" style={{ color: 'var(--az-lime, #e5fa19)', textDecoration: 'underline' }}>Personal Training</Link>, <Link href="/functional-training-mohali" style={{ color: 'var(--az-lime, #e5fa19)', textDecoration: 'underline' }}>Functional Training</Link>, <Link href="/crossfit-mohali" style={{ color: 'var(--az-lime, #e5fa19)', textDecoration: 'underline' }}>CrossFit</Link> and <Link href="/hiit-training-mohali" style={{ color: 'var(--az-lime, #e5fa19)', textDecoration: 'underline' }}>HIIT</Link>.
+          </p>
+          <div className="az-callout-box" style={{ borderColor: 'rgba(229,250,25,0.25)' }}>
+            <h3 className="az-callout-title" style={{ color: 'var(--az-lime, #e5fa19)' }}>
+              <MapPin size={18} /> Alpha Zone Gym Location & Contact
+            </h3>
+            <ul style={{ margin: '12px 0 0', paddingLeft: 20 }}>
+              <li><strong>Address:</strong> 2nd Floor, MNB Group, SCO 16-17, Landran Road, Sohana, Mohali, Punjab 140308</li>
+              <li><strong>Phone:</strong> +91 97793 33155</li>
+              <li><strong>Timings:</strong> Mon–Sat: 5:00 AM – 11:00 PM | Sun: 6:00 AM – 12:00 PM</li>
+            </ul>
+          </div>
+
+          <h2>Personal Training for Weight Training Beginners</h2>
+          <p>
+            If you're completely new to weight training, <Link href="/personal-training-mohali" style={{ color: 'var(--az-lime, #e5fa19)', textDecoration: 'underline' }}>personal training</Link> can provide additional guidance. A trainer can help with exercise technique, equipment, workout structure, training progression, warm-up, recovery and goal-specific programming.
+          </p>
 
           <h2>Frequently Asked Questions</h2>
           <div className="az-faq-list">
@@ -275,9 +296,9 @@ export default function WeightTrainingForBeginnersPage() {
           {/* Bottom CTA Banner */}
           <div className="az-cta-banner">
             <p className="az-eyebrow" style={{ justifyContent: 'center' }}>START YOUR STRENGTH JOURNEY</p>
-            <h3>Begin Weight Training at Alpha Zone Gym Mohali</h3>
-            <p style={{ fontSize: 15, color: '#94a3b8', maxWidth: 580, margin: '0 auto 28px', lineHeight: 1.6 }}>
-              Book a personal fitness consultation and tour our strength facility on Landran Road, Sohana, Mohali. Start building real strength today.
+            <h3>Start Your Weight Training Journey in Mohali</h3>
+            <p style={{ fontSize: 15, color: '#94a3b8', maxWidth: 620, margin: '0 auto 28px', lineHeight: 1.6 }}>
+              If you&apos;re looking for weight training in Mohali, start with the fundamentals. Learn the movements, use appropriate resistance, follow a structured routine and gradually increase the training challenge. At Alpha Zone Gym, you can combine weight training, strength training, cardio, CrossFit, HIIT, functional training and personal training according to your fitness goals.
             </p>
             <div style={{ display: 'flex', gap: 14, justifyContent: 'center', flexWrap: 'wrap' }}>
               <a

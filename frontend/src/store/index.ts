@@ -438,32 +438,20 @@ export const useGymStore = create<GymStore>((set, get) => ({
   },
   fetchNextBiometricId: async () => {
     try {
-      const res = await API.get('/members/next-biometric-id');
+      const res = await API.get('/members/next-biometric-id', { timeout: 15000 });
       if (res.data && (res.data.nextBiometricId || res.data.nextId)) {
         return String(res.data.nextBiometricId || res.data.nextId);
       }
     } catch (err) {
       console.warn('API fetch next biometric ID notice:', err);
     }
-
-    // Fallback: calculate from existing members in store or Firestore
-    let maxId = 0;
-    const members = get().members;
-    members.forEach((m: any) => {
-      const candidates = [m.biometricId, m.memberId, m.clientId, m.customId, m.id];
-      candidates.forEach((c) => {
-        if (c) {
-          const parsed = parseInt(String(c).replace(/\D/g, ''), 10);
-          if (!isNaN(parsed) && parsed > 0 && parsed < 1000000 && parsed > maxId) {
-            maxId = parsed;
-          }
-        }
-      });
-    });
-    return String(maxId > 0 ? maxId + 1 : 1);
+    // Do not guess from a partial browser cache: employee and device IDs also
+    // occupy the same EasyBio namespace. The create-member API can allocate
+    // authoritatively if this preview request is unavailable.
+    return '';
   },
   addMember: async (member) => {
-    const res = await API.post('/members', member);
+    const res = await API.post('/members', member, { timeout: 30000 });
     // Always force re-fetch from server to ensure immediate top placement
     await get().fetchMembers(true);
     get().fetchPayments(); // refresh invoices ledger

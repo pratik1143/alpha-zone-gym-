@@ -100,100 +100,95 @@ export default function BestGymInSohanaPage() {
 
           <h2>What Should You Look for in a Gym in Sohana?</h2>
           <p>
-            Before purchasing a gym membership, take time to evaluate the following key parameters to ensure the facility meets your long-term training expectations:
-          </p>
-          <ul>
-            <li><strong>Equipment Quality & Variety:</strong> Modern resistance machines, Olympic barbells, power racks, dumbbells up to heavy increments, and specialized functional turf.</li>
-            <li><strong>Structured Training Disciplines:</strong> Facilities that support strength training, cardio conditioning, CrossFit, functional movement, and high-intensity classes under one roof.</li>
-            <li><strong>Expert Coaching:</strong> Coaches who prioritize proper lifting mechanics, injury prevention, and tailored workout progressions.</li>
-            <li><strong>Cleanliness & Hygiene:</strong> Regularly sanitized equipment, pristine locker rooms, air conditioning, and clean shower amenities.</li>
-            <li><strong>Location & Accessibility:</strong> A conveniently accessible location on Landran Road with ample parking and easy connectivity from Sector 77, Landran, and Sohana.</li>
-            <li><strong>Flexible Membership Options:</strong> Transparent 1-month, 3-month, 6-month, and annual plans that provide full gym access without lock-in penalties.</li>
-          </ul>
-
-          <h2>Comprehensive Training Disciplines</h2>
-          <p>
-            Not everyone shares the same fitness aspirations. A balanced fitness center caters to diverse training methodologies:
+            Before purchasing a membership, consider equipment quality, available training programs, coaching, cleanliness, location, timings and membership options.
           </p>
 
-          <h3>1. Weight Training</h3>
+          <h3>Quality Equipment</h3>
           <p>
-            Weight training stimulates muscle hypertrophy and bone density through progressive resistance. A well-equipped gym features dumbbells, Olympic barbells, plate-loaded machines, cable crossover towers, and adjustable benches.
+            A good gym should have equipment supporting different types of workouts, including free weights, weight machines, benches, squat racks, cardio equipment, functional training equipment and conditioning equipment.
           </p>
 
-          <h3>2. Strength Training</h3>
+          <h3>Different Training Programs</h3>
           <p>
-            Strength-focused workouts emphasize multi-joint compound lifts such as squats, bench presses, overhead presses, and deadlifts. Beginners benefit greatly from certified coach supervision to master correct form before adding heavier resistance.
+            Not everyone has the same fitness goal. One person may want to build muscle, while another may want to lose weight or improve cardiovascular fitness.
           </p>
 
-          <h3>3. Cardio Training Deck</h3>
+          <h3>Weight Training</h3>
           <p>
-            Cardiovascular exercise boosts stamina, endurance, lung capacity, and heart health. Essential cardio equipment includes commercial treadmills, assault bikes, rowing machines, StairMasters, and elliptical cross-trainers.
+            <Link href="/weight-training-mohali" style={{ color: 'var(--az-lime, #e5fa19)', textDecoration: 'underline' }}>Weight training</Link> can help develop strength and muscle when combined with appropriate training and nutrition. It can include dumbbells, barbells, machines, cables and free weights.
           </p>
 
-          <h3>4. Functional Training</h3>
+          <h3>Strength Training</h3>
           <p>
-            Functional workouts train movement patterns that improve real-world mobility, balance, coordination, and rotational core stability using kettlebells, battle ropes, medicine balls, plyometric boxes, and suspension trainers.
+            Strength-focused workouts generally use progressive resistance exercises designed to improve physical strength. Beginners should focus on proper technique and gradually increase training demands.
           </p>
 
-          <h3>5. HIIT (High-Intensity Interval Training)</h3>
+          <h3>Cardio Training</h3>
           <p>
-            HIIT alternates bursts of maximal effort with short recovery intervals, maximizing metabolic caloric burn in time-efficient 30-to-45-minute training sessions.
+            Cardiovascular exercise can help improve endurance and overall fitness. Common gym cardio options include treadmill, cycling, rowing, stair climbing and conditioning equipment.
           </p>
 
-          <h3>6. CrossFit Conditioning</h3>
+          <h3>Functional Training</h3>
           <p>
-            CrossFit merges Olympic weightlifting, gymnastics, and high-intensity conditioning. Under structured coaching, beginners learn scaled movements and progressive pacing.
+            <Link href="/functional-training-mohali" style={{ color: 'var(--az-lime, #e5fa19)', textDecoration: 'underline' }}>Functional training</Link> focuses on movements that develop strength, stability, coordination and movement capacity. It can include kettlebells, medicine balls, bodyweight movements and other equipment.
           </p>
 
-          <h2>Personal Training in Sohana, Mohali</h2>
+          <h3>HIIT Training</h3>
           <p>
-            If you are new to working out or preparing for a specific physical goal, enrolling in <Link href="/personal-training-mohali" style={{ color: 'var(--az-lime, #e5fa19)' }}>personal training in Sohana</Link> accelerates your progress dramatically. A personal coach provides:
+            <Link href="/hiit-training-mohali" style={{ color: 'var(--az-lime, #e5fa19)', textDecoration: 'underline' }}>High-intensity interval training (HIIT)</Link> uses periods of harder effort combined with recovery periods. It can be incorporated into programs for improving conditioning and making workouts time-efficient.
           </p>
-          <ul>
-            <li>Personalized workout splits tailored to your baseline movement assessment</li>
-            <li>Direct form correction on every repetition to prevent injury</li>
-            <li>Progressive overload tracking and systematic weekly progression</li>
-            <li>Accountability, consistency coaching, and lifestyle habit tracking</li>
-          </ul>
+
+          <h3>CrossFit</h3>
+          <p>
+            <Link href="/crossfit-mohali" style={{ color: 'var(--az-lime, #e5fa19)', textDecoration: 'underline' }}>CrossFit</Link> combines functional movements and conditioning methods. Beginners should learn movement technique and appropriate scaling before progressing to more demanding workouts.
+          </p>
+
+          <h2>Personal Training in Sohana</h2>
+          <p>
+            If you are new to the gym or have a specific fitness goal, <Link href="/personal-training-mohali" style={{ color: 'var(--az-lime, #e5fa19)', textDecoration: 'underline' }}>personal training in Sohana</Link> may be useful. A personal trainer can help with workout planning, exercise technique, training progression, workout structure, accountability and goal-specific training.
+          </p>
 
           <h2>Gym for Weight Loss in Sohana</h2>
           <p>
-            A sustainable weight loss routine combines resistance training, cardio conditioning, caloric balance, and consistent habits. Resistance training ensures that weight lost comes from fat stores rather than metabolically active lean muscle tissue.
+            A well-rounded fitness routine can combine strength training, cardio, conditioning, appropriate nutrition and consistency. Your program should match your current fitness level and goals.
           </p>
 
-          <h2>Gym for Muscle Building & Hypertrophy</h2>
+          <h2>Gym for Muscle Building in Sohana</h2>
           <p>
-            Building muscle requires progressive overload across proven movement patterns—squats, presses, rows, pull-downs, and hinges—coupled with sufficient protein intake and proper recovery sleep.
+            For muscle-building goals, resistance training is an important component. A structured program may include squats, presses, rows, pull-downs, deadlift variations, lunges, shoulder exercises and arm exercises. Progress should be gradual, with attention to technique, recovery and nutrition.
           </p>
 
           <h2>Why Location Matters When Choosing a Gym</h2>
           <p>
-            Proximity is one of the highest predictors of long-term gym consistency. When your fitness center is located within a 5-to-10 minute commute, it seamlessly integrates into your morning or post-work schedule.
+            Convenience can make it easier to maintain a regular routine. For people around Sohana, Landran Road, Landran, Sector 77 and nearby Mohali areas, a conveniently located gym can make regular training easier.
           </p>
           <p>
-            <strong>Alpha Zone Gym</strong> is strategically situated at <strong>2nd Floor, MNB Group, SCO 16-17, Landran Road, Sohana, Mohali</strong>, making it exceptionally convenient for members coming from Sohana, Landran Road, Sector 77, and surrounding sectors of Mohali.
+            <strong>Alpha Zone Gym</strong> is located on Landran Road in Sohana, Mohali.
           </p>
 
           <h2>What Makes a Gym Suitable for Beginners?</h2>
           <p>
-            Beginners thrive in an environment that is encouraging rather than intimidating. Alpha Zone Gym prioritizes beginner onboarding through free fitness assessments, equipment orientation, and coaches always available on the gym floor to demonstrate safe lifting technique.
+            A beginner routine should focus on learning basic movements, understanding gym equipment, developing proper technique, starting with manageable resistance, building consistency and gradually increasing training difficulty.
           </p>
 
-          <h2>How Often Should You Train?</h2>
+          <h2>How Often Should You Go to the Gym?</h2>
           <p>
-            For most individuals starting out, <strong>3 to 4 training days per week</strong> provides the ideal balance between training stimulus and muscular recovery. Quality of movement and consistency over months always outperforms sporadic over-training.
+            The ideal frequency depends on your goals, fitness level, schedule and recovery. For many beginners, starting with a manageable schedule and gradually increasing training frequency can be more sustainable than exercising every day.
           </p>
 
-          <div className="az-callout-box" style={{ borderColor: 'rgba(255,255,255,0.15)' }}>
-            <h3 className="az-callout-title" style={{ color: '#fff' }}>
-              <MapPin size={18} color="var(--az-lime, #e5fa19)" /> Alpha Zone Gym Mohali Facility Details
+          <h2>Why Alpha Zone Gym in Sohana?</h2>
+          <p>
+            Alpha Zone Gym offers Weight Training, Strength Training, Cardio, Personal Training, CrossFit, Functional Training, HIIT and Group Fitness.
+          </p>
+          <div className="az-callout-box" style={{ borderColor: 'rgba(229,250,25,0.25)' }}>
+            <h3 className="az-callout-title" style={{ color: 'var(--az-lime, #e5fa19)' }}>
+              <MapPin size={18} /> Alpha Zone Gym Location & Details
             </h3>
             <ul style={{ margin: '12px 0 0', paddingLeft: 20 }}>
               <li><strong>Address:</strong> 2nd Floor, MNB Group, SCO 16-17, Landran Road, Sohana, Mohali, Punjab 140308</li>
-              <li><strong>Disciplines:</strong> Weight Training, Strength, Cardio, Personal Training, CrossFit, Functional, HIIT</li>
-              <li><strong>Timings:</strong> Open 7 Days (Mon–Sat: 5:00 AM – 11:00 PM | Sun: 6:00 AM – 12:00 PM)</li>
-              <li><strong>Contact:</strong> +91 97793 33155</li>
+              <li><strong>Programs:</strong> Weight Training, Strength Training, Cardio, Personal Training, CrossFit, Functional Training, HIIT & Group Fitness</li>
+              <li><strong>Timings:</strong> Mon–Sat: 5:00 AM – 11:00 PM | Sun: 6:00 AM – 12:00 PM</li>
+              <li><strong>Phone:</strong> +91 97793 33155</li>
             </ul>
           </div>
 

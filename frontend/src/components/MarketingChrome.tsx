@@ -272,6 +272,13 @@ export function MarketingHeader() {
               Gallery
             </Link>
             <Link
+              href="/blog"
+              onClick={() => setMenu(false)}
+              aria-current={path.startsWith("/blog") || path === "/best-gym-in-sohana-mohali" || path === "/weight-training-for-beginners-mohali" ? "page" : undefined}
+            >
+              Blog
+            </Link>
+            <Link
               href="/contact-us"
               onClick={() => setMenu(false)}
               aria-current={path === "/contact-us" ? "page" : undefined}
