@@ -112,6 +112,90 @@ export const blogs: BlogArticle[] = [
         answer: 'A personal trainer can be useful if you\'re new to the gym, unsure about exercise technique or working toward a specific goal.'
       }
     ]
+  },
+  {
+    slug: 'best-gym-in-mohali',
+    url: '/best-gym-in-mohali',
+    title: 'Best Gym in Mohali: How to Choose the Right Gym for Your Fitness Goals',
+    seoTitle: 'Best Gym in Mohali: How to Choose the Right Gym for Your Fitness Goals | Alpha Zone Gym',
+    metaDescription: 'Looking for the best gym in Mohali? Learn what to look for in a gym, from strength training and cardio to personal training, CrossFit, and HIIT.',
+    primaryKeyword: 'Best Gym in Mohali',
+    secondaryKeywords: [
+      'gym in Mohali',
+      'gym near Sohana',
+      'gym near Landran Road',
+      'fitness centre Mohali',
+      'personal training Mohali',
+      'CrossFit Mohali',
+      'strength training Mohali',
+      'gym near Sector 77 Mohali',
+      'gym in Kharar Landran'
+    ],
+    category: 'Gym Guide & Local Fitness',
+    readTime: '6 min read',
+    publishedDate: '2026-09-30',
+    author: 'Alpha Zone Fitness Team',
+    excerpt: 'Finding the right gym in Mohali is about more than modern equipment. Discover how to evaluate gym coaching, multi-discipline zones, proximity, and membership options.',
+    image: '/gym_images/best-gym-in-mohali.jpg',
+    faqs: [
+      {
+        question: 'Which is the best gym in Mohali for strength and cardio?',
+        answer: 'Alpha Zone Gym on Landran Road in Sohana, Mohali provides dedicated zones for heavy strength training, imported cardio decks, functional fitness turf, and CrossFit conditioning.'
+      },
+      {
+        question: 'Does Alpha Zone Gym offer personal training in Mohali?',
+        answer: 'Yes. Certified personal trainers provide one-on-one coaching, custom workout plans, form correction, and progressive goal tracking for members.'
+      },
+      {
+        question: 'Is Alpha Zone Gym easily accessible from Sector 77, 78, 79, and Kharar?',
+        answer: 'Yes. Strategically situated at SCO 16–17 on Landran Road in Sohana, Alpha Zone Gym offers direct connectivity and ample parking for residents of Sector 77–80, Kharar, Landran, and Sohana.'
+      },
+      {
+        question: 'What training programs are available at Alpha Zone Gym?',
+        answer: 'Members enjoy access to Strength Training, Personal Training, Cardio, HIIT & Conditioning, Functional Fitness, and CrossFit-style high-energy workouts under one roof.'
+      }
+    ]
+  },
+  {
+    slug: 'affordable-gym-in-mohali',
+    url: '/affordable-gym-in-mohali',
+    title: 'Affordable Gym in Mohali: How to Find a Low-Cost Gym Without Compromising Your Workout',
+    seoTitle: 'Affordable Gym in Mohali: How to Find a Low-Cost Gym Without Compromising Your Workout | Alpha Zone Gym',
+    metaDescription: 'Searching for an affordable gym in Mohali? Learn how to choose a low-cost gym with quality equipment, training programs and membership options.',
+    primaryKeyword: 'Affordable Gym in Mohali',
+    secondaryKeywords: [
+      'low-cost gym in Mohali',
+      'budget friendly gym Mohali',
+      'affordable gym near me',
+      'affordable personal training Mohali',
+      'cheap gym membership Mohali',
+      'gym near Landran Road Sohana',
+      'gym in Sector 77 Mohali'
+    ],
+    category: 'Membership & Value',
+    readTime: '6 min read',
+    publishedDate: '2026-09-30',
+    author: 'Alpha Zone Fitness Team',
+    excerpt: 'Searching for an affordable gym in Mohali does not mean compromising on equipment or coaching. Learn how to compare facilities, packages, and value to start training sustainably.',
+    image: '/gym_images/affordable-gym-in-mohali.jpg',
+    faqs: [
+      {
+        question: 'Is there an affordable gym near Sohana and Landran Road?',
+        answer: 'Yes. Alpha Zone Gym offers flexible and budget-friendly membership packages with complete access to imported strength machines, free weights, cardio equipment, and functional turf.'
+      },
+      {
+        question: 'What is included in an affordable gym membership at Alpha Zone?',
+        answer: 'Memberships cover full floor access to weight training, cardio decks, functional fitness zones, locker amenities, and on-floor trainer assistance without hidden fees.'
+      },
+      {
+        question: 'Can beginners join an affordable gym without feeling lost?',
+        answer: 'Absolutely. Alpha Zone Gym provides beginner-friendly orientation, basic movement instruction, and affordable personal training options to ensure safe, structured progression.'
+      },
+      {
+        question: 'Where is Alpha Zone Gym located in Mohali?',
+        answer: 'Alpha Zone Gym is located at 2nd Floor, MNB Group, SCO 16–17, Landran Road, Sohana, Mohali, Punjab 140308. Phone: 097793 33155.'
+      }
+    ]
   }
 ];
 

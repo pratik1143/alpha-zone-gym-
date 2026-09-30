@@ -17,6 +17,8 @@ export default function sitemap(): MetadataRoute.Sitemap {
     '/blog',
     '/best-gym-in-sohana-mohali',
     '/weight-training-for-beginners-mohali',
+    '/best-gym-in-mohali',
+    '/affordable-gym-in-mohali',
     '/privacy-policy',
     '/terms-and-conditions'
   ];

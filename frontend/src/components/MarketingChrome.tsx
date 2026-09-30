@@ -274,7 +274,7 @@ export function MarketingHeader() {
             <Link
               href="/blog"
               onClick={() => setMenu(false)}
-              aria-current={path.startsWith("/blog") || path === "/best-gym-in-sohana-mohali" || path === "/weight-training-for-beginners-mohali" ? "page" : undefined}
+              aria-current={path.startsWith("/blog") || path === "/best-gym-in-sohana-mohali" || path === "/weight-training-for-beginners-mohali" || path === "/best-gym-in-mohali" || path === "/affordable-gym-in-mohali" ? "page" : undefined}
             >
               Blog
             </Link>
