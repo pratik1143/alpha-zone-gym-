@@ -617,18 +617,18 @@ export const setBiometricAccess = async (req: Request, res: Response) => {
     }
 
     const now = new Date().toISOString();
+    const commandId = `access_${isEmployee ? 'emp' : 'mem'}_${memberId}_${Date.now()}`;
     await recordRef.set({
       // Keep CRM access closed until the terminal confirms the requested state.
       // In particular, an unblock timeout must never grant software-side entry.
       biometricBlocked: true,
       biometricBlockPending: true,
       biometricBlockAction: enabled ? 'unblock' : 'block',
-      biometricBlockCommandId: null,
+      biometricBlockCommandId: commandId,
       biometricBlockedAt: record.biometricBlockedAt || now,
       biometricBlockReason: enabled ? (record.biometricBlockReason || 'Unblock pending terminal confirmation') : 'Manually blocked from Gate Control',
     }, { merge: true });
 
-    const commandId = `access_${isEmployee ? 'emp' : 'mem'}_${memberId}_${Date.now()}`;
     await firestore.collection('biometric_enrollment').doc(commandId).set({
       docId: commandId,
       command: 'set_user_access',
@@ -643,7 +643,6 @@ export const setBiometricAccess = async (req: Request, res: Response) => {
       createdAt: admin!.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin!.firestore.FieldValue.serverTimestamp(),
     });
-    await recordRef.set({ biometricBlockCommandId: commandId }, { merge: true });
     return res.json({ success: true, enrollmentDocId: commandId, enabled, message: enabled ? 'Access enable queued.' : 'Access disable queued.' });
   } catch (error: any) {
     return res.status(500).json({ success: false, error: error.message || 'Could not queue biometric access change.' });

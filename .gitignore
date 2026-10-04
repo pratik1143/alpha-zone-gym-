@@ -29,6 +29,7 @@ dist-ssr
 serviceAccountKey.json
 *.apk
 __pycache__
+device-service/device_service.lock
 .firebase
 build
 .wwebjs_auth

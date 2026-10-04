@@ -5,12 +5,14 @@ import socket
 import logging
 import json
 import urllib.request
+import urllib.error
 from datetime import datetime, date, timedelta
 import threading
 import subprocess
 import platform
 import struct
 from pathlib import Path
+import atexit
 from zk import ZK, const
 from zk.exception import ZKError
 import firebase_admin
@@ -44,6 +46,30 @@ logging.basicConfig(
         logging.StreamHandler(sys.stdout)
     ]
 )
+
+# A single terminal capture connection must own the gate. Multiple copies of
+# this service can observe one punch and race conflicting relay decisions.
+SERVICE_LOCK_HANDLE = None
+try:
+    SERVICE_LOCK_PATH = BASE_DIR / 'device_service.lock'
+    SERVICE_LOCK_HANDLE = open(SERVICE_LOCK_PATH, 'a+b')
+    SERVICE_LOCK_HANDLE.seek(0)
+    if os.name == 'nt':
+        import msvcrt
+        if SERVICE_LOCK_HANDLE.read(1) == b'':
+            SERVICE_LOCK_HANDLE.seek(0)
+            SERVICE_LOCK_HANDLE.write(b'0')
+            SERVICE_LOCK_HANDLE.flush()
+        SERVICE_LOCK_HANDLE.seek(0)
+        msvcrt.locking(SERVICE_LOCK_HANDLE.fileno(), msvcrt.LK_NBLCK, 1)
+        atexit.register(lambda: (SERVICE_LOCK_HANDLE.seek(0), msvcrt.locking(SERVICE_LOCK_HANDLE.fileno(), msvcrt.LK_UNLCK, 1)))
+    else:
+        import fcntl
+        fcntl.flock(SERVICE_LOCK_HANDLE.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        atexit.register(lambda: fcntl.flock(SERVICE_LOCK_HANDLE.fileno(), fcntl.LOCK_UN))
+except (OSError, BlockingIOError):
+    logging.error('Another Alpha Zone device service already owns the gate listener; exiting this duplicate instance.')
+    sys.exit(0)
 
 # Dynamic Service Account Key Discovery
 def resolve_service_account_path():
@@ -939,23 +965,28 @@ def set_terminal_user_enabled(conn, biometric_uid, enabled):
 
     privilege = int(user.privilege or 0)
     privilege = (privilege & 0x0E) | (0 if enabled else 1)
+    def fixed_bytes(value, length):
+        if isinstance(value, bytes):
+            encoded = value
+        else:
+            encoded = str(value or '').encode('utf-8', errors='ignore')
+        return encoded.ljust(length, b'\x00')[:length]
+
     if conn.user_packet_size == 28:
         user_packet = struct.pack(
             '<HB5s8sIxBHI', int(user.uid), privilege,
-            str(user.password or '').encode('utf-8', errors='ignore'),
-            str(user.name or '').encode('utf-8', errors='ignore'),
+            fixed_bytes(user.password, 5), fixed_bytes(user.name, 8),
             int(user.card or 0), int(user.group_id or 0), 0, int(uid_string)
         )
     elif conn.user_packet_size == 72:
         user_packet = struct.pack(
             '<HB8s24s4sx7sx24s', int(user.uid), privilege,
-            str(user.password or '').encode('utf-8', errors='ignore'),
-            str(user.name or '').encode('utf-8', errors='ignore').ljust(24, b'\x00')[:24],
-            int(user.card or 0), str(user.group_id or '').encode('utf-8', errors='ignore'),
-            uid_string.encode('utf-8', errors='ignore')
+            fixed_bytes(user.password, 8), fixed_bytes(user.name, 24),
+            struct.pack('<I', int(user.card or 0))[:4],
+            fixed_bytes(user.group_id, 7), fixed_bytes(uid_string, 24)
         )
     else:
-        raise RuntimeError(f'Unsupported terminal user record size: {conn.user_packet_size}')
+        raise RuntimeError(f'Unsupported terminal user record size: {conn.user_packet_size}; refusing an unverified access change.')
 
     # A device-side fingerprint count comparison ensures this command changed
     # only the account permission bit and never removed or replaced templates.
@@ -1001,6 +1032,28 @@ def run_set_user_access(enrollment_doc_id, member_id, member_name, biometric_uid
         conn = None
         try:
             push_status('connecting', 'Connecting to terminal to update user access...', {'enabled': bool(enabled)})
+            target_snapshot = target_ref.get()
+            if not target_snapshot.exists:
+                raise RuntimeError(f'{target_collection[:-1].capitalize()} record no longer exists.')
+            current_record = target_snapshot.to_dict() or {}
+            if manual_access:
+                current_action = 'unblock' if enabled else 'block'
+                if (current_record.get('biometricBlockCommandId') != enrollment_doc_id
+                        or current_record.get('biometricBlockPending') is not True
+                        or current_record.get('biometricBlockAction') != current_action):
+                    push_status('cancelled', 'This access command was superseded by a newer user action.')
+                    return
+                if enabled and not membership_allows_terminal_access(current_record, allow_explicit_unblock=True):
+                    target_ref.set({
+                        'biometricBlocked': True,
+                        'biometricBlockPending': False,
+                        'biometricBlockAction': None,
+                    }, merge=True)
+                    push_status('failed', 'Membership is not eligible for access; renew or activate it first.')
+                    return
+            elif membership_allows_terminal_access(current_record) != bool(enabled):
+                push_status('cancelled', 'This membership policy command was superseded by newer membership state.')
+                return
             zk = ZK(DEVICE_IP, port=DEVICE_PORT, timeout=15)
             conn = zk.connect()
             push_status('processing', 'Updating terminal account state without touching fingerprints...')
@@ -1145,6 +1198,27 @@ def make_enrollment_listener():
                 target_collection = data.get('targetCollection') or ('employees' if data.get('isEmployee') else 'members')
                 enabled = data.get('enabled') is True
                 manual_access = data.get('source') != 'membership_policy'
+                target_collection = target_collection if target_collection in ('members', 'employees') else 'members'
+                current_snapshot = db.collection(target_collection).document(member_id).get() if member_id else None
+                current_record = current_snapshot.to_dict() if current_snapshot and current_snapshot.exists else None
+                current_action = 'unblock' if enabled else 'block'
+                is_current = bool(current_record)
+                if manual_access:
+                    is_current = is_current and (
+                        current_record.get('biometricBlockCommandId') == doc.id
+                        and current_record.get('biometricBlockPending') is True
+                        and current_record.get('biometricBlockAction') == current_action
+                    )
+                else:
+                    is_current = is_current and (membership_allows_terminal_access(current_record) == enabled)
+                if not is_current:
+                    logging.info(f"[ACCESS] Skipping stale command {doc.id}; newer CRM access state takes precedence.")
+                    doc.reference.update({
+                        'status': 'cancelled',
+                        'message': 'Skipped because a newer CRM access or membership state superseded this command.',
+                        'updatedAt': datetime.utcnow().isoformat() + 'Z',
+                    })
+                    continue
                 logging.info(f"[ACCESS] Setting terminal user {biometric_uid} {'enabled' if enabled else 'disabled'} without deleting templates.")
                 threading.Thread(
                     target=run_set_user_access,
@@ -1178,10 +1252,13 @@ def parse_membership_date(value):
         return None
 
 
-def membership_allows_terminal_access(data, today=None):
+def membership_allows_terminal_access(data, today=None, allow_explicit_unblock=False):
     today = today or date.today()
     statuses = {str(data.get(key, '') or '').strip().casefold() for key in ('status', 'membershipStatus')}
-    if data.get('biometricBlocked') is True or data.get('isBlocked') is True or data.get('blacklisted') is True or statuses.intersection({'blocked', 'blacklisted', 'frozen', 'expired', 'inactive', 'suspended', 'cancelled', 'canceled'}):
+    explicit_unblock_pending = allow_explicit_unblock and data.get('biometricBlockPending') is True and data.get('biometricBlockAction') == 'unblock'
+    if ((data.get('biometricBlocked') is True and not explicit_unblock_pending)
+            or data.get('isBlocked') is True or data.get('blacklisted') is True
+            or statuses.intersection({'blocked', 'blacklisted', 'frozen', 'expired', 'inactive', 'suspended', 'cancelled', 'canceled'})):
         return False
     start = parse_membership_date(data.get('startDate') or data.get('membershipStartDate') or data.get('joinDate'))
     expiry = parse_membership_date(data.get('expiryDate') or data.get('membershipExpiryDate') or data.get('endDate'))
@@ -1235,7 +1312,9 @@ def schedule_membership_access_boundary(collection_name, doc_id, data):
     if not boundaries:
         return
     next_boundary = min(boundaries)
-    delay = max(1, (next_boundary - datetime.now()).total_seconds())
+    # Windows wait handles used by threading.Timer cannot accept values above
+    # TIMEOUT_MAX (~49 days). Wake at the cap and re-schedule until the boundary.
+    delay = min(max(1, (next_boundary - datetime.now()).total_seconds()), threading.TIMEOUT_MAX - 1)
 
     def apply_boundary():
         try:
@@ -1269,7 +1348,6 @@ def make_membership_access_listener(collection_name):
             signature = (
                 str(data.get('status', '')).casefold(),
                 str(data.get('membershipStatus', '')).casefold(),
-                str(data.get('biometricBlocked', False)),
                 str(data.get('isBlocked', False)),
                 str(data.get('blacklisted', False)),
                 str(data.get('startDate') or data.get('membershipStartDate') or data.get('joinDate') or ''),
@@ -1280,8 +1358,10 @@ def make_membership_access_listener(collection_name):
             schedule_membership_access_boundary(collection_name, doc.id, data)
 
             policy_changed = previous is not None and previous != signature
-            initially_ineligible = previous is None and not membership_allows_terminal_access(data)
-            if policy_changed or initially_ineligible:
+            # Avoid flooding a live terminal with commands for every historical
+            # expired record on startup. Date boundaries and later status changes
+            # remain watched; every punch is also validated directly in Firestore.
+            if policy_changed:
                 queue_membership_policy_access(collection_name, doc.id, data, membership_allows_terminal_access(data))
     return membership_snapshot_listener
 
@@ -1355,8 +1435,22 @@ def run_membership_validation(user_id, device_id, device_name, branch, timestamp
         
         with urllib.request.urlopen(req, timeout=3) as resp:
             api_result = json.loads(resp.read().decode('utf-8'))
+    except urllib.error.HTTPError as err:
+        # An explicit membership denial from the API always wins.
+        if err.code == 403:
+            try:
+                denied = json.loads(err.read().decode('utf-8', errors='replace'))
+            except Exception:
+                denied = {}
+            logging.warning(f"[API Checkin Deny]: UserID={user_id_str}: {denied.get('reason') or denied.get('error') or 'Access denied by membership API.'}")
+            return False
+        # This internal service may receive 401 because the CRM endpoint requires a
+        # dashboard token. In that case use the direct Firestore gate validation below.
+        logging.warning(f"[API Checkin Notice]: HTTP {err.code}; applying direct Firestore gate validation.")
     except Exception as err:
-        logging.warning(f"[API Checkin Notice]: {err}")
+        # If the CRM API is unavailable, only a fresh direct Firestore record may
+        # authorize entry below. An absent/failed roster lookup stays unmapped/denied.
+        logging.warning(f"[API Checkin Notice]: {err}; applying direct Firestore gate validation.")
 
     # 3. Lookup member in Firestore / local roster with multi-type matching
     member = None
