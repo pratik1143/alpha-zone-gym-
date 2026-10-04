@@ -8,7 +8,7 @@ import {
   upgradeMembership
 } from '../controllers/member.controller';
 import { getAttendanceFeed, createCheckIn, checkoutLog, triggerGateUnlock, getGateStatus, getAccessLogs, getDoorStatus, getDashboardAnalyticsFeed, getAttendanceSummaryFeed } from '../controllers/attendance.controller';
-import { getDevices, createDevice, updateDevice, deleteDevice, getDeviceLogs, triggerSimulationTap, restartDevice, queueConnectionTest, queueReadUsers, queueReadAttendance, getTesterStatus, queueSyncFirebase, queueImportUsers, startEnrollFingerprint, deleteEnrollment, syncMemberToDevice, getEnrollmentStatus, getEnrollmentCommandStatus, getPythonStatus, getLatestPunch, autoMapAllBiometrics } from '../controllers/device.controller';
+import { getDevices, createDevice, updateDevice, deleteDevice, getDeviceLogs, triggerSimulationTap, restartDevice, queueConnectionTest, queueReadUsers, queueReadAttendance, getTesterStatus, queueSyncFirebase, queueImportUsers, startEnrollFingerprint, deleteEnrollment, syncMemberToDevice, setBiometricAccess, getEnrollmentStatus, getEnrollmentCommandStatus, getPythonStatus, getLatestPunch, autoMapAllBiometrics } from '../controllers/device.controller';
 import { getInvoices, createInvoice, updateInvoice, deleteInvoice, markPaymentPaid } from '../controllers/billing.controller';
 import { 
   getWorkoutPlan, saveWorkoutPlan, getDietPlan, saveDietPlan,
@@ -113,6 +113,7 @@ router.post('/devices/sync-member', syncMemberToDevice);
 router.post('/devices/biometric/enroll-fingerprint', startEnrollFingerprint);
 router.post('/devices/biometric/delete', deleteEnrollment);
 router.post('/devices/biometric/sync', syncMemberToDevice);
+router.post('/devices/biometric/access', setBiometricAccess);
 router.get('/devices/biometric/command/:commandId', getEnrollmentCommandStatus);
 router.post('/devices/biometric/auto-map-all', autoMapAllBiometrics);
 router.get('/devices/biometric/status/:memberId', getEnrollmentStatus);

@@ -4,6 +4,7 @@ import { simulateManualTap } from '../services/deviceSync.service';
 import { execFile } from 'child_process';
 import path from 'path';
 import fs from 'fs';
+import { getKolkataDateString } from '../services/followupAutomation.service';
 
 /**
  * Get all devices, including calculated summary stats for the dashboard.
@@ -578,6 +579,74 @@ export const deleteEnrollment = async (req: Request, res: Response) => {
     res.json({ success: true, enrollmentDocId: docId, message: 'Biometric deletion queued' });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
+  }
+};
+
+/** Enable/disable one terminal account without touching its fingerprint templates. */
+export const setBiometricAccess = async (req: Request, res: Response) => {
+  try {
+    const memberId = String(req.body.memberId || '').trim();
+    const isEmployee = req.body.isEmployee === true;
+    const enabled = req.body.enabled === true;
+    const biometricId = String(req.body.biometricId || '').trim();
+    if (!memberId || !/^\d{1,5}$/.test(biometricId) || Number(biometricId) < 1 || Number(biometricId) > 65535) {
+      return res.status(400).json({ success: false, error: 'A CRM record and valid numeric biometric ID are required.' });
+    }
+    const firestore = getFirestoreDb();
+    if (!firestore) return res.status(503).json({ success: false, error: 'Firebase is unavailable.' });
+
+    const collection = isEmployee ? 'employees' : 'members';
+    const recordRef = firestore.collection(collection).doc(memberId);
+    const recordSnap = await recordRef.get();
+    if (!recordSnap.exists) return res.status(404).json({ success: false, error: `${isEmployee ? 'Employee' : 'Member'} not found.` });
+    const record = recordSnap.data() || {};
+    const storedId = String(record.biometricId ?? record.deviceUserId ?? '').trim();
+    if (storedId !== biometricId) return res.status(409).json({ success: false, error: 'The biometric ID does not match this CRM record.' });
+
+    if (enabled) {
+      const today = getKolkataDateString();
+      const expiry = String(record.expiryDate || record.membershipExpiryDate || '').slice(0, 10);
+      const start = String(record.startDate || record.joinDate || '').slice(0, 10);
+      const statuses = [record.status, record.membershipStatus].map(value => String(value || '').toLowerCase());
+      if (record.biometricBlocked === true) {
+        // Explicit unblock is allowed, but membership restrictions still apply.
+      }
+      if (statuses.some(status => ['expired', 'frozen', 'blocked', 'blacklisted', 'inactive'].includes(status)) || (expiry && expiry < today) || (start && start > today)) {
+        return res.status(409).json({ success: false, error: 'Membership is not currently eligible for gate access. Renew or activate it first.' });
+      }
+    }
+
+    const now = new Date().toISOString();
+    await recordRef.set({
+      // Keep CRM access closed until the terminal confirms the requested state.
+      // In particular, an unblock timeout must never grant software-side entry.
+      biometricBlocked: true,
+      biometricBlockPending: true,
+      biometricBlockAction: enabled ? 'unblock' : 'block',
+      biometricBlockCommandId: null,
+      biometricBlockedAt: record.biometricBlockedAt || now,
+      biometricBlockReason: enabled ? (record.biometricBlockReason || 'Unblock pending terminal confirmation') : 'Manually blocked from Gate Control',
+    }, { merge: true });
+
+    const commandId = `access_${isEmployee ? 'emp' : 'mem'}_${memberId}_${Date.now()}`;
+    await firestore.collection('biometric_enrollment').doc(commandId).set({
+      docId: commandId,
+      command: 'set_user_access',
+      status: 'pending',
+      memberId,
+      memberName: String(record.name || ''),
+      biometricId: Number(biometricId),
+      isEmployee,
+      targetCollection: collection,
+      enabled,
+      message: enabled ? 'Enabling existing terminal fingerprint access...' : 'Disabling terminal access; stored fingerprints will be kept...',
+      createdAt: admin!.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin!.firestore.FieldValue.serverTimestamp(),
+    });
+    await recordRef.set({ biometricBlockCommandId: commandId }, { merge: true });
+    return res.json({ success: true, enrollmentDocId: commandId, enabled, message: enabled ? 'Access enable queued.' : 'Access disable queued.' });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, error: error.message || 'Could not queue biometric access change.' });
   }
 };
 

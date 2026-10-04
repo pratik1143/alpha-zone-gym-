@@ -9,6 +9,7 @@ from datetime import datetime, date, timedelta
 import threading
 import subprocess
 import platform
+import struct
 from pathlib import Path
 from zk import ZK, const
 from zk.exception import ZKError
@@ -106,6 +107,8 @@ biometric_lock = threading.Lock()
 last_unlock_time = {}
 processed_fingerprints = set()
 processed_unlock_requests = set()
+membership_expiry_timers = {}
+membership_policy_cache = {}
 
 def check_internet_connection():
     """Checks real internet connectivity by attempting socket connection to DNS servers."""
@@ -924,6 +927,131 @@ def run_delete_biometric(enrollment_doc_id, member_id, member_name, biometric_ui
             push_status('failed', f'Delete failed: {err_msg}')
 
 
+def set_terminal_user_enabled(conn, biometric_uid, enabled):
+    """Toggle only the terminal user's enabled bit; fingerprint templates stay intact."""
+    from zk import const
+
+    uid_string = str(biometric_uid).strip()
+    users = conn.get_users()
+    user = next((item for item in users if str(item.user_id).strip() == uid_string), None)
+    if user is None:
+        raise RuntimeError(f'Terminal user {uid_string} was not found; no access flag was changed.')
+
+    privilege = int(user.privilege or 0)
+    privilege = (privilege & 0x0E) | (0 if enabled else 1)
+    if conn.user_packet_size == 28:
+        user_packet = struct.pack(
+            '<HB5s8sIxBHI', int(user.uid), privilege,
+            str(user.password or '').encode('utf-8', errors='ignore'),
+            str(user.name or '').encode('utf-8', errors='ignore'),
+            int(user.card or 0), int(user.group_id or 0), 0, int(uid_string)
+        )
+    elif conn.user_packet_size == 72:
+        user_packet = struct.pack(
+            '<HB8s24s4sx7sx24s', int(user.uid), privilege,
+            str(user.password or '').encode('utf-8', errors='ignore'),
+            str(user.name or '').encode('utf-8', errors='ignore').ljust(24, b'\x00')[:24],
+            int(user.card or 0), str(user.group_id or '').encode('utf-8', errors='ignore'),
+            uid_string.encode('utf-8', errors='ignore')
+        )
+    else:
+        raise RuntimeError(f'Unsupported terminal user record size: {conn.user_packet_size}')
+
+    # A device-side fingerprint count comparison ensures this command changed
+    # only the account permission bit and never removed or replaced templates.
+    before_templates = [fp for fp in conn.get_templates() if str(fp.uid) == str(user.uid)]
+    conn.disable_device()
+    try:
+        result = conn._ZK__send_command(const.CMD_USER_WRQ, user_packet, 1024)
+        if not result.get('status'):
+            raise RuntimeError('Terminal rejected the user enable/disable command.')
+        conn.refresh_data()
+    finally:
+        conn.enable_device()
+
+    verified_users = conn.get_users()
+    verified_user = next((item for item in verified_users if str(item.user_id).strip() == uid_string), None)
+    if verified_user is None:
+        raise RuntimeError(f'Terminal did not return user {uid_string} after access update.')
+    is_disabled = bool(int(verified_user.privilege or 0) & 1)
+    if is_disabled == enabled:
+        raise RuntimeError(f'Terminal access read-back mismatch for user {uid_string}.')
+    after_templates = [fp for fp in conn.get_templates() if str(fp.uid) == str(verified_user.uid)]
+    if len(after_templates) != len(before_templates):
+        raise RuntimeError(
+            f'Fingerprint verification failed: template count changed from {len(before_templates)} to {len(after_templates)}.'
+        )
+    return {'enabled': enabled, 'fingerprintsCount': len(after_templates), 'userName': verified_user.name}
+
+
+def run_set_user_access(enrollment_doc_id, member_id, member_name, biometric_uid, enabled, target_collection='members', manual_access=True):
+    """Enable/disable a terminal account in place and verify retained templates."""
+    enroll_ref = db.collection('biometric_enrollment').document(enrollment_doc_id)
+    target_collection = target_collection if target_collection in ('members', 'employees') else 'members'
+    target_ref = db.collection(target_collection).document(member_id)
+    profile_ref = db.collection('biometric_profiles').document(member_id)
+
+    def push_status(status, message, extra=None):
+        payload = {'status': status, 'message': message, 'updatedAt': datetime.utcnow().isoformat() + 'Z'}
+        if extra:
+            payload.update(extra)
+        enroll_ref.update(payload)
+
+    with biometric_lock:
+        conn = None
+        try:
+            push_status('connecting', 'Connecting to terminal to update user access...', {'enabled': bool(enabled)})
+            zk = ZK(DEVICE_IP, port=DEVICE_PORT, timeout=15)
+            conn = zk.connect()
+            push_status('processing', 'Updating terminal account state without touching fingerprints...')
+            result = set_terminal_user_enabled(conn, biometric_uid, bool(enabled))
+            now_iso = datetime.utcnow().isoformat() + 'Z'
+            target_update = {
+                'biometricEnrolled': result['fingerprintsCount'] > 0,
+                'fingerprintEnrolled': result['fingerprintsCount'] > 0,
+                'fingerprintStatus': 'ENROLLED' if result['fingerprintsCount'] > 0 else 'not_enrolled',
+                'lastBiometricSync': now_iso,
+            }
+            if manual_access:
+                target_update.update({
+                    'biometricBlocked': not bool(enabled),
+                    'biometricBlockPending': False,
+                    'biometricBlockAction': None,
+                    'biometricBlockCommandId': None,
+                    'biometricBlockedAt': None if enabled else now_iso,
+                    'biometricBlockReason': None if enabled else 'Manually blocked from gate control',
+                })
+            target_ref.set(target_update, merge=True)
+            profile_ref.set({'lastSync': now_iso, 'deviceAccessEnabled': bool(enabled)}, merge=True)
+            device_id = os.getenv('EASYBIO_DEVICE_ID', 'dev_k90_main')
+            db.collection('deviceUsers').document(f'dev_{device_id}_usr_{int(biometric_uid)}').set({
+                'deviceId': device_id,
+                'userId': int(biometric_uid),
+                'userName': result['userName'],
+                'fingerprintsCount': result['fingerprintsCount'],
+                'enrollmentStatus': 'Enrolled' if result['fingerprintsCount'] > 0 else 'Card Only',
+                'accessEnabled': bool(enabled),
+                'lastActivity': now_iso,
+            }, merge=True)
+            message = ('Access enabled' if enabled else 'Access disabled') + f" for {member_name}; {result['fingerprintsCount']} fingerprint template(s) retained."
+            push_status('success', message, {'fingerprintsCount': result['fingerprintsCount'], 'enabled': bool(enabled)})
+            logging.info(f"[ACCESS] {message}")
+        except Exception as error:
+            message = str(error)
+            logging.error(f"[ACCESS] Could not update terminal user {biometric_uid}: {message}")
+            # Keep block requests fail-closed. An unsuccessful enable must not clear
+            # the CRM block bit; a retry can safely issue the idempotent command.
+            if manual_access:
+                target_ref.set({'biometricBlocked': True, 'biometricBlockPending': False, 'biometricBlockAction': None}, merge=True)
+            push_status('failed', f'Access update failed: {message}')
+        finally:
+            if conn:
+                try:
+                    conn.disconnect()
+                except Exception:
+                    pass
+
+
 def run_sync_user_to_device(enrollment_doc_id, member_id, member_name, biometric_uid):
     """Syncs a CRM member's user record to the device (creates user slot if not exists)."""
     enroll_ref = db.collection('biometric_enrollment').document(enrollment_doc_id)
@@ -1010,6 +1138,20 @@ def make_enrollment_listener():
                     daemon=True
                 ).start()
 
+            elif command == 'set_user_access':
+                member_id = str(data.get('memberId', '')).strip()
+                biometric_uid = str(data.get('biometricId', '')).strip()
+                member_name = data.get('memberName', 'Gym Member')
+                target_collection = data.get('targetCollection') or ('employees' if data.get('isEmployee') else 'members')
+                enabled = data.get('enabled') is True
+                manual_access = data.get('source') != 'membership_policy'
+                logging.info(f"[ACCESS] Setting terminal user {biometric_uid} {'enabled' if enabled else 'disabled'} without deleting templates.")
+                threading.Thread(
+                    target=run_set_user_access,
+                    args=(doc.id, member_id, member_name, biometric_uid, enabled, target_collection, manual_access),
+                    daemon=True
+                ).start()
+
             elif command == 'sync_to_device':
                 logging.info(f"[Enrollment Listener] Sync to device triggered for {member_name}")
                 threading.Thread(
@@ -1019,6 +1161,129 @@ def make_enrollment_listener():
                 ).start()
 
     return enrollment_snapshot_listener
+
+
+def parse_membership_date(value):
+    if not value:
+        return None
+    try:
+        if hasattr(value, 'date') and callable(value.date):
+            return value.date()
+        if hasattr(value, 'to_datetime'):
+            return value.to_datetime().date()
+        if isinstance(value, (int, float)):
+            return datetime.fromtimestamp(value / 1000 if value > 10_000_000_000 else value).date()
+        return datetime.strptime(str(value).strip()[:10], '%Y-%m-%d').date()
+    except (TypeError, ValueError):
+        return None
+
+
+def membership_allows_terminal_access(data, today=None):
+    today = today or date.today()
+    statuses = {str(data.get(key, '') or '').strip().casefold() for key in ('status', 'membershipStatus')}
+    if data.get('biometricBlocked') is True or data.get('isBlocked') is True or data.get('blacklisted') is True or statuses.intersection({'blocked', 'blacklisted', 'frozen', 'expired', 'inactive', 'suspended', 'cancelled', 'canceled'}):
+        return False
+    start = parse_membership_date(data.get('startDate') or data.get('membershipStartDate') or data.get('joinDate'))
+    expiry = parse_membership_date(data.get('expiryDate') or data.get('membershipExpiryDate') or data.get('endDate'))
+    if start and today < start:
+        return False
+    if expiry and today > expiry:
+        return False
+    return True
+
+
+def queue_membership_policy_access(collection_name, doc_id, data, enabled):
+    biometric_uid = str(data.get('biometricId') or data.get('deviceUserId') or '').strip()
+    if not biometric_uid.isdigit() or not 1 <= int(biometric_uid) <= 65535:
+        return
+    command_id = f"policy_{collection_name}_{doc_id}_{'on' if enabled else 'off'}_{int(time.time() * 1000)}"
+    try:
+        db.collection('biometric_enrollment').document(command_id).set({
+            'docId': command_id,
+            'command': 'set_user_access',
+            'status': 'pending',
+            'source': 'membership_policy',
+            'memberId': doc_id,
+            'targetCollection': collection_name,
+            'isEmployee': collection_name == 'employees',
+            'memberName': data.get('name') or ('Employee' if collection_name == 'employees' else 'Member'),
+            'biometricId': int(biometric_uid),
+            'enabled': bool(enabled),
+            'message': 'Applying membership access policy; fingerprints will be preserved...',
+            'createdAt': firestore.SERVER_TIMESTAMP,
+            'updatedAt': firestore.SERVER_TIMESTAMP,
+        })
+        logging.info(f"[ACCESS POLICY] Queued {collection_name}/{doc_id} -> {'enabled' if enabled else 'disabled'} (biometric ID {biometric_uid}).")
+    except Exception as error:
+        logging.error(f"[ACCESS POLICY] Could not queue {collection_name}/{doc_id}: {error}")
+
+
+def schedule_membership_access_boundary(collection_name, doc_id, data):
+    key = f'{collection_name}/{doc_id}'
+    old_timer = membership_expiry_timers.pop(key, None)
+    if old_timer:
+        old_timer.cancel()
+
+    today = date.today()
+    start = parse_membership_date(data.get('startDate') or data.get('membershipStartDate') or data.get('joinDate'))
+    expiry = parse_membership_date(data.get('expiryDate') or data.get('membershipExpiryDate') or data.get('endDate'))
+    boundaries = []
+    if start and start > today:
+        boundaries.append(datetime.combine(start, datetime.min.time()))
+    if expiry and expiry >= today:
+        boundaries.append(datetime.combine(expiry + timedelta(days=1), datetime.min.time()))
+    if not boundaries:
+        return
+    next_boundary = min(boundaries)
+    delay = max(1, (next_boundary - datetime.now()).total_seconds())
+
+    def apply_boundary():
+        try:
+            latest = db.collection(collection_name).document(doc_id).get()
+            if not latest.exists:
+                return
+            current = latest.to_dict() or {}
+            queue_membership_policy_access(collection_name, doc_id, current, membership_allows_terminal_access(current))
+            schedule_membership_access_boundary(collection_name, doc_id, current)
+        except Exception as error:
+            logging.error(f"[ACCESS POLICY] Boundary check failed for {collection_name}/{doc_id}: {error}")
+
+    timer = threading.Timer(delay, apply_boundary)
+    timer.daemon = True
+    membership_expiry_timers[key] = timer
+    timer.start()
+
+
+def make_membership_access_listener(collection_name):
+    def membership_snapshot_listener(_snapshot, changes, _read_time):
+        for change in changes:
+            doc = change.document
+            key = f'{collection_name}/{doc.id}'
+            if change.type.name == 'REMOVED':
+                timer = membership_expiry_timers.pop(key, None)
+                if timer:
+                    timer.cancel()
+                membership_policy_cache.pop(key, None)
+                continue
+            data = doc.to_dict() or {}
+            signature = (
+                str(data.get('status', '')).casefold(),
+                str(data.get('membershipStatus', '')).casefold(),
+                str(data.get('biometricBlocked', False)),
+                str(data.get('isBlocked', False)),
+                str(data.get('blacklisted', False)),
+                str(data.get('startDate') or data.get('membershipStartDate') or data.get('joinDate') or ''),
+                str(data.get('expiryDate') or data.get('membershipExpiryDate') or data.get('endDate') or ''),
+            )
+            previous = membership_policy_cache.get(key)
+            membership_policy_cache[key] = signature
+            schedule_membership_access_boundary(collection_name, doc.id, data)
+
+            policy_changed = previous is not None and previous != signature
+            initially_ineligible = previous is None and not membership_allows_terminal_access(data)
+            if policy_changed or initially_ineligible:
+                queue_membership_policy_access(collection_name, doc.id, data, membership_allows_terminal_access(data))
+    return membership_snapshot_listener
 
 
 def trigger_door_relay(conn, device_name="Main Gate", duration_seconds=3):
@@ -1187,26 +1452,31 @@ def run_membership_validation(user_id, device_id, device_name, branch, timestamp
         member_id_str = member.get('id', '')
         member_code_str = member.get('memberId', f"AZ-2026-{user_id_str}")
         
-        exp_date_str = member.get('expiryDate', '')
-        if exp_date_str:
+        exp_date_value = member.get('expiryDate') or member.get('membershipExpiryDate') or member.get('endDate')
+        if exp_date_value:
             try:
-                exp_dt = datetime.strptime(exp_date_str, "%Y-%m-%d")
-                delta = (exp_dt.date() - date.today()).days
+                if hasattr(exp_date_value, 'date') and callable(exp_date_value.date):
+                    exp_date = exp_date_value.date()
+                else:
+                    exp_date = datetime.strptime(str(exp_date_value).strip()[:10], "%Y-%m-%d").date()
+                delta = (exp_date - date.today()).days
                 days_left = delta
                 if delta < 0:
                     expired_days = abs(delta)
                     status = 'expired'
                     reason = f'Membership expired {expired_days} days ago'
-            except Exception:
-                pass
+            except (TypeError, ValueError):
+                logging.warning(f"[Membership] Could not parse expiry date for {member_name}: {exp_date_value!r}")
 
-        if member.get('biometricBlocked') is True or str(member.get('status', '')).lower() in ('blocked', 'blacklisted'):
+        member_status = str(member.get('status', '')).strip().casefold()
+        membership_status = str(member.get('membershipStatus', '')).strip().casefold()
+        if member.get('biometricBlocked') is True or member.get('biometricBlockPending') is True or member.get('isBlocked') is True or member.get('blacklisted') is True or member_status in ('blocked', 'blacklisted', 'inactive', 'suspended', 'cancelled', 'canceled') or membership_status in ('blocked', 'blacklisted', 'inactive', 'suspended', 'cancelled', 'canceled'):
             status = 'denied'
             reason = member.get('biometricBlockReason') or 'Biometric access is blocked for this member'
-        elif member.get('status') == 'frozen':
+        elif member_status == 'frozen' or membership_status == 'frozen':
             status = 'frozen'
             reason = 'Membership is frozen'
-        elif member.get('status') == 'expired':
+        elif member_status == 'expired' or membership_status == 'expired':
             status = 'expired'
             reason = 'Membership has expired'
 
@@ -1906,6 +2176,13 @@ def main_sync_orchestrator():
         logging.info("Attached biometric enrollment listener on biometric_enrollment collection.")
     except Exception as e:
         logging.error(f"Failed to attach enrollment listener: {e}")
+
+    for collection_name in ('members', 'employees'):
+        try:
+            access_watch = db.collection(collection_name).on_snapshot(make_membership_access_listener(collection_name))
+            logging.info(f"Attached access policy listener on {collection_name} for automatic expiry/renewal and terminal user state.")
+        except Exception as e:
+            logging.error(f"Failed to attach {collection_name} access policy listener: {e}")
 
         
     while threads_running:

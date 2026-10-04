@@ -89,6 +89,7 @@ app.get('/api/gate/roster', async (req: express.Request, res: express.Response) 
           biometricBlocked: member.biometricBlocked === true,
           biometricBlockPending: member.biometricBlockPending === true,
           biometricBlockAction: member.biometricBlockAction || null,
+          biometricBlockCommandId: member.biometricBlockCommandId || null,
           biometricBlockReason: member.biometricBlockReason || '',
           biometricBlockedAt: member.biometricBlockedAt || null
         };
@@ -113,6 +114,7 @@ app.get('/api/gate/roster', async (req: express.Request, res: express.Response) 
         biometricBlocked: employee.biometricBlocked === true,
         biometricBlockPending: employee.biometricBlockPending === true,
         biometricBlockAction: employee.biometricBlockAction || null,
+        biometricBlockCommandId: employee.biometricBlockCommandId || null,
         biometricBlockReason: employee.biometricBlockReason || '',
         biometricBlockedAt: employee.biometricBlockedAt || null
       };
@@ -465,7 +467,7 @@ const renderGateHtml = (req: express.Request, res: express.Response) => {
     <div id="tabContentBlocked" class="hidden w-full max-w-2xl bg-slate-900/90 border border-rose-900/50 rounded-3xl p-6 shadow-2xl space-y-5">
       <div>
         <h2 class="text-lg font-black text-white uppercase tracking-tight">🚫 Blocked Client &amp; Employee Access</h2>
-        <p class="text-xs text-slate-400 mt-1">Unblock syncs the user slot to the terminal. Fingerprint enrollment may be required before biometric entry works again.</p>
+        <p class="text-xs text-slate-400 mt-1">Block or restore the user on the terminal without deleting saved fingerprints. Expired memberships are denied automatically until renewed.</p>
       </div>
       <input id="searchBlocked" type="search" oninput="renderBlockedRoster()" placeholder="Search by biometric ID, name, phone, or staff/member ID..." class="w-full h-11 bg-slate-800 border border-slate-700 rounded-2xl px-4 text-xs font-bold text-white placeholder-slate-500 focus:outline-none focus:border-blue-500" />
       <div class="flex flex-wrap items-center justify-between gap-3">
@@ -659,42 +661,27 @@ const renderGateHtml = (req: express.Request, res: express.Response) => {
       const original = button.textContent;
       button.disabled = true;
       button.textContent = 'SYNCING...';
-      const endpoint = kind === 'employee' ? '/api/employees/' : '/api/members/';
-      const write = async payload => {
-        const response = await fetch(endpoint + encodeURIComponent(id), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-        const data = await response.json().catch(() => ({}));
-        if (!response.ok || data.success === false) throw new Error(data.error || 'Could not update biometric access.');
-        return data;
-      };
       try {
-        await write({ biometricBlocked: true, biometricBlockPending: true, biometricBlockAction: 'unblock' });
-        let commandId = typeof person.biometricBlockCommandId === 'string' ? person.biometricBlockCommandId : '';
-        if (!commandId) {
-          const response = await fetch('/api/devices/biometric/sync', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ memberId: id, memberName: person.name, biometricId: Number(getCleanNumericId(person)), isEmployee: kind === 'employee' }) });
-          const queued = await response.json().catch(() => ({}));
-          if (!response.ok || !queued.success || !queued.enrollmentDocId) throw new Error(queued.error || 'Could not queue device sync.');
-          commandId = queued.enrollmentDocId;
-          person.biometricBlockCommandId = commandId;
-          await write({ biometricBlockCommandId: commandId });
-        }
-        const deadline = Date.now() + 25000;
+        const response = await fetch('/api/devices/biometric/access', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ memberId: id, biometricId: Number(getCleanNumericId(person)), enabled: true, isEmployee: kind === 'employee' }) });
+        const queued = await response.json().catch(() => ({}));
+        if (!response.ok || !queued.success || !queued.enrollmentDocId) throw new Error(queued.error || 'Could not queue terminal enable.');
+        const deadline = Date.now() + 30000;
         let complete = false;
         while (Date.now() < deadline) {
-          const statusResponse = await fetch('/api/devices/biometric/command/' + encodeURIComponent(commandId));
+          const statusResponse = await fetch('/api/devices/biometric/command/' + encodeURIComponent(queued.enrollmentDocId));
           const status = await statusResponse.json().catch(() => ({}));
-          if (!statusResponse.ok) throw new Error(status.error || 'Could not read device sync status.');
+          if (!statusResponse.ok) throw new Error(status.error || 'Could not read device access status.');
           if (status.status === 'success') { complete = true; break; }
-          if (status.status === 'failed') throw new Error(status.message || 'The device rejected the sync.');
-          await new Promise(resolve => setTimeout(resolve, 800));
+          if (status.status === 'failed') throw new Error(status.message || 'The device rejected the enable command.');
+          await new Promise(resolve => setTimeout(resolve, 700));
         }
-        if (!complete) throw new Error('Device has not confirmed sync yet. Access remains blocked; press Retry Unblock when the device is online.');
-        await write({ biometricBlocked: false, biometricBlockPending: false, biometricBlockAction: null, biometricBlockCommandId: null, biometricBlockedAt: null, biometricBlockReason: null });
+        if (!complete) throw new Error('Terminal has not confirmed enable yet. Retry when the device is online.');
         person.biometricBlocked = false;
         person.biometricBlockPending = false;
         person.biometricBlockAction = null;
         person.biometricBlockCommandId = null;
         const label = kind === 'employee' ? 'Employee' : 'Client';
-        document.getElementById('blockedCountText').textContent = label + ' unblocked · fingerprint may need re-enrollment';
+        document.getElementById('blockedCountText').textContent = label + ' enabled on terminal · saved fingerprint kept';
         await fetchRoster();
       } catch (error) {
         button.disabled = false;
@@ -779,6 +766,8 @@ const renderGateHtml = (req: express.Request, res: express.Response) => {
           const isEnrolled = hasFingerprintTemplate(m);
           const isMapped = hasMappedDeviceUser(m);
           const memberId = String(m.id || '');
+          const accessText = m.biometricBlocked ? 'Unblock Access' : 'Block Access';
+          const accessClass = m.biometricBlocked ? 'bg-emerald-600 hover:bg-emerald-500 border-emerald-500' : 'bg-rose-700 hover:bg-rose-600 border-rose-600';
           return \`
             <div class="p-3.5 rounded-2xl border bg-slate-800/60 border-slate-700/60 flex items-center justify-between hover:border-slate-700 transition-all">
               <div class="flex items-center gap-3">
@@ -790,9 +779,12 @@ const renderGateHtml = (req: express.Request, res: express.Response) => {
                   <div class="text-[11px] text-slate-400 mt-0.5">Fingerprint: <span class="\${isEnrolled ? 'text-emerald-400 font-bold' : 'text-amber-400 font-bold'}">\${isEnrolled ? 'ENROLLED' : 'NOT ENROLLED'}</span> • Device: <span class="\${isMapped ? 'text-emerald-400 font-bold' : 'text-slate-400'}">\${isMapped ? 'MAPPED' : 'NOT MAPPED'}</span></div>
                 </div>
               </div>
-              <button type="button" data-client-action="\${bioId ? 'enroll' : 'assign'}" data-member-id="\${encodeURIComponent(memberId)}" data-biometric-id="\${bioId}" data-encoded-name="\${encodeURIComponent(m.name || '')}" class="px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider border cursor-pointer \${bioId ? (isEnrolled ? 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700' : 'bg-blue-600 hover:bg-blue-500 text-white border-blue-500 shadow-md') : 'bg-amber-600 hover:bg-amber-500 text-white border-amber-500'}">
-                \${bioId ? (isEnrolled ? 'Re-Enroll' : 'Start Enroll') : 'Assign Biometric ID'}
-              </button>
+              <div class="flex items-center gap-2">
+                <button type="button" data-client-action="\${bioId ? 'enroll' : 'assign'}" data-member-id="\${encodeURIComponent(memberId)}" data-biometric-id="\${bioId}" data-encoded-name="\${encodeURIComponent(m.name || '')}" class="px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider border cursor-pointer \${bioId ? (isEnrolled ? 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700' : 'bg-blue-600 hover:bg-blue-500 text-white border-blue-500 shadow-md') : 'bg-amber-600 hover:bg-amber-500 text-white border-amber-500'}">
+                  \${bioId ? (isEnrolled ? 'Re-Enroll' : 'Start Enroll') : 'Assign Biometric ID'}
+                </button>
+                <button type="button" data-roster-access="1" data-person-kind="client" data-person-id="\${encodeURIComponent(memberId)}" data-biometric-id="\${bioId}" data-enabled="\${m.biometricBlocked ? 'false' : 'true'}" \${bioId ? '' : 'disabled'} class="px-3 py-2 rounded-xl text-[10px] font-black uppercase text-white border disabled:opacity-40 \${accessClass}">\${bioId ? accessText : 'No Bio ID'}</button>
+              </div>
             </div>
           \`;
         }).join('');
@@ -825,6 +817,8 @@ const renderGateHtml = (req: express.Request, res: express.Response) => {
           const isEnrolled = isEmployeeEnrollmentComplete(e);
           const hasDeviceTemplate = hasFingerprintTemplate(e);
           const employeeCode = e.employeeId || (bioId ? 'EMP-' + bioId : e.id);
+          const accessText = e.biometricBlocked ? 'Unblock Access' : 'Block Access';
+          const accessClass = e.biometricBlocked ? 'bg-emerald-600 hover:bg-emerald-500 border-emerald-500' : 'bg-rose-700 hover:bg-rose-600 border-rose-600';
           return \`
             <div class="p-3.5 rounded-2xl border bg-slate-800/60 border-slate-700/60 flex items-center justify-between hover:border-slate-700 transition-all">
               <div class="flex items-center gap-3">
@@ -837,9 +831,12 @@ const renderGateHtml = (req: express.Request, res: express.Response) => {
                   <div class="text-[11px] text-slate-400 mt-0.5">\${e.phone || 'No Phone'} • <span class="\${isEnrolled ? 'text-emerald-400 font-bold' : 'text-amber-400 font-bold'}">\${isEnrolled ? '✓ Enrolled' : (hasDeviceTemplate ? 'Pending · device template needs CRM verification' : 'Pending')}</span></div>
                 </div>
               </div>
-              <button \${bioId ? '' : 'disabled'} onclick="triggerEnroll('\${e.id}', '\${bioId}', '\${encodeURIComponent(e.name || '')}', true)" class="px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider border cursor-pointer \${bioId ? (isEnrolled ? 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700' : 'bg-purple-600 hover:bg-purple-500 text-white border-purple-500 shadow-md') : 'bg-slate-800 text-slate-500 border-slate-700 cursor-not-allowed'}">
-                \${bioId ? (isEnrolled ? 'Re-Enroll' : 'Start Enroll') : 'Assign Biometric ID'}
-              </button>
+              <div class="flex items-center gap-2">
+                <button \${bioId ? '' : 'disabled'} onclick="triggerEnroll('\${e.id}', '\${bioId}', '\${encodeURIComponent(e.name || '')}', true)" class="px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider border cursor-pointer \${bioId ? (isEnrolled ? 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700' : 'bg-purple-600 hover:bg-purple-500 text-white border-purple-500 shadow-md') : 'bg-slate-800 text-slate-500 border-slate-700 cursor-not-allowed'}">
+                  \${bioId ? (isEnrolled ? 'Re-Enroll' : 'Start Enroll') : 'Assign Biometric ID'}
+                </button>
+                <button type="button" data-roster-access="1" data-person-kind="employee" data-person-id="\${encodeURIComponent(String(e.id || ''))}" data-biometric-id="\${bioId}" data-enabled="\${e.biometricBlocked ? 'false' : 'true'}" \${bioId ? '' : 'disabled'} class="px-3 py-2 rounded-xl text-[10px] font-black uppercase text-white border disabled:opacity-40 \${accessClass}">\${bioId ? accessText : 'No Bio ID'}</button>
+              </div>
             </div>
           \`;
         }).join('');
@@ -849,6 +846,48 @@ const renderGateHtml = (req: express.Request, res: express.Response) => {
     // Client rows are replaced on every search/filter/refresh. Use one delegated
     // listener on their stable container so member enrollment remains clickable
     // after any re-render and does not depend on generated inline JavaScript.
+    async function changeRosterAccess(kind, id, biometricId, enabled, button) {
+      if (button.disabled) return;
+      const original = button.textContent;
+      button.disabled = true;
+      button.textContent = 'SAVING...';
+      const countId = kind === 'employee' ? 'employeeCountText' : 'clientCountText';
+      try {
+        const response = await fetch('/api/devices/biometric/access', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ memberId: id, biometricId: Number(biometricId), enabled, isEmployee: kind === 'employee' }),
+          signal: AbortSignal.timeout(20000)
+        });
+        const queued = await response.json().catch(() => ({}));
+        if (!response.ok || !queued.success || !queued.enrollmentDocId) throw new Error(queued.error || 'Could not queue terminal access change.');
+        const deadline = Date.now() + 30000;
+        while (Date.now() < deadline) {
+          const statusResponse = await fetch('/api/devices/biometric/command/' + encodeURIComponent(queued.enrollmentDocId));
+          const status = await statusResponse.json().catch(() => ({}));
+          if (!statusResponse.ok) throw new Error(status.error || 'Could not read terminal status.');
+          if (status.status === 'success') {
+            await fetchRoster();
+            return;
+          }
+          if (status.status === 'failed') throw new Error(status.message || 'Terminal rejected the access change.');
+          await new Promise(resolve => setTimeout(resolve, 700));
+        }
+        throw new Error('Terminal did not confirm yet. Check device connection and retry.');
+      } catch (error) {
+        button.disabled = false;
+        button.textContent = original;
+        document.getElementById(countId).textContent = 'ACCESS UPDATE FAILED: ' + String(error && error.message || 'Retry when terminal is online.');
+      }
+    }
+
+    for (const listId of ['clientRosterList', 'employeeRosterList']) {
+      document.getElementById(listId).addEventListener('click', event => {
+        const button = event.target && event.target.closest ? event.target.closest('button[data-roster-access]') : null;
+        if (!button || !event.currentTarget.contains(button) || button.disabled) return;
+        changeRosterAccess(button.dataset.personKind, decodeURIComponent(button.dataset.personId || ''), button.dataset.biometricId || '', button.dataset.enabled === 'true', button);
+      });
+    }
+
     document.getElementById('clientRosterList').addEventListener('click', event => {
       const button = event.target && event.target.closest ? event.target.closest('button[data-client-action]') : null;
       if (!button || !event.currentTarget.contains(button) || button.disabled) return;

@@ -4,6 +4,7 @@ import { exec } from 'child_process';
 import os from 'os';
 import net from 'net';
 import { randomUUID } from 'crypto';
+import { getKolkataDateString } from '../services/followupAutomation.service';
 
 let latestPunchEvent: any = null;
 
@@ -86,9 +87,10 @@ export const createCheckIn = async (req: Request, res: Response) => {
       });
     }
 
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = getKolkataDateString();
     const startDateStr = member.startDate || member.joinDate || todayStr;
-    const expiryDateStr = member.expiryDate || '';
+    const expiryDateStr = member.expiryDate || member.membershipExpiryDate || '';
+    const membershipStatuses = [member.status, member.membershipStatus].map(value => String(value || '').trim().toLowerCase());
 
     let status = 'granted';
     let reason = '';
@@ -99,13 +101,13 @@ export const createCheckIn = async (req: Request, res: Response) => {
       const todayObj = new Date(todayStr);
       const daysUntil = Math.ceil((startObj.getTime() - todayObj.getTime()) / (1000 * 60 * 60 * 24));
       reason = `Membership starts on ${startDateStr} (Starts in ${daysUntil} ${daysUntil === 1 ? 'day' : 'days'})`;
-    } else if (member.status === 'expired' || (expiryDateStr && expiryDateStr < todayStr)) {
+    } else if (membershipStatuses.includes('expired') || (expiryDateStr && String(expiryDateStr).slice(0, 10) < todayStr)) {
       status = 'denied';
       reason = 'Membership has expired';
-    } else if (member.biometricBlocked === true || member.status === 'blocked' || member.status === 'blacklisted') {
+    } else if (member.biometricBlocked === true || member.biometricBlockPending === true || membershipStatuses.some(value => ['blocked', 'blacklisted', 'inactive', 'suspended', 'cancelled', 'canceled'].includes(value))) {
       status = 'denied';
       reason = member.biometricBlockReason || 'Biometric access is blocked for this member';
-    } else if (member.status === 'frozen') {
+    } else if (membershipStatuses.includes('frozen')) {
       status = 'denied';
       reason = 'Membership is frozen';
     }

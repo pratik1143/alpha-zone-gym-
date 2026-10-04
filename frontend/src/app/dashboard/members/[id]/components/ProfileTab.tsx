@@ -264,99 +264,40 @@ export default function ProfileTab({ member, onOpenRenewModal }: { member: any; 
 
   const handleBioBlockToggle = async () => {
     if (!member?.id || savingBioBlock) return;
-    const retryingUnblock = member.biometricBlocked === true && member.biometricBlockPending === true && member.biometricBlockAction === 'unblock';
-    const retryingBlock = member.biometricBlocked === true && member.biometricBlockPending === true && !retryingUnblock;
-    const nextBlocked = member.biometricBlocked !== true || retryingBlock;
+    const retryingBlock = member.biometricBlocked === true && member.biometricBlockPending === true && member.biometricBlockAction === 'block';
+    const nextBlocked = retryingBlock || member.biometricBlocked !== true;
     setSavingBioBlock(true);
     try {
       const biometricId = String(member.biometricId || member.deviceUserId || '').trim();
       if (!biometricId) throw new Error('This member has no mapped biometric ID.');
+      const queued = await API.post('/devices/biometric/access', {
+        memberId: member.id,
+        biometricId: Number(biometricId),
+        enabled: !nextBlocked,
+        isEmployee: false,
+      }, { timeout: 20000 });
+      const commandId = queued.data?.enrollmentDocId;
+      if (!commandId) throw new Error('Device access command was not queued.');
+      member.biometricBlocked = nextBlocked;
+      member.biometricBlockPending = true;
+      member.biometricBlockAction = nextBlocked ? 'block' : 'unblock';
+      member.biometricBlockCommandId = commandId;
 
-      const waitForDeviceCommand = async (commandId: string) => {
-        const startedAt = Date.now();
-        while (Date.now() - startedAt < 25000) {
-          const statusResponse = await API.get(`/devices/biometric/command/${encodeURIComponent(commandId)}`, { timeout: 10000 });
-          const command = statusResponse.data;
-          if (command.status === 'success') return;
-          if (command.status === 'failed') throw new Error(command.message || 'The device rejected the biometric command.');
-          await new Promise(resolve => setTimeout(resolve, 700));
+      const deadline = Date.now() + 30000;
+      while (Date.now() < deadline) {
+        const result = await API.get(`/devices/biometric/command/${encodeURIComponent(commandId)}`, { timeout: 10000 });
+        if (result.data?.status === 'success') {
+          toast.success(nextBlocked
+            ? 'Access blocked on the terminal. Fingerprint data remains saved.'
+            : 'Access restored on the terminal. The existing fingerprint remains active.');
+          await fetchMembers(true);
+          return;
         }
-        throw new Error('The device has not confirmed the command yet. Check the device connection and retry.');
-      };
-
-      if (nextBlocked) {
-        await API.put(`/members/${encodeURIComponent(member.id)}`, {
-          biometricBlocked: true,
-          biometricBlockPending: true,
-          biometricBlockAction: 'block',
-          biometricBlockedAt: new Date().toISOString(),
-          biometricBlockReason: 'Manually blocked from member profile',
-        }, { timeout: 20000 });
-        member.biometricBlocked = true;
-        member.biometricBlockPending = true;
-
-        let commandId = typeof member.biometricBlockCommandId === 'string' ? member.biometricBlockCommandId : '';
-        if (!commandId) {
-          const queued = await API.post('/devices/biometric/delete', {
-            memberId: member.id,
-            memberName: member.name,
-            biometricId: Number(biometricId),
-          }, { timeout: 20000 });
-          commandId = queued.data?.enrollmentDocId;
-          if (commandId) await API.put(`/members/${encodeURIComponent(member.id)}`, { biometricBlockCommandId: commandId }, { timeout: 20000 });
-        }
-        if (!commandId) throw new Error('Block saved, but the device removal command was not queued.');
-        await waitForDeviceCommand(commandId);
-
-        await API.put(`/members/${encodeURIComponent(member.id)}`, {
-          biometricBlockPending: false,
-          biometricBlockAction: null,
-          biometricBlockCommandId: null,
-          biometricEnrolled: false,
-          fingerprintStatus: 'not_enrolled',
-        }, { timeout: 20000 });
-        member.biometricBlockPending = false;
-        member.biometricBlockCommandId = null;
-        member.biometricEnrolled = false;
-        member.fingerprintStatus = 'not_enrolled';
-        toast.success('Bio blocked on the terminal. Re-enrollment is required before access can be restored.');
-      } else {
-        await API.put(`/members/${encodeURIComponent(member.id)}`, {
-          biometricBlocked: true,
-          biometricBlockPending: true,
-          biometricBlockAction: 'unblock',
-        }, { timeout: 20000 });
-        member.biometricBlocked = true;
-        member.biometricBlockPending = true;
-        member.biometricBlockAction = 'unblock';
-
-        let commandId = typeof member.biometricBlockCommandId === 'string' ? member.biometricBlockCommandId : '';
-        if (!commandId) {
-          const queued = await API.post('/devices/biometric/sync', {
-            memberId: member.id,
-            memberName: member.name,
-            biometricId: Number(biometricId),
-          }, { timeout: 20000 });
-          commandId = queued.data?.enrollmentDocId;
-          if (commandId) await API.put(`/members/${encodeURIComponent(member.id)}`, { biometricBlockCommandId: commandId }, { timeout: 20000 });
-        }
-        if (!commandId) throw new Error('Access flag cleared, but the device user could not be restored.');
-        await waitForDeviceCommand(commandId);
-        await API.put(`/members/${encodeURIComponent(member.id)}`, {
-          biometricBlocked: false,
-          biometricBlockPending: false,
-          biometricBlockAction: null,
-          biometricBlockCommandId: null,
-          biometricBlockedAt: null,
-          biometricBlockReason: null,
-        }, { timeout: 20000 });
-        member.biometricBlocked = false;
-        member.biometricBlockPending = false;
-        member.biometricBlockAction = null;
-        toast.success('Bio block removed. Re-enroll this member’s fingerprint before their next entry.');
+        if (result.data?.status === 'failed') throw new Error(result.data?.message || 'The terminal rejected the access change.');
+        await new Promise(resolve => setTimeout(resolve, 700));
       }
+      throw new Error('Terminal has not confirmed the access change yet. Check its connection, then retry.');
 
-      await fetchMembers(true);
     } catch (error: any) {
       toast.error('Could not update biometric access: ' + (error?.message || 'Please retry.'));
     } finally {
@@ -465,7 +406,7 @@ export default function ProfileTab({ member, onOpenRenewModal }: { member: any; 
                 type="button"
                 onClick={handleBioBlockToggle}
                 disabled={savingBioBlock}
-                title={member.biometricBlocked ? (member.biometricBlockPending ? 'Retry removing the biometric ID from the terminal' : 'Restore this ID on the terminal; fingerprint re-enrollment will be required') : 'Remove this biometric ID from the terminal and deny entry'}
+                title={member.biometricBlocked ? 'Restore gate access; the saved fingerprint remains on the terminal' : 'Block gate access without deleting the saved fingerprint'}
                 className={`flex-1 py-3 border rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95 disabled:opacity-60 ${
                   member.biometricBlocked
                     ? 'bg-rose-100 border-rose-300 text-rose-800 hover:bg-rose-200'
@@ -473,7 +414,7 @@ export default function ProfileTab({ member, onOpenRenewModal }: { member: any; 
                 }`}
               >
                 {member.biometricBlocked ? <Fingerprint size={14} /> : <Ban size={14} />}
-                {savingBioBlock ? 'Syncing…' : member.biometricBlocked ? (member.biometricBlockAction === 'unblock' ? 'Retry Unblock' : member.biometricBlockPending ? 'Retry Block' : 'Unblock Bio') : 'Block Bio'}
+                {savingBioBlock ? 'Syncing…' : member.biometricBlocked ? (member.biometricBlockAction === 'block' && member.biometricBlockPending ? 'Retry Block' : 'Unblock Access') : 'Block Access'}
               </button>
             </div>
           </div>
