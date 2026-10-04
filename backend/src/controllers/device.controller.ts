@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { db, admin, isFirebaseInitialized, getFirestoreDb, disableFirestore } from '../firebase';
 import { simulateManualTap } from '../services/deviceSync.service';
-import { exec } from 'child_process';
+import { execFile } from 'child_process';
 import path from 'path';
 import fs from 'fs';
 
@@ -424,7 +424,7 @@ export const startEnrollFingerprint = async (req: Request, res: Response) => {
     const serviceOnline = heartbeat.pythonConnected === true
       && heartbeat.esslConnected === true
       && Number.isFinite(heartbeatAt)
-      && Date.now() - heartbeatAt < 30000
+      && Date.now() - heartbeatAt < 120000
       && String(heartbeat.deviceIp || '') === deviceIp
       && Number(heartbeat.devicePort) === devicePort
       && device.status === 'connected';
@@ -472,6 +472,7 @@ export const startEnrollFingerprint = async (req: Request, res: Response) => {
         status: 'timeout',
         message: 'No completed enrollment result arrived from the local EasyBio service.'
       }), 300000);
+      res.setTimeout(0);
       unsubscribe = enrollmentRef.onSnapshot((snapshot) => {
         const data = snapshot.data();
         if (!data) return;
@@ -743,96 +744,174 @@ export const getLatestPunch = async (req: Request, res: Response) => {
  */
 export const autoMapAllBiometrics = async (req: Request, res: Response) => {
   try {
-    const scriptPath = path.resolve(process.cwd(), 'device-service/auto_map_device_users.py');
+    if (!isFirebaseInitialized || !admin) {
+      return res.status(503).json({ success: false, error: 'Firebase is unavailable. No member mappings were changed.' });
+    }
 
-    exec(`python "${scriptPath}"`, { cwd: path.resolve(process.cwd(), 'device-service'), maxBuffer: 10 * 1024 * 1024 }, async (err, stdout, stderr) => {
-      let deviceUsers: any[] = [];
-      if (!err && stdout) {
-        try {
-          const parsed = JSON.parse(stdout);
-          if (parsed.success && Array.isArray(parsed.users)) {
-            deviceUsers = parsed.users;
-          }
-        } catch (e) {}
-      }
-
-      const members = await db.getMembers();
-      let newlyMapped = 0;
-      let alreadyMapped = 0;
-      const missingMembers: any[] = [];
-
-      for (const m of members) {
-        let targetBioId: string | null = null;
-
-        // 1. Extract numeric ID from direct member fields (clientId, customId, biometricId, memberId, id)
-        const candidates = [m.clientId, m.customId, m.biometricId, m.deviceUserId, m.memberId, m.id];
-        for (const c of candidates) {
-          if (!c) continue;
-          const strC = String(c).trim();
-          if (/^\d+$/.test(strC) && Number(strC) > 0 && Number(strC) < 100000) {
-            targetBioId = strC;
-            break;
-          }
-          const mDigits = strC.match(/\d+/g);
-          if (mDigits && mDigits.length > 0) {
-            const lastDigits = mDigits[mDigits.length - 1];
-            const num = parseInt(lastDigits, 10);
-            if (num > 0 && num < 100000) {
-              targetBioId = num.toString();
-              break;
-            }
-          }
-        }
-
-        // 2. If not found by candidate ID, try matching against ESSL device users by name or card
-        if (!targetBioId && deviceUsers.length > 0) {
-          const mName = String(m.name || m.fullName || '').toLowerCase().trim();
-          const matched = deviceUsers.find(u => {
-            const uId = String(u.user_id).trim();
-            const uName = String(u.name || '').toLowerCase().trim();
-            if (m.phone && u.card && String(u.card) === String(m.phone)) return true;
-            if (uName && mName && (uName === mName || uName.includes(mName) || mName.includes(uName))) return true;
-            return false;
-          });
-          if (matched) {
-            targetBioId = String(matched.user_id);
-          }
-        }
-
-        if (targetBioId) {
-          if (m.biometricId === targetBioId && m.deviceUserId === targetBioId) {
-            alreadyMapped++;
-          } else {
-            await db.updateMember(m.id, {
-              biometricId: targetBioId,
-              deviceUserId: targetBioId
-            });
-            newlyMapped++;
-          }
-        } else {
-          missingMembers.push({
-            id: m.id,
-            name: m.name,
-            phone: m.phone,
-            memberId: m.memberId || m.id,
-            plan: m.plan || 'Standard',
-            status: m.status || 'active'
-          });
-        }
-      }
-
-      const totalMapped = alreadyMapped + newlyMapped;
-      res.json({
-        success: true,
-        totalCrmMembers: members.length,
-        totalDeviceUsers: deviceUsers.length,
-        mappedCount: totalMapped,
-        alreadyMapped,
-        newlyMapped,
-        missingCount: missingMembers.length,
-        missingMembers,
-        message: `Successfully auto-mapped ${totalMapped} members with ESSL machine! (${newlyMapped} newly mapped, ${missingMembers.length} missing on machine)`
+    const deviceServiceDir = path.resolve(__dirname, '../../../device-service');
+    const scriptPath = path.join(deviceServiceDir, 'auto_map_device_users.py');
+    const { stdout } = await new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
+      execFile('python', [scriptPath], {
+        cwd: deviceServiceDir,
+        timeout: 15000,
+        maxBuffer: 10 * 1024 * 1024,
+        encoding: 'utf8'
+      }, (error, stdout, stderr) => {
+        if (error) return reject(new Error(stderr || error.message));
+        resolve({ stdout, stderr });
       });
+    });
+    const scan = JSON.parse(stdout);
+    if (!scan.success || scan.source !== 'device' || !Array.isArray(scan.users)) {
+      return res.status(503).json({
+        success: false,
+        error: scan.error || 'Fingerprint device is offline. No member mappings were changed.'
+      });
+    }
+
+    const deviceUsers = scan.users.filter((user: any) =>
+      /^\d{1,5}$/.test(String(user.user_id || '').trim())
+      && Number(user.user_id) > 0
+      && Number(user.fingerprint_count) > 0
+    );
+    const members = await db.getMembers();
+    const employeeSnapshot = await admin.firestore().collection('employees').get();
+    const employeeBioIds = new Set<string>();
+    const employeeNames = new Set<string>();
+    for (const employeeDoc of employeeSnapshot.docs) {
+      const employee = employeeDoc.data();
+      for (const id of [employee.biometricId, employee.deviceUserId].map(value => String(value || '').trim()).filter(Boolean)) {
+        employeeBioIds.add(id);
+      }
+      const name = String(employee.name || employee.fullName || '').trim().toLocaleLowerCase().replace(/\s+/g, ' ');
+      if (name) employeeNames.add(name);
+    }
+    const normalizeName = (value: unknown) => String(value || '').trim().toLocaleLowerCase().replace(/\s+/g, ' ');
+    const membersByBioId = new Map<string, any[]>();
+    const membersByName = new Map<string, any[]>();
+    for (const member of members) {
+      const name = normalizeName(member.name || member.fullName);
+      if (name) membersByName.set(name, [...(membersByName.get(name) || []), member]);
+      for (const id of [member.biometricId, member.deviceUserId].map(value => String(value || '').trim()).filter(Boolean)) {
+        membersByBioId.set(id, [...(membersByBioId.get(id) || []), member]);
+      }
+    }
+
+    const deviceUsersByName = new Map<string, any[]>();
+    for (const user of deviceUsers) {
+      const name = normalizeName(user.name);
+      if (name) deviceUsersByName.set(name, [...(deviceUsersByName.get(name) || []), user]);
+    }
+
+    const claimedDeviceIds = new Set<string>();
+    const missingMembers: any[] = [];
+    let newlyMapped = 0;
+    let alreadyMapped = 0;
+    let ambiguousCount = 0;
+    let conflictingCount = 0;
+
+    for (const member of members) {
+      const memberId = String(member.id || member.uid || '').trim();
+      const existingIds = [...new Set([member.biometricId, member.deviceUserId]
+        .map(value => String(value || '').trim())
+        .filter(value => /^\d{1,5}$/.test(value) && Number(value) > 0))];
+      let candidateUsers = existingIds.flatMap(id => deviceUsers.filter((user: any) => String(user.user_id).trim() === id));
+      candidateUsers = [...new Map(candidateUsers.map((user: any) => [String(user.user_id).trim(), user])).values()];
+
+      if (candidateUsers.length === 0 && existingIds.length === 0) {
+        const memberName = normalizeName(member.name || member.fullName);
+        const nameUsers = deviceUsersByName.get(memberName) || [];
+        const nameMembers = membersByName.get(memberName) || [];
+        if (memberName && !employeeNames.has(memberName) && nameUsers.length === 1 && nameMembers.length === 1) candidateUsers = nameUsers;
+        else if (nameUsers.length > 0 || nameMembers.length > 1) ambiguousCount++;
+      }
+
+      if (candidateUsers.length !== 1) {
+        missingMembers.push({
+          id: memberId,
+          name: member.name || member.fullName || 'Unnamed member',
+          phone: member.phone || '',
+          memberId: member.memberId || memberId,
+          plan: member.plan || 'Standard',
+          status: member.status || 'active'
+        });
+        continue;
+      }
+
+      const matchedDeviceUser = candidateUsers[0];
+      const targetBioId = String(matchedDeviceUser.user_id).trim();
+      if (employeeBioIds.has(targetBioId)) {
+        conflictingCount++;
+        missingMembers.push({
+          id: memberId, name: member.name || member.fullName || 'Unnamed member',
+          phone: member.phone || '', memberId: member.memberId || memberId,
+          plan: member.plan || 'Standard', status: member.status || 'active'
+        });
+        continue;
+      }
+      const currentBioId = String(member.biometricId || '').trim();
+      const currentDeviceId = String(member.deviceUserId || '').trim();
+      const otherClaims = members.filter(other => String(other.id || other.uid || '') !== memberId
+        && [other.biometricId, other.deviceUserId].some(value => String(value || '').trim() === targetBioId));
+      if (claimedDeviceIds.has(targetBioId) || otherClaims.length > 0) {
+        conflictingCount++;
+        missingMembers.push({
+          id: memberId, name: member.name || member.fullName || 'Unnamed member',
+          phone: member.phone || '', memberId: member.memberId || memberId,
+          plan: member.plan || 'Standard', status: member.status || 'active'
+        });
+        continue;
+      }
+
+      const nameIdMatches = (membersByBioId.get(targetBioId) || []).length === 0
+        || (membersByBioId.get(targetBioId) || []).every(other => String(other.id || other.uid || '') === memberId);
+      if (!nameIdMatches) {
+        conflictingCount++;
+        missingMembers.push({
+          id: memberId, name: member.name || member.fullName || 'Unnamed member',
+          phone: member.phone || '', memberId: member.memberId || memberId,
+          plan: member.plan || 'Standard', status: member.status || 'active'
+        });
+        continue;
+      }
+
+      const sameMapping = currentBioId === targetBioId && currentDeviceId === targetBioId
+        && String(member.fingerprintStatus || '').toUpperCase() === 'ENROLLED'
+        && member.fingerprintEnrolled === true;
+      if (sameMapping) {
+        alreadyMapped++;
+      } else {
+        await db.updateMember(memberId, {
+          biometricId: targetBioId,
+          deviceUserId: targetBioId,
+          fingerprintStatus: 'ENROLLED',
+          fingerprintEnrolled: true,
+          fingerprintCount: Number(matchedDeviceUser.fingerprint_count),
+          biometricEnrolled: true,
+          biometricStatus: 'Linked',
+          lastBiometricSync: new Date().toISOString()
+        });
+        newlyMapped++;
+      }
+      claimedDeviceIds.add(targetBioId);
+    }
+
+    const totalMapped = alreadyMapped + newlyMapped;
+    res.json({
+      success: true,
+      totalCrmMembers: members.length,
+      totalDeviceUsers: scan.users.length,
+      fingerprintedDeviceUsers: deviceUsers.length,
+      skippedStaffFingerprints: deviceUsers.filter((user: any) => employeeBioIds.has(String(user.user_id).trim())).length,
+      unmappedFingerprintCount: deviceUsers.filter((user: any) => !claimedDeviceIds.has(String(user.user_id).trim())).length,
+      mappedCount: totalMapped,
+      alreadyMapped,
+      newlyMapped,
+      missingCount: missingMembers.length,
+      ambiguousCount,
+      conflictingCount,
+      missingMembers,
+      message: `Mapped ${totalMapped} members to verified device fingerprints: ${newlyMapped} new, ${alreadyMapped} already linked, ${missingMembers.length} need review.`
     });
   } catch (error: any) {
     res.status(500).json({ error: error.message });

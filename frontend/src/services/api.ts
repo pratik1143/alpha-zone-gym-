@@ -3,6 +3,12 @@ import { auth } from '../lib/firebase';
 
 const getBaseURL = () => {
   if (process.env.NEXT_PUBLIC_API_URL) {
+    // LAN gate terminal is served by the API itself. A build-time localhost URL
+    // points each phone/browser back to itself, so use the page's own origin.
+    if (typeof window !== 'undefined'
+      && ['localhost', '127.0.0.1'].includes(new URL(process.env.NEXT_PUBLIC_API_URL).hostname)) {
+      return `${window.location.origin}/api`;
+    }
     return process.env.NEXT_PUBLIC_API_URL;
   }
   // In production browser environment where NEXT_PUBLIC_API_URL wasn't built in, default to relative /api

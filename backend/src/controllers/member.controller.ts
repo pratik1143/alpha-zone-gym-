@@ -268,6 +268,7 @@ export const createMember = async (req: Request, res: Response) => {
       faceEnrolled: req.body.faceEnrolled === true,
       paymentStatus: finalPaymentStatus
     });
+    db.invalidateMembersCache();
 
     // 1. Generate ONE authoritative MEMBERSHIP invoice for new member
     const invoiceNumber = req.body.invoiceNumber || `INV-${Math.floor(100000 + Math.random() * 900000)}`;

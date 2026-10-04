@@ -16,8 +16,8 @@ if sys.platform == 'win32':
         pass
 
 BASE_DIR = Path(__file__).resolve().parent
-DEVICE_IP = "192.168.18.11"
-DEVICE_PORT = 4370
+DEVICE_IP = os.getenv("EASYBIO_DEVICE_IP") or os.getenv("DEVICE_IP") or "192.168.18.11"
+DEVICE_PORT = int(os.getenv("EASYBIO_DEVICE_PORT") or os.getenv("DEVICE_PORT") or "4370")
 
 def check_internet():
     try:
@@ -41,7 +41,9 @@ def check_essl():
 
 def check_backend_api():
     try:
-        req = urllib.request.Request("http://localhost:5000/health", headers={"User-Agent": "HealthCheck"})
+        api_url = os.getenv("ALPHA_ZONE_API_URL", "http://127.0.0.1:%s/api" % os.getenv("PORT", "5000"))
+        health_url = os.getenv("ALPHA_ZONE_HEALTH_URL", api_url.rstrip("/").rsplit("/api", 1)[0] + "/health")
+        req = urllib.request.Request(health_url, headers={"User-Agent": "HealthCheck"})
         with urllib.request.urlopen(req, timeout=2) as resp:
             data = json.loads(resp.read().decode('utf-8'))
             return data.get('status') == 'healthy'

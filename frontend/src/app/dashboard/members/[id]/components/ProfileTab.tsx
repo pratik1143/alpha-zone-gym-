@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Camera, Edit2, MapPin, Phone, Mail, Droplet, Activity, User, Briefcase, HeartPulse, CreditCard, Calendar, Clock, Star, Dumbbell, Shield, BadgeCheck, CheckCircle2, AlertCircle, Snowflake, Repeat, Sparkles } from 'lucide-react';
+import { Camera, Edit2, MapPin, Phone, Mail, Droplet, Activity, User, Briefcase, HeartPulse, CreditCard, Calendar, Clock, Star, Dumbbell, Shield, BadgeCheck, CheckCircle2, AlertCircle, Snowflake, Repeat, Sparkles, Fingerprint, Ban } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import { cleanPlanName, parsePlanSegments } from '@/lib/utils';
@@ -135,6 +135,7 @@ export default function ProfileTab({ member, onOpenRenewModal }: { member: any; 
   const [freezeDays, setFreezeDays] = useState(7);
   const [freezeReason, setFreezeReason] = useState('Travel / Vacation');
   const [savingFreeze, setSavingFreeze] = useState(false);
+  const [savingBioBlock, setSavingBioBlock] = useState(false);
 
   const hasTrainer = Boolean(
     member?.trainerId &&
@@ -261,6 +262,29 @@ export default function ProfileTab({ member, onOpenRenewModal }: { member: any; 
     }
   };
 
+  const handleBioBlockToggle = async () => {
+    if (!member?.id || savingBioBlock) return;
+    const nextBlocked = member.biometricBlocked !== true;
+    setSavingBioBlock(true);
+    try {
+      const response = await API.put(`/members/${encodeURIComponent(member.id)}`, {
+        biometricBlocked: nextBlocked,
+        biometricBlockedAt: nextBlocked ? new Date().toISOString() : null,
+        biometricBlockReason: nextBlocked ? 'Manually blocked from member profile' : null,
+      });
+      if (response?.data?.error) throw new Error(response.data.error);
+      member.biometricBlocked = nextBlocked;
+      member.biometricBlockedAt = nextBlocked ? new Date().toISOString() : null;
+      member.biometricBlockReason = nextBlocked ? 'Manually blocked from member profile' : null;
+      toast.success(nextBlocked ? 'Biometric gate access blocked for this member.' : 'Biometric gate access restored.');
+      await fetchMembers(true);
+    } catch (error: any) {
+      toast.error('Could not update biometric access: ' + (error?.message || 'Please retry.'));
+    } finally {
+      setSavingBioBlock(false);
+    }
+  };
+
   return (
     <div className="space-y-6 text-slate-800 text-left font-display">
       
@@ -357,6 +381,20 @@ export default function ProfileTab({ member, onOpenRenewModal }: { member: any; 
                 }`}
               >
                 <Snowflake size={14} /> {member.status === 'frozen' ? '⚡ Unfreeze' : 'Freeze'}
+              </button>
+              <button
+                type="button"
+                onClick={handleBioBlockToggle}
+                disabled={savingBioBlock}
+                title={member.biometricBlocked ? 'Restore entry for this biometric ID' : 'Deny entry when this biometric ID is used'}
+                className={`flex-1 py-3 border rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95 disabled:opacity-60 ${
+                  member.biometricBlocked
+                    ? 'bg-rose-100 border-rose-300 text-rose-800 hover:bg-rose-200'
+                    : 'bg-white/10 border-white/20 text-white hover:bg-white/20'
+                }`}
+              >
+                {member.biometricBlocked ? <Fingerprint size={14} /> : <Ban size={14} />}
+                {savingBioBlock ? 'Saving…' : member.biometricBlocked ? 'Unblock Bio' : 'Block Bio'}
               </button>
             </div>
           </div>

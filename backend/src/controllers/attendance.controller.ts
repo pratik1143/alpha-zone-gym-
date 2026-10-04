@@ -102,6 +102,9 @@ export const createCheckIn = async (req: Request, res: Response) => {
     } else if (member.status === 'expired' || (expiryDateStr && expiryDateStr < todayStr)) {
       status = 'denied';
       reason = 'Membership has expired';
+    } else if (member.biometricBlocked === true || member.status === 'blocked' || member.status === 'blacklisted') {
+      status = 'denied';
+      reason = member.biometricBlockReason || 'Biometric access is blocked for this member';
     } else if (member.status === 'frozen') {
       status = 'denied';
       reason = 'Membership is frozen';

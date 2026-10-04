@@ -21,6 +21,12 @@ type EnrollmentState =
   | 'FAILED'
   | 'CANCELLED';
 
+const isFingerprintEnrolled = (item: any) =>
+  String(item?.fingerprintStatus || '').toUpperCase() === 'ENROLLED'
+  || item?.fingerprintEnrolled === true
+  || item?.fingerprint?.enrolled === true
+  || String(item?.fingerprint?.status || '').toUpperCase() === 'ENROLLED';
+
 export default function GateControlPage() {
   const [activeTab, setActiveTab] = useState<'gate' | 'enroll' | 'employee'>('gate');
   const [deviceIp, setDeviceIp] = useState('192.168.18.11');
@@ -44,8 +50,10 @@ export default function GateControlPage() {
   // Enroll Client state
   const { members, fetchMembers } = useGymStore();
   const [searchQuery, setSearchQuery] = useState('');
+  const [refreshingMembers, setRefreshingMembers] = useState(false);
   const [statusFilter, setStatusFilter] = useState<'pending' | 'enrolled' | 'all'>('pending');
   const [selectedMember, setSelectedMember] = useState<any | null>(null);
+  const [enrollingMemberId, setEnrollingMemberId] = useState<string | null>(null);
 
   // Enroll Employee state
   const [employees, setEmployees] = useState<any[]>([]);
@@ -93,15 +101,25 @@ export default function GateControlPage() {
 
   useEffect(() => {
     fetchStatus();
-    fetchMembers();
+    fetchMembers(true);
     fetchEmployees();
     const interval = setInterval(() => {
       fetchStatus();
-      fetchMembers();
+      fetchMembers(true);
       fetchEmployees();
     }, 15000);
     return () => clearInterval(interval);
   }, [fetchMembers]);
+
+  const refreshMembers = async () => {
+    setRefreshingMembers(true);
+    try {
+      await fetchMembers(true);
+      toast.success('Member list refreshed');
+    } finally {
+      setRefreshingMembers(false);
+    }
+  };
 
   // Clean Numeric Biometric ID extractor
   const getCleanNumericId = (item: any): string => {
@@ -113,20 +131,25 @@ export default function GateControlPage() {
 
   // Filter CRM members for enrollment
   const filteredMembers = useMemo(() => {
+    const getCreatedTime = (member: any) => {
+      const value = member?.createdAt || member?.joinDate || member?.startDate;
+      if (value?.seconds) return value.seconds * 1000;
+      const parsed = value ? new Date(value).getTime() : 0;
+      return Number.isFinite(parsed) ? parsed : 0;
+    };
+    const q = searchQuery.trim().toLowerCase().replace(/^#/, '');
     return (members || []).filter((m: any) => {
-      const bioId = getCleanNumericId(m);
-      const name = String(m.name || '').toLowerCase();
-      const phone = String(m.phone || '');
-      const q = searchQuery.trim().toLowerCase();
-
-      const matchesSearch = !q || bioId.includes(q) || name.includes(q) || phone.includes(q);
-      const isEnrolled = m.fingerprintStatus === 'ENROLLED' || m.fingerprintEnrolled === true;
+      const searchable = [m.biometricId, m.deviceUserId, m.memberId, m.clientId, m.customId, m.id, m.uid, m.name, m.fullName, m.phone]
+        .filter(value => value !== undefined && value !== null)
+        .map(value => String(value).toLowerCase());
+      const matchesSearch = !q || searchable.some(value => value.includes(q));
+      const isEnrolled = isFingerprintEnrolled(m);
 
       if (!matchesSearch) return false;
       if (statusFilter === 'pending') return !isEnrolled;
       if (statusFilter === 'enrolled') return isEnrolled;
       return true;
-    });
+    }).sort((a: any, b: any) => getCreatedTime(b) - getCreatedTime(a));
   }, [members, searchQuery, statusFilter]);
 
   // Filter Employees for enrollment
@@ -194,11 +217,19 @@ export default function GateControlPage() {
 
   // Handle Fingerprint Enrollment Trigger
   const handleStartEnrollment = async (member: any) => {
+    if (enrollingMemberId) return;
     const bioId = getCleanNumericId(member);
     const sessionId = `sess_${bioId}_${Date.now()}`;
     
     setSelectedMember(member);
     setActiveSessionId(sessionId);
+    if (!bioId) {
+      setEnrollState('FAILED');
+      setEnrollMsg('This member does not have a permanent numeric biometric ID yet. Refresh the list, then assign an ID before enrolling.');
+      toast.error('Biometric ID is missing. Assign an ID first.');
+      return;
+    }
+    setEnrollingMemberId(String(member.id));
     setEnrollState('ENROLLMENT_REQUESTED');
     setEnrollMsg(`Connecting to ESSL K90 Pro at ${deviceIp} for User #${bioId}...`);
 
@@ -211,7 +242,7 @@ export default function GateControlPage() {
         biometricId: bioId,
         userId: bioId,
         enrollmentSessionId: sessionId
-      });
+      }, { timeout: 330000 });
 
       if (res.data && res.data.success) {
         setEnrollState('ENROLLMENT_SUCCESS');
@@ -219,19 +250,22 @@ export default function GateControlPage() {
         toast.success(`Fingerprint successfully enrolled for ${member.name} (ID #${bioId})!`);
         
         // Refresh member roster
-        fetchMembers(true);
+        await fetchMembers(true);
         setTimeout(() => {
           setEnrollState('COMPLETED');
         }, 2500);
       } else {
         setEnrollState('FAILED');
         setEnrollMsg(res.data?.error || res.data?.message || 'Device did not confirm a saved fingerprint template.');
-        toast.error('Enrollment failed. Device template was not confirmed.');
+        toast.error(res.data?.error || 'Enrollment failed. Device template was not confirmed.');
       }
     } catch (err: any) {
       setEnrollState('FAILED');
-      setEnrollMsg(err?.response?.data?.error || err?.response?.data?.message || err?.message || 'Device socket communication error.');
-      toast.error('Device error during fingerprint enrollment.');
+      const errorMessage = err?.response?.data?.error || err?.response?.data?.message || err?.message || 'Device socket communication error.';
+      setEnrollMsg(errorMessage);
+      toast.error(errorMessage);
+    } finally {
+      setEnrollingMemberId(null);
     }
   };
 
@@ -256,7 +290,7 @@ export default function GateControlPage() {
         biometricId: bioId,
         userId: bioId,
         enrollmentSessionId: sessionId
-      });
+      }, { timeout: 330000 });
 
       if (res.data && res.data.success) {
         setEnrollState('ENROLLMENT_SUCCESS');
@@ -288,7 +322,7 @@ export default function GateControlPage() {
         <div className="absolute -bottom-40 -right-40 w-96 h-96 bg-emerald-600/10 rounded-full blur-3xl" />
       </div>
 
-      <div className="relative w-full max-w-2xl space-y-5 z-10 py-4">
+      <div className="relative w-full max-w-5xl space-y-5 z-10 py-4">
 
         {/* PAGE HEADER */}
         <div className="bg-slate-900/90 backdrop-blur-xl border border-slate-800/80 rounded-3xl p-6 text-center shadow-2xl space-y-2">
@@ -448,22 +482,22 @@ export default function GateControlPage() {
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search member by Biometric ID (e.g. 222), Name, or Phone..."
+                  placeholder="Search by member ID, biometric ID, name, or phone..."
                   className="w-full h-11 bg-slate-800/90 border border-slate-700 rounded-2xl pl-10 pr-4 text-xs font-bold text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
                 />
               </div>
 
-              <div className="flex items-center justify-between text-xs">
+                <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
                 <div className="flex items-center gap-1.5 bg-slate-800/60 p-1 rounded-xl border border-slate-700/60">
                   <button
-                    onClick={() => setStatusFilter('pending')}
+                      onClick={() => setStatusFilter('pending')}
                     className={`px-3 py-1.5 rounded-lg text-[11px] font-black uppercase transition-all border-none cursor-pointer ${
                       statusFilter === 'pending'
                         ? 'bg-amber-500 text-slate-950 font-extrabold'
                         : 'text-slate-400 hover:text-white'
                     }`}
                   >
-                    Pending ({members.filter((m: any) => m.fingerprintStatus !== 'ENROLLED' && !m.fingerprintEnrolled).length})
+                    Pending ({members.filter((m: any) => !isFingerprintEnrolled(m)).length})
                   </button>
 
                   <button
@@ -474,7 +508,7 @@ export default function GateControlPage() {
                         : 'text-slate-400 hover:text-white'
                     }`}
                   >
-                    Enrolled ({members.filter((m: any) => m.fingerprintStatus === 'ENROLLED' || m.fingerprintEnrolled).length})
+                    Enrolled ({members.filter((m: any) => isFingerprintEnrolled(m)).length})
                   </button>
 
                   <button
@@ -489,9 +523,18 @@ export default function GateControlPage() {
                   </button>
                 </div>
 
-                <span className="text-[11px] text-slate-400 font-mono">
-                  Showing {filteredMembers.length} members
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] text-slate-400 font-mono">Showing {filteredMembers.length} members</span>
+                  <button
+                    type="button"
+                    onClick={refreshMembers}
+                    disabled={refreshingMembers}
+                    className="px-3 py-1.5 rounded-lg text-[11px] font-black uppercase bg-slate-800 text-slate-200 border border-slate-700 hover:bg-slate-700 disabled:opacity-50 inline-flex items-center gap-1.5"
+                  >
+                    <RefreshCw size={12} className={refreshingMembers ? 'animate-spin' : ''} />
+                    {refreshingMembers ? 'Refreshing' : 'Refresh'}
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -523,7 +566,7 @@ export default function GateControlPage() {
                     SCAN 2
                   </div>
                   <div className={`p-2 rounded-xl border ${enrollState === 'SCANNING_3' || enrollState === 'ENROLLMENT_SUCCESS' || enrollState === 'COMPLETED' ? 'bg-blue-900/60 border-blue-500 text-blue-300' : 'bg-slate-900 border-slate-800 text-slate-600'}`}>
-                    SCAN 3
+                    DEVICE
                   </div>
                   <div className={`p-2 rounded-xl border ${enrollState === 'ENROLLMENT_SUCCESS' || enrollState === 'COMPLETED' ? 'bg-emerald-900/60 border-emerald-500 text-emerald-300' : 'bg-slate-900 border-slate-800 text-slate-600'}`}>
                     MAPPED ✓
@@ -541,7 +584,7 @@ export default function GateControlPage() {
               ) : (
                 filteredMembers.map((m: any) => {
                   const bioId = getCleanNumericId(m);
-                  const isEnrolled = m.fingerprintStatus === 'ENROLLED' || m.fingerprintEnrolled === true;
+                  const isEnrolled = isFingerprintEnrolled(m);
                   const isSelected = selectedMember?.id === m.id;
 
                   return (
@@ -574,7 +617,7 @@ export default function GateControlPage() {
 
                       <button
                         onClick={() => handleStartEnrollment(m)}
-                        disabled={enrollState === 'ENROLLMENT_REQUESTED' || enrollState === 'SCANNING_1' || enrollState === 'SCANNING_2' || enrollState === 'SCANNING_3'}
+                        disabled={!!enrollingMemberId}
                         className={`px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all border cursor-pointer inline-flex items-center gap-1.5 active:scale-95 disabled:opacity-50 ${
                           isEnrolled
                             ? 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
@@ -582,7 +625,7 @@ export default function GateControlPage() {
                         }`}
                       >
                         <Fingerprint size={14} />
-                        <span>{isEnrolled ? 'Re-Enroll' : 'Start Enroll'}</span>
+                        <span>{enrollingMemberId === String(m.id) ? 'Enrolling...' : isEnrolled ? 'Re-Enroll' : 'Start Enroll'}</span>
                       </button>
                     </div>
                   );

@@ -719,7 +719,10 @@ def run_enroll_fingerprint(enrollment_doc_id, member_id, member_name, biometric_
 
             push_status('connecting', 'Connecting to configured EasyBio terminal...', {'scan': 0, 'totalScans': 3})
             logging.info(f"[ENROLLMENT] Selected {target_collection[:-1]} {member_id}, device user {uid_value}, name {member_name}")
-            zk = ZK(DEVICE_IP, port=DEVICE_PORT, timeout=15)
+            # Finger enrollment requires three deliberate touches at the terminal.
+            # A 15-second socket timeout expires while a member is positioning a
+            # finger, even though employees who scan quickly may appear to work.
+            zk = ZK(DEVICE_IP, port=DEVICE_PORT, timeout=180)
             conn = zk.connect()
             users = conn.get_users()
             device_user = next((u for u in users if str(u.user_id).strip() == str(uid_value)), None)
@@ -735,26 +738,33 @@ def run_enroll_fingerprint(enrollment_doc_id, member_id, member_name, biometric_
             device_name_key = ' '.join(str(device_user.name or '').casefold().split())
             crm_name_key = ' '.join(str(member_name[:24] or '').casefold().split())
             if device_name_key != crm_name_key:
-                raise RuntimeError(
-                    f'Device user {uid_value} is already assigned to "{device_user.name or ""}", '
-                    'which does not match the selected CRM record.'
+                # Numeric device user ID is the authoritative mapping. Names are
+                # display labels and can become stale after an import/rename.
+                logging.warning(
+                    f'[ENROLLMENT] Device user {uid_value} has display name '
+                    f'"{device_user.name or ""}"; CRM name is "{member_name[:24]}". '
+                    'Keeping the existing numeric ID and updating its label.'
                 )
+                conn.set_user(uid=int(device_user.uid), name=member_name[:24].strip(), privilege=0,
+                              password='', group_id='', user_id=str(uid_value))
+                users = conn.get_users()
+                device_user = next((u for u in users if str(u.user_id).strip() == str(uid_value)), None)
+                if not device_user:
+                    raise RuntimeError(f'Device user {uid_value} disappeared while updating its display name.')
             push_status('user_created', f'Device user {uid_value} verified.', {'deviceUserId': str(uid_value)})
 
             templates = conn.get_templates()
             user_templates = [t for t in templates if int(t.uid) == int(device_user.uid)]
             used_finger_indexes = {int(t.fid) for t in user_templates}
+            free_slots = [slot for slot in range(10) if slot not in used_finger_indexes]
+            if not free_slots:
+                raise RuntimeError(
+                    f'Device user {uid_value} already has templates in all 10 finger slots; '
+                    'delete an old device template before re-enrolling.'
+                )
             if finger_value in used_finger_indexes:
-                # CRM says this employee is pending while the device already has a
-                # template at the requested slot. Preserve that template and enroll
-                # the new scan into the first free slot instead of silently syncing
-                # an old device template as a new enrollment.
-                free_slots = [slot for slot in range(10) if slot not in used_finger_indexes]
-                if not free_slots:
-                    raise RuntimeError(
-                        f'Device user {uid_value} already has templates in all 10 finger slots; '
-                        'cannot safely add a new enrollment.'
-                    )
+                # Never overwrite the existing finger: Re-Enroll adds the new scan
+                # in the next free slot so access continues during replacement.
                 finger_value = free_slots[0]
                 enroll_ref.update({'fingerIndex': finger_value})
                 logging.info(
@@ -1073,7 +1083,7 @@ def run_membership_validation(user_id, device_id, device_name, branch, timestamp
         }).encode('utf-8')
         
         req = urllib.request.Request(
-            'http://localhost:5000/api/attendance/checkin',
+            os.getenv('ALPHA_ZONE_API_URL', 'http://127.0.0.1:%s/api' % os.getenv('PORT', '5000')).rstrip('/') + '/attendance/checkin',
             data=req_data,
             headers={'Content-Type': 'application/json'}
         )
@@ -1190,7 +1200,10 @@ def run_membership_validation(user_id, device_id, device_name, branch, timestamp
             except Exception:
                 pass
 
-        if member.get('status') == 'frozen':
+        if member.get('biometricBlocked') is True or str(member.get('status', '')).lower() in ('blocked', 'blacklisted'):
+            status = 'denied'
+            reason = member.get('biometricBlockReason') or 'Biometric access is blocked for this member'
+        elif member.get('status') == 'frozen':
             status = 'frozen'
             reason = 'Membership is frozen'
         elif member.get('status') == 'expired':
@@ -1331,10 +1344,18 @@ def run_membership_validation(user_id, device_id, device_name, branch, timestamp
                                     logging.info(f"🚪 [Checkout Recorded] Member {member_name} checked out at {timestamp_iso}")
                             except Exception as parse_err:
                                 logging.warning(f"Checkout time parse warning: {parse_err}")
-                else:
+                elif not (api_result and api_result.get('success')):
                     # New check-in session for today
                     db.collection('attendance').document(att_doc_id).set(punch_record, merge=True)
                     db.collection('attendance_logs').document(f"log_{device_id}_{user_id_str}_{int(time.time())}").set(punch_record)
+                elif api_result.get('success') and not api_result.get('alreadyInside'):
+                    # The API already wrote attendance_logs and updated summary/analytics.
+                    # Keep the stable day record for device-side checkout handling.
+                    db.collection('attendance').document(att_doc_id).set(punch_record, merge=True)
+                elif api_result.get('success'):
+                    # Same-day repeat: retain the local day record for checkout only;
+                    # the API intentionally avoids creating another attendance log.
+                    db.collection('attendance').document(att_doc_id).set(punch_record, merge=True)
                 
                 flush_offline_queue()
             except Exception as save_err:

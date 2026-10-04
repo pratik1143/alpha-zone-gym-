@@ -70,6 +70,12 @@ app.get('/api/gate/roster', async (req: express.Request, res: express.Response) 
       .filter(doc => !doc.data().isDeleted && !doc.data().deletedAt)
       .map(doc => {
         const member = doc.data();
+        const memberFingerprintStatus = String(member.fingerprintStatus || member.fingerprint?.status || '').toUpperCase();
+        const memberFingerprintEnrolled = member.fingerprintEnrolled === true || member.fingerprint?.enrolled === true;
+        const memberBioId = String(member.biometricId ?? member.deviceUserId ?? '');
+        const memberDeviceUser = deviceUserSnap.docs.find(userDoc => String(userDoc.data().userId ?? '') === memberBioId)?.data();
+        const memberHasFingerprint = memberFingerprintStatus === 'ENROLLED' || memberFingerprintEnrolled
+          || Number(memberDeviceUser?.fingerprintsCount || 0) > 0;
         return {
           id: doc.id,
           memberId: member.memberId || '',
@@ -77,8 +83,8 @@ app.get('/api/gate/roster', async (req: express.Request, res: express.Response) 
           phone: member.phone || '',
           biometricId: member.biometricId ?? null,
           deviceUserId: member.deviceUserId ?? null,
-          fingerprintStatus: member.fingerprintStatus || member.fingerprint?.status || '',
-          fingerprintEnrolled: member.fingerprintEnrolled ?? member.fingerprint?.enrolled ?? false,
+          fingerprintStatus: memberHasFingerprint ? 'ENROLLED' : (memberFingerprintStatus || 'NOT_ENROLLED'),
+          fingerprintEnrolled: memberHasFingerprint,
           biometricStatus: member.biometricStatus || member.biometric?.status || ''
         };
       });
@@ -95,8 +101,9 @@ app.get('/api/gate/roster', async (req: express.Request, res: express.Response) 
         role: employee.role || '',
         biometricId: bioId,
         deviceUserId: employee.deviceUserId ?? (bioId ? String(bioId) : null),
-        fingerprintStatus: employee.fingerprintStatus || employee.fingerprint?.status || '',
-        fingerprintEnrolled: employee.fingerprintEnrolled ?? employee.fingerprint?.enrolled ?? false,
+        fingerprintStatus: String(employee.fingerprintStatus || employee.fingerprint?.status || '').toUpperCase(),
+        fingerprintEnrolled: employee.fingerprintEnrolled === true || employee.fingerprint?.enrolled === true
+          || String(employee.fingerprintStatus || employee.fingerprint?.status || '').toUpperCase() === 'ENROLLED',
         biometricStatus: employee.biometricStatus || employee.biometric?.status || ''
       };
     });
@@ -149,6 +156,7 @@ app.post('/api/gate/members/:memberId/assign-biometric-id', async (req: express.
       fingerprintEnrolled: member.fingerprintEnrolled === true,
       updatedAt: new Date().toISOString()
     });
+    db.invalidateMembersCache();
     res.json({ success: true, biometricId: String(biometricId), alreadyAssigned: false });
   } catch (err: any) {
     console.error('[CRM BIOMETRIC ID ASSIGNMENT ERROR] ' + err.message);
@@ -451,7 +459,7 @@ const renderGateHtml = (req: express.Request, res: express.Response) => {
 
   <script>
     let currentTab = 'gate';
-    let filterClient = 'pending';
+    let filterClient = 'all';
     let filterEmployee = 'pending';
     let membersData = [];
     let employeesData = [];
@@ -527,9 +535,11 @@ const renderGateHtml = (req: express.Request, res: express.Response) => {
     function hasFingerprintTemplate(item) {
       const bioId = getCleanNumericId(item);
       const deviceUser = deviceUsersData.find(user => String(user.userId).trim() === bioId);
-      if (deviceUser) return Number(deviceUser.fingerprintsCount || 0) > 0;
       const status = String(item.fingerprintStatus || '').toUpperCase();
-      return item.fingerprintEnrolled === true || status === 'ENROLLED';
+      return Number(deviceUser && deviceUser.fingerprintsCount || 0) > 0
+        || item.fingerprintEnrolled === true
+        || item.fingerprint && item.fingerprint.enrolled === true
+        || status === 'ENROLLED';
     }
 
     function isEmployeeEnrollmentComplete(employee) {
@@ -579,6 +589,7 @@ const renderGateHtml = (req: express.Request, res: express.Response) => {
 
     async function assignMemberBiometricId(memberId, button) {
       const originalText = button.textContent;
+      const countText = document.getElementById('clientCountText');
       button.disabled = true;
       button.textContent = 'ASSIGNING...';
       try {
@@ -587,11 +598,13 @@ const renderGateHtml = (req: express.Request, res: express.Response) => {
         });
         const result = await response.json().catch(() => ({}));
         if (!response.ok || !result.success || !result.biometricId) throw new Error(result.error || 'Biometric ID assignment failed');
-        await fetchRoster();
+        countText.innerText = 'BIO ID #' + result.biometricId + ' ASSIGNED — READY TO ENROLL';
+        const refreshed = await fetchRoster();
+        if (!refreshed) throw new Error('ID assigned, but member list did not refresh. Press Refresh to verify before enrollment.');
       } catch (error) {
         button.disabled = false;
         button.textContent = originalText;
-        document.getElementById('clientCountText').innerText = 'ID ASSIGNMENT FAILED';
+        countText.innerText = 'ID ASSIGNMENT FAILED: ' + String(error && error.message || 'Check CRM connection and retry.');
         console.error('[CLIENT] Biometric ID assignment failed:', error);
       }
     }
@@ -622,9 +635,7 @@ const renderGateHtml = (req: express.Request, res: express.Response) => {
           const bioId = getCleanNumericId(m);
           const isEnrolled = hasFingerprintTemplate(m);
           const isMapped = hasMappedDeviceUser(m);
-          const memberIdArg = JSON.stringify(String(m.id || ''));
-          const enrollAction = 'triggerEnroll(' + memberIdArg + ', ' + JSON.stringify(bioId) + ', ' + JSON.stringify(encodeURIComponent(m.name || '')) + ', false)';
-          const rowAction = bioId ? enrollAction : 'assignMemberBiometricId(' + memberIdArg + ', this)';
+          const memberId = String(m.id || '');
           return \`
             <div class="p-3.5 rounded-2xl border bg-slate-800/60 border-slate-700/60 flex items-center justify-between hover:border-slate-700 transition-all">
               <div class="flex items-center gap-3">
@@ -636,7 +647,7 @@ const renderGateHtml = (req: express.Request, res: express.Response) => {
                   <div class="text-[11px] text-slate-400 mt-0.5">Fingerprint: <span class="\${isEnrolled ? 'text-emerald-400 font-bold' : 'text-amber-400 font-bold'}">\${isEnrolled ? 'ENROLLED' : 'NOT ENROLLED'}</span> • Device: <span class="\${isMapped ? 'text-emerald-400 font-bold' : 'text-slate-400'}">\${isMapped ? 'MAPPED' : 'NOT MAPPED'}</span></div>
                 </div>
               </div>
-              <button onclick="\${rowAction}" class="px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider border cursor-pointer \${bioId ? (isEnrolled ? 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700' : 'bg-blue-600 hover:bg-blue-500 text-white border-blue-500 shadow-md') : 'bg-amber-600 hover:bg-amber-500 text-white border-amber-500'}">
+              <button type="button" data-client-action="\${bioId ? 'enroll' : 'assign'}" data-member-id="\${encodeURIComponent(memberId)}" data-biometric-id="\${bioId}" data-encoded-name="\${encodeURIComponent(m.name || '')}" class="px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider border cursor-pointer \${bioId ? (isEnrolled ? 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700' : 'bg-blue-600 hover:bg-blue-500 text-white border-blue-500 shadow-md') : 'bg-amber-600 hover:bg-amber-500 text-white border-amber-500'}">
                 \${bioId ? (isEnrolled ? 'Re-Enroll' : 'Start Enroll') : 'Assign Biometric ID'}
               </button>
             </div>
@@ -692,7 +703,22 @@ const renderGateHtml = (req: express.Request, res: express.Response) => {
       }
     }
 
-    async function triggerEnroll(targetId, bioId, encodedName, isEmployee, retryCrmSync = false) {
+    // Client rows are replaced on every search/filter/refresh. Use one delegated
+    // listener on their stable container so member enrollment remains clickable
+    // after any re-render and does not depend on generated inline JavaScript.
+    document.getElementById('clientRosterList').addEventListener('click', event => {
+      const button = event.target && event.target.closest ? event.target.closest('button[data-client-action]') : null;
+      if (!button || !event.currentTarget.contains(button) || button.disabled) return;
+      const action = button.dataset.clientAction;
+      const memberId = button.dataset.memberId || '';
+      if (action === 'enroll') {
+        triggerEnroll(memberId, button.dataset.biometricId || '', button.dataset.encodedName || '', false, false, button);
+      } else if (action === 'assign') {
+        assignMemberBiometricId(memberId, button);
+      }
+    });
+
+    async function triggerEnroll(targetId, bioId, encodedName, isEmployee, retryCrmSync = false, triggerButton = null) {
       const name = decodeURIComponent(encodedName);
       const prefix = isEmployee ? 'Employee' : 'Client';
       const banner = document.getElementById(isEmployee ? 'enrollProgressBannerEmployee' : 'enrollProgressBannerClient');
@@ -711,6 +737,8 @@ const renderGateHtml = (req: express.Request, res: express.Response) => {
       msgText.innerText = retryCrmSync ? 'Verifying the saved template before retrying CRM sync...' : 'Waiting for the device. Follow its prompts and complete the fingerprint scans.';
       const oldRetryButton = document.getElementById(isEmployee ? 'crmRetryButtonEmployee' : 'crmRetryButtonClient');
       if (oldRetryButton) oldRetryButton.remove();
+      const originalButtonText = triggerButton ? triggerButton.textContent : '';
+      if (triggerButton) { triggerButton.disabled = true; triggerButton.textContent = retryCrmSync ? 'RETRYING...' : 'WAIT FOR SCANNER...'; }
 
       step1.className = 'p-2 rounded-xl border bg-slate-900 border-slate-800 text-slate-600';
       step2.className = 'p-2 rounded-xl border bg-slate-900 border-slate-800 text-slate-600';
@@ -732,7 +760,8 @@ const renderGateHtml = (req: express.Request, res: express.Response) => {
         const res = await fetch('/api/gate/enroll-fingerprint', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
+          body: JSON.stringify(payload),
+          signal: AbortSignal.timeout(330000)
         });
         const data = await res.json().catch(() => ({}));
 
@@ -744,7 +773,7 @@ const renderGateHtml = (req: express.Request, res: express.Response) => {
           stateText.innerText = 'TEMPLATE VERIFIED · MAPPED ✓';
           stateText.className = 'text-[10px] font-mono font-bold text-emerald-400 bg-emerald-950 border border-emerald-800 px-2 py-0.5 rounded-md';
           msgText.innerText = data.message || 'Fingerprint template verified on the device and mapped to CRM ID #' + bioId + ' (' + name + ')';
-          fetchRoster();
+          await fetchRoster();
         } else {
           step1.className = 'p-2 rounded-xl border bg-rose-950 border-rose-800 text-rose-400';
           step2.className = 'p-2 rounded-xl border bg-rose-950 border-rose-800 text-rose-400';
@@ -768,6 +797,8 @@ const renderGateHtml = (req: express.Request, res: express.Response) => {
         stateText.innerText = 'ERROR ❌';
         stateText.className = 'text-[10px] font-mono font-bold text-rose-400 bg-rose-950 border border-rose-800 px-2 py-0.5 rounded-md';
         msgText.innerText = '❌ ' + (err && err.message ? err.message : 'Unable to reach the local enrollment service.');
+      } finally {
+        if (triggerButton) { triggerButton.disabled = false; triggerButton.textContent = originalButtonText; }
       }
     }
 

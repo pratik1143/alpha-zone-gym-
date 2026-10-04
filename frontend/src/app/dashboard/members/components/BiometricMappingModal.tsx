@@ -72,7 +72,7 @@ export default function BiometricMappingModal({ isOpen, onClose, targetMember }:
         toast.error('Failed to auto-map biometric IDs');
       }
     } catch (err: any) {
-      toast.error('Error connecting to ESSL machine for auto-mapping');
+      toast.error(err?.response?.data?.error || 'Error connecting to ESSL machine for auto-mapping');
     } finally {
       setIsAutoMapping(false);
     }
@@ -139,7 +139,7 @@ export default function BiometricMappingModal({ isOpen, onClose, targetMember }:
               </div>
               <div>
                 <h2 className="text-lg font-black tracking-wide text-white uppercase font-display">Biometric ID Hardware Mapping</h2>
-                <p className="text-xs text-slate-400 font-medium">Auto-Sync all members with ESSL K90 Pro machine users</p>
+                <p className="text-xs text-slate-400 font-medium">Link member records to fingerprints already stored on the ESSL K90 Pro</p>
               </div>
             </div>
 
@@ -162,8 +162,8 @@ export default function BiometricMappingModal({ isOpen, onClose, targetMember }:
                     <Zap size={20} />
                   </div>
                   <div>
-                    <h3 className="text-sm font-black uppercase text-white tracking-wide">1-Click Auto Map All Members</h3>
-                    <p className="text-[10px] text-slate-300 font-medium">Scans ESSL machine users and matches names/IDs automatically</p>
+                    <h3 className="text-sm font-black uppercase text-white tracking-wide">Map all existing fingerprints once</h3>
+                    <p className="text-[10px] text-slate-300 font-medium">Matches the live scanner roster by existing ID or a unique exact name. Unclear matches are left for review.</p>
                   </div>
                 </div>
 
@@ -174,7 +174,7 @@ export default function BiometricMappingModal({ isOpen, onClose, targetMember }:
                   className="px-6 py-3 rounded-2xl bg-[#0b5cbe] text-white font-black uppercase text-xs hover:bg-[#064a9b] transition-all border-none cursor-pointer shadow-lg disabled:opacity-50 flex items-center gap-2"
                 >
                   <Cpu size={16} className={isAutoMapping ? 'animate-spin' : ''} />
-                  <span>{isAutoMapping ? 'Scanning ESSL...' : 'Auto-Map All Members'}</span>
+                  <span>{isAutoMapping ? 'Scanning ESSL...' : 'Map all fingers once'}</span>
                 </button>
               </div>
 
@@ -191,17 +191,22 @@ export default function BiometricMappingModal({ isOpen, onClose, targetMember }:
                       <span className="text-lg font-black text-blue-300 font-mono">+{autoMapResult.newlyMapped}</span>
                     </div>
                     <div className="bg-slate-900/80 p-3 rounded-xl border border-white/10 text-center">
-                      <span className="text-[9px] font-black uppercase text-slate-400 block">Missing on Machine</span>
+                      <span className="text-[9px] font-black uppercase text-slate-400 block">Members to Review</span>
                       <span className="text-lg font-black text-rose-400 font-mono">{autoMapResult.missingCount}</span>
                     </div>
                   </div>
+                  <p className="text-[10px] text-slate-300">
+                    Scanner fingerprints found: {autoMapResult.fingerprintedDeviceUsers ?? 0}
+                    {' · '}Still unmapped: {autoMapResult.unmappedFingerprintCount ?? 0}
+                    {(autoMapResult.skippedStaffFingerprints ?? 0) > 0 && ` · Staff IDs left for employee mapping: ${autoMapResult.skippedStaffFingerprints}`}
+                  </p>
 
                   {/* Missing Members List Alert */}
                   {autoMapResult.missingCount > 0 && (
                     <div className="bg-rose-500/10 border border-rose-500/30 p-4 rounded-2xl space-y-2">
                       <div className="text-[10px] font-black uppercase tracking-wider text-rose-400 flex items-center gap-1.5">
                         <AlertTriangle size={14} />
-                        {autoMapResult.missingCount} Members Not Found on Machine Scanner (Fingerprint Enrollment Needed):
+                        {autoMapResult.missingCount} member records need a manual match or fingerprint enrollment:
                       </div>
                       <div className="max-h-36 overflow-y-auto space-y-1.5 pr-2 custom-scrollbar">
                         {autoMapResult.missingMembers?.map((m: any) => (
