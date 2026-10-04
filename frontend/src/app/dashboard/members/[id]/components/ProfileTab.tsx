@@ -264,7 +264,8 @@ export default function ProfileTab({ member, onOpenRenewModal }: { member: any; 
 
   const handleBioBlockToggle = async () => {
     if (!member?.id || savingBioBlock) return;
-    const retryingBlock = member.biometricBlocked === true && member.biometricBlockPending === true;
+    const retryingUnblock = member.biometricBlocked === true && member.biometricBlockPending === true && member.biometricBlockAction === 'unblock';
+    const retryingBlock = member.biometricBlocked === true && member.biometricBlockPending === true && !retryingUnblock;
     const nextBlocked = member.biometricBlocked !== true || retryingBlock;
     setSavingBioBlock(true);
     try {
@@ -273,8 +274,8 @@ export default function ProfileTab({ member, onOpenRenewModal }: { member: any; 
 
       const waitForDeviceCommand = async (commandId: string) => {
         const startedAt = Date.now();
-        while (Date.now() - startedAt < 18000) {
-          const statusResponse = await API.get(`/devices/biometric/command/${encodeURIComponent(commandId)}`);
+        while (Date.now() - startedAt < 25000) {
+          const statusResponse = await API.get(`/devices/biometric/command/${encodeURIComponent(commandId)}`, { timeout: 10000 });
           const command = statusResponse.data;
           if (command.status === 'success') return;
           if (command.status === 'failed') throw new Error(command.message || 'The device rejected the biometric command.');
@@ -287,27 +288,33 @@ export default function ProfileTab({ member, onOpenRenewModal }: { member: any; 
         await API.put(`/members/${encodeURIComponent(member.id)}`, {
           biometricBlocked: true,
           biometricBlockPending: true,
+          biometricBlockAction: 'block',
           biometricBlockedAt: new Date().toISOString(),
           biometricBlockReason: 'Manually blocked from member profile',
-        });
+        }, { timeout: 20000 });
         member.biometricBlocked = true;
         member.biometricBlockPending = true;
 
-        const queued = await API.post('/devices/biometric/delete', {
-          memberId: member.id,
-          memberName: member.name,
-          biometricId: Number(biometricId),
-        });
-        const commandId = queued.data?.enrollmentDocId;
+        let commandId = typeof member.biometricBlockCommandId === 'string' ? member.biometricBlockCommandId : '';
+        if (!commandId) {
+          const queued = await API.post('/devices/biometric/delete', {
+            memberId: member.id,
+            memberName: member.name,
+            biometricId: Number(biometricId),
+          }, { timeout: 20000 });
+          commandId = queued.data?.enrollmentDocId;
+          if (commandId) await API.put(`/members/${encodeURIComponent(member.id)}`, { biometricBlockCommandId: commandId }, { timeout: 20000 });
+        }
         if (!commandId) throw new Error('Block saved, but the device removal command was not queued.');
         await waitForDeviceCommand(commandId);
 
         await API.put(`/members/${encodeURIComponent(member.id)}`, {
           biometricBlockPending: false,
+          biometricBlockAction: null,
           biometricBlockCommandId: null,
           biometricEnrolled: false,
           fingerprintStatus: 'not_enrolled',
-        });
+        }, { timeout: 20000 });
         member.biometricBlockPending = false;
         member.biometricBlockCommandId = null;
         member.biometricEnrolled = false;
@@ -315,22 +322,37 @@ export default function ProfileTab({ member, onOpenRenewModal }: { member: any; 
         toast.success('Bio blocked on the terminal. Re-enrollment is required before access can be restored.');
       } else {
         await API.put(`/members/${encodeURIComponent(member.id)}`, {
-          biometricBlocked: false,
-          biometricBlockPending: false,
-          biometricBlockedAt: null,
-          biometricBlockReason: null,
-        });
-        member.biometricBlocked = false;
-        member.biometricBlockPending = false;
+          biometricBlocked: true,
+          biometricBlockPending: true,
+          biometricBlockAction: 'unblock',
+        }, { timeout: 20000 });
+        member.biometricBlocked = true;
+        member.biometricBlockPending = true;
+        member.biometricBlockAction = 'unblock';
 
-        const queued = await API.post('/devices/biometric/sync', {
-          memberId: member.id,
-          memberName: member.name,
-          biometricId: Number(biometricId),
-        });
-        const commandId = queued.data?.enrollmentDocId;
+        let commandId = typeof member.biometricBlockCommandId === 'string' ? member.biometricBlockCommandId : '';
+        if (!commandId) {
+          const queued = await API.post('/devices/biometric/sync', {
+            memberId: member.id,
+            memberName: member.name,
+            biometricId: Number(biometricId),
+          }, { timeout: 20000 });
+          commandId = queued.data?.enrollmentDocId;
+          if (commandId) await API.put(`/members/${encodeURIComponent(member.id)}`, { biometricBlockCommandId: commandId }, { timeout: 20000 });
+        }
         if (!commandId) throw new Error('Access flag cleared, but the device user could not be restored.');
         await waitForDeviceCommand(commandId);
+        await API.put(`/members/${encodeURIComponent(member.id)}`, {
+          biometricBlocked: false,
+          biometricBlockPending: false,
+          biometricBlockAction: null,
+          biometricBlockCommandId: null,
+          biometricBlockedAt: null,
+          biometricBlockReason: null,
+        }, { timeout: 20000 });
+        member.biometricBlocked = false;
+        member.biometricBlockPending = false;
+        member.biometricBlockAction = null;
         toast.success('Bio block removed. Re-enroll this member’s fingerprint before their next entry.');
       }
 
@@ -451,7 +473,7 @@ export default function ProfileTab({ member, onOpenRenewModal }: { member: any; 
                 }`}
               >
                 {member.biometricBlocked ? <Fingerprint size={14} /> : <Ban size={14} />}
-                {savingBioBlock ? 'Syncing…' : member.biometricBlocked ? (member.biometricBlockPending ? 'Retry Block' : 'Unblock Bio') : 'Block Bio'}
+                {savingBioBlock ? 'Syncing…' : member.biometricBlocked ? (member.biometricBlockAction === 'unblock' ? 'Retry Unblock' : member.biometricBlockPending ? 'Retry Block' : 'Unblock Bio') : 'Block Bio'}
               </button>
             </div>
           </div>
@@ -500,7 +522,7 @@ export default function ProfileTab({ member, onOpenRenewModal }: { member: any; 
           </span>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 pt-1">
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 pt-1">
           <div className="p-4 bg-slate-50/80 rounded-2xl border border-slate-200/80 flex flex-col justify-between space-y-2">
             <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Biometric ID</span>
             <span className="text-xl font-mono font-black text-blue-700">#{member.biometricId || member.memberId || 'N/A'}</span>
@@ -534,6 +556,23 @@ export default function ProfileTab({ member, onOpenRenewModal }: { member: any; 
             <span className="text-xs font-bold text-slate-700 font-mono">ESSL K90 Pro (192.168.18.11)</span>
           </div>
         </div>
+
+        {member.biometricBlocked !== true && member.fingerprintStatus !== 'ENROLLED' && member.fingerprintEnrolled !== true && (
+          <div className="sm:col-span-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+            <div>
+              <p className="text-sm font-black text-amber-900">Access is unblocked, but this device has no fingerprint template.</p>
+              <p className="mt-1 text-xs text-amber-800">Ask the member to scan the same finger three times at the gym terminal to restore fingerprint entry.</p>
+            </div>
+            <a
+              href={`http://172.31.128.1:8000/gate-control?reenroll=${encodeURIComponent(String(member.biometricId || member.deviceUserId || ''))}`}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex shrink-0 items-center justify-center rounded-xl bg-amber-500 px-4 py-2.5 text-xs font-black text-slate-950 hover:bg-amber-400"
+            >
+              Re-enroll fingerprint
+            </a>
+          </div>
+        )}
       </div>
 
       {/* BOTTOM ROW: Health Measurements & Personal Trainer */}

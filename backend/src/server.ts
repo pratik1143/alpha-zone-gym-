@@ -85,7 +85,12 @@ app.get('/api/gate/roster', async (req: express.Request, res: express.Response) 
           deviceUserId: member.deviceUserId ?? null,
           fingerprintStatus: memberHasFingerprint ? 'ENROLLED' : (memberFingerprintStatus || 'NOT_ENROLLED'),
           fingerprintEnrolled: memberHasFingerprint,
-          biometricStatus: member.biometricStatus || member.biometric?.status || ''
+          biometricStatus: member.biometricStatus || member.biometric?.status || '',
+          biometricBlocked: member.biometricBlocked === true,
+          biometricBlockPending: member.biometricBlockPending === true,
+          biometricBlockAction: member.biometricBlockAction || null,
+          biometricBlockReason: member.biometricBlockReason || '',
+          biometricBlockedAt: member.biometricBlockedAt || null
         };
       });
     const employees = employeeSnap.docs.map(doc => {
@@ -104,7 +109,12 @@ app.get('/api/gate/roster', async (req: express.Request, res: express.Response) 
         fingerprintStatus: String(employee.fingerprintStatus || employee.fingerprint?.status || '').toUpperCase(),
         fingerprintEnrolled: employee.fingerprintEnrolled === true || employee.fingerprint?.enrolled === true
           || String(employee.fingerprintStatus || employee.fingerprint?.status || '').toUpperCase() === 'ENROLLED',
-        biometricStatus: employee.biometricStatus || employee.biometric?.status || ''
+        biometricStatus: employee.biometricStatus || employee.biometric?.status || '',
+        biometricBlocked: employee.biometricBlocked === true,
+        biometricBlockPending: employee.biometricBlockPending === true,
+        biometricBlockAction: employee.biometricBlockAction || null,
+        biometricBlockReason: employee.biometricBlockReason || '',
+        biometricBlockedAt: employee.biometricBlockedAt || null
       };
     });
     const deviceUsers = deviceUserSnap.docs.map(doc => {
@@ -257,6 +267,13 @@ const renderGateHtml = (req: express.Request, res: express.Response) => {
       class="px-5 py-2.5 rounded-2xl text-xs font-black uppercase tracking-wider transition-all border cursor-pointer flex items-center gap-2 bg-slate-900 text-slate-400 border-slate-800 hover:bg-slate-800 hover:text-white"
     >
       👔 Enroll Employee
+    </button>
+    <button
+      id="tabBtnBlocked"
+      onclick="switchTab('blocked')"
+      class="px-5 py-2.5 rounded-2xl text-xs font-black uppercase tracking-wider transition-all border cursor-pointer flex items-center gap-2 bg-slate-900 text-slate-400 border-slate-800 hover:bg-slate-800 hover:text-white"
+    >
+      🚫 Blocked Access
     </button>
   </div>
 
@@ -445,6 +462,23 @@ const renderGateHtml = (req: express.Request, res: express.Response) => {
       <div id="employeeRosterList" class="space-y-2 max-h-96 overflow-y-auto pr-1"></div>
     </div>
 
+    <div id="tabContentBlocked" class="hidden w-full max-w-2xl bg-slate-900/90 border border-rose-900/50 rounded-3xl p-6 shadow-2xl space-y-5">
+      <div>
+        <h2 class="text-lg font-black text-white uppercase tracking-tight">🚫 Blocked Client &amp; Employee Access</h2>
+        <p class="text-xs text-slate-400 mt-1">Unblock syncs the user slot to the terminal. Fingerprint enrollment may be required before biometric entry works again.</p>
+      </div>
+      <input id="searchBlocked" type="search" oninput="renderBlockedRoster()" placeholder="Search by biometric ID, name, phone, or staff/member ID..." class="w-full h-11 bg-slate-800 border border-slate-700 rounded-2xl px-4 text-xs font-bold text-white placeholder-slate-500 focus:outline-none focus:border-blue-500" />
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <div class="flex items-center gap-1.5 bg-slate-800/80 p-1 rounded-xl border border-slate-700">
+          <button onclick="setBlockedFilter('all')" id="btnBlockedAll" class="px-3 py-1.5 rounded-lg text-[11px] font-black uppercase bg-blue-600 text-white">All</button>
+          <button onclick="setBlockedFilter('client')" id="btnBlockedClient" class="px-3 py-1.5 rounded-lg text-[11px] font-black uppercase text-slate-400">Clients</button>
+          <button onclick="setBlockedFilter('employee')" id="btnBlockedEmployee" class="px-3 py-1.5 rounded-lg text-[11px] font-black uppercase text-slate-400">Employees</button>
+        </div>
+        <div class="flex items-center gap-2"><span id="blockedCountText" class="text-[11px] text-slate-400 font-mono">Loading blocked access...</span><button onclick="refreshAll()" class="px-3 py-1.5 rounded-lg bg-slate-800 text-slate-200 text-[10px] font-black uppercase border border-slate-700">Refresh</button></div>
+      </div>
+      <div id="blockedRosterList" class="space-y-2 max-h-[32rem] overflow-y-auto pr-1"></div>
+    </div>
+
     <!-- Quick Access Links Card -->
     <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 px-6 text-center text-xs text-slate-400 max-w-lg shadow-sm">
       💡 <strong class="text-white font-bold">Gym WiFi Quick Access:</strong> Connect to Gym WiFi and open <code class="bg-blue-950 text-blue-300 px-2 py-0.5 rounded font-mono font-bold border border-blue-800">http://${lanIp}:8000/gate-control</code> for 1-tap gate unlock & fingerprint enrollment.
@@ -461,6 +495,9 @@ const renderGateHtml = (req: express.Request, res: express.Response) => {
     let currentTab = 'gate';
     let filterClient = 'all';
     let filterEmployee = 'pending';
+    let filterBlocked = 'all';
+    const gateSearchParams = new URLSearchParams(window.location.search);
+    const requestedBioId = gateSearchParams.get('reenroll');
     let membersData = [];
     let employeesData = [];
     let deviceUsersData = [];
@@ -471,12 +508,14 @@ const renderGateHtml = (req: express.Request, res: express.Response) => {
       document.getElementById('tabContentGate').className = tab === 'gate' ? 'w-full max-w-md flex flex-col items-center justify-center space-y-6 py-4' : 'hidden';
       document.getElementById('tabContentClient').className = tab === 'client' ? 'w-full max-w-2xl bg-slate-900/90 border border-slate-800 rounded-3xl p-6 shadow-2xl space-y-5' : 'hidden';
       document.getElementById('tabContentEmployee').className = tab === 'employee' ? 'w-full max-w-2xl bg-slate-900/90 border border-slate-800 rounded-3xl p-6 shadow-2xl space-y-5' : 'hidden';
+      document.getElementById('tabContentBlocked').className = tab === 'blocked' ? 'w-full max-w-2xl bg-slate-900/90 border border-rose-900/50 rounded-3xl p-6 shadow-2xl space-y-5' : 'hidden';
 
       document.getElementById('tabBtnGate').className = tab === 'gate' ? 'px-5 py-2.5 rounded-2xl text-xs font-black uppercase tracking-wider transition-all border cursor-pointer flex items-center gap-2 bg-blue-600 text-white border-blue-500 shadow-lg shadow-blue-900/40' : 'px-5 py-2.5 rounded-2xl text-xs font-black uppercase tracking-wider transition-all border cursor-pointer flex items-center gap-2 bg-slate-900 text-slate-400 border-slate-800 hover:bg-slate-800 hover:text-white';
       document.getElementById('tabBtnClient').className = tab === 'client' ? 'px-5 py-2.5 rounded-2xl text-xs font-black uppercase tracking-wider transition-all border cursor-pointer flex items-center gap-2 bg-blue-600 text-white border-blue-500 shadow-lg shadow-blue-900/40' : 'px-5 py-2.5 rounded-2xl text-xs font-black uppercase tracking-wider transition-all border cursor-pointer flex items-center gap-2 bg-slate-900 text-slate-400 border-slate-800 hover:bg-slate-800 hover:text-white';
       document.getElementById('tabBtnEmployee').className = tab === 'employee' ? 'px-5 py-2.5 rounded-2xl text-xs font-black uppercase tracking-wider transition-all border cursor-pointer flex items-center gap-2 bg-blue-600 text-white border-blue-500 shadow-lg shadow-blue-900/40' : 'px-5 py-2.5 rounded-2xl text-xs font-black uppercase tracking-wider transition-all border cursor-pointer flex items-center gap-2 bg-slate-900 text-slate-400 border-slate-800 hover:bg-slate-800 hover:text-white';
+      document.getElementById('tabBtnBlocked').className = tab === 'blocked' ? 'px-5 py-2.5 rounded-2xl text-xs font-black uppercase tracking-wider transition-all border cursor-pointer flex items-center gap-2 bg-rose-700 text-white border-rose-500 shadow-lg shadow-rose-900/40' : 'px-5 py-2.5 rounded-2xl text-xs font-black uppercase tracking-wider transition-all border cursor-pointer flex items-center gap-2 bg-slate-900 text-slate-400 border-slate-800 hover:bg-slate-800 hover:text-white';
 
-      if (tab === 'client' || tab === 'employee') {
+      if (tab === 'client' || tab === 'employee' || tab === 'blocked') {
         fetchRoster();
       }
     }
@@ -490,12 +529,13 @@ const renderGateHtml = (req: express.Request, res: express.Response) => {
         employeesData = data.employees || [];
         deviceUsersData = data.deviceUsers || [];
         renderRoster();
+        renderBlockedRoster();
         return true;
       } catch (err) {
         document.getElementById('clientCountText').innerText = 'CRM CONNECTION FAILED';
         document.getElementById('employeeCountText').innerText = String(err && err.message || '').includes('Could not load the live CRM roster') ? 'EMPLOYEE DATA FETCH FAILED' : 'CRM CONNECTION ERROR';
         const message = err && err.message ? err.message : 'CRM connection failed.';
-        for (const listId of ['clientRosterList', 'employeeRosterList']) {
+        for (const listId of ['clientRosterList', 'employeeRosterList', 'blockedRosterList']) {
           const errorBox = document.createElement('div');
           errorBox.className = 'p-8 text-center text-xs text-rose-300 bg-rose-950/40 rounded-2xl border border-rose-800';
           errorBox.textContent = message;
@@ -565,6 +605,109 @@ const renderGateHtml = (req: express.Request, res: express.Response) => {
         document.getElementById('btnFilterEmpAll').className = filter === 'all' ? 'px-3 py-1.5 rounded-lg text-[11px] font-black uppercase transition-all bg-blue-600 text-white' : 'px-3 py-1.5 rounded-lg text-[11px] font-black uppercase transition-all text-slate-400 hover:text-white';
       }
     }
+
+    function setBlockedFilter(filter) {
+      filterBlocked = filter;
+      for (const key of ['all', 'client', 'employee']) {
+        const button = document.getElementById('btnBlocked' + key.charAt(0).toUpperCase() + key.slice(1));
+        button.className = filter === key
+          ? 'px-3 py-1.5 rounded-lg text-[11px] font-black uppercase bg-blue-600 text-white'
+          : 'px-3 py-1.5 rounded-lg text-[11px] font-black uppercase text-slate-400 hover:text-white';
+      }
+      renderBlockedRoster();
+    }
+
+    function renderBlockedRoster() {
+      const query = (document.getElementById('searchBlocked')?.value || '').trim().toLowerCase();
+      const records = [
+        ...membersData.filter(person => person.biometricBlocked === true || person.biometricBlockPending === true).map(person => ({ ...person, accessKind: 'client' })),
+        ...employeesData.filter(person => person.biometricBlocked === true || person.biometricBlockPending === true).map(person => ({ ...person, accessKind: 'employee' })),
+      ].filter(person => {
+        if (filterBlocked !== 'all' && person.accessKind !== filterBlocked) return false;
+        const searchable = [person.name, person.phone, person.memberId, person.employeeId, person.id, person.biometricId, person.deviceUserId].join(' ').toLowerCase();
+        return !query || searchable.includes(query);
+      });
+      document.getElementById('blockedCountText').textContent = records.length + ' BLOCKED / PENDING';
+      const list = document.getElementById('blockedRosterList');
+      if (!records.length) {
+        list.innerHTML = '<div class="p-8 text-center text-xs text-slate-400 bg-slate-800/40 rounded-2xl border border-slate-800">No blocked clients or employees match this search.</div>';
+        return;
+      }
+      list.innerHTML = records.map(person => {
+        const pending = person.biometricBlockPending === true;
+        const retryAction = person.biometricBlockAction === 'unblock';
+        const name = escapeHtml(person.name || (person.accessKind === 'client' ? 'Client' : 'Employee'));
+        const contact = escapeHtml(person.phone || person.employeeId || person.memberId || 'No contact');
+        const reason = person.biometricBlockReason ? '<div class="text-[10px] text-slate-500 mt-0.5">' + escapeHtml(person.biometricBlockReason) + '</div>' : '';
+        const action = pending && retryAction ? 'Retry Unblock' : 'Unblock';
+        return '<div class="p-4 rounded-2xl border bg-slate-800/70 border-rose-900/50 flex flex-wrap items-center justify-between gap-3">'
+          + '<div class="flex items-center gap-3 min-w-0"><div class="w-10 h-10 rounded-xl bg-slate-900 border border-rose-800 flex items-center justify-center font-mono text-xs font-black text-rose-300 shrink-0">#' + (getCleanNumericId(person) || '—') + '</div>'
+          + '<div class="min-w-0"><div class="text-xs font-black text-white truncate">' + name + ' <span class="text-[10px] uppercase text-slate-400">· ' + person.accessKind + '</span></div>'
+          + '<div class="text-[11px] text-slate-400 mt-1">' + contact + ' · ' + (pending ? (retryAction ? 'UNBLOCK SYNC PENDING' : 'BLOCK SYNC PENDING') : 'ACCESS BLOCKED') + '</div>' + reason + '</div></div>'
+          + '<button type="button" data-blocked-action="unblock" data-person-kind="' + person.accessKind + '" data-person-id="' + encodeURIComponent(String(person.id || '')) + '" class="px-4 py-2 rounded-xl text-xs font-black uppercase border border-emerald-500 bg-emerald-600 hover:bg-emerald-500 text-white disabled:opacity-60">' + action + '</button></div>';
+      }).join('');
+    }
+
+    function escapeHtml(value) {
+      return String(value).replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character]));
+    }
+
+    async function unblockBiometric(kind, id, button) {
+      const people = kind === 'employee' ? employeesData : membersData;
+      const person = people.find(item => String(item.id) === String(id));
+      if (!person || button.disabled) return;
+      const original = button.textContent;
+      button.disabled = true;
+      button.textContent = 'SYNCING...';
+      const endpoint = kind === 'employee' ? '/api/employees/' : '/api/members/';
+      const write = async payload => {
+        const response = await fetch(endpoint + encodeURIComponent(id), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || data.success === false) throw new Error(data.error || 'Could not update biometric access.');
+        return data;
+      };
+      try {
+        await write({ biometricBlocked: true, biometricBlockPending: true, biometricBlockAction: 'unblock' });
+        let commandId = typeof person.biometricBlockCommandId === 'string' ? person.biometricBlockCommandId : '';
+        if (!commandId) {
+          const response = await fetch('/api/devices/biometric/sync', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ memberId: id, memberName: person.name, biometricId: Number(getCleanNumericId(person)), isEmployee: kind === 'employee' }) });
+          const queued = await response.json().catch(() => ({}));
+          if (!response.ok || !queued.success || !queued.enrollmentDocId) throw new Error(queued.error || 'Could not queue device sync.');
+          commandId = queued.enrollmentDocId;
+          person.biometricBlockCommandId = commandId;
+          await write({ biometricBlockCommandId: commandId });
+        }
+        const deadline = Date.now() + 25000;
+        let complete = false;
+        while (Date.now() < deadline) {
+          const statusResponse = await fetch('/api/devices/biometric/command/' + encodeURIComponent(commandId));
+          const status = await statusResponse.json().catch(() => ({}));
+          if (!statusResponse.ok) throw new Error(status.error || 'Could not read device sync status.');
+          if (status.status === 'success') { complete = true; break; }
+          if (status.status === 'failed') throw new Error(status.message || 'The device rejected the sync.');
+          await new Promise(resolve => setTimeout(resolve, 800));
+        }
+        if (!complete) throw new Error('Device has not confirmed sync yet. Access remains blocked; press Retry Unblock when the device is online.');
+        await write({ biometricBlocked: false, biometricBlockPending: false, biometricBlockAction: null, biometricBlockCommandId: null, biometricBlockedAt: null, biometricBlockReason: null });
+        person.biometricBlocked = false;
+        person.biometricBlockPending = false;
+        person.biometricBlockAction = null;
+        person.biometricBlockCommandId = null;
+        const label = kind === 'employee' ? 'Employee' : 'Client';
+        document.getElementById('blockedCountText').textContent = label + ' unblocked · fingerprint may need re-enrollment';
+        await fetchRoster();
+      } catch (error) {
+        button.disabled = false;
+        button.textContent = original;
+        document.getElementById('blockedCountText').textContent = 'UNBLOCK FAILED: ' + String(error && error.message || 'Retry when terminal is online.');
+      }
+    }
+
+    document.getElementById('blockedRosterList').addEventListener('click', event => {
+      const button = event.target.closest('[data-blocked-action="unblock"]');
+      if (!button) return;
+      unblockBiometric(button.dataset.personKind, decodeURIComponent(button.dataset.personId || ''), button);
+    });
 
     function getCleanNumericId(item) {
       if (!item) return '';
@@ -871,6 +1014,12 @@ const renderGateHtml = (req: express.Request, res: express.Response) => {
     // Initial load
     refreshDeviceStatus();
     fetchRoster();
+    if (requestedBioId) {
+      switchTab('client');
+      document.getElementById('searchClient').value = requestedBioId;
+      setFilter('client', 'all');
+      renderRoster();
+    }
   </script>
 </body>
 </html>`;

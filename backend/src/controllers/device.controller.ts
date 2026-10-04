@@ -550,7 +550,7 @@ export const startEnrollFingerprint = async (req: Request, res: Response) => {
  */
 export const deleteEnrollment = async (req: Request, res: Response) => {
   try {
-    const { memberId, memberName, biometricId } = req.body;
+    const { memberId, memberName, biometricId, isEmployee } = req.body;
     if (!memberId || !biometricId) {
       return res.status(400).json({ error: 'memberId and biometricId are required' });
     }
@@ -568,6 +568,7 @@ export const deleteEnrollment = async (req: Request, res: Response) => {
       status: 'pending',
       memberId,
       memberName: memberName || 'Member',
+      isEmployee: isEmployee === true,
       biometricId: Number(biometricId),
       message: 'Deletion queued...',
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
