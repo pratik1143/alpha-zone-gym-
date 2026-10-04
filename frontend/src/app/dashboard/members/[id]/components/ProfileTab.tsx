@@ -283,7 +283,7 @@ export default function ProfileTab({ member, onOpenRenewModal }: { member: any; 
       member.biometricBlockAction = nextBlocked ? 'block' : 'unblock';
       member.biometricBlockCommandId = commandId;
 
-      const deadline = Date.now() + 30000;
+      const deadline = Date.now() + 120000;
       while (Date.now() < deadline) {
         const result = await API.get(`/devices/biometric/command/${encodeURIComponent(commandId)}`, { timeout: 10000 });
         if (result.data?.status === 'success') {
@@ -294,7 +294,7 @@ export default function ProfileTab({ member, onOpenRenewModal }: { member: any; 
           return;
         }
         if (result.data?.status === 'failed') throw new Error(result.data?.message || 'The terminal rejected the access change.');
-        await new Promise(resolve => setTimeout(resolve, 700));
+        await new Promise(resolve => setTimeout(resolve, 1000));
       }
       throw new Error('Terminal has not confirmed the access change yet. Check its connection, then retry.');
 

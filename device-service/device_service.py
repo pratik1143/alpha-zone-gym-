@@ -13,6 +13,7 @@ import platform
 import struct
 from pathlib import Path
 import atexit
+from contextlib import contextmanager
 from zk import ZK, const
 from zk.exception import ZKError
 import firebase_admin
@@ -128,6 +129,8 @@ run_startup_self_diagnostics()
 active_threads = {}
 threads_running = True
 biometric_lock = threading.Lock()
+biometric_lock_condition = threading.Condition()
+manual_access_waiters = 0
 
 # Cooldown tracker to prevent duplicate unlocks (UserID -> last_unlock_epoch)
 last_unlock_time = {}
@@ -135,6 +138,32 @@ processed_fingerprints = set()
 processed_unlock_requests = set()
 membership_expiry_timers = {}
 membership_policy_cache = {}
+
+
+@contextmanager
+def biometric_operation(manual_access=False):
+    """Serialize terminal commands, letting an explicit block/unblock go next.
+
+    Firestore can deliver a burst of membership-policy updates. Without this
+    small priority gate, a manual unblock could sit behind hundreds of routine
+    expiry syncs and time out in the browser even though the service was online.
+    """
+    global manual_access_waiters
+    with biometric_lock_condition:
+        if manual_access:
+            manual_access_waiters += 1
+        while True:
+            if (manual_access or manual_access_waiters == 0) and biometric_lock.acquire(blocking=False):
+                if manual_access:
+                    manual_access_waiters -= 1
+                break
+            biometric_lock_condition.wait(timeout=0.1)
+    try:
+        yield
+    finally:
+        with biometric_lock_condition:
+            biometric_lock.release()
+            biometric_lock_condition.notify_all()
 
 def check_internet_connection():
     """Checks real internet connectivity by attempting socket connection to DNS servers."""
@@ -738,7 +767,7 @@ def run_enroll_fingerprint(enrollment_doc_id, member_id, member_name, biometric_
             payload.update(extra)
         enroll_ref.update(payload)
 
-    with biometric_lock:
+    with biometric_operation():
         conn = None
         try:
             uid_value = int(biometric_uid)
@@ -926,7 +955,7 @@ def run_delete_biometric(enrollment_doc_id, member_id, member_name, biometric_ui
     def push_status(status, message):
         enroll_ref.update({'status': status, 'message': message, 'updatedAt': datetime.utcnow().isoformat() + 'Z'})
 
-    with biometric_lock:
+    with biometric_operation():
         try:
             push_status('connecting', 'Connecting to device...')
             zk = ZK(DEVICE_IP, port=DEVICE_PORT, timeout=10)
@@ -1028,7 +1057,7 @@ def run_set_user_access(enrollment_doc_id, member_id, member_name, biometric_uid
             payload.update(extra)
         enroll_ref.update(payload)
 
-    with biometric_lock:
+    with biometric_operation(manual_access=manual_access):
         conn = None
         try:
             push_status('connecting', 'Connecting to terminal to update user access...', {'enabled': bool(enabled)})
@@ -1112,7 +1141,7 @@ def run_sync_user_to_device(enrollment_doc_id, member_id, member_name, biometric
     def push_status(status, message):
         enroll_ref.update({'status': status, 'message': message, 'updatedAt': datetime.utcnow().isoformat() + 'Z'})
 
-    with biometric_lock:
+    with biometric_operation():
         try:
             push_status('connecting', 'Connecting to ESSL K90 Pro...')
             zk = ZK(DEVICE_IP, port=DEVICE_PORT, timeout=10)
@@ -1269,6 +1298,54 @@ def membership_allows_terminal_access(data, today=None, allow_explicit_unblock=F
     return True
 
 
+def membership_policy_allows_terminal_access(data, today=None):
+    """Return membership eligibility without including an operator's biometric toggle.
+
+    Manual block/unblock commands own the biometricBlocked field. Treating that
+    field as a membership transition created duplicate policy commands, including
+    a stale disable immediately after a successful manual unblock.
+    """
+    policy_record = dict(data or {})
+    policy_record['biometricBlocked'] = False
+    policy_record['biometricBlockPending'] = False
+    policy_record['biometricBlockAction'] = None
+    return membership_allows_terminal_access(policy_record, today=today)
+
+
+def is_biometric_access_allowed_now(biometric_uid):
+    """Re-check the latest CRM access decision immediately before pulsing the gate."""
+    if db is None:
+        return False
+    uid = str(biometric_uid or '').strip()
+    if not uid.isdigit():
+        return False
+    candidates = {uid}
+    try:
+        candidates.add(str(int(uid)))
+    except ValueError:
+        pass
+
+    found = False
+    for collection_name in ('members', 'employees'):
+        collection = db.collection(collection_name)
+        matched = {}
+        for field in ('biometricId', 'deviceUserId'):
+            for candidate in candidates:
+                for snapshot in collection.where(field, '==', candidate).limit(5).stream():
+                    matched[snapshot.id] = snapshot
+                try:
+                    numeric_candidate = int(candidate)
+                    for snapshot in collection.where(field, '==', numeric_candidate).limit(5).stream():
+                        matched[snapshot.id] = snapshot
+                except (TypeError, ValueError):
+                    pass
+        for snapshot in matched.values():
+            found = True
+            if not membership_allows_terminal_access(snapshot.to_dict() or {}):
+                return False
+    return found
+
+
 def queue_membership_policy_access(collection_name, doc_id, data, enabled):
     biometric_uid = str(data.get('biometricId') or data.get('deviceUserId') or '').strip()
     if not biometric_uid.isdigit() or not 1 <= int(biometric_uid) <= 65535:
@@ -1322,7 +1399,7 @@ def schedule_membership_access_boundary(collection_name, doc_id, data):
             if not latest.exists:
                 return
             current = latest.to_dict() or {}
-            queue_membership_policy_access(collection_name, doc_id, current, membership_allows_terminal_access(current))
+            queue_membership_policy_access(collection_name, doc_id, current, membership_policy_allows_terminal_access(current))
             schedule_membership_access_boundary(collection_name, doc_id, current)
         except Exception as error:
             logging.error(f"[ACCESS POLICY] Boundary check failed for {collection_name}/{doc_id}: {error}")
@@ -1345,14 +1422,9 @@ def make_membership_access_listener(collection_name):
                 membership_policy_cache.pop(key, None)
                 continue
             data = doc.to_dict() or {}
-            signature = (
-                str(data.get('status', '')).casefold(),
-                str(data.get('membershipStatus', '')).casefold(),
-                str(data.get('isBlocked', False)),
-                str(data.get('blacklisted', False)),
-                str(data.get('startDate') or data.get('membershipStartDate') or data.get('joinDate') or ''),
-                str(data.get('expiryDate') or data.get('membershipExpiryDate') or data.get('endDate') or ''),
-            )
+            # Sync only when the effective gate eligibility changes. CRM edits
+            # that leave access eligible must not flood the terminal command queue.
+            signature = membership_policy_allows_terminal_access(data)
             previous = membership_policy_cache.get(key)
             membership_policy_cache[key] = signature
             schedule_membership_access_boundary(collection_name, doc.id, data)
@@ -1362,7 +1434,7 @@ def make_membership_access_listener(collection_name):
             # expired record on startup. Date boundaries and later status changes
             # remain watched; every punch is also validated directly in Firestore.
             if policy_changed:
-                queue_membership_policy_access(collection_name, doc.id, data, membership_allows_terminal_access(data))
+                queue_membership_policy_access(collection_name, doc.id, data, signature)
     return membership_snapshot_listener
 
 
@@ -1917,7 +1989,7 @@ def make_device_listener(conn, device_id, device_name):
                         'unlockError': None
                     })
                     logging.info(f"[GATE] Request {request_id}: sending {duration}s relay command to {device_name}.")
-                    with biometric_lock:
+                    with biometric_operation():
                         latest = device_ref.get().to_dict() or {}
                         if latest.get('unlockRequestId') != request_id or latest.get('unlockStatus') != 'processing':
                             logging.info(f"[GATE] Request {request_id} was cancelled or superseded before relay execution.")
@@ -2110,8 +2182,17 @@ def device_worker_thread(device_id, ip, port, device_name, branch, sync_interval
                 
                 # Trigger door lock relay control if active athlete validated
                 if success:
-                    last_unlock_time[str(event.user_id)] = now_ts
-                    trigger_door_relay(conn, device_name)
+                    with biometric_operation():
+                        # Membership may have been blocked/expired after the first
+                        # validation but while this punch waited for the terminal.
+                        # Fail closed with a fresh Firestore read immediately before
+                        # the relay pulse so a stale validation can never open it.
+                        if is_biometric_access_allowed_now(event.user_id):
+                            last_unlock_time[str(event.user_id)] = now_ts
+                            trigger_door_relay(conn, device_name)
+                        else:
+                            success = False
+                            logging.warning(f"[GATE] Suppressed relay for biometric ID {event.user_id}: latest CRM access is blocked or membership is ineligible.")
                 
                 # Update lastPunchDetails in diagnostics control document
                 try:

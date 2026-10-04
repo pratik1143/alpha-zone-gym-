@@ -665,7 +665,9 @@ const renderGateHtml = (req: express.Request, res: express.Response) => {
         const response = await fetch('/api/devices/biometric/access', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ memberId: id, biometricId: Number(getCleanNumericId(person)), enabled: true, isEmployee: kind === 'employee' }) });
         const queued = await response.json().catch(() => ({}));
         if (!response.ok || !queued.success || !queued.enrollmentDocId) throw new Error(queued.error || 'Could not queue terminal enable.');
-        const deadline = Date.now() + 30000;
+        // A manual biometric change has priority on the local service, but may
+        // need to wait for the terminal's current SDK operation to finish.
+        const deadline = Date.now() + 120000;
         let complete = false;
         while (Date.now() < deadline) {
           const statusResponse = await fetch('/api/devices/biometric/command/' + encodeURIComponent(queued.enrollmentDocId));
@@ -673,7 +675,7 @@ const renderGateHtml = (req: express.Request, res: express.Response) => {
           if (!statusResponse.ok) throw new Error(status.error || 'Could not read device access status.');
           if (status.status === 'success') { complete = true; break; }
           if (status.status === 'failed') throw new Error(status.message || 'The device rejected the enable command.');
-          await new Promise(resolve => setTimeout(resolve, 700));
+          await new Promise(resolve => setTimeout(resolve, 1000));
         }
         if (!complete) throw new Error('Terminal has not confirmed enable yet. Retry when the device is online.');
         person.biometricBlocked = false;
@@ -860,7 +862,7 @@ const renderGateHtml = (req: express.Request, res: express.Response) => {
         });
         const queued = await response.json().catch(() => ({}));
         if (!response.ok || !queued.success || !queued.enrollmentDocId) throw new Error(queued.error || 'Could not queue terminal access change.');
-        const deadline = Date.now() + 30000;
+        const deadline = Date.now() + 120000;
         while (Date.now() < deadline) {
           const statusResponse = await fetch('/api/devices/biometric/command/' + encodeURIComponent(queued.enrollmentDocId));
           const status = await statusResponse.json().catch(() => ({}));
@@ -870,7 +872,7 @@ const renderGateHtml = (req: express.Request, res: express.Response) => {
             return;
           }
           if (status.status === 'failed') throw new Error(status.message || 'Terminal rejected the access change.');
-          await new Promise(resolve => setTimeout(resolve, 700));
+          await new Promise(resolve => setTimeout(resolve, 1000));
         }
         throw new Error('Terminal did not confirm yet. Check device connection and retry.');
       } catch (error) {
