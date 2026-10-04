@@ -580,6 +580,22 @@ export const deleteEnrollment = async (req: Request, res: Response) => {
   }
 };
 
+export const getEnrollmentCommandStatus = async (req: Request, res: Response) => {
+  try {
+    if (!isFirebaseInitialized || !admin) return res.status(503).json({ error: 'Firebase not initialized' });
+    const commandId = String(req.params.commandId || '').trim();
+    if (!commandId || commandId.length > 200 || commandId.includes('/')) {
+      return res.status(400).json({ error: 'Invalid biometric command ID' });
+    }
+    const snapshot = await admin.firestore().collection('biometric_enrollment').doc(commandId).get();
+    if (!snapshot.exists) return res.status(404).json({ error: 'Biometric command not found' });
+    const command = snapshot.data() || {};
+    res.json({ success: true, commandId, status: command.status || 'unknown', message: command.message || '' });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
 /**
  * Sync member info to device user slot.
  */

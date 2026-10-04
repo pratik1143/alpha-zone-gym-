@@ -19,7 +19,7 @@ import BlacklistedPopup from './popups/BlacklistedPopup';
 
 interface PopupData {
   id: string;
-  type: 'success' | 'unknown' | 'duplicate' | 'expired' | 'frozen' | 'blacklisted';
+  type: 'success' | 'unknown' | 'duplicate' | 'expired' | 'frozen' | 'blacklisted' | 'blocked';
   data: any;
 }
 
@@ -102,7 +102,8 @@ export default function AttendancePopupManager() {
     } else if (data.status === 'unknown' || (data.memberName && String(data.memberName).toLowerCase().includes('unmapped')) || (!match && data.unmapped)) {
       type = 'unknown';
     } else if (data.status === 'denied') {
-      if (data.reason?.toLowerCase().includes('blacklisted')) type = 'blacklisted';
+      if (data.reason?.toLowerCase().includes('biometric') || match?.biometricBlocked === true) type = 'blocked';
+      else if (data.reason?.toLowerCase().includes('blacklisted')) type = 'blacklisted';
       else if (data.reason?.toLowerCase().includes('frozen') || match?.status === 'frozen') type = 'frozen';
       else type = 'expired';
     }
@@ -183,12 +184,14 @@ export default function AttendancePopupManager() {
         anniversaryYears,
         trainer: match?.trainer || '',
         workout: 'Push Day',
-        reason: data.reason || 'Attendance Recorded'
+        reason: data.reason || 'Attendance Recorded',
+        biometricBlocked: type === 'blocked'
       }
     };
 
     const memberName = match?.name || data.memberName || `Biometric User #${data.biometricId || data.memberId || '1'}`;
-    const toastTitle = type === 'unknown' ? 'Unmapped Biometric Punch' : (type === 'duplicate' ? 'Already Checked In' : 'Attendance Marked');
+    const isDenied = ['expired', 'frozen', 'blacklisted', 'blocked'].includes(type);
+    const toastTitle = type === 'unknown' ? 'Unmapped Biometric Punch' : (type === 'duplicate' ? 'Already Checked In' : isDenied ? `Access Denied${data.reason ? `: ${data.reason}` : ''}` : 'Attendance Marked');
     toast(`⚡ ${toastTitle}: ${memberName}`, {
       icon: type === 'success' ? '🟢' : type === 'duplicate' ? '🔵' : type === 'unknown' ? '🟡' : '🔴',
       duration: 5000,
@@ -317,6 +320,7 @@ export default function AttendancePopupManager() {
             {activePopup.type === 'expired' && <ExpiredPopup data={activePopup.data} onClose={handleClose} onRenew={() => handleRenewMember(activePopup.data.rawId)} />}
             {activePopup.type === 'frozen' && <FrozenPopup data={activePopup.data} onClose={handleClose} onResume={() => handleViewMember(activePopup.data.rawId)} />}
             {activePopup.type === 'blacklisted' && <BlacklistedPopup data={activePopup.data} onClose={handleClose} />}
+            {activePopup.type === 'blocked' && <BlacklistedPopup data={activePopup.data} onClose={handleClose} />}
           </div>
         )}
       </AnimatePresence>
