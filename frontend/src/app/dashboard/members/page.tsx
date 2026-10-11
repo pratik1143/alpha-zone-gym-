@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import './members-ui.css';
 import {
   Search,
   Plus,
@@ -228,6 +229,7 @@ export default function MembersPage() {
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [mappingBiometrics, setMappingBiometrics] = useState(false);
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [activeProfile, setActiveProfile] = useState<any | null>(null);
@@ -945,34 +947,74 @@ export default function MembersPage() {
     return days >= 0 && days <= 7;
   });
 
+  const handleAutoMapBiometrics = async () => {
+    if (mappingBiometrics) return;
+    setMappingBiometrics(true);
+    try {
+      const response = await API.post('/devices/biometric/auto-map-all', {}, { timeout: 30000 });
+      const result = response.data;
+      if (!result?.success) throw new Error(result?.error || 'Could not match members with the EasyBio device.');
+
+      await fetchMembers(true);
+      const newLinks = Number(result.newlyMapped || 0);
+      const alreadyLinked = Number(result.alreadyMapped || 0);
+      const needsReview = Number(result.missingCount || 0);
+      const description = `${newLinks} newly linked · ${alreadyLinked} already matched · ${needsReview} need review`;
+
+      if (needsReview > 0 && newLinks === 0) {
+        toast.warning('No safe new matches found', { description });
+      } else {
+        toast.success('EasyBio mapping complete', { description });
+      }
+    } catch (error: any) {
+      toast.error(error?.response?.data?.error || error?.message || 'Could not read biometric IDs from the machine. Check the device connection and try again.');
+    } finally {
+      setMappingBiometrics(false);
+    }
+  };
+
   return (
-    <div className="space-y-6 pb-12 w-full text-slate-800 text-left">
-      {/* Clean Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-2">
-        <div>
+    <div className="members-dashboard space-y-6 pb-12 w-full text-slate-800 text-left">
+      <motion.div
+        className="members-page-heading flex flex-wrap items-center justify-between gap-4 mb-2"
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.35, ease: 'easeOut' }}
+      >
+        <div className="members-heading-copy">
+          <span className="members-eyebrow"><span className="members-live-dot" /> Member studio</span>
           <h1 className="text-3xl font-black text-slate-900 tracking-tight font-display">
             Members
           </h1>
           <p className="text-xs text-slate-500 mt-0.5">
-            Manage your gym members, track attendance, and monitor renewals.
+            Your roster, membership health, and renewals — all in one place.
           </p>
         </div>
         <div className="flex items-center gap-2.5">
           <button
-            className="flex items-center gap-2 px-4 py-2.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer active:scale-95"
+            className="members-secondary-action flex items-center gap-2 px-4 py-2.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer active:scale-95 disabled:opacity-60 disabled:cursor-wait"
+            onClick={handleAutoMapBiometrics}
+            disabled={mappingBiometrics}
+            title="Read saved fingerprint IDs from EasyBio and safely match them to members"
+          >
+            <Fingerprint size={15} className={mappingBiometrics ? 'animate-pulse text-[#0052FF]' : 'text-[#0052FF]'} />
+            <span>{mappingBiometrics ? 'Reading Machine…' : 'Map Bio'}</span>
+          </button>
+          <button
+            className="members-secondary-action flex items-center gap-2 px-4 py-2.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer active:scale-95"
             onClick={() => router.push('/dashboard/import')}
           >
             <Upload size={15} className="text-[#0052FF]" />
             <span>Import Members</span>
           </button>
           <button
-            className="flex items-center gap-2 px-5 py-2.5 bg-[#0052FF] hover:bg-blue-600 text-white rounded-xl text-xs font-black transition-all shadow-md cursor-pointer border-none active:scale-95"
+            className="members-primary-action flex items-center gap-2 px-5 py-2.5 bg-[#0052FF] hover:bg-blue-600 text-white rounded-xl text-xs font-black transition-all shadow-md cursor-pointer border-none active:scale-95"
             onClick={() => setShowAddModal(true)}
           >
             <Plus size={16} /> Add Member
           </button>
         </div>
-      </div>
+      </motion.div>
 
       {/* KPI Row */}
       <MembersKPI />

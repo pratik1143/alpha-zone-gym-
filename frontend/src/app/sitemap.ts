@@ -19,6 +19,10 @@ export default function sitemap(): MetadataRoute.Sitemap {
     '/weight-training-for-beginners-mohali',
     '/best-gym-in-mohali',
     '/affordable-gym-in-mohali',
+    '/personal-trainer-in-mohali',
+    '/crossfit-gym-in-mohali',
+    '/gym-membership-in-mohali',
+    '/hiit-training-in-mohali',
     '/privacy-policy',
     '/terms-and-conditions'
   ];

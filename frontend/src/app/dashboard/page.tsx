@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
+import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import { 
   Users, Clock, Plus, ArrowUpRight, Unlock, Phone, MessageSquare, 
@@ -15,6 +16,7 @@ import API from '@/services/api';
 import { useFollowups } from '@/hooks/useFollowups';
 import AttendanceCalendarSection from './components/AttendanceCalendarSection';
 import { getISTDateStr } from '@/hooks/useTodaysPayments';
+import './dashboard-ui.css';
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -270,7 +272,7 @@ export default function DashboardPage() {
   const checkinDays = attendance ? attendance.map((a: any) => new Date(a.checkIn || '').getDate()) : [];
 
   return (
-    <div className="flex flex-col gap-5 w-full text-slate-800 text-left bg-[#FDFDFD]">
+    <div className="dashboard-ops flex flex-col gap-5 w-full text-slate-800 text-left bg-[#FDFDFD]">
       
       {/* ── MOBILE COMPACT COMMAND CENTER (MOBILE ONLY < md) ── */}
       <div className="md:hidden space-y-3 text-left">
@@ -279,7 +281,7 @@ export default function DashboardPage() {
           {/* Card 1: Today's Collection */}
           <div
             onClick={() => router.push('/dashboard/billing')}
-            className="bg-white border border-slate-200/90 rounded-2xl p-3 shadow-2xs flex flex-col justify-between cursor-pointer active:scale-98 transition-transform"
+            className="dashboard-frosted-card bg-white border border-slate-200/90 rounded-2xl p-3 shadow-2xs flex flex-col justify-between cursor-pointer active:scale-98 transition-transform"
           >
             <div className="flex items-center justify-between">
               <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Collection</span>
@@ -298,7 +300,7 @@ export default function DashboardPage() {
           {/* Card 2: Present Today */}
           <div
             onClick={() => router.push('/dashboard/attendance')}
-            className="bg-white border border-slate-200/90 rounded-2xl p-3 shadow-2xs flex flex-col justify-between cursor-pointer active:scale-98 transition-transform"
+            className="dashboard-frosted-card bg-white border border-slate-200/90 rounded-2xl p-3 shadow-2xs flex flex-col justify-between cursor-pointer active:scale-98 transition-transform"
           >
             <div className="flex items-center justify-between">
               <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Present</span>
@@ -315,7 +317,7 @@ export default function DashboardPage() {
           {/* Card 3: Active Members */}
           <div
             onClick={() => router.push('/dashboard/members')}
-            className="bg-white border border-slate-200/90 rounded-2xl p-3 shadow-2xs flex flex-col justify-between cursor-pointer active:scale-98 transition-transform"
+            className="dashboard-frosted-card bg-white border border-slate-200/90 rounded-2xl p-3 shadow-2xs flex flex-col justify-between cursor-pointer active:scale-98 transition-transform"
           >
             <div className="flex items-center justify-between">
               <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Active</span>
@@ -334,7 +336,7 @@ export default function DashboardPage() {
           {/* Card 4: Today's Follow-ups */}
           <div
             onClick={() => router.push('/dashboard/follow-up')}
-            className="bg-white border border-slate-200/90 rounded-2xl p-3 shadow-2xs flex flex-col justify-between cursor-pointer active:scale-98 transition-transform"
+            className="dashboard-frosted-card bg-white border border-slate-200/90 rounded-2xl p-3 shadow-2xs flex flex-col justify-between cursor-pointer active:scale-98 transition-transform"
           >
             <div className="flex items-center justify-between">
               <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Follow-ups</span>
@@ -350,7 +352,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Compact Quick Actions */}
-        <div className="bg-white p-3 rounded-2xl border border-slate-200/80 shadow-xs">
+        <div className="dashboard-frosted-card bg-white p-3 rounded-2xl border border-slate-200/80 shadow-xs">
           <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-2">Quick Actions</span>
           <div className="grid grid-cols-4 gap-2">
             <button
@@ -390,7 +392,7 @@ export default function DashboardPage() {
       </div>
 
       {/* ─── 1. PAGE HEADER (DESKTOP ONLY < md hidden) ─── */}
-      <div className="hidden md:flex flex-col md:flex-row md:items-center justify-between gap-3 bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs">
+      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45 }} className="dashboard-frosted-card dashboard-page-header hidden md:flex flex-col md:flex-row md:items-center justify-between gap-3 p-5 rounded-2xl border shadow-xs">
         <div>
           <h1 className="font-rowdies text-2xl font-bold text-slate-900 uppercase tracking-tight leading-none">
             Dashboard
@@ -402,19 +404,19 @@ export default function DashboardPage() {
 
         <div className="flex items-center gap-3">
           {/* Device status badge */}
-          <div className="flex items-center gap-2 px-3 py-1.5 bg-[#f4f8fd] border border-[#b9d7f7] rounded-xl text-[10px] font-black uppercase tracking-wider text-[#0b5cbe]">
+          <div className="flex items-center gap-2 px-3 py-1.5 bg-white/70 backdrop-blur-md border border-blue-200/80 rounded-xl text-[10px] font-black uppercase tracking-wider text-[#0b5cbe] shadow-sm">
             <span className={`w-2 h-2 rounded-full ${deviceStatus === 'connected' ? 'bg-emerald-500' : deviceStatus === 'syncing' ? 'bg-blue-400 animate-pulse' : 'bg-rose-500'}`} />
             {deviceStatus === 'connected' ? 'Device Online' : deviceStatus === 'syncing' ? 'Syncing...' : 'Device Offline'}
           </div>
         </div>
-      </div>
+      </motion.div>
 
       {/* ─── 2. TOP KPI CARDS (DESKTOP ONLY) ─── */}
-      <div className="hidden md:grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 w-full">
+      <div className="dashboard-kpi-grid hidden md:grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 w-full">
         {/* Card 1: Today's Follow-ups */}
         <div 
           onClick={() => router.push('/dashboard/follow-up')}
-          className="bg-white border border-slate-200/80 p-4.5 rounded-2xl shadow-xs flex items-center gap-4 hover:border-[#0b5cbe] hover:shadow-md transition-all cursor-pointer group"
+          className="dashboard-frosted-card bg-white border border-slate-200/80 p-4.5 rounded-2xl shadow-xs flex items-center gap-4 hover:border-[#0b5cbe] hover:shadow-md transition-all cursor-pointer group"
         >
           <div className="w-11 h-11 rounded-xl bg-[#eaf3ff] text-[#0b5cbe] flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform border border-[#b9d7f7]">
             <AlertTriangle size={20} />
@@ -429,7 +431,7 @@ export default function DashboardPage() {
         {/* Card 2: Total Enquiry */}
         <div 
           onClick={() => router.push('/dashboard/enquiries')}
-          className="bg-white border border-slate-200/80 p-4.5 rounded-2xl shadow-xs flex items-center gap-4 hover:border-[#0b5cbe] hover:shadow-md transition-all cursor-pointer group"
+          className="dashboard-frosted-card bg-white border border-slate-200/80 p-4.5 rounded-2xl shadow-xs flex items-center gap-4 hover:border-[#0b5cbe] hover:shadow-md transition-all cursor-pointer group"
         >
           <div className="w-11 h-11 rounded-xl bg-[#eaf3ff] text-[#0b5cbe] flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform border border-[#b9d7f7]">
             <ClipboardList size={20} />
@@ -444,7 +446,7 @@ export default function DashboardPage() {
         {/* Card 3: Expiring Soon Clients */}
         <div 
           onClick={() => router.push('/dashboard/expired')}
-          className="bg-white border border-slate-200/80 p-4.5 rounded-2xl shadow-xs flex items-center gap-4 hover:border-[#0b5cbe] hover:shadow-md transition-all cursor-pointer group"
+          className="dashboard-frosted-card bg-white border border-slate-200/80 p-4.5 rounded-2xl shadow-xs flex items-center gap-4 hover:border-[#0b5cbe] hover:shadow-md transition-all cursor-pointer group"
         >
           <div className="w-11 h-11 rounded-xl bg-[#eaf3ff] text-[#0b5cbe] flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform border border-[#b9d7f7]">
             <Clock size={20} />
@@ -459,7 +461,7 @@ export default function DashboardPage() {
         {/* Card 4: Today's Collection */}
         <div 
           onClick={() => router.push('/dashboard/billing')}
-          className="bg-white border border-slate-200/80 p-4.5 rounded-2xl shadow-xs flex items-center gap-4 hover:border-[#0b5cbe] hover:shadow-md transition-all cursor-pointer group"
+          className="dashboard-frosted-card bg-white border border-slate-200/80 p-4.5 rounded-2xl shadow-xs flex items-center gap-4 hover:border-[#0b5cbe] hover:shadow-md transition-all cursor-pointer group"
         >
           <div className="w-11 h-11 rounded-xl bg-[#eaf3ff] text-[#0b5cbe] flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform border border-[#b9d7f7]">
             <DollarSign size={20} />
@@ -475,9 +477,9 @@ export default function DashboardPage() {
       </div>
 
       {/* ─── 3. SECONDARY OPERATIONS CARDS (DESKTOP ONLY) ─── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 w-full">
+      <div className="dashboard-secondary-grid grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 w-full">
         {/* Card 1: Members Inside */}
-        <div className="bg-white border border-slate-200/80 p-4 rounded-2xl shadow-xs flex flex-col justify-between min-h-[120px]">
+        <div className="dashboard-frosted-card bg-white border border-slate-200/80 p-4 rounded-2xl shadow-xs flex flex-col justify-between min-h-[120px]">
           <div className="flex justify-between items-center text-slate-400">
             <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Members Inside</span>
             <div className="w-6 h-6 rounded-full bg-[#f4f8fd] border border-[#b9d7f7] flex items-center justify-center text-[#0b5cbe]">
@@ -499,7 +501,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Card 2: Active Pass */}
-        <div className="bg-white border border-slate-200/80 p-4 rounded-2xl shadow-xs flex flex-col justify-between min-h-[120px]">
+        <div className="dashboard-frosted-card bg-white border border-slate-200/80 p-4 rounded-2xl shadow-xs flex flex-col justify-between min-h-[120px]">
           <div className="flex justify-between items-center text-slate-400">
             <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Active Pass</span>
             <span className="text-[9px] bg-[#eaf3ff] text-[#0b5cbe] px-2 py-0.5 rounded-full font-black uppercase border border-[#b9d7f7]">Gold</span>
@@ -530,7 +532,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Card 3: Staff Live */}
-        <div className="bg-white border border-slate-200/80 p-4 rounded-2xl shadow-xs flex flex-col justify-between min-h-[120px] text-xs font-semibold">
+        <div className="dashboard-frosted-card bg-white border border-slate-200/80 p-4 rounded-2xl shadow-xs flex flex-col justify-between min-h-[120px] text-xs font-semibold">
           <div className="flex justify-between items-center text-slate-400">
             <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 flex items-center gap-1">
               Staff Live
@@ -568,10 +570,12 @@ export default function DashboardPage() {
         </div>
 
         {/* Card 4: Unlock Turnstile */}
-        <button 
+        <motion.button
           onClick={handleManualUnlock}
           disabled={gateUnlocked}
-          className="bg-white border-2 border-dashed border-[#b9d7f7] hover:border-[#0b5cbe] hover:bg-[#f4f8fd] rounded-2xl p-4 flex flex-col items-center justify-center min-h-[120px] transition-all cursor-pointer group text-center"
+          whileHover={!gateUnlocked ? { y: -3, scale: 1.015 } : undefined}
+          whileTap={!gateUnlocked ? { scale: 0.98 } : undefined}
+          className="dashboard-unlock-card bg-white border-2 border-dashed border-[#b9d7f7] hover:border-[#0b5cbe] hover:bg-[#f4f8fd] rounded-2xl p-4 flex flex-col items-center justify-center min-h-[120px] transition-all cursor-pointer group text-center"
         >
           <div className={`w-9 h-9 rounded-full border-2 border-dashed ${gateUnlocked ? 'bg-[#0b5cbe] border-[#0b5cbe] text-white' : 'border-[#0b5cbe]/40 text-[#0b5cbe] group-hover:bg-[#0b5cbe] group-hover:text-white'} flex items-center justify-center transition-all`}>
             {gateUnlocked ? <Unlock size={16} /> : <Plus size={16} />}
@@ -580,7 +584,7 @@ export default function DashboardPage() {
             {gateUnlocked ? 'Gate Unlocked' : 'Unlock Turnstile'}
           </span>
           <span className="text-[8px] text-slate-400 font-bold mt-0.5">ESSL Gate Trigger Bridge</span>
-        </button>
+        </motion.button>
       </div>
 
       {/* ─── 4. ATTENDANCE CALENDAR & STAFF ATTENDANCE ─── */}

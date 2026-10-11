@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
+import { motion } from 'framer-motion';
 import { 
   ChevronLeft, ChevronRight, Users, Clock, CheckCircle2, 
   Search, Calendar, UserCheck, Shield, Briefcase
@@ -372,7 +373,7 @@ export default function AttendanceCalendarSection({
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 w-full items-stretch text-left">
       
       {/* ─── 1. STAFF MANAGEMENT (PRIMARY PANEL - LEFT ~65% / 7-8 COLS) ─── */}
-      <div className="lg:col-span-7 xl:col-span-8 bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs flex flex-col justify-between h-full min-w-0">
+      <div className="dashboard-frosted-card lg:col-span-7 xl:col-span-8 bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs flex flex-col justify-between h-full min-w-0">
         
         {/* Panel Header & Controls */}
         <div className="w-full">
@@ -409,7 +410,7 @@ export default function AttendanceCalendarSection({
                 placeholder="Search staff by name, role, phone..."
                 value={staffSearch}
                 onChange={e => setStaffSearch(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-8 pr-3 py-2 text-xs font-semibold text-slate-800 outline-none focus:border-[#0b5cbe] placeholder:text-slate-400"
+                className="dashboard-glass-input w-full bg-slate-50 border border-slate-200 rounded-xl pl-8 pr-3 py-2 text-xs font-semibold text-slate-800 outline-none focus:border-[#0b5cbe] placeholder:text-slate-400"
               />
             </div>
 
@@ -417,7 +418,7 @@ export default function AttendanceCalendarSection({
               <select
                 value={staffFilter}
                 onChange={e => setStaffFilter(e.target.value as any)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 outline-none focus:border-[#0b5cbe] cursor-pointer"
+                className="dashboard-glass-input w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 outline-none focus:border-[#0b5cbe] cursor-pointer"
               >
                 <option value="all">All Staff ({staffListWithStatus.length})</option>
                 <option value="present">Present Today ({presentStaffCount})</option>
@@ -432,13 +433,17 @@ export default function AttendanceCalendarSection({
         {/* Staff Table / Rich Card Roster */}
         <div className="flex-1 overflow-y-auto space-y-2.5 pr-1 min-h-[160px]">
           {filteredStaff.length > 0 ? (
-            filteredStaff.map((emp: any) => {
+            filteredStaff.map((emp: any, index: number) => {
               const isPresent = emp.punchedToday;
 
               return (
-                <div 
+                <motion.div
                   key={emp.id || emp.biometricId || emp.name} 
-                  className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl border border-slate-200/80 bg-slate-50/60 hover:bg-[#f4f8fd] hover:border-[#b9d7f7] transition-all"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.32, delay: Math.min(index * 0.045, 0.27) }}
+                  whileHover={{ y: -2 }}
+                  className="dashboard-staff-row flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl border border-white/90 bg-white/55 hover:bg-white/85 hover:border-blue-200 transition-all"
                 >
                   {/* Left: Staff Identity */}
                   <div className="flex items-center gap-3.5 min-w-0">
@@ -496,7 +501,7 @@ export default function AttendanceCalendarSection({
                       )}
                     </div>
                   </div>
-                </div>
+                </motion.div>
               );
             })
           ) : (
@@ -511,7 +516,7 @@ export default function AttendanceCalendarSection({
       </div>
 
       {/* ─── 2. ATTENDANCE CALENDAR (COMPACT PANEL - RIGHT ~35% / 4-5 COLS) ─── */}
-      <div className="lg:col-span-5 xl:col-span-4 bg-white border border-slate-200/80 rounded-2xl p-4 sm:p-5 shadow-xs flex flex-col justify-between h-full min-w-0 overflow-hidden">
+      <div className="dashboard-frosted-card lg:col-span-5 xl:col-span-4 bg-white border border-slate-200/80 rounded-2xl p-4 sm:p-5 shadow-xs flex flex-col justify-between h-full min-w-0 overflow-hidden">
         
         {/* Header with 2 Responsive Rows */}
         <div className="w-full min-w-0">
@@ -527,7 +532,7 @@ export default function AttendanceCalendarSection({
               <select
                 value={selectedMonth}
                 onChange={e => setSelectedMonth(Number(e.target.value))}
-                className="bg-slate-50 border border-slate-200 text-slate-800 text-[11px] font-bold rounded-lg px-2 py-1 outline-none focus:border-[#0b5cbe] cursor-pointer"
+                className="dashboard-glass-input bg-slate-50 border border-slate-200 text-slate-800 text-[11px] font-bold rounded-lg px-2 py-1 outline-none focus:border-[#0b5cbe] cursor-pointer"
               >
                 {MONTH_NAMES.map((m, idx) => (
                   <option key={m} value={idx}>{m.slice(0, 3)}</option>
@@ -537,7 +542,7 @@ export default function AttendanceCalendarSection({
               <select
                 value={selectedYear}
                 onChange={e => setSelectedYear(Number(e.target.value))}
-                className="bg-slate-50 border border-slate-200 text-slate-800 text-[11px] font-bold rounded-lg px-1.5 py-1 outline-none focus:border-[#0b5cbe] cursor-pointer"
+                className="dashboard-glass-input bg-slate-50 border border-slate-200 text-slate-800 text-[11px] font-bold rounded-lg px-1.5 py-1 outline-none focus:border-[#0b5cbe] cursor-pointer"
               >
                 {[2025, 2026, 2027, 2028].map(y => (
                   <option key={y} value={y}>{y}</option>
@@ -616,12 +621,16 @@ export default function AttendanceCalendarSection({
                 const isSelected = activeYmd === day.ymd;
 
                 return (
-                  <div
+                  <motion.button
+                    type="button"
                     key={day.key}
                     onClick={() => { if (day.ymd) setSelectedDateYmd(day.ymd); }}
-                    className={`w-full aspect-square min-w-0 rounded-lg border flex flex-col items-center justify-center relative cursor-pointer transition-all ${cellBg} ${
+                    aria-label={`${day.ymd || ''}, ${day.totalPunches || 0} punches${day.isToday ? ', today' : ''}`}
+                    whileHover={{ scale: 1.045, y: -1 }}
+                    whileTap={{ scale: 0.97 }}
+                    className={`dashboard-calendar-cell appearance-none p-0 w-full aspect-square min-w-0 rounded-lg border flex flex-col items-center justify-center relative cursor-pointer ${cellBg} ${
                       day.isToday ? 'ring-2 ring-[#0b5cbe] ring-offset-1 z-10' : ''
-                    } ${isSelected ? 'scale-105 shadow-md border-[#0b5cbe]' : 'hover:scale-105'}`}
+                    } ${isSelected ? 'scale-105 shadow-md border-[#0b5cbe]' : ''}`}
                     title={`${day.ymd || ''} — ${day.totalPunches || 0} Punches`}
                   >
                     <span className={`text-[10px] leading-none ${day.isSunday ? 'text-rose-600' : ''}`}>
@@ -637,7 +646,7 @@ export default function AttendanceCalendarSection({
                     {day.isToday && (
                       <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-[#0b5cbe]" />
                     )}
-                  </div>
+                  </motion.button>
                 );
               })}
             </div>
@@ -646,7 +655,7 @@ export default function AttendanceCalendarSection({
 
         {/* Selected Day Inspector Popover / Banner */}
         {activeDayObj && (
-          <div className="bg-[#f4f8fd] border border-[#b9d7f7] rounded-xl p-2.5 mt-1.5 text-xs w-full min-w-0 overflow-hidden">
+          <div className="dashboard-frosted-card bg-[#f4f8fd] border border-[#b9d7f7] rounded-xl p-2.5 mt-1.5 text-xs w-full min-w-0 overflow-hidden">
             <div className="flex items-center justify-between border-b border-[#b9d7f7]/60 pb-1.5 min-w-0">
               <div className="font-extrabold text-slate-900 flex items-center gap-1.5 text-[11px] truncate min-w-0">
                 <span className="truncate">{new Date(activeDayObj.ymd || todayStr).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })}</span>

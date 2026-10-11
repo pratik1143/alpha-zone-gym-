@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useMemo } from 'react';
+import { motion } from 'framer-motion';
 import { Users, CheckCircle2, Clock, Activity, IndianRupee } from 'lucide-react';
 import { useGymStore } from '@/store';
 import { SYSTEM_CONFIG } from '@/config/system';
@@ -98,9 +99,9 @@ export default function MembersKPI() {
   }, [members, attendance, allPayments]);
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+    <div className="members-kpi-grid grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
       {/* 1. Total Members */}
-      <div className="bg-white rounded-2xl p-5 shadow-xs border border-[#d9e7f7] flex flex-col justify-between hover:border-[#0b5cbe] transition-all">
+      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.32, delay: 0 }} whileHover={{ y: -4 }} className="members-glass-card bg-white rounded-2xl p-5 shadow-xs border border-[#d9e7f7] flex flex-col justify-between hover:border-[#0b5cbe] transition-all">
         <div className="flex justify-between items-start">
           <span className="text-xs font-semibold text-slate-500">Total Members</span>
           <div className="w-8 h-8 rounded-full bg-[#eaf3ff] flex items-center justify-center text-[#0b5cbe]">
@@ -114,14 +115,14 @@ export default function MembersKPI() {
           </p>
         </div>
         <div className="mt-4 h-6 w-full opacity-60">
-          <svg viewBox="0 0 100 20" className="w-full h-full preserve-aspect-ratio-none">
+          <svg viewBox="0 0 100 20" className="members-sparkline w-full h-full preserve-aspect-ratio-none">
             <path d="M0,15 Q20,5 40,15 T80,10 T100,5" fill="none" stroke="#0b5cbe" strokeWidth="2" strokeLinecap="round" />
           </svg>
         </div>
-      </div>
+      </motion.div>
 
       {/* 2. Active Today */}
-      <div className="bg-white rounded-2xl p-5 shadow-xs border border-[#d9e7f7] flex flex-col justify-between hover:border-[#0b5cbe] transition-all">
+      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.32, delay: 0.045 }} whileHover={{ y: -4 }} className="members-glass-card bg-white rounded-2xl p-5 shadow-xs border border-[#d9e7f7] flex flex-col justify-between hover:border-[#0b5cbe] transition-all">
         <div className="flex justify-between items-start">
           <span className="text-xs font-semibold text-slate-500">Active Today</span>
           <div className="w-8 h-8 rounded-full bg-[#eaf3ff] flex items-center justify-center text-[#0b5cbe]">
@@ -135,14 +136,14 @@ export default function MembersKPI() {
           </p>
         </div>
         <div className="mt-4 h-6 w-full opacity-60">
-          <svg viewBox="0 0 100 20" className="w-full h-full preserve-aspect-ratio-none">
+          <svg viewBox="0 0 100 20" className="members-sparkline w-full h-full preserve-aspect-ratio-none">
             <path d="M0,15 Q20,10 40,15 T80,5 T100,10" fill="none" stroke="#10b981" strokeWidth="2" strokeLinecap="round" />
           </svg>
         </div>
-      </div>
+      </motion.div>
 
       {/* 3. Expiring This Month */}
-      <div className="bg-white rounded-2xl p-5 shadow-xs border border-[#d9e7f7] flex flex-col justify-between hover:border-[#0b5cbe] transition-all">
+      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.32, delay: 0.09 }} whileHover={{ y: -4 }} className="members-glass-card bg-white rounded-2xl p-5 shadow-xs border border-[#d9e7f7] flex flex-col justify-between hover:border-[#0b5cbe] transition-all">
         <div className="flex justify-between items-start">
           <span className="text-xs font-semibold text-slate-500">Expiring This Month</span>
           <div className="w-8 h-8 rounded-full bg-[#eaf3ff] flex items-center justify-center text-[#0b5cbe]">
@@ -156,14 +157,14 @@ export default function MembersKPI() {
           </p>
         </div>
         <div className="mt-4 h-6 w-full opacity-60">
-          <svg viewBox="0 0 100 20" className="w-full h-full preserve-aspect-ratio-none">
+          <svg viewBox="0 0 100 20" className="members-sparkline w-full h-full preserve-aspect-ratio-none">
             <path d="M0,10 Q20,15 40,5 T80,15 T100,10" fill="none" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round" />
           </svg>
         </div>
-      </div>
+      </motion.div>
 
       {/* 4. PT Members */}
-      <div className="bg-white rounded-2xl p-5 shadow-xs border border-[#d9e7f7] flex flex-col justify-between hover:border-[#0b5cbe] transition-all">
+      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.32, delay: 0.135 }} whileHover={{ y: -4 }} className="members-glass-card bg-white rounded-2xl p-5 shadow-xs border border-[#d9e7f7] flex flex-col justify-between hover:border-[#0b5cbe] transition-all">
         <div className="flex justify-between items-start">
           <span className="text-xs font-semibold text-slate-500">PT Members</span>
           <div className="w-8 h-8 rounded-full bg-[#eaf3ff] flex items-center justify-center text-[#0b5cbe]">
@@ -177,14 +178,14 @@ export default function MembersKPI() {
           </p>
         </div>
         <div className="mt-4 h-6 w-full opacity-60">
-          <svg viewBox="0 0 100 20" className="w-full h-full preserve-aspect-ratio-none">
+          <svg viewBox="0 0 100 20" className="members-sparkline w-full h-full preserve-aspect-ratio-none">
             <path d="M0,15 Q20,5 40,15 T80,10 T100,5" fill="none" stroke="#0b5cbe" strokeWidth="2" strokeLinecap="round" />
           </svg>
         </div>
-      </div>
+      </motion.div>
 
       {/* 5. Revenue This Month */}
-      <div className="bg-white rounded-2xl p-5 shadow-xs border border-[#d9e7f7] flex flex-col justify-between hover:border-[#0b5cbe] transition-all">
+      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.32, delay: 0.18 }} whileHover={{ y: -4 }} className="members-glass-card bg-white rounded-2xl p-5 shadow-xs border border-[#d9e7f7] flex flex-col justify-between hover:border-[#0b5cbe] transition-all">
         <div className="flex justify-between items-start">
           <span className="text-xs font-semibold text-slate-500">Revenue This Month</span>
           <div className="w-8 h-8 rounded-full bg-[#eaf3ff] flex items-center justify-center text-[#0b5cbe]">
@@ -198,11 +199,11 @@ export default function MembersKPI() {
           </p>
         </div>
         <div className="mt-4 h-6 w-full opacity-60">
-          <svg viewBox="0 0 100 20" className="w-full h-full preserve-aspect-ratio-none">
+          <svg viewBox="0 0 100 20" className="members-sparkline w-full h-full preserve-aspect-ratio-none">
             <path d="M0,15 Q20,10 40,15 T80,5 T100,10" fill="none" stroke="#10b981" strokeWidth="2" strokeLinecap="round" />
           </svg>
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 }

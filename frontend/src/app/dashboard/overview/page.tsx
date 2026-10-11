@@ -17,6 +17,7 @@ import toast from '@/lib/toast';
 import API from "@/services/api";
 
 import FinancialAnalytics from "./components/FinancialAnalytics";
+import "./overview.css";
 import PresentMembersModal from "./components/PresentMembersModal";
 import { useFollowups } from "@/hooks/useFollowups";
 import { SYSTEM_START_DATE, SYSTEM_CONFIG } from "@/config/system";
@@ -499,12 +500,12 @@ export default function OverviewCommandCenter() {
   }, []);
 
   return (
-    <div className="w-full space-y-4 pb-6 text-left">
+    <div className="overview-dashboard w-full space-y-4 pb-6 text-left">
 
       {/* ── MOBILE COMPACT COMMAND CENTER (VISIBLE ONLY ON MOBILE < md) ── */}
       <div className="md:hidden space-y-3 text-left">
         {/* Compact Header Greeting */}
-        <div className="bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 rounded-2xl p-4 text-white shadow-md relative overflow-hidden">
+        <div className="overview-hero rounded-2xl p-4 text-white shadow-md relative overflow-hidden border border-white/15">
           <div className="flex items-center justify-between">
             <div>
               <span className="text-[9px] font-black uppercase tracking-widest text-blue-300">Command Center</span>
@@ -524,7 +525,7 @@ export default function OverviewCommandCenter() {
           {/* Card 1: Today's Collection */}
           <div
             onClick={() => router.push('/dashboard/billing')}
-            className="bg-white border border-slate-200/90 rounded-2xl p-3 shadow-2xs flex flex-col justify-between cursor-pointer active:scale-98 transition-transform"
+            className="overview-glass-card border border-white/80 rounded-2xl p-3 shadow-2xs flex flex-col justify-between cursor-pointer active:scale-98 transition-transform"
           >
             <div className="flex items-center justify-between">
               <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Collection</span>
@@ -543,7 +544,7 @@ export default function OverviewCommandCenter() {
           {/* Card 2: Present Today */}
           <div
             onClick={() => setShowPresentModal(true)}
-            className="bg-white border border-slate-200/90 rounded-2xl p-3 shadow-2xs flex flex-col justify-between cursor-pointer active:scale-98 transition-transform"
+            className="overview-glass-card border border-white/80 rounded-2xl p-3 shadow-2xs flex flex-col justify-between cursor-pointer active:scale-98 transition-transform"
           >
             <div className="flex items-center justify-between">
               <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Present</span>
@@ -560,7 +561,7 @@ export default function OverviewCommandCenter() {
           {/* Card 3: Active Members */}
           <div
             onClick={() => router.push('/dashboard/members')}
-            className="bg-white border border-slate-200/90 rounded-2xl p-3 shadow-2xs flex flex-col justify-between cursor-pointer active:scale-98 transition-transform"
+            className="overview-glass-card border border-white/80 rounded-2xl p-3 shadow-2xs flex flex-col justify-between cursor-pointer active:scale-98 transition-transform"
           >
             <div className="flex items-center justify-between">
               <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Active</span>
@@ -577,7 +578,7 @@ export default function OverviewCommandCenter() {
           {/* Card 4: Today's Follow-ups */}
           <div
             onClick={() => router.push('/dashboard/follow-up')}
-            className="bg-white border border-slate-200/90 rounded-2xl p-3 shadow-2xs flex flex-col justify-between cursor-pointer active:scale-98 transition-transform"
+            className="overview-glass-card border border-white/80 rounded-2xl p-3 shadow-2xs flex flex-col justify-between cursor-pointer active:scale-98 transition-transform"
           >
             <div className="flex items-center justify-between">
               <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Follow-ups</span>
@@ -593,7 +594,7 @@ export default function OverviewCommandCenter() {
         </div>
 
         {/* Compact Quick Actions */}
-        <div className="bg-white p-3 rounded-2xl border border-slate-200/80 shadow-xs">
+        <div className="overview-glass-card p-3 rounded-2xl border border-white/80 shadow-xs">
           <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-2">Quick Actions</span>
           <div className="grid grid-cols-4 gap-2">
             <button
@@ -631,7 +632,7 @@ export default function OverviewCommandCenter() {
         </div>
 
         {/* Compact Recent Attendance Feed */}
-        <div className="bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-xs space-y-2">
+        <div className="overview-glass-card p-3.5 rounded-2xl border border-white/80 shadow-xs space-y-2">
           <div className="flex items-center justify-between">
             <span className="text-xs font-black text-slate-900 uppercase tracking-tight flex items-center gap-1.5">
               <Activity size={14} className="text-[#0b5cbe]" /> Recent Live Punches
@@ -677,9 +678,9 @@ export default function OverviewCommandCenter() {
       {/* ── DESKTOP ONLY DASHBOARD (HIDDEN ON MOBILE < md) ── */}
       <div className="hidden md:block space-y-4">
         {/* HERO HEADER CARD (Clean greeting, quick actions, date range filter with 2-way sync) */}
-        <div className="relative overflow-hidden bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 rounded-[24px] px-6 py-6 border border-slate-800 shadow-xl">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute -bottom-8 left-0 w-56 h-56 bg-violet-500/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="overview-hero relative overflow-hidden rounded-[28px] px-6 py-6 border border-white/15 shadow-xl">
+          <div className="overview-hero-orb absolute top-0 right-0 w-72 h-72 bg-indigo-400/20 rounded-full blur-3xl pointer-events-none" />
+          <div className="overview-hero-orb-delayed absolute -bottom-12 left-[28%] w-64 h-64 bg-cyan-400/15 rounded-full blur-3xl pointer-events-none" />
 
         <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
           {/* Greeting & Quick Actions */}
@@ -706,33 +707,41 @@ export default function OverviewCommandCenter() {
 
             {/* POPUP ACTION BUTTONS */}
             <motion.div {...fadeUp(0.15)} className="flex flex-wrap gap-2.5 pt-1">
-              <button
+              <motion.button
+                whileHover={{ y: -2, scale: 1.025 }}
+                whileTap={{ scale: 0.97 }}
                 onClick={() => router.push('/dashboard/members?action=add')}
-                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-white bg-[#0b5cbe] hover:bg-[#084a99] border border-blue-400/30 transition-all cursor-pointer shadow-md active:scale-95"
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-white bg-blue-500/80 hover:bg-blue-500 border border-white/20 transition-all cursor-pointer shadow-lg shadow-blue-950/25 backdrop-blur-md"
               >
                 <UserPlus size={14} /> + New Member
-              </button>
+              </motion.button>
 
-              <button
+              <motion.button
+                whileHover={{ y: -2, scale: 1.025 }}
+                whileTap={{ scale: 0.97 }}
                 onClick={() => setShowNewEnquiryModal(true)}
-                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-white bg-[#0b5cbe]/90 hover:bg-[#084a99] border border-blue-400/30 transition-all cursor-pointer shadow-md active:scale-95"
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-white bg-white/10 hover:bg-white/20 border border-white/15 transition-all cursor-pointer shadow-lg backdrop-blur-md"
               >
                 <MessageSquare size={14} /> + New Enquiry
-              </button>
+              </motion.button>
 
-              <button
+              <motion.button
+                whileHover={{ y: -2, scale: 1.025 }}
+                whileTap={{ scale: 0.97 }}
                 onClick={() => setShowNewFollowupModal(true)}
-                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-white bg-[#0b5cbe]/80 hover:bg-[#084a99] border border-blue-400/30 transition-all cursor-pointer shadow-md active:scale-95"
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-white bg-white/10 hover:bg-white/20 border border-white/15 transition-all cursor-pointer shadow-lg backdrop-blur-md"
               >
                 <PhoneCall size={14} /> + Follow Up
-              </button>
+              </motion.button>
 
-              <button
+              <motion.button
+                whileHover={{ y: -2, scale: 1.025 }}
+                whileTap={{ scale: 0.97 }}
                 onClick={() => router.push('/dashboard/attendance')}
-                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-slate-200 bg-white/10 hover:bg-white/20 border border-white/10 transition-all cursor-pointer"
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-slate-100 bg-white/10 hover:bg-white/20 border border-white/15 transition-all cursor-pointer backdrop-blur-md"
               >
                 <Fingerprint size={14} className="text-blue-300" /> Attendance
-              </button>
+              </motion.button>
             </motion.div>
           </div>
 
@@ -794,7 +803,7 @@ export default function OverviewCommandCenter() {
       {/* FLOATING KPI STRIP (REAL CALCULATED OPERATIONAL METRICS) */}
       <motion.div
         {...fadeUp(0.2)}
-        className="grid grid-cols-2 sm:grid-cols-4 gap-3 relative z-10"
+        className="overview-kpi-grid grid grid-cols-2 sm:grid-cols-4 gap-3 relative z-10"
       >
         {[
           { title: "Today's Collection", value: `₹${todaysRealCollection.toLocaleString('en-IN')}`, icon: IndianRupee, color: "#0b5cbe", onClick: () => router.push('/dashboard/billing') },
@@ -802,10 +811,18 @@ export default function OverviewCommandCenter() {
           { title: "Active Members", value: activeMembersCount, icon: Activity, color: "#0b5cbe", onClick: () => router.push('/dashboard/members') },
           { title: "Today's Follow-ups", value: todaysCount, icon: PhoneCall, color: "#0b5cbe", onClick: () => router.push('/dashboard/follow-up') },
         ].map((kpi, i) => (
-          <div
+          <motion.div
             key={i}
             onClick={kpi.onClick}
-            className="bg-white rounded-2xl p-4 border border-blue-100 shadow-[0_4px_20px_-4px_rgba(11,92,190,0.08)] flex items-center gap-3 hover:border-[#0b5cbe] transition-all cursor-pointer hover:shadow-md hover:scale-[1.02]"
+            onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); kpi.onClick?.(); } }}
+            role="button"
+            tabIndex={0}
+            whileHover={{ y: -4, scale: 1.015 }}
+            whileTap={{ scale: 0.985 }}
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.45, delay: 0.18 + i * 0.07, ease: 'easeOut' }}
+            className="overview-glass-card rounded-2xl p-4 border border-white/80 flex items-center gap-3 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
           >
             <div
               className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-[#eaf3ff] text-[#0b5cbe]"
@@ -819,7 +836,7 @@ export default function OverviewCommandCenter() {
               </div>
               <div className="text-lg font-black text-slate-900 mt-1 leading-none">{kpi.value}</div>
             </div>
-          </div>
+          </motion.div>
         ))}
       </motion.div>
       </div>
@@ -829,14 +846,14 @@ export default function OverviewCommandCenter() {
 
         {/* ─── SUMMARY STATISTICS (13 REAL-TIME OPERATIONAL CARDS) ─── */}
         <motion.div {...fadeUp(0.25)}>
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center justify-between mb-4 px-1">
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-xl bg-[#0b5cbe] text-white flex items-center justify-center font-black">
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white flex items-center justify-center font-black shadow-lg shadow-blue-500/20">
                 <BarChart3 size={18} />
               </div>
               <h2 className="text-lg font-black text-slate-900 font-display">Summary Statistics</h2>
             </div>
-            <div className="h-px flex-1 mx-4 bg-slate-200" />
+            <div className="h-px flex-1 mx-4 bg-gradient-to-r from-blue-200 via-slate-200 to-transparent" />
             <span className="text-[10px] font-black text-[#0b5cbe] bg-[#eaf3ff] px-3 py-1 rounded-full border border-[#b9d6f5] uppercase tracking-wider">
               {dateRange} Real Time
             </span>
@@ -857,7 +874,7 @@ export default function OverviewCommandCenter() {
             </div>
           )}
 
-          <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="overview-summary-grid grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-4">
             {/* Row 1 */}
             <SummaryStatCard
               title="New clients"
@@ -1191,12 +1208,20 @@ export default function OverviewCommandCenter() {
 
 function SummaryStatCard({ title, value, icon: Icon, color, lineAccentColor, onClick }: { title: string; value: string | number; icon: any; color: string; lineAccentColor: string; onClick?: () => void }) {
   return (
-    <div
+    <motion.div
       onClick={onClick}
-      className={`bg-[#fdfdfd] hover:bg-white rounded-2xl p-4 border border-[#d9e7f7] shadow-xs relative overflow-hidden flex flex-col justify-between transition-all hover:border-[#0b5cbe] hover:shadow-md ${onClick ? 'cursor-pointer hover:scale-[1.02]' : ''}`}
+      onKeyDown={event => { if (onClick && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); onClick(); } }}
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      initial={{ opacity: 0, y: 18, scale: 0.98 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      whileHover={{ y: -4, scale: 1.015 }}
+      whileTap={onClick ? { scale: 0.985 } : undefined}
+      transition={{ duration: 0.42, ease: 'easeOut' }}
+      className={`overview-glass-card overview-stat-card rounded-2xl p-4 relative overflow-hidden flex flex-col justify-between ${onClick ? 'cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-blue-400' : ''}`}
     >
       <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 shadow-xs bg-[#eaf3ff] text-[#0b5cbe]">
+        <div className="w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 shadow-sm bg-gradient-to-br from-blue-50 to-indigo-100 ring-1 ring-blue-100/80" style={{ color, backgroundColor: `${color}12` }}>
           <Icon size={20} />
         </div>
         <div>
@@ -1207,7 +1232,7 @@ function SummaryStatCard({ title, value, icon: Icon, color, lineAccentColor, onC
           <div className="text-xl font-black text-[#10233f] font-mono tracking-tight mt-0.5">{value}</div>
         </div>
       </div>
-      <div className="h-1.5 w-16 rounded-full mt-3 bg-[#0b5cbe]" />
-    </div>
+      <div className="h-1 w-16 rounded-full mt-3 shadow-[0_0_12px_rgba(59,130,246,0.25)]" style={{ background: `linear-gradient(90deg, ${color}, ${lineAccentColor}, transparent)` }} />
+    </motion.div>
   );
 }

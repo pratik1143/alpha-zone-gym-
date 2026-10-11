@@ -196,6 +196,154 @@ export const blogs: BlogArticle[] = [
         answer: 'Alpha Zone Gym is located at 2nd Floor, MNB Group, SCO 16–17, Landran Road, Sohana, Mohali, Punjab 140308. Phone: 097793 33155.'
       }
     ]
+  },
+  {
+    slug: 'personal-trainer-in-mohali',
+    url: '/personal-trainer-in-mohali',
+    title: 'Personal Trainer in Mohali: Is Personal Training Worth It?',
+    seoTitle: 'Personal Trainer in Mohali: Benefits, Cost & How to Choose | Alpha Zone Gym',
+    metaDescription: 'Looking for a personal trainer in Mohali? Learn how personal training works, its benefits and what to look for when choosing a trainer.',
+    primaryKeyword: 'Personal Trainer in Mohali',
+    secondaryKeywords: [
+      'Personal Trainer Near Me',
+      'Personal Training in Mohali',
+      'Best Personal Trainer in Mohali'
+    ],
+    category: 'Personal Training & Coaching',
+    readTime: '6 min read',
+    publishedDate: '2026-10-11',
+    author: 'Alpha Zone Fitness Team',
+    excerpt: 'Finding the right personal trainer in Mohali can make your workouts more structured, focused and easier to follow. Learn how one-to-one coaching works, its benefits, and how to choose the right trainer.',
+    image: '/gym_images/personal-trainer-in-mohali.jpg',
+    faqs: [
+      {
+        question: 'Is personal training good for beginners?',
+        answer: 'Yes. Personal training can help beginners learn exercises, equipment and basic workout structure.'
+      },
+      {
+        question: 'Can a personal trainer help with weight loss?',
+        answer: 'A trainer can create a structured workout routine and provide accountability, while nutrition and overall lifestyle also play important roles.'
+      },
+      {
+        question: 'How do I find a personal trainer near me?',
+        answer: 'Compare trainers based on experience, coaching approach, location and whether their training style matches your goals.'
+      },
+      {
+        question: 'Does Alpha Zone Gym offer personal training?',
+        answer: 'Yes. Personal training is one of the services available at Alpha Zone Gym in Sohana, Mohali.'
+      }
+    ]
+  },
+  {
+    slug: 'crossfit-gym-in-mohali',
+    url: '/crossfit-gym-in-mohali',
+    title: 'CrossFit Gym in Mohali: Benefits, Workouts and How to Get Started',
+    seoTitle: 'CrossFit Gym in Mohali: Benefits, Workouts & Beginner Guide | Alpha Zone Gym',
+    metaDescription: 'Looking for a CrossFit gym in Mohali? Learn what CrossFit training involves, its benefits and how beginners can get started safely.',
+    primaryKeyword: 'CrossFit Gym in Mohali',
+    secondaryKeywords: [
+      'CrossFit Near Me',
+      'CrossFit Training in Mohali',
+      'CrossFit Gym Near Me'
+    ],
+    category: 'CrossFit & Conditioning',
+    readTime: '6 min read',
+    publishedDate: '2026-10-11',
+    author: 'Alpha Zone Fitness Team',
+    excerpt: 'CrossFit-style training combines strength, conditioning and varied functional movements. Learn what workouts involve, key fitness benefits, and how beginners can get started safely.',
+    image: '/gym_images/crossfit-gym-in-mohali.jpg',
+    faqs: [
+      {
+        question: 'Is CrossFit suitable for beginners?',
+        answer: 'Yes. CrossFit movements and workouts can be scaled for beginners when appropriate coaching and progression are used.'
+      },
+      {
+        question: 'What should I bring to CrossFit training?',
+        answer: 'Comfortable workout clothing, suitable training shoes, water and a willingness to learn are good starting points.'
+      },
+      {
+        question: 'Can CrossFit help with fitness?',
+        answer: 'CrossFit can develop strength, conditioning, coordination and overall work capacity when practiced consistently.'
+      },
+      {
+        question: 'Does Alpha Zone Gym offer CrossFit?',
+        answer: 'Yes. CrossFit is one of the training options offered at Alpha Zone Gym in Sohana, Mohali.'
+      }
+    ]
+  },
+  {
+    slug: 'gym-membership-in-mohali',
+    url: '/gym-membership-in-mohali',
+    title: 'Gym Membership in Mohali: How to Choose the Right Membership Plan',
+    seoTitle: 'Gym Membership in Mohali: How to Choose the Right Plan | Alpha Zone Gym',
+    metaDescription: 'Choosing a gym membership in Mohali? Compare membership duration, facilities, training options, location and overall value before joining.',
+    primaryKeyword: 'Gym Membership in Mohali',
+    secondaryKeywords: [
+      'Gym Membership Near Me',
+      'Gym Membership in Sohana',
+      'Affordable Gym Membership in Mohali'
+    ],
+    category: 'Membership & Pricing Guide',
+    readTime: '6 min read',
+    publishedDate: '2026-10-11',
+    author: 'Alpha Zone Fitness Team',
+    excerpt: 'Choosing a gym membership is about more than finding the lowest price. Compare membership duration, facilities, training disciplines, location and overall value to pick the right plan.',
+    image: '/gym_images/gym-membership-in-mohali.jpg',
+    faqs: [
+      {
+        question: 'Which gym membership is best for beginners?',
+        answer: 'A shorter membership can be useful while you learn the gym and establish a routine, although the best option depends on your schedule and goals.'
+      },
+      {
+        question: 'Should I choose a monthly or annual gym membership?',
+        answer: 'Choose based on how consistently you expect to train and how much flexibility you need.'
+      },
+      {
+        question: 'What should I check before buying a gym membership?',
+        answer: 'Check equipment, facilities, training programs, membership terms, location and what services are included.'
+      },
+      {
+        question: 'What membership plans does Alpha Zone Gym offer?',
+        answer: 'Alpha Zone Gym lists monthly, three-month, six-month and twelve-month options; confirm current prices and terms with the gym.'
+      }
+    ]
+  },
+  {
+    slug: 'hiit-training-in-mohali',
+    url: '/hiit-training-in-mohali',
+    title: 'HIIT Training in Mohali: Benefits, Beginner Workouts and Fitness Tips',
+    seoTitle: 'HIIT Training in Mohali: Benefits, Beginner Workouts & Tips | Alpha Zone Gym',
+    metaDescription: 'Discover HIIT training in Mohali, including its benefits, beginner-friendly approach, workout structure and tips for building consistency.',
+    primaryKeyword: 'HIIT Training in Mohali',
+    secondaryKeywords: [
+      'HIIT Near Me',
+      'HIIT Gym Near Me',
+      'HIIT Workout in Mohali'
+    ],
+    category: 'HIIT & Conditioning',
+    readTime: '6 min read',
+    publishedDate: '2026-10-11',
+    author: 'Alpha Zone Fitness Team',
+    excerpt: 'High-intensity interval training (HIIT) alternates periods of challenging effort with active recovery. Learn how HIIT builds conditioning, beginner workout structures, and tips for consistency.',
+    image: '/gym_images/hiit-training-in-mohali.png',
+    faqs: [
+      {
+        question: 'Is HIIT suitable for beginners?',
+        answer: 'Yes, when the workout is scaled appropriately and beginners learn the movements before increasing intensity.'
+      },
+      {
+        question: 'Can HIIT help with weight loss?',
+        answer: 'HIIT can contribute to fitness and overall activity, but sustainable weight management also depends on nutrition, daily activity and recovery.'
+      },
+      {
+        question: 'How often should I do HIIT?',
+        answer: 'Frequency depends on your fitness level and other training. Because HIIT can be demanding, adequate recovery is important.'
+      },
+      {
+        question: 'Does Alpha Zone Gym offer HIIT?',
+        answer: 'Yes. HIIT and group training are among the workout options available at Alpha Zone Gym.'
+      }
+    ]
   }
 ];
 

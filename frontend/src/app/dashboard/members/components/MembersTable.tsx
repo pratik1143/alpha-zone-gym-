@@ -543,10 +543,10 @@ export default function MembersTable({
   }, [filtered, currentPage, pageSize]);
 
   return (
-    <div className="bg-white rounded-2xl shadow-[0_2px_10px_rgba(0,0,0,0.04)] border border-slate-100 overflow-hidden relative">
+    <div className="members-glass-panel bg-white rounded-2xl shadow-[0_2px_10px_rgba(0,0,0,0.04)] border border-slate-100 overflow-hidden relative">
       
       {/* Top Filter Bar */}
-      <div className="p-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-4">
+      <div className="members-table-toolbar p-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-4">
         <div className="relative flex-1 min-w-[240px]">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input 
@@ -554,7 +554,7 @@ export default function MembersTable({
             value={localSearch} 
             onChange={e => setLocalSearch(e.target.value)}
             placeholder="Search by name, phone or member ID..." 
-            className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-indigo-500 transition-colors" 
+            className="members-glass-input w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-indigo-500 transition-colors"
           />
         </div>
 
@@ -580,7 +580,7 @@ export default function MembersTable({
 
           {/* ── MORE FILTERS POPOVER / MODAL ────────────────────────────────────── */}
           {showMoreFilters && (
-            <div className="absolute right-0 top-12 w-full sm:w-[460px] bg-white rounded-3xl shadow-2xl border border-slate-200 p-5 z-[999] space-y-4 text-left select-none animate-in fade-in">
+            <div className="members-filter-popover absolute right-0 top-12 w-full sm:w-[460px] bg-white rounded-3xl shadow-2xl border border-slate-200 p-5 z-[999] space-y-4 text-left select-none animate-in fade-in">
               <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                 <div className="flex items-center gap-2">
                   <Sliders size={16} className="text-indigo-600" />
@@ -816,7 +816,7 @@ export default function MembersTable({
       )}
 
       {/* Tabs */}
-      <div className="px-4 border-b border-slate-100 flex items-center justify-between overflow-x-auto">
+      <div className="members-table-tabs px-4 border-b border-slate-100 flex items-center justify-between overflow-x-auto">
         <div className="flex space-x-1">
           {[
             { id: 'all', label: 'All Members', count: counts.all },
@@ -844,7 +844,7 @@ export default function MembersTable({
       </div>
 
       {/* Mobile Member Cards View (< md) */}
-      <div className="md:hidden p-3 space-y-3 bg-slate-50/50">
+      <div className="members-mobile-roster md:hidden p-3 space-y-3 bg-slate-50/50">
         {paginatedMembers.length === 0 ? (
           <div className="p-8 text-center text-xs text-slate-500 bg-white rounded-2xl border border-slate-200">
             No members found matching selected search & filters.
@@ -860,7 +860,7 @@ export default function MembersTable({
             return (
               <div
                 key={member.id ? `${member.id}_${idx}` : `mem_${idx}`}
-                className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-xs space-y-3 text-left"
+                className="members-mobile-card bg-white border border-slate-200/80 rounded-2xl p-4 shadow-xs space-y-3 text-left"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-center gap-3">
@@ -921,9 +921,9 @@ export default function MembersTable({
       </div>
 
       {/* Table (Desktop Only >= md) */}
-      <div className="hidden md:block overflow-x-auto">
+      <div className="members-desktop-roster hidden md:block overflow-x-auto">
         <table className="w-full text-left text-sm whitespace-nowrap border-separate border-spacing-0">
-          <thead className="bg-[#0b5cbe] text-[#fdfdfd] font-bold">
+          <thead className="members-table-head bg-[#0b5cbe] text-[#fdfdfd] font-bold">
             <tr className="bg-[#0b5cbe]">
               <th className="px-4 py-3.5 text-[#fdfdfd] bg-[#0b5cbe] rounded-tl-[14px] border-b border-[#084a99]">Member</th>
               <th className="px-4 py-3.5 text-[#fdfdfd] bg-[#0b5cbe] border-b border-[#084a99]">Phone</th>
