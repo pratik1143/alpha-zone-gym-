@@ -325,7 +325,7 @@ export const blogs: BlogArticle[] = [
     publishedDate: '2026-10-11',
     author: 'Alpha Zone Fitness Team',
     excerpt: 'High-intensity interval training (HIIT) alternates periods of challenging effort with active recovery. Learn how HIIT builds conditioning, beginner workout structures, and tips for consistency.',
-    image: '/gym_images/hiit-training-in-mohali.png',
+    image: '/gym_images/hiit-training-in-mohali.jpg',
     faqs: [
       {
         question: 'Is HIIT suitable for beginners?',
