@@ -11,7 +11,7 @@ import {
   Percent, Tag, DollarSign, Dumbbell, User, Award, ArrowRight, Eye, FileText
 } from 'lucide-react';
 import { db } from '@/lib/firebase';
-import { collection, addDoc, doc, updateDoc, getDocs, getDoc, query, where, writeBatch } from 'firebase/firestore';
+import { collection, addDoc, arrayUnion, doc, updateDoc, getDocs, getDoc, query, where, writeBatch } from 'firebase/firestore';
 import { useGymStore } from '@/store';
 import toast from '@/lib/toast';
 import { formatDate, formatPhoneNumber, cleanPlanName } from '@/lib/utils';
@@ -135,7 +135,7 @@ function UniversalBillingTerminalContent() {
     const today = new Date();
     const YMD = `${today.getFullYear()}${String(today.getMonth() + 1).padStart(2, '0')}${String(today.getDate()).padStart(2, '0')}`;
     const randomSeq = String(Math.floor(100 + Math.random() * 900));
-    const prefix = activeMode === 'upgrade' ? 'INV-UPG' : (activeMode === 'renew' ? 'INV-REN' : 'INV-MEM');
+    const prefix = activeMode === 'pt' ? 'INV-PT' : (activeMode === 'upgrade' ? 'INV-UPG' : (activeMode === 'renew' ? 'INV-REN' : 'INV-MEM'));
     return `${prefix}-${YMD}-${randomSeq}`;
   }, [activeMode, selectedMemberId]);
 
@@ -148,14 +148,24 @@ function UniversalBillingTerminalContent() {
   // Dynamic Catalog of Packages
   const activePackages = useMemo(() => {
     if (plans.length > 0) {
-      return plans.map((p: any) => ({
+      return plans.filter((p: any) => {
+        if (String(p.status || 'Active').toLowerCase() === 'inactive') return false;
+        const type = String(p.type || p.planType || p.packageType || '').toLowerCase();
+        const isPt = type.includes('pt') || type.includes('personal training') ||
+          String(p.name || '').toLowerCase().includes('pt') || String(p.badge || '').toLowerCase().includes('personal training');
+        return activeMode === 'pt' ? isPt : !isPt;
+      }).map((p: any) => ({
+        ...p,
         id: p.id,
         name: p.name,
-        durationMonths: p.durationMonths || p.months || 3,
-        price: Number(p.price) || 5000,
-        tag: p.tag || 'Popular'
+        durationMonths: Number(p.durationMonths || p.months) || 0,
+        durationDays: Number(p.durationDays) || 0,
+        duration: p.duration || '',
+        price: Number(p.price) || 0,
+        tag: p.badge || p.tag || (activeMode === 'pt' ? 'Personal Training' : 'Popular')
       }));
     }
+    if (activeMode === 'pt') return [];
     return [
       { id: 'p1', name: '1 Month Standard', durationMonths: 1, price: 3000, tag: 'Standard' },
       { id: 'p2', name: '3 Months Prime', durationMonths: 3, price: 6500, tag: 'Popular' },
@@ -163,15 +173,24 @@ function UniversalBillingTerminalContent() {
       { id: 'p4', name: '6 Months Executive', durationMonths: 6, price: 9500, tag: 'Saver' },
       { id: 'p5', name: '12 Months VIP', durationMonths: 12, price: 14000, tag: 'Annual Pro' },
     ];
-  }, [plans]);
+  }, [plans, activeMode]);
 
   const [selectedPackage, setSelectedPackage] = useState<any>(activePackages[1] || activePackages[0]);
   const [packagePrice, setPackagePrice] = useState<number>(activePackages[1]?.price || 6500);
 
+  useEffect(() => {
+    const currentChoice = activePackages.find((pkg: any) => pkg.id === selectedPackage?.id);
+    const nextChoice = currentChoice || activePackages[0] || null;
+    setSelectedPackage(nextChoice);
+    setPackagePrice(nextChoice ? Number(nextChoice.price) || 0 : 0);
+  }, [activePackages]);
+
   // Auto set start date based on continuation rules
   useEffect(() => {
     if (selectedMember) {
-      if (activeMode === 'renew' || activeMode === 'upgrade') {
+      if (activeMode === 'pt') {
+        setStartDate(todayYMD);
+      } else if (activeMode === 'renew' || activeMode === 'upgrade') {
         const curExpStr = selectedMember.expiryDate;
         const curExp = curExpStr ? new Date(curExpStr) : null;
         if (curExp && curExp.getTime() > Date.now()) {
@@ -190,10 +209,19 @@ function UniversalBillingTerminalContent() {
     const baseDate = new Date(startDate || todayYMD);
     if (isNaN(baseDate.getTime())) return todayYMD;
 
-    const monthsToAdd = selectedPackage?.durationMonths || 3;
-    baseDate.setMonth(baseDate.getMonth() + monthsToAdd);
+    if (activeMode === 'pt') {
+      const durationText = String(selectedPackage?.duration || selectedPackage?.name || '').toLowerCase();
+      const durationMatch = durationText.match(/(\d+)\s*(day|days|month|months|year|years)/);
+      const durationDays = Number(selectedPackage?.durationDays) || (durationMatch
+        ? Number(durationMatch[1]) * (durationMatch[2].startsWith('year') ? 365 : durationMatch[2].startsWith('month') ? 30 : 1)
+        : (Number(selectedPackage?.durationMonths) || 1) * 30);
+      baseDate.setDate(baseDate.getDate() + durationDays);
+    } else {
+      const monthsToAdd = selectedPackage?.durationMonths || 3;
+      baseDate.setMonth(baseDate.getMonth() + monthsToAdd);
+    }
     return baseDate.toISOString().split('T')[0];
-  }, [startDate, selectedPackage, todayYMD]);
+  }, [activeMode, startDate, selectedPackage, todayYMD]);
 
   // ── PREVIOUS MEMBERSHIP FINANCIAL SNAPSHOT & CARRY FORWARD ─────────────
   const currentMembershipSnapshot = useMemo(() => {
@@ -254,7 +282,7 @@ function UniversalBillingTerminalContent() {
   }, [selectedMember, todayYMD]);
 
   // Carry Forward Amount (For standard renewal/new: pending balance; For upgrade: credit adjustment)
-  const carryForwardAmount = activeMode === 'upgrade' ? currentMembershipSnapshot.alreadyPaid : currentMembershipSnapshot.currentPending;
+  const carryForwardAmount = activeMode === 'pt' ? 0 : (activeMode === 'upgrade' ? currentMembershipSnapshot.alreadyPaid : currentMembershipSnapshot.currentPending);
 
   // ── DISCOUNT & ACCOUNTING ENGINE ───────────────────────────────────────
   const [discountType, setDiscountType] = useState<'flat' | 'percent'>('flat');
@@ -279,6 +307,9 @@ function UniversalBillingTerminalContent() {
   }, [currentMembershipSnapshot, packagePrice, discountAmount]);
 
   const finalPayable = useMemo(() => {
+    if (activeMode === 'pt') {
+      return Math.max(0, packagePrice - discountAmount);
+    }
     if (activeMode === 'upgrade') {
       return upgradeCalc.finalPayable;
     }
@@ -323,10 +354,15 @@ function UniversalBillingTerminalContent() {
       toast.error(`Please select a member for this ${activeMode}.`);
       return;
     }
+    if (!selectedPackage) {
+      toast.error(activeMode === 'pt' ? 'No active PT plans are available. Add a PT plan first.' : 'No active packages are available.');
+      return;
+    }
     if (submitting) return; // Prevent double click
     setSubmitting(true);
 
     const isRenew = activeMode === 'renew';
+    const isPtBill = activeMode === 'pt';
     const normalizedPaymentDate = getCanonicalISTDate(billDate);
     const newPaymentRef = doc(collection(db, 'payments'));
     const transactionId = `TXN-${normalizedPaymentDate.replace(/-/g, '')}-${Math.floor(1000 + Math.random() * 9000)}`;
@@ -361,19 +397,29 @@ function UniversalBillingTerminalContent() {
       memberName: selectedMember.name,
       memberPhone: selectedMember.phone || '',
       mode: activeMode.toUpperCase(),
-      transactionType: isRenew ? 'membership_renewal' : 'membership_upgrade',
-      billingType: 'membership',
+      transactionType: isPtBill ? 'pt_payment' : (isRenew ? 'membership_renewal' : 'membership_upgrade'),
+      billingType: isPtBill ? 'PT' : 'membership',
+      ...(isPtBill ? { invoiceType: 'PT', packageType: 'PT' } : {}),
       plan: selectedPackage?.name || (isRenew ? 'Renewed Membership' : 'Upgraded Membership'),
       packageName: selectedPackage?.name || (isRenew ? 'Renewed Membership' : 'Upgraded Membership'),
+      ...(isPtBill ? {
+        packageId: selectedPackage.id,
+        duration: selectedPackage.duration || selectedPackage.name,
+        durationDays: selectedPackage.durationDays || undefined,
+        trainerId: selectedMember.trainerId || '',
+        trainerName: selectedMember.trainerName || selectedMember.trainer || 'Personal Trainer',
+      } : {}),
 
       // Previous Billing Relationship
-      previousInvoiceNumber: currentMembershipSnapshot.previousInvoiceNo,
-      previousPackage: currentMembershipSnapshot.package,
-      previousBillAmount: currentMembershipSnapshot.originalBill,
-      previousAmountPaid: currentMembershipSnapshot.alreadyPaid,
-      previousPending: currentMembershipSnapshot.currentPending,
-      carryForwardCredit: activeMode === 'upgrade' ? upgradeCalc.carryForwardCredit : 0,
-      upgradeAmountBeforeDiscount: activeMode === 'upgrade' ? upgradeCalc.upgradeAmountBeforeDiscount : packagePrice,
+      ...(!isPtBill ? {
+        previousInvoiceNumber: currentMembershipSnapshot.previousInvoiceNo,
+        previousPackage: currentMembershipSnapshot.package,
+        previousBillAmount: currentMembershipSnapshot.originalBill,
+        previousAmountPaid: currentMembershipSnapshot.alreadyPaid,
+        previousPending: currentMembershipSnapshot.currentPending,
+        carryForwardCredit: activeMode === 'upgrade' ? upgradeCalc.carryForwardCredit : 0,
+        upgradeAmountBeforeDiscount: activeMode === 'upgrade' ? upgradeCalc.upgradeAmountBeforeDiscount : packagePrice,
+      } : {}),
 
       // Financial Ledger
       packagePrice: packagePrice,
@@ -405,9 +451,11 @@ function UniversalBillingTerminalContent() {
       updatedAt: new Date().toISOString(),
       isHistorical: false,
       imported: false,
-      notes: isRenew
-        ? `Membership renewed to ${selectedPackage?.name} from ${startDate} to ${calculatedExpiryDate}`
-        : `Membership upgraded to ${selectedPackage?.name}. Credit adjustment: -₹${upgradeCalc.carryForwardCredit}`,
+      notes: isPtBill
+        ? `Personal Training package ${selectedPackage?.name} from ${startDate} to ${calculatedExpiryDate}`
+        : isRenew
+          ? `Membership renewed to ${selectedPackage?.name} from ${startDate} to ${calculatedExpiryDate}`
+          : `Membership upgraded to ${selectedPackage?.name}. Credit adjustment: -₹${upgradeCalc.carryForwardCredit}`,
     };
 
     try {
@@ -418,22 +466,58 @@ function UniversalBillingTerminalContent() {
       batch.set(newPaymentRef, billPayload);
 
       // 2. Update Member Record atomically
-      const newTotalPaid = (Number(selectedMember.totalPaid) || 0) + amountPaidToday;
-      const newTotalBilled = (Number(selectedMember.totalBilled) || 0) + finalPayable;
-
       const memberRef = doc(db, 'members', selectedMember.id);
-      batch.update(memberRef, {
-        plan: selectedPackage?.name || selectedMember.plan,
-        price: packagePrice,
-        startDate: startDate,
-        expiryDate: calculatedExpiryDate,
-        status: calculatedExpiryDate >= todayYMD ? 'active' : 'expired',
-        paymentStatus: payStatus,
-        totalBilled: newTotalBilled,
-        totalPaid: newTotalPaid,
-        outstandingBalance: remainingPending,
-        updatedAt: new Date().toISOString(),
-      });
+      if (isPtBill) {
+        const ptDuration = selectedPackage.duration || selectedPackage.name;
+        const trainerName = selectedMember.trainerName || selectedMember.trainer || 'Personal Trainer';
+        const ptDetails = {
+          id: fixedInvoiceNo,
+          invoiceNo: fixedInvoiceNo,
+          invoiceNumber: fixedInvoiceNo,
+          packageId: selectedPackage.id,
+          packageName: selectedPackage.name,
+          duration: ptDuration,
+          durationDays: selectedPackage.durationDays || null,
+          durationMonths: selectedPackage.durationMonths || null,
+          amount: packagePrice,
+          startDate,
+          expiryDate: calculatedExpiryDate,
+          trainerId: selectedMember.trainerId || '',
+          trainerName,
+          status: 'ACTIVE',
+          paymentStatus: payStatus,
+          paymentMode: paymentMethod,
+          updatedAt: new Date().toISOString(),
+        };
+
+        batch.update(memberRef, {
+          pt: { ...(selectedMember.pt || {}), ...ptDetails, enabled: true },
+          ptMembership: { ...(selectedMember.ptMembership || {}), ...ptDetails },
+          ptPlan: selectedPackage.name,
+          ptStartDate: startDate,
+          ptExpiryDate: calculatedExpiryDate,
+          ptDuration: ptDuration,
+          ptAmount: packagePrice,
+          ptHistory: arrayUnion({ ...billPayload, trainerName }),
+          updatedAt: new Date().toISOString(),
+        });
+      } else {
+        const newTotalPaid = (Number(selectedMember.totalPaid) || 0) + amountPaidToday;
+        const newTotalBilled = (Number(selectedMember.totalBilled) || 0) + finalPayable;
+
+        batch.update(memberRef, {
+          plan: selectedPackage?.name || selectedMember.plan,
+          price: packagePrice,
+          startDate: startDate,
+          expiryDate: calculatedExpiryDate,
+          status: calculatedExpiryDate >= todayYMD ? 'active' : 'expired',
+          paymentStatus: payStatus,
+          totalBilled: newTotalBilled,
+          totalPaid: newTotalPaid,
+          outstandingBalance: remainingPending,
+          updatedAt: new Date().toISOString(),
+        });
+      }
 
       await batch.commit();
 
@@ -457,7 +541,7 @@ function UniversalBillingTerminalContent() {
       await fetchPayments(true);
 
       setSuccessInvoice(savedInvoice);
-      toast.success(`${isRenew ? 'Renewal' : 'Upgrade'} invoice ${fixedInvoiceNo} created! 🎉`);
+      toast.success(`${isPtBill ? 'PT bill' : (isRenew ? 'Renewal' : 'Upgrade')} ${fixedInvoiceNo} created! 🎉`);
     } catch (err: any) {
       console.error('Billing execution error:', err);
       toast.error(`Failed to create ${activeMode} invoice: ` + (err?.message || err));
@@ -525,7 +609,7 @@ function UniversalBillingTerminalContent() {
 
             <div>
               <h2 className="text-2xl font-black text-slate-900">
-                {activeMode === 'renew' ? 'RENEWAL SUCCESSFUL ✓' : 'UPGRADE SUCCESSFUL ✓'}
+                {activeMode === 'pt' ? 'PT BILL CREATED ✓' : activeMode === 'renew' ? 'RENEWAL SUCCESSFUL ✓' : 'UPGRADE SUCCESSFUL ✓'}
               </h2>
               <p className="text-xs font-semibold text-slate-500 mt-1">
                 Transaction <code className="font-mono bg-slate-100 px-2 py-0.5 rounded text-slate-800 font-bold">{successInvoice.invoiceNumber}</code> has been confirmed.
@@ -539,7 +623,7 @@ function UniversalBillingTerminalContent() {
               </div>
               <div>
                 <span className="text-[10px] font-bold text-slate-400 uppercase">
-                  {activeMode === 'renew' ? 'Renewed Package' : 'Upgraded To'}
+                  {activeMode === 'pt' ? 'PT Package' : activeMode === 'renew' ? 'Renewed Package' : 'Upgraded To'}
                 </span>
                 <p className="font-black text-[#0B5CBE] mt-0.5">{successInvoice.plan}</p>
               </div>
@@ -548,7 +632,7 @@ function UniversalBillingTerminalContent() {
                 <p className="font-black text-emerald-700 font-mono mt-0.5">₹{successInvoice.amountPaid.toLocaleString('en-IN')}</p>
               </div>
               <div>
-                <span className="text-[10px] font-bold text-slate-400 uppercase">New Expiry</span>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase">{activeMode === 'pt' ? 'PT Expires' : 'New Expiry'}</span>
                 <p className="font-black text-slate-900 font-mono mt-0.5">{formatDate(successInvoice.expiryDate)}</p>
               </div>
             </div>
@@ -587,7 +671,7 @@ function UniversalBillingTerminalContent() {
               {/* ── STEP 1: MEMBER PROFILE & CURRENT MEMBERSHIP SNAPSHOT ───────── */}
               <div className="bg-white rounded-2xl p-5 border border-slate-200/90 shadow-xs space-y-4">
                 <span className="text-[10px] font-black uppercase tracking-wider text-[#0B5CBE] block">
-                  STEP 1 — {activeMode === 'renew' ? 'RENEW MEMBER PROFILE' : 'UPGRADE MEMBER PROFILE'}
+                  STEP 1 — {activeMode === 'pt' ? 'MEMBER & PT PLAN' : activeMode === 'renew' ? 'RENEW MEMBER PROFILE' : 'UPGRADE MEMBER PROFILE'}
                 </span>
 
                 {/* Search / Select Member Dropdown */}
@@ -711,7 +795,16 @@ function UniversalBillingTerminalContent() {
                       </button>
                     </div>
 
-                    {/* CURRENT MEMBERSHIP SNAPSHOT */}
+                {activeMode === 'pt' ? (
+                  <div className="p-4 rounded-xl bg-amber-50/70 border border-amber-200 space-y-2.5">
+                    <span className="text-[10px] font-black uppercase text-amber-800 block tracking-wider">CURRENT PT PLAN</span>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
+                      <div><span className="text-[10px] text-slate-500 font-bold block uppercase">Package</span><span className="font-extrabold text-slate-900">{selectedMember.ptMembership?.packageName || selectedMember.pt?.packageName || selectedMember.ptPlan || 'No PT plan yet'}</span></div>
+                      <div><span className="text-[10px] text-slate-500 font-bold block uppercase">Trainer</span><span className="font-bold text-slate-700">{selectedMember.ptMembership?.trainerName || selectedMember.pt?.trainerName || selectedMember.trainerName || selectedMember.trainer || 'Unassigned'}</span></div>
+                      <div><span className="text-[10px] text-slate-500 font-bold block uppercase">PT Expires</span><span className="font-bold text-slate-700">{formatDate(selectedMember.ptExpiryDate || selectedMember.ptMembership?.expiryDate || selectedMember.pt?.expiryDate || '')}</span></div>
+                    </div>
+                  </div>
+                ) : (
                     <div className="p-4 rounded-xl bg-blue-50/60 border border-blue-200 space-y-2.5">
                       <span className="text-[10px] font-black uppercase text-[#0B5CBE] block tracking-wider">
                         CURRENT MEMBERSHIP SNAPSHOT
@@ -743,10 +836,11 @@ function UniversalBillingTerminalContent() {
                         </div>
                       </div>
                     </div>
+                )}
                   </div>
                 ) : (
                   <div className="p-4 rounded-xl bg-slate-50 border border-dashed border-slate-300 text-center text-xs text-slate-400">
-                    Select a member above to load membership snapshot
+                    {activeMode === 'pt' ? 'Select a member above to load PT plan details' : 'Select a member above to load membership snapshot'}
                   </div>
                 )}
               </div>
@@ -754,10 +848,15 @@ function UniversalBillingTerminalContent() {
               {/* ── STEP 2: SELECT MEMBERSHIP PACKAGE ──────────────────────── */}
               <div className="bg-white rounded-2xl p-5 border border-slate-200/90 shadow-xs space-y-3">
                 <span className="text-[10px] font-black uppercase tracking-wider text-[#0B5CBE] block">
-                  STEP 2 — {activeMode === 'renew' ? 'SELECT RENEWAL PACKAGE' : 'SELECT NEW MEMBERSHIP PACKAGE'}
+                  STEP 2 — {activeMode === 'pt' ? 'SELECT PT PLAN' : activeMode === 'renew' ? 'SELECT RENEWAL PACKAGE' : 'SELECT NEW MEMBERSHIP PACKAGE'}
                 </span>
 
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  {activePackages.length === 0 && (
+                    <div className="col-span-full rounded-xl border border-dashed border-amber-300 bg-amber-50 p-5 text-center text-xs font-bold text-amber-800">
+                      No active PT plans found. Add or activate a PT plan in Memberships first.
+                    </div>
+                  )}
                   {activePackages.map((pkg) => {
                     const isSelected = selectedPackage?.id === pkg.id;
                     return (
@@ -797,7 +896,7 @@ function UniversalBillingTerminalContent() {
               {/* ── STEP 3: MEMBERSHIP DATES & START OPTION ─────────────────────────── */}
               <div className="bg-white rounded-2xl p-5 border border-slate-200/90 shadow-xs space-y-3">
                 <span className="text-[10px] font-black uppercase tracking-wider text-[#0B5CBE] block">
-                  STEP 3 — {activeMode === 'renew' ? 'RENEWAL DATES & START OPTION' : 'UPGRADE DATES'}
+                  STEP 3 — {activeMode === 'pt' ? 'PT PLAN DATES' : activeMode === 'renew' ? 'RENEWAL DATES & START OPTION' : 'UPGRADE DATES'}
                 </span>
 
                 {activeMode === 'renew' && (
@@ -851,7 +950,7 @@ function UniversalBillingTerminalContent() {
                     />
                   </div>
                   <div>
-                    <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Calculated Expiry</label>
+                    <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">{activeMode === 'pt' ? 'PT Expiry' : 'Calculated Expiry'}</label>
                     <div className="w-full bg-blue-50 border border-blue-100 rounded-xl px-3 py-2 text-xs font-black text-[#0B5CBE] font-mono">
                       {formatDate(calculatedExpiryDate)}
                     </div>
@@ -859,6 +958,8 @@ function UniversalBillingTerminalContent() {
                 </div>
               </div>
 
+              {activeMode !== 'pt' && (
+              <>
               {/* ── STEP 4: CARRY FORWARD / UPGRADE CREDIT ────────────────────── */}
               <div className="bg-amber-50/70 rounded-2xl p-5 border border-amber-200 space-y-3">
                 <div className="flex items-center justify-between">
@@ -901,11 +1002,13 @@ function UniversalBillingTerminalContent() {
                   )}
                 </div>
               </div>
+              </>
+              )}
 
               {/* ── STEP 5: DISCOUNT & AMOUNT PAYABLE ─────────────────────────── */}
               <div className="bg-white rounded-2xl p-5 border border-slate-200/90 shadow-xs space-y-4">
                 <span className="text-[10px] font-black uppercase tracking-wider text-[#0B5CBE] block">
-                  STEP 5 — DISCOUNT &amp; PAYMENT SETTLEMENT
+                  STEP {activeMode === 'pt' ? '4' : '5'} — {activeMode === 'pt' ? 'PT PAYMENT SETTLEMENT' : 'DISCOUNT & PAYMENT SETTLEMENT'}
                 </span>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -950,7 +1053,9 @@ function UniversalBillingTerminalContent() {
                   <div>
                     <span className="text-[10px] font-black uppercase text-[#0B5CBE] tracking-wider block">FINAL AMOUNT PAYABLE</span>
                     <p className="text-xs text-slate-500 font-medium">
-                      {activeMode === 'upgrade'
+                      {activeMode === 'pt'
+                        ? `PT Plan (₹${packagePrice}) - Discount (₹${discountAmount})`
+                        : activeMode === 'upgrade'
                         ? `New Package (₹${packagePrice}) - Paid Credit (₹${currentMembershipSnapshot.alreadyPaid}) - Discount (₹${discountAmount})`
                         : `Package (₹${packagePrice}) + Carry (₹${carryForwardAmount}) - Discount (₹${discountAmount})`}
                     </p>
@@ -997,7 +1102,7 @@ function UniversalBillingTerminalContent() {
                   <div className="flex items-center gap-2">
                     <TrendingUp size={18} className="text-[#0B5CBE]" />
                     <h3 className="font-extrabold text-sm text-slate-900">
-                      {activeMode === 'renew' ? 'RENEWAL SUMMARY' : 'UPGRADE SUMMARY'}
+                      {activeMode === 'pt' ? 'PT BILL SUMMARY' : activeMode === 'renew' ? 'RENEWAL SUMMARY' : 'UPGRADE SUMMARY'}
                     </h3>
                   </div>
                   <span className="text-[10px] font-mono font-bold bg-blue-50 text-[#0B5CBE] px-2 py-0.5 rounded border border-blue-100">
@@ -1013,13 +1118,15 @@ function UniversalBillingTerminalContent() {
                     <span className="font-extrabold text-slate-900">{selectedMember?.name || 'Not Selected'}</span>
                   </div>
 
-                  <div className="flex justify-between">
-                    <span>Current Package:</span>
-                    <span className="font-bold text-slate-700">{currentMembershipSnapshot.package}</span>
-                  </div>
+                  {activeMode !== 'pt' && (
+                    <div className="flex justify-between">
+                      <span>Current Package:</span>
+                      <span className="font-bold text-slate-700">{currentMembershipSnapshot.package}</span>
+                    </div>
+                  )}
 
                   <div className="flex justify-between text-[#0B5CBE] font-bold">
-                    <span>New Package:</span>
+                    <span>{activeMode === 'pt' ? 'PT Plan:' : 'New Package:'}</span>
                     <span>{selectedPackage?.name}</span>
                   </div>
 
@@ -1029,12 +1136,12 @@ function UniversalBillingTerminalContent() {
                   </div>
 
                   <div className="flex justify-between">
-                    <span>New Expiry Date:</span>
+                    <span>{activeMode === 'pt' ? 'PT Expiry Date:' : 'New Expiry Date:'}</span>
                     <span className="font-mono font-bold text-[#0B5CBE]">{formatDate(calculatedExpiryDate)}</span>
                   </div>
 
                   <div className="pt-2 border-t border-slate-100 flex justify-between">
-                    <span>New Package Amount:</span>
+                    <span>{activeMode === 'pt' ? 'PT Plan Amount:' : 'New Package Amount:'}</span>
                     <span className="font-mono font-bold text-slate-900">₹{packagePrice.toLocaleString('en-IN')}</span>
                   </div>
 
@@ -1091,16 +1198,16 @@ function UniversalBillingTerminalContent() {
                   <button
                     type="button"
                     onClick={handleConfirmBill}
-                    disabled={submitting || !selectedMember}
+                    disabled={submitting || !selectedMember || !selectedPackage}
                     className={`w-full py-3.5 px-4 ${BLUE_GRADIENT} ${BLUE_GRADIENT_HOVER} text-white font-black text-xs rounded-xl shadow-lg transition-all border-none cursor-pointer flex items-center justify-center gap-2 active:scale-98 disabled:opacity-50 disabled:cursor-not-allowed`}
                   >
                     {submitting ? (
                       <>
-                        <RefreshCw size={16} className="animate-spin" /> {activeMode === 'renew' ? 'GENERATING RENEWAL BILL...' : 'GENERATING UPGRADE BILL...'}
+                        <RefreshCw size={16} className="animate-spin" /> {activeMode === 'pt' ? 'GENERATING PT BILL...' : activeMode === 'renew' ? 'GENERATING RENEWAL BILL...' : 'GENERATING UPGRADE BILL...'}
                       </>
                     ) : (
                       <>
-                        <ShieldCheck size={18} /> {activeMode === 'renew' ? 'GENERATE RENEWAL BILL' : 'GENERATE UPGRADE BILL'}
+                        <ShieldCheck size={18} /> {activeMode === 'pt' ? 'GENERATE PT BILL' : activeMode === 'renew' ? 'GENERATE RENEWAL BILL' : 'GENERATE UPGRADE BILL'}
                       </>
                     )}
                   </button>

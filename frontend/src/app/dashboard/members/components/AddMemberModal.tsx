@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   X, User, Phone, Mail, Calendar, Heart, Shield, Smartphone, 
@@ -855,13 +856,13 @@ export default function AddMemberModal({ isOpen, onClose, initialBiometricId = '
     }
   };
 
-  if (!isOpen) return null;
+  if (!isOpen || typeof document === 'undefined') return null;
 
   const totalStepCount = hasPt ? 6 : 5;
 
-  return (
+  return createPortal((
     <AnimatePresence>
-      <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4">
+      <div className="fixed inset-0 z-[10000] flex items-center justify-center overflow-y-auto overscroll-contain bg-slate-950/45 p-3 sm:p-5">
         
         {/* Backdrop */}
         <motion.div
@@ -878,7 +879,7 @@ export default function AddMemberModal({ isOpen, onClose, initialBiometricId = '
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.96, y: 15 }}
           transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-          className="w-full max-w-[1050px] bg-white text-slate-900 rounded-[32px] shadow-2xl border border-slate-200 relative overflow-hidden flex flex-col h-[90vh] z-10 font-sans text-left"
+          className="w-full max-w-6xl bg-white text-slate-900 rounded-[28px] shadow-2xl border border-slate-200 relative overflow-hidden flex flex-col h-[90dvh] max-h-[900px] min-h-0 z-10 font-sans text-left"
         >
           {/* Header Bar */}
           <div className="px-6 sm:px-8 py-4 sm:py-5 bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-800 text-white flex justify-between items-center shrink-0">
@@ -2064,5 +2065,5 @@ export default function AddMemberModal({ isOpen, onClose, initialBiometricId = '
         </div>
       )}
     </AnimatePresence>
-  );
+  ), document.body);
 }

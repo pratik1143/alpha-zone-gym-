@@ -1754,7 +1754,7 @@ export default function EnquiryGodLevelHub() {
             >
               <div className="flex items-center justify-between pb-3 border-b border-slate-100">
                 <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                  <Upload className="text-[#0b5cbe]" size={18} /> Import Real Enquiries Excel
+                  <Upload className="text-[#0b5cbe]" size={18} /> Import Enquiries Excel
                 </h3>
                 <button onClick={() => setShowImportModal(false)} className="p-1 rounded-lg text-slate-400 hover:bg-slate-100 border-none cursor-pointer">
                   <X size={18} />
@@ -1763,12 +1763,13 @@ export default function EnquiryGodLevelHub() {
 
               <div className="space-y-4 text-xs text-slate-600">
                 <p>
-                  Upload your master enquiry Excel spreadsheet (e.g. <code>inquiries 230826.xlsx</code>). The system will automatically:
+                  Upload an enquiry Excel spreadsheet with columns for name, phone number, interested plan, next follow-up, representative, and status. The system will automatically:
                 </p>
                 <ul className="list-disc list-inside space-y-1 text-slate-700 font-medium">
-                  <li>Normalize and import all Sheet 1 master enquiry records (386 rows)</li>
-                  <li>Link Sheet 2 closed records as history timeline without duplicates</li>
-                  <li>Generate automated follow-ups for all pending enquiries</li>
+                  <li>Import the first sheet and preserve Pending, Closed, and Converted statuses</li>
+                  <li>Prevent duplicate records using normalized phone numbers</li>
+                  <li>Generate automated follow-ups for pending enquiries with a follow-up date</li>
+                  <li>Optionally link matching records from a second sheet to enquiry history</li>
                 </ul>
 
                 <div className="border-2 border-dashed border-slate-200 hover:border-[#0b5cbe] rounded-2xl p-6 text-center cursor-pointer transition-colors bg-slate-50">
@@ -1799,6 +1800,7 @@ export default function EnquiryGodLevelHub() {
                       <span>Master Imported: <b>{importReport.imported}</b></span>
                       <span>Pending: <b>{importReport.pending}</b></span>
                       <span>Closed: <b>{importReport.closed}</b></span>
+                      <span>Converted: <b>{importReport.converted || 0}</b></span>
                       <span>Duplicates Prevented: <b>{importReport.duplicatesPrevented}</b></span>
                       <span>Closed History Linked: <b>{importReport.historicalRecordsLinked}</b></span>
                     </div>
