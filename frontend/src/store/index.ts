@@ -26,12 +26,35 @@ interface AuthStore {
   logout: () => Promise<void>;
 }
 
+const readStoredAuthUser = (): User | null => {
+  if (typeof window === 'undefined') return null;
+
+  try {
+    const raw = localStorage.getItem('alpha_zone_user');
+    if (!raw) return null;
+
+    const user = JSON.parse(raw) as User;
+    // Local demo sessions have no Firebase ID token and cannot authorize
+    // protected production API calls. Clear them so the owner signs in again
+    // through Firebase after the production frontend is deployed.
+    if (process.env.NODE_ENV === 'production' && (!user?.token || user.uid?.startsWith('demo_'))) {
+      localStorage.removeItem('alpha_zone_user');
+      return null;
+    }
+
+    return user;
+  } catch {
+    localStorage.removeItem('alpha_zone_user');
+    return null;
+  }
+};
+
+const initialAuthUser = readStoredAuthUser();
+
 export const useAuthStore = create<AuthStore>((set) => ({
-  user: typeof window !== 'undefined' && localStorage.getItem('alpha_zone_user') 
-    ? JSON.parse(localStorage.getItem('alpha_zone_user')!) 
-    : null,
+  user: initialAuthUser,
   isLoading: false,
-  isAuthenticated: typeof window !== 'undefined' && !!localStorage.getItem('alpha_zone_user'),
+  isAuthenticated: !!initialAuthUser,
   setUser: (user) => {
     if (user) {
       localStorage.setItem('alpha_zone_user', JSON.stringify(user));
@@ -70,7 +93,7 @@ export const useAuthStore = create<AuthStore>((set) => ({
       };
 
       const demoMatch = DEMO_ACCOUNTS[credentials.email.toLowerCase()];
-      if (demoMatch && demoMatch.password === credentials.password) {
+      if (process.env.NODE_ENV === 'development' && demoMatch && demoMatch.password === credentials.password) {
         localStorage.setItem('alpha_zone_user', JSON.stringify(demoMatch.user));
         set({ user: demoMatch.user, isAuthenticated: true, isLoading: false });
         return demoMatch.user;
