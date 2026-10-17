@@ -26,6 +26,8 @@ dist-ssr
 # Credentials and environment configurations
 .env
 .env.*
+!.env.example
+!**/.env.example
 serviceAccountKey.json
 *.apk
 __pycache__
