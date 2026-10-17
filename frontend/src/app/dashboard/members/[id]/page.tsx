@@ -388,7 +388,7 @@ export default function ClientProfileSystem() {
               <div className="flex-1 min-w-0 space-y-1.5">
                 {/* Name + Status Badge */}
                 <div className="flex items-center gap-2.5 flex-wrap">
-                  <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight leading-tight truncate">
+                  <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight leading-tight break-words [overflow-wrap:anywhere]">
                     {member.name || 'Member'}
                   </h1>
                   <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${
@@ -420,7 +420,7 @@ export default function ClientProfileSystem() {
                 </div>
 
                 {/* Secondary Metadata: Phone · Location · Email */}
-                <div className="flex items-center gap-2 text-xs font-semibold text-slate-600 flex-wrap">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs font-semibold text-slate-600">
                   {member.phone && (
                     <span className="inline-flex items-center gap-1 text-slate-700">
                       <Phone size={12} className="text-slate-400" />
@@ -428,14 +428,14 @@ export default function ClientProfileSystem() {
                     </span>
                   )}
                   {member.phone && <span className="text-slate-300">·</span>}
-                  <span className="inline-flex items-center gap-1 text-slate-600">
+                  <span className="inline-flex items-center gap-1 min-w-0 text-slate-600 break-words">
                     <MapPin size={12} className="text-slate-400" />
                     {member.branch || 'Mohali, Punjab'}
                   </span>
                   {member.email && (
                     <>
-                      <span className="text-slate-300">·</span>
-                      <span className="text-slate-500 truncate max-w-[180px]">{member.email}</span>
+                      <span className="hidden sm:inline text-slate-300">·</span>
+                      <span className="min-w-0 text-slate-500 break-all">{member.email}</span>
                     </>
                   )}
                 </div>
@@ -453,16 +453,16 @@ export default function ClientProfileSystem() {
             </div>
 
             {/* ── ZONE 2: MEMBERSHIP CARD BLOCK (Span 5) ── */}
-            <div className="lg:col-span-5 bg-slate-50/90 border border-slate-200/80 rounded-2xl p-4 flex flex-col justify-between gap-2.5">
+            <div className="lg:col-span-5 bg-gradient-to-br from-slate-50 to-blue-50/60 border border-blue-100/80 rounded-2xl p-4 sm:p-5 flex flex-col justify-between gap-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]">
               <div>
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Membership</span>
                   <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Expires</span>
                 </div>
 
-                <div className="flex items-baseline justify-between gap-2 mt-0.5">
-                  <div className="flex items-baseline gap-2 flex-wrap">
-                    <span className="text-base sm:text-lg font-black text-slate-900 tracking-tight">{member.plan || 'Standard Plan'}</span>
+                <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-3 gap-y-2 mt-1">
+                  <div className="flex min-w-0 items-center gap-x-2 gap-y-1 flex-wrap">
+                    <span className="text-base sm:text-lg font-black text-slate-900 tracking-tight leading-snug break-words">{member.plan || 'Standard Plan'}</span>
                     {(member.amount || member.price || member.totalBilled) && (
                       <span className="text-sm font-extrabold text-[#0066FF]">
                         ₹{Number(member.amount || member.price || member.totalBilled || 0).toLocaleString('en-IN')}
@@ -476,7 +476,7 @@ export default function ClientProfileSystem() {
                       <TrendingUp size={11} /> Upgrade
                     </button>
                   </div>
-                  <span className="text-xs sm:text-sm font-bold text-slate-800 shrink-0">
+                  <span className="text-xs sm:text-sm font-bold text-slate-800 text-right whitespace-nowrap">
                     {member.expiryDate
                       ? new Date(member.expiryDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
                       : '—'}
@@ -522,52 +522,51 @@ export default function ClientProfileSystem() {
             </div>
           </div>
 
-          {/* ── ROW 2: METRICS STRIP + ACTION BUTTONS ── */}
-          <div className="flex flex-col xl:flex-row items-stretch xl:items-center justify-between gap-3.5 pt-2 border-t border-slate-100">
-            
-            {/* 4-Metric Compact Strip */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 bg-slate-50/80 border border-slate-200/80 rounded-2xl p-1 divide-y sm:divide-y-0 sm:divide-x divide-slate-200/70 flex-1">
+          {/* ── ROW 2: FULL-WIDTH METRICS + ACTIONS ── */}
+          <div className="space-y-3.5 pt-4 border-t border-slate-100">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
               {[
                 {
                   label: 'HEALTH SCORE',
                   value: `${Math.max(0, 100 - healthScore)}%`,
                   color: healthScore < 40 ? '#10b981' : healthScore < 70 ? '#f59e0b' : '#ef4444',
-                  icon: '❤️',
+                  icon: Heart,
                 },
                 {
                   label: 'ATTENDANCE',
                   value: `${attendancePct}%`,
                   color: attendancePct > 60 ? '#10b981' : attendancePct > 30 ? '#f59e0b' : '#64748b',
-                  icon: '📅',
+                  icon: Calendar,
                 },
                 {
                   label: 'DAYS LEFT',
                   value: daysLeft > 0 ? String(daysLeft) : '0',
                   color: daysLeft > 14 ? '#0066FF' : daysLeft > 0 ? '#f59e0b' : '#ef4444',
-                  icon: '⏱',
+                  icon: Timer,
                 },
                 {
                   label: 'PAYMENT',
                   value: payStatus === 'PAID' ? 'PAID' : 'DUE',
                   color: payStatus === 'PAID' ? '#10b981' : '#f59e0b',
-                  icon: '💳',
+                  icon: CreditCard,
                 },
               ].map(m => (
-                <div key={m.label} className="px-3.5 py-2 flex items-center gap-2.5">
-                  <span className="text-base leading-none select-none">{m.icon}</span>
+                <div key={m.label} className="min-w-0 rounded-2xl border border-blue-100/80 bg-gradient-to-br from-white to-blue-50/50 px-3 py-3 shadow-[0_3px_12px_rgba(15,67,125,0.04)] flex items-center gap-3">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white border border-slate-100 shadow-sm" style={{ color: m.color }}>
+                    <m.icon size={18} strokeWidth={2.4} />
+                  </span>
                   <div className="min-w-0">
-                    <div className="text-[9.5px] font-black uppercase tracking-wider text-slate-400 leading-tight truncate">{m.label}</div>
-                    <div className="text-sm sm:text-base font-black leading-tight mt-0.5 truncate" style={{ color: m.color }}>{m.value}</div>
+                    <div className="text-[10px] font-extrabold uppercase tracking-[0.08em] text-slate-500 leading-tight whitespace-normal">{m.label}</div>
+                    <div className="text-lg sm:text-xl font-black leading-tight mt-1 break-words" style={{ color: m.color }}>{m.value}</div>
                   </div>
                 </div>
               ))}
             </div>
 
-            {/* Action Buttons Group */}
-            <div className="flex items-center gap-2 shrink-0 flex-wrap sm:flex-nowrap">
+            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-2.5">
               <button
                 onClick={() => router.push(`/dashboard/billing/create?mode=upgrade&id=${id}`)}
-                className="flex-1 sm:flex-none h-11 px-4 bg-gradient-to-r from-[#0B5CBE] to-[#064A9B] hover:from-[#064A9B] hover:to-[#083F82] text-white rounded-xl flex items-center justify-center gap-1.5 text-xs font-black transition-all cursor-pointer shadow-xs active:scale-[0.98] border-none"
+                className="w-full min-w-0 h-11 px-3 sm:px-4 bg-gradient-to-r from-[#0B5CBE] to-[#064A9B] hover:from-[#064A9B] hover:to-[#083F82] text-white rounded-xl flex items-center justify-center gap-1.5 text-xs font-black whitespace-nowrap transition-all cursor-pointer shadow-xs active:scale-[0.98] border-none"
                 title="Upgrade Membership Package"
               >
                 <TrendingUp size={14} /> Upgrade
@@ -575,7 +574,7 @@ export default function ClientProfileSystem() {
 
               <button
                 onClick={() => router.push(`/dashboard/billing/create?mode=pt&id=${id}`)}
-                className="flex-1 sm:flex-none h-11 px-4 bg-[#0B5CBE] hover:bg-blue-700 text-white rounded-xl flex items-center justify-center gap-1.5 text-xs font-black transition-all cursor-pointer shadow-xs active:scale-[0.98] border-none"
+                className="w-full min-w-0 h-11 px-3 sm:px-4 bg-[#0B5CBE] hover:bg-blue-700 text-white rounded-xl flex items-center justify-center gap-1.5 text-xs font-black whitespace-nowrap transition-all cursor-pointer shadow-xs active:scale-[0.98] border-none"
                 title="Add Personal Training Bill"
               >
                 <Dumbbell size={14} /> + Add PT Bill
@@ -588,7 +587,7 @@ export default function ClientProfileSystem() {
                   if (cleanPhone) window.open(`https://wa.me/${cleanPhone}`, '_blank');
                   else toast.error('No valid phone number for WhatsApp');
                 }}
-                className="flex-1 sm:flex-none h-11 px-4 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-xl flex items-center justify-center gap-1.5 text-xs font-bold transition-all cursor-pointer shadow-2xs active:scale-[0.98]"
+                className="w-full min-w-0 h-11 px-3 sm:px-4 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-xl flex items-center justify-center gap-1.5 text-xs font-bold whitespace-nowrap transition-all cursor-pointer shadow-2xs active:scale-[0.98]"
                 title="Send WhatsApp Message"
               >
                 <MessageSquare size={14} /> WhatsApp
@@ -599,17 +598,17 @@ export default function ClientProfileSystem() {
                   if (member.phone) window.location.href = `tel:${member.phone}`;
                   else toast.error('No phone number recorded');
                 }}
-                className="flex-1 sm:flex-none h-11 px-4 bg-blue-50 hover:bg-blue-100 text-[#0066FF] border border-blue-200 rounded-xl flex items-center justify-center gap-1.5 text-xs font-bold transition-all cursor-pointer shadow-2xs active:scale-[0.98]"
+                className="w-full min-w-0 h-11 px-3 sm:px-4 bg-blue-50 hover:bg-blue-100 text-[#0066FF] border border-blue-200 rounded-xl flex items-center justify-center gap-1.5 text-xs font-bold whitespace-nowrap transition-all cursor-pointer shadow-2xs active:scale-[0.98]"
                 title="Call Member"
               >
                 <Phone size={14} /> Call
               </button>
 
               {/* Quick Action Dropdown Menu (⋮) */}
-              <div className="relative" ref={quickMenuRef}>
+              <div className="relative w-full md:w-auto" ref={quickMenuRef}>
                 <button
                   onClick={() => setShowQuickMenu(!showQuickMenu)}
-                  className="h-11 w-11 bg-white hover:bg-slate-100 text-slate-600 border border-slate-200 rounded-xl flex items-center justify-center transition-all cursor-pointer shadow-2xs active:scale-[0.98]"
+                  className="h-11 w-full md:w-11 bg-white hover:bg-slate-100 text-slate-600 border border-slate-200 rounded-xl flex items-center justify-center transition-all cursor-pointer shadow-2xs active:scale-[0.98]"
                   title="More Options"
                 >
                   <MoreVertical size={16} />
