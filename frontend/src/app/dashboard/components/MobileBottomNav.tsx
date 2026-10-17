@@ -7,7 +7,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   LayoutDashboard, Users, Plus, CreditCard, Menu, X, Clock,
   ClipboardList, Briefcase, UserX, AlertTriangle, Settings, Mail,
-  MessageSquare, ShieldCheck, LogOut, Award, Smartphone, KeyRound, Unlock
+  MessageSquare, ShieldCheck, LogOut, Award, Smartphone, KeyRound, Unlock,
+  UserCheck, Gift, Apple, Upload, BarChart3, Sparkles, MessageCircle
 } from 'lucide-react';
 import { useAuthStore } from '@/store';
 import toast from '@/lib/toast';
@@ -32,14 +33,27 @@ export default function MobileBottomNav({ onOpenAddMember }: MobileBottomNavProp
   ];
 
   const moreLinks = [
-    { label: 'Attendance', href: '/dashboard/attendance', icon: Clock, desc: 'Live member check-ins' },
-    { label: 'Enquiries', href: '/dashboard/enquiries', icon: ClipboardList, desc: 'Leads & follow-ups' },
-    { label: 'Employees', href: '/dashboard/employees', icon: Briefcase, desc: 'Staff & trainers' },
+    { label: 'Attendance', href: '/dashboard/attendance', icon: Clock, desc: 'Member check-ins' },
+    { label: 'Enquiries', href: '/dashboard/enquiries', icon: ClipboardList, desc: 'Leads and follow-ups' },
+    { label: 'Employees', href: '/dashboard/employees', icon: Briefcase, desc: 'Staff management' },
+    { label: 'Trainers', href: '/dashboard/trainers', icon: UserCheck, desc: 'Trainer management' },
     { label: 'Follow Up', href: '/dashboard/follow-up', icon: AlertTriangle, desc: 'Pending renewals' },
     { label: 'Expired', href: '/dashboard/expired', icon: UserX, desc: 'Expired memberships' },
-    { label: 'Memberships', href: '/dashboard/memberships', icon: Award, desc: 'Packages & pricing' },
-    { label: 'Gate Control', href: '/dashboard/gate-control', icon: Unlock, desc: 'Hardware door relay' },
-    { label: 'WhatsApp', href: '/dashboard/automation/whatsapp', icon: MessageSquare, desc: 'Automated messaging' },
+    { label: 'Inconsistent', href: '/dashboard/inconsistent', icon: ShieldCheck, desc: 'Member data checks' },
+    { label: 'Memberships', href: '/dashboard/memberships', icon: Award, desc: 'Packages and pricing' },
+    { label: 'Diet Plans', href: '/dashboard/diet-management', icon: Apple, desc: 'Member nutrition plans' },
+    { label: 'Referrals', href: '/dashboard/referrals', icon: Gift, desc: 'Referral rewards' },
+    { label: 'Web Messages', href: '/dashboard/messages', icon: MessageCircle, desc: 'Website messages' },
+    { label: 'Gate Control', href: '/dashboard/gate-control', icon: Unlock, desc: 'Door access control' },
+    { label: 'Device Access', href: '/dashboard/access-control', icon: KeyRound, desc: 'Biometric device setup' },
+    { label: 'WhatsApp', href: '/dashboard/automation/whatsapp', icon: MessageSquare, desc: 'WhatsApp automation' },
+    { label: 'Email Automation', href: '/dashboard/automation', icon: Mail, desc: 'Email reminders' },
+    { label: 'Analytics', href: '/dashboard/analytics', icon: BarChart3, desc: 'Gym performance' },
+    { label: 'Risk Radar', href: '/dashboard/risk-radar', icon: Sparkles, desc: 'Members needing attention' },
+    { label: 'Trainer Desk', href: '/dashboard/trainer-desk', icon: UserCheck, desc: 'Trainer operations' },
+    { label: 'Leaderboard', href: '/dashboard/leaderboard', icon: Award, desc: 'Member activity' },
+    { label: 'Import Data', href: '/dashboard/import', icon: Upload, desc: 'Import members and leads' },
+    { label: 'Member App', href: '/dashboard/member-app', icon: Smartphone, desc: 'Member app access' },
     { label: 'Settings', href: '/dashboard/settings', icon: Settings, desc: 'Gym configuration' },
   ];
 
@@ -54,7 +68,7 @@ export default function MobileBottomNav({ onOpenAddMember }: MobileBottomNavProp
     <>
       {/* Mobile Bottom Navigation Bar (Visible <768px) */}
       <nav
-        className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-[#0c0c0e]/95 backdrop-blur-xl border-t border-white/10 shadow-[0_-5px_25px_rgba(0,0,0,0.5)] font-sans"
+        className="crm-bottom-nav md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-xl border-t border-slate-200 shadow-[0_-8px_28px_rgba(15,23,42,0.10)] font-sans"
         style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
       >
         <div className="flex items-center justify-around h-16 px-2 max-w-md mx-auto relative">
@@ -65,7 +79,7 @@ export default function MobileBottomNav({ onOpenAddMember }: MobileBottomNavProp
                   <button
                     type="button"
                     onClick={onOpenAddMember}
-                    className="w-14 h-14 rounded-full bg-[#d4ff00] text-black shadow-[0_0_20px_rgba(212,255,0,0.4)] hover:bg-white active:scale-95 transition-all flex flex-col items-center justify-center border-4 border-[#0c0c0e] cursor-pointer"
+                    className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#1268e8] to-[#0649b5] text-white shadow-[0_8px_20px_rgba(11,92,190,0.34)] hover:brightness-105 active:scale-95 transition-all flex flex-col items-center justify-center border-4 border-white cursor-pointer"
                     aria-label="Add Member"
                   >
                     <Plus size={26} strokeWidth={3} />
@@ -81,7 +95,7 @@ export default function MobileBottomNav({ onOpenAddMember }: MobileBottomNavProp
                   type="button"
                   onClick={() => setIsMoreOpen(true)}
                   className={`flex flex-col items-center justify-center gap-0.5 flex-1 h-full cursor-pointer bg-transparent border-none ${
-                    isMoreOpen ? 'text-[#d4ff00]' : 'text-slate-400 hover:text-white'
+                    isMoreOpen ? 'text-[#0b5cbe]' : 'text-slate-500 hover:text-[#0b5cbe]'
                   }`}
                 >
                   <item.icon size={20} />
@@ -98,10 +112,10 @@ export default function MobileBottomNav({ onOpenAddMember }: MobileBottomNavProp
                 href={item.href!}
                 onClick={() => setIsMoreOpen(false)}
                 className={`flex flex-col items-center justify-center gap-0.5 flex-1 h-full cursor-pointer no-underline transition-colors ${
-                  isActive ? 'text-[#d4ff00] font-bold' : 'text-slate-400 hover:text-white'
+                  isActive ? 'text-[#0b5cbe] font-bold' : 'text-slate-500 hover:text-[#0b5cbe]'
                 }`}
               >
-                <item.icon size={20} className={isActive ? 'text-[#d4ff00]' : ''} />
+                <item.icon size={20} className={isActive ? 'text-[#0b5cbe]' : ''} />
                 <span className="text-[10px] font-black uppercase tracking-wider">{item.label}</span>
               </Link>
             );
@@ -118,7 +132,7 @@ export default function MobileBottomNav({ onOpenAddMember }: MobileBottomNavProp
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setIsMoreOpen(false)}
-              className="md:hidden fixed inset-0 bg-black/70 backdrop-blur-sm z-[60]"
+              className="md:hidden fixed inset-0 bg-slate-950/45 backdrop-blur-sm z-[60]"
             />
 
             <motion.div
@@ -126,33 +140,33 @@ export default function MobileBottomNav({ onOpenAddMember }: MobileBottomNavProp
               animate={{ y: 0 }}
               exit={{ y: '100%' }}
               transition={{ type: 'spring', damping: 25, stiffness: 220 }}
-              className="md:hidden fixed bottom-0 left-0 right-0 z-[65] bg-[#0c0c0e] border-t border-white/10 rounded-t-3xl shadow-2xl max-h-[85vh] flex flex-col font-sans overflow-hidden text-white"
+              className="md:hidden fixed bottom-0 left-0 right-0 z-[65] bg-white border-t border-slate-200 rounded-t-3xl shadow-2xl max-h-[88dvh] flex flex-col font-sans overflow-hidden text-slate-900"
               style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 70px)' }}
             >
               {/* Drawer Handle & Header */}
-              <div className="p-4 border-b border-white/10 flex items-center justify-between bg-slate-900/50 shrink-0">
+              <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-white shrink-0">
                 <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-full bg-[#d4ff00] text-black font-black text-xs flex items-center justify-center">
+                  <div className="w-9 h-9 rounded-xl bg-blue-50 text-[#0b5cbe] font-black text-xs flex items-center justify-center border border-blue-100">
                     AZ
                   </div>
                   <div>
-                    <h3 className="text-sm font-black text-white uppercase tracking-wider">Alpha CRM Modules</h3>
-                    <p className="text-[10px] text-slate-400 font-bold">Logged in as {user?.name || 'Admin'}</p>
+                    <h3 className="text-sm font-black text-slate-900 uppercase tracking-wider">Alpha CRM Modules</h3>
+                    <p className="text-[10px] text-slate-500 font-bold">Logged in as {user?.name || 'Admin'}</p>
                   </div>
                 </div>
 
                 <button
                   onClick={() => setIsMoreOpen(false)}
-                  className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-slate-400 hover:text-white border-none cursor-pointer"
+                  className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 hover:text-slate-900 border-none cursor-pointer"
                 >
                   <X size={18} />
                 </button>
               </div>
 
               {/* PWA Install Banner inside Drawer */}
-              <div className="p-4 border-b border-white/5 bg-gradient-to-r from-[#d4ff00]/10 to-transparent flex items-center justify-between gap-3 shrink-0">
+              <div className="p-4 border-b border-slate-100 bg-gradient-to-r from-blue-50 to-white flex items-center justify-between gap-3 shrink-0">
                 <div className="space-y-0.5">
-                  <div className="text-xs font-black text-white uppercase">Install App on Phone</div>
+                  <div className="text-xs font-black text-slate-900 uppercase">Install App on Phone</div>
                   <div className="text-[10px] text-slate-400">Standalone PWA app experience</div>
                 </div>
                 <PwaInstallButton variant="compact" label="INSTALL APP" />
@@ -161,7 +175,7 @@ export default function MobileBottomNav({ onOpenAddMember }: MobileBottomNavProp
               {/* Grid of Links */}
               <div className="p-4 overflow-y-auto grid grid-cols-2 gap-2.5 scrollbar-thin">
                 {moreLinks.map((link, idx) => {
-                  const isActive = pathname === link.href;
+                  const isActive = pathname === link.href || pathname.startsWith(`${link.href}/`);
                   return (
                     <Link
                       key={idx}
@@ -169,13 +183,13 @@ export default function MobileBottomNav({ onOpenAddMember }: MobileBottomNavProp
                       onClick={() => setIsMoreOpen(false)}
                       className={`p-3 rounded-2xl border transition-all no-underline text-left flex flex-col justify-between ${
                         isActive
-                          ? 'bg-[#d4ff00]/15 border-[#d4ff00]/40 text-[#d4ff00]'
-                          : 'bg-slate-900/60 border-white/5 text-slate-300 hover:bg-slate-900 hover:text-white'
+                          ? 'bg-blue-50 border-blue-200 text-[#0b5cbe]'
+                          : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900'
                       }`}
                     >
                       <div className="flex items-center gap-2 mb-1">
-                        <link.icon size={16} className={isActive ? 'text-[#d4ff00]' : 'text-slate-400'} />
-                        <span className="text-xs font-black uppercase tracking-wide text-white">{link.label}</span>
+                        <link.icon size={16} className={isActive ? 'text-[#0b5cbe]' : 'text-slate-400'} />
+                        <span className={`text-xs font-black uppercase tracking-wide ${isActive ? 'text-[#0b5cbe]' : 'text-slate-800'}`}>{link.label}</span>
                       </div>
                       <span className="text-[9px] text-slate-500 font-medium leading-tight">{link.desc}</span>
                     </Link>
@@ -184,11 +198,11 @@ export default function MobileBottomNav({ onOpenAddMember }: MobileBottomNavProp
               </div>
 
               {/* Sign Out Footer */}
-              <div className="p-4 border-t border-white/10 bg-slate-950 shrink-0">
+              <div className="p-4 border-t border-slate-100 bg-white shrink-0">
                 <button
                   type="button"
                   onClick={handleSignOut}
-                  className="w-full py-3 bg-red-950/40 hover:bg-red-900/60 text-red-400 border border-red-500/30 rounded-2xl text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer"
+                  className="w-full py-3 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 rounded-2xl text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer"
                 >
                   <LogOut size={16} />
                   <span>Sign Out</span>

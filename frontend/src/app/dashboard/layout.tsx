@@ -25,6 +25,7 @@ import LiveTimeCard from './components/LiveTimeCard';
 import SoftwareFooter from './components/SoftwareFooter';
 import MobileBottomNav from './components/MobileBottomNav';
 import AddMemberModal from './members/components/AddMemberModal';
+import './mobile-dashboard.css';
 
 export default function DashboardLayout({
   children,
@@ -256,7 +257,7 @@ export default function DashboardLayout({
   const checkinDays = attendance ? attendance.map((a: any) => new Date(a.checkIn || '').getDate()) : [];
 
   return (
-    <div className="h-screen w-full flex font-sans text-slate-800 bg-[#FDFDFD] overflow-hidden relative">
+    <div className="crm-app-frame h-[100dvh] w-full flex font-sans text-slate-800 bg-[#FDFDFD] overflow-hidden relative">
       {/* ─── Column 1: Left Navigation Sidebar (Desktop Only) ─── */}
       <aside className="hidden md:flex w-[230px] lg:w-[240px] flex-shrink-0 bg-white border-r border-slate-200/80 p-4 flex-col justify-between h-full overflow-y-auto z-40">
         <div className="space-y-6">
@@ -352,11 +353,11 @@ export default function DashboardLayout({
       </aside>
 
       {/* ─── Main Workspace Content Area ─── */}
-      <main className="flex-1 min-w-0 w-full h-full p-4 sm:p-6 pb-24 md:pb-6 overflow-y-auto flex flex-col justify-between gap-6 text-left bg-[#FDFDFD]">
-        <div className="flex flex-col gap-4 flex-1">
+      <main className="crm-main flex-1 min-w-0 w-full h-full p-4 sm:p-6 pb-24 md:pb-6 overflow-y-auto flex flex-col justify-between gap-6 text-left bg-[#FDFDFD]">
+        <div className="crm-main-content flex flex-col gap-4 flex-1 min-w-0">
           {/* Compact Mobile Top Header Bar (< md) with iOS Safe-Area Top Inset */}
           <div 
-            className="md:hidden sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-slate-200/80 px-4 py-3 flex items-center justify-between shadow-2xs shrink-0"
+            className="crm-mobile-topbar md:hidden sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-slate-200/80 px-4 py-3 flex items-center justify-between shadow-2xs shrink-0"
             style={{ paddingTop: 'max(env(safe-area-inset-top, 0px), 12px)' }}
           >
             <Link href="/dashboard/overview" className="flex items-center gap-2 cursor-pointer no-underline">
@@ -369,7 +370,7 @@ export default function DashboardLayout({
               <button
                 type="button"
                 onClick={() => setIsMobileAddModalOpen(true)}
-                className="px-3 py-1.5 bg-[#0b5cbe] text-white rounded-full text-[11px] font-extrabold uppercase tracking-wider flex items-center gap-1 cursor-pointer border-none shadow-xs"
+                className="px-3 py-2 bg-[#0b5cbe] text-white rounded-xl text-[11px] font-extrabold uppercase tracking-wider flex items-center gap-1 cursor-pointer border-none shadow-xs active:scale-95 transition-transform"
               >
                 <Plus size={14} /> Add Member
               </button>
@@ -377,7 +378,7 @@ export default function DashboardLayout({
           </div>
 
           {/* Top Header Bar: Universal Search (Left/Center) + Live Time Card (Right) */}
-          <div className="w-full flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 shrink-0 pb-1">
+          <div className="crm-mobile-search w-full flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 shrink-0 pb-1">
             <div className="w-full sm:max-w-[460px] md:max-w-[500px]">
               <UniversalSearchBar />
             </div>
@@ -385,9 +386,9 @@ export default function DashboardLayout({
               <LiveTimeCard />
             </div>
           </div>
-          {children}
+          <div className="crm-page-slot min-w-0 w-full">{children}</div>
         </div>
-        <SoftwareFooter />
+        <div className="crm-desktop-footer"><SoftwareFooter /></div>
       </main>
 
       {/* AI Gym Copilot Helper */}

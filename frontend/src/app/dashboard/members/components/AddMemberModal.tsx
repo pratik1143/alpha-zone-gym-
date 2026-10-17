@@ -220,6 +220,7 @@ export default function AddMemberModal({ isOpen, onClose, initialBiometricId = '
 
   // Step 3: Biometric Fingerprint Enrollment
   const [biometricId, setBiometricId] = useState('');
+  const [isRefreshingBiometricId, setIsRefreshingBiometricId] = useState(false);
   const [enrollStatus, setEnrollStatus] = useState<'idle' | 'enrolling' | 'success' | 'failed'>('idle');
   const [enrollMsg, setEnrollMsg] = useState('');
 
@@ -562,6 +563,7 @@ export default function AddMemberModal({ isOpen, onClose, initialBiometricId = '
 
   // Biometric Enrollment Trigger
   const handleStartBiometricEnrollment = async () => {
+    if (!validateBiometricId()) return;
     setEnrollStatus('enrolling');
     setEnrollMsg('Communicating with local biometric controller...');
 
@@ -583,6 +585,41 @@ export default function AddMemberModal({ isOpen, onClose, initialBiometricId = '
     } catch (e: any) {
       setEnrollStatus('failed');
       setEnrollMsg('Hardware terminal unreachable. Biometric ID saved locally.');
+    }
+  };
+
+  const validateBiometricId = () => {
+    const value = biometricId.trim();
+    if (!/^\d{1,5}$/.test(value) || Number(value) < 1 || Number(value) > 65535) {
+      toast.error('Biometric ID must be a number from 1 to 65535.');
+      return false;
+    }
+    const duplicate = members.find((m: any) => {
+      const ids = [m.biometricId, m.deviceUserId].filter(Boolean).map((id: any) => Number(id));
+      return ids.includes(Number(value));
+    });
+    if (duplicate) {
+      toast.error(`Biometric ID ${value} is already linked to ${duplicate.name || 'another member'}.`);
+      return false;
+    }
+    return true;
+  };
+
+  const handleUseNextBiometricId = async () => {
+    setIsRefreshingBiometricId(true);
+    try {
+      const nextId = await fetchNextBiometricId();
+      if (nextId) {
+        setBiometricId(String(nextId));
+        setEnrollStatus('idle');
+        setEnrollMsg('');
+      } else {
+        toast.error('Could not load the next available biometric ID. Check the server connection.');
+      }
+    } catch {
+      toast.error('Could not load the next available biometric ID. Check the server connection.');
+    } finally {
+      setIsRefreshingBiometricId(false);
     }
   };
 
@@ -636,6 +673,10 @@ export default function AddMemberModal({ isOpen, onClose, initialBiometricId = '
   // Submit Final Member Creation
   const handleSubmitFinal = async () => {
     if (isSubmitting) return;
+    if (!validateBiometricId()) {
+      setStep(3);
+      return;
+    }
     setIsSubmitting(true);
     setBackendError(null);
 
@@ -1384,21 +1425,40 @@ export default function AddMemberModal({ isOpen, onClose, initialBiometricId = '
                 </div>
 
                 <div className="bg-slate-50 p-6 rounded-3xl border border-slate-200/80 space-y-4">
-                  <div className="flex items-center justify-center gap-3">
-                    <span className="text-xs font-black uppercase tracking-wider text-slate-500">Biometric User ID:</span>
-                    <div className="relative inline-flex items-center">
-                      <input 
-                        type="text"
-                        value={biometricId}
-                        readOnly
-                        className="w-32 h-11 bg-slate-100 border border-slate-300 rounded-xl text-center font-mono text-base font-black text-blue-700 cursor-not-allowed select-none shadow-xs pr-8"
-                      />
-                      <Lock size={14} className="absolute right-2.5 text-slate-400" />
-                    </div>
+                  <div className="flex flex-wrap items-center justify-center gap-3">
+                    <label htmlFor="new-member-biometric-id" className="text-xs font-black uppercase tracking-wider text-slate-500">Biometric User ID:</label>
+                    <input
+                      id="new-member-biometric-id"
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      maxLength={5}
+                      value={biometricId}
+                      readOnly={biometricAlreadyOnDevice}
+                      onChange={(event) => {
+                        const nextValue = event.target.value.replace(/\D/g, '').slice(0, 5);
+                        setBiometricId(nextValue);
+                        setEnrollStatus('idle');
+                        setEnrollMsg('');
+                      }}
+                      aria-label="Biometric user ID"
+                      className={`w-36 h-11 border rounded-xl text-center font-mono text-base font-black text-blue-700 shadow-xs ${biometricAlreadyOnDevice ? 'bg-slate-100 border-slate-300 cursor-not-allowed' : 'bg-white border-blue-300 focus:outline-none focus:ring-4 focus:ring-blue-100'}`}
+                    />
+                    {!biometricAlreadyOnDevice && (
+                      <button
+                        type="button"
+                        onClick={handleUseNextBiometricId}
+                        disabled={isRefreshingBiometricId}
+                        className="h-10 px-3 rounded-xl border border-blue-200 bg-blue-50 text-blue-700 text-xs font-bold inline-flex items-center gap-2 hover:bg-blue-100 disabled:opacity-60"
+                      >
+                        <RefreshCw size={14} className={isRefreshingBiometricId ? 'animate-spin' : ''} />
+                        {isRefreshingBiometricId ? 'Loading…' : 'Next available'}
+                      </button>
+                    )}
                   </div>
 
                   <p className="text-[11px] text-slate-500 font-medium max-w-md mx-auto">
-                    {biometricAlreadyOnDevice ? 'Existing terminal ID ' : 'Permanent auto-generated ID '}<strong className="text-blue-700 font-bold">#{biometricId}</strong>{biometricAlreadyOnDevice ? ' will stay mapped to this member.' : '. You can enroll fingerprint now or skip and enroll later from the Local IP Terminal.'}
+                    {biometricAlreadyOnDevice ? 'Existing terminal ID ' : 'Choose a unique ID or keep the suggested sequence number. '}<strong className="text-blue-700 font-bold">#{biometricId || '—'}</strong>{biometricAlreadyOnDevice ? ' will stay mapped to this member.' : '. IDs must be 1–65535 and cannot already belong to a member, employee, or device user.'}
                   </p>
 
                   <div className="pt-2 flex items-center justify-center gap-3">

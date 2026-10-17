@@ -20,17 +20,15 @@ export const metadata: Metadata = {
     'mobile-web-app-capable': 'yes',
     'apple-mobile-web-app-capable': 'yes',
     'apple-mobile-web-app-status-bar-style': 'black-translucent',
-    'theme-color': '#08080a',
+    'theme-color': '#0b5cbe',
   }
 };
 
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
   viewportFit: 'cover',
-  themeColor: '#08080a',
+  themeColor: '#0b5cbe',
 };
 
 export default function RootLayout({

@@ -6,8 +6,8 @@
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait-primary",
-  "background_color": "#08080a",
-  "theme_color": "#08080a",
+  "background_color": "#f8fafc",
+  "theme_color": "#0b5cbe",
   "icons": [
     {
       "src": "/gymlogo.png",

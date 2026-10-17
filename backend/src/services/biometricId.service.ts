@@ -9,6 +9,38 @@ export function isValidDeviceBiometricId(value: unknown): boolean {
   return Number.isInteger(numeric) && numeric >= 1 && numeric <= MAX_DEVICE_BIOMETRIC_ID;
 }
 
+/** Check the shared EasyBio ID namespace used by members, employees, and terminal records. */
+export async function isDeviceBiometricIdInUse(value: unknown, allowExistingDeviceUserLink = false): Promise<boolean> {
+  if (!isValidDeviceBiometricId(value)) return false;
+  const target = Number(value);
+  const firestore = getFirestoreDb();
+  if (!firestore) throw new Error('CRM/Firebase is unavailable; biometric ID availability cannot be verified.');
+
+  const [members, employees, deviceUsers, legacyDeviceUsers] = await Promise.all([
+    firestore.collection('members').get(),
+    firestore.collection('employees').get(),
+    firestore.collection('deviceUsers').get(),
+    firestore.collection('device_users').get()
+  ]);
+  for (const snapshot of [members, employees]) {
+    for (const doc of snapshot.docs) {
+      const record = doc.data();
+      if ([record.biometricId, record.deviceUserId].some(id => isValidDeviceBiometricId(id) && Number(id) === target)) return true;
+    }
+  }
+  if (!allowExistingDeviceUserLink) {
+    for (const snapshot of [deviceUsers, legacyDeviceUsers]) {
+      for (const doc of snapshot.docs) {
+        const record = doc.data();
+        const ids = [record.userId, record.user_id];
+        if (!record.userId && !record.user_id) ids.push(doc.id);
+        if (ids.some(id => isValidDeviceBiometricId(id) && Number(id) === target)) return true;
+      }
+    }
+  }
+  return false;
+}
+
 /** Reserve only IDs that the EasyBio device can actually accept. */
 export async function getNextAvailableBiometricId(): Promise<number> {
   const firestore = getFirestoreDb();

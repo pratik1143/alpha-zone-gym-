@@ -30,24 +30,24 @@ export default function PwaInstallButton({
     if (variant === 'compact') {
       return `inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold transition-all ${
         isInstalled
-          ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-          : 'bg-[#d4ff00] text-black hover:bg-white'
+          ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+          : 'bg-[#0b5cbe] text-white hover:bg-blue-700 shadow-sm'
       } ${className}`;
     }
 
     if (variant === 'outline') {
       return `inline-flex items-center gap-2 px-6 py-3 rounded-full text-xs font-extrabold uppercase tracking-wider transition-all cursor-pointer border ${
         isInstalled
-          ? 'bg-emerald-950/30 border-emerald-500/50 text-emerald-400'
-          : 'border-[#d4ff00]/40 text-[#d4ff00] hover:bg-[#d4ff00] hover:text-black'
+        ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+        : 'border-blue-200 text-[#0b5cbe] hover:bg-blue-50'
       } ${className}`;
     }
 
     // Default primary
     return `inline-flex items-center justify-center gap-2 px-7 py-3.5 rounded-full font-extrabold text-xs uppercase tracking-wider transition-all cursor-pointer shadow-lg hover:scale-105 ${
       isInstalled
-        ? 'bg-emerald-600 text-white shadow-emerald-900/30'
-        : 'bg-[#d4ff00] text-black hover:bg-white shadow-[0_0_20px_rgba(212,255,0,0.3)]'
+        ? 'bg-emerald-600 text-white shadow-emerald-900/20'
+        : 'bg-[#0b5cbe] text-white hover:bg-blue-700 shadow-[0_8px_22px_rgba(11,92,190,0.24)]'
     } ${className}`;
   };
 

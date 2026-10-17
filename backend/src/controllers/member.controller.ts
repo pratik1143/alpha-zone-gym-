@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import { db, admin, isFirebaseInitialized } from '../firebase';
 import { triggerWelcomeEmail, triggerPaymentEmail, triggerPtWelcomeEmail } from '../services/automation.service';
 import { resolveStaleRenewalFollowups } from '../services/followupAutomation.service';
-import { getNextAvailableBiometricId, isValidDeviceBiometricId } from '../services/biometricId.service';
+import { getNextAvailableBiometricId, isDeviceBiometricIdInUse, isValidDeviceBiometricId } from '../services/biometricId.service';
 
 export const getMembers = async (req: Request, res: Response) => {
   try {
@@ -124,13 +124,24 @@ export const createMember = async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Name and Phone are required' });
     }
 
-    let assignedBioId = String(biometricId || req.body.memberId || '').trim();
+    const requestedBioId = String(biometricId ?? '').trim();
+    let assignedBioId = requestedBioId || String(req.body.memberId || '').trim();
+    if (requestedBioId && !isValidDeviceBiometricId(requestedBioId)) {
+      return res.status(400).json({ error: 'Biometric ID must be a whole number between 1 and 65535.' });
+    }
     if (!isValidDeviceBiometricId(assignedBioId)) {
       try {
         assignedBioId = String(await getNextAvailableBiometricId());
       } catch (allocationError: any) {
         return res.status(503).json({ error: `Could not assign a valid EasyBio ID: ${allocationError.message}` });
       }
+    }
+    try {
+      if (await isDeviceBiometricIdInUse(assignedBioId, Boolean(req.body.fingerprintDeviceId))) {
+        return res.status(409).json({ error: `Biometric ID ${assignedBioId} is already assigned. Choose another ID or use Next available.` });
+      }
+    } catch (availabilityError: any) {
+      return res.status(503).json({ error: `Could not verify EasyBio ID availability: ${availabilityError.message}` });
     }
 
     let uid = 'm' + Date.now();
