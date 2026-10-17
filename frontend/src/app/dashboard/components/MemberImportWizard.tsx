@@ -61,7 +61,9 @@ export default function MemberImportWizard({
       setFileName(file.name);
 
       const buffer = await file.arrayBuffer();
-      const workbook = XLSX.read(buffer, { type: 'array', cellDates: true });
+      // Keep Excel-formatted dates as strings (for example, `8-Oct-26`).
+      // Converting serial dates to JS Date objects can shift calendar days across timezones.
+      const workbook = XLSX.read(buffer, { type: 'array', cellDates: false });
 
       if (!workbook.SheetNames || workbook.SheetNames.length === 0) {
         throw new Error('Workbook contains no sheets.');
