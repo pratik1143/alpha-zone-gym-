@@ -143,6 +143,14 @@ export default function MemberImportWizard({
 
   // ── 2. METRICS & FILTERED PREVIEW DATA ────────────────────────────────────
   const warningsCount = useMemo(() => parsedRows.filter(r => r.warnings.length > 0).length, [parsedRows]);
+  const warningBreakdown = useMemo(() => parsedRows.reduce((counts, row) => {
+    const warnings = row.warnings.join(' ').toLowerCase();
+    if (warnings.includes('no photo url supplied')) counts.missingPhotos++;
+    if (warnings.includes('expiry date') && warnings.includes('before start date')) counts.dateOrder++;
+    if (warnings.includes('balance') && warnings.includes('amount paid')) counts.balance++;
+    if (warnings.includes('package value')) counts.package++;
+    return counts;
+  }, { missingPhotos: 0, dateOrder: 0, balance: 0, package: 0 }), [parsedRows]);
   const errorsCount = useMemo(() => parsedRows.filter(r => r.errors.length > 0).length, [parsedRows]);
   const validCount = useMemo(() => parsedRows.filter(r => r.isValid && r.warnings.length === 0).length, [parsedRows]);
   const readyCount = useMemo(() => parsedRows.filter(r => r.isValid).length, [parsedRows]);
@@ -396,7 +404,12 @@ export default function MemberImportWizard({
             <div className="bg-white p-4 rounded-2xl border border-amber-200/80 bg-amber-50/20 shadow-2xs">
               <div className="text-xs text-amber-700 font-bold uppercase">Source Warnings</div>
               <div className="text-2xl font-black text-amber-600 mt-1">{warningsCount}</div>
-              <div className="text-[10px] text-amber-600 font-medium mt-0.5">Flagged for review</div>
+              <div
+                className="text-[10px] text-amber-600 font-medium mt-0.5"
+                title="Warning reasons can overlap on a single row."
+              >
+                {warningBreakdown.missingPhotos} no photo · {warningBreakdown.dateOrder} date · {warningBreakdown.balance} balance · {warningBreakdown.package} package
+              </div>
             </div>
 
             <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs">

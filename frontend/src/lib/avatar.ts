@@ -20,6 +20,7 @@ export function resolveAvatarUrl(entity: any): string {
   const photo = 
     entity.profilePhotoUrl ||
     entity.photoURL ||
+    entity.photoUrl ||
     entity.photo ||
     entity.avatarUrl ||
     entity.avatar ||
