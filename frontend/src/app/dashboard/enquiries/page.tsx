@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
+import './enquiries-mobile.css';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -736,29 +737,31 @@ export default function EnquiryGodLevelHub() {
   const hasActiveMoreFilters = priorityFilter !== 'All' || planFilter !== 'All';
 
   return (
-    <div className="space-y-6 pb-12 w-full text-slate-800 text-left font-sans">
+    <div className="enquiry-page-root space-y-6 pb-12 w-full text-slate-800 text-left font-sans">
       
       {/* ── 1. HEADER (Design matching Members & Employees) ── */}
-      <div className="bg-white rounded-3xl p-6 lg:p-8 border border-slate-100 shadow-[0_4px_25px_rgba(0,0,0,0.03)] flex flex-col md:flex-row md:items-center justify-between gap-4 relative overflow-hidden">
+      <div className="enquiry-hero bg-white rounded-3xl p-6 lg:p-8 border border-slate-100 shadow-[0_4px_25px_rgba(0,0,0,0.03)] flex flex-col md:flex-row md:items-center justify-between gap-4 relative overflow-hidden">
         <div className="absolute top-0 right-0 w-80 h-80 bg-blue-500/5 rounded-full blur-3xl pointer-events-none -translate-y-1/2 translate-x-1/3" />
         
         <div>
-          <div className="flex items-center gap-2.5 mb-2">
+          <div className="enquiry-hero-eyebrow flex items-center gap-2.5 mb-2">
             <span className="px-3 py-1 bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-[10px] font-black uppercase tracking-widest rounded-full shadow-sm">
               Leads & Inquiries Engine
             </span>
             <span className="text-xs text-slate-400 font-mono font-bold">AZ-ENQ-v4.0</span>
           </div>
-          <h1 className="text-2xl lg:text-3xl font-black tracking-tight text-slate-900 font-display">Enquiries & Leads Hub</h1>
-          <p className="text-xs text-slate-500 font-medium mt-1">Real client enquiries, automatic follow-up reminders & closed lead history.</p>
+          <h1 className="text-2xl lg:text-3xl font-black tracking-tight text-slate-900 font-display"><span className="hidden sm:inline">Enquiries & Leads Hub</span><span className="sm:hidden">Enquiries</span></h1>
+          <p className="enquiry-hero-description text-xs text-slate-500 font-medium mt-1">Real client enquiries, automatic follow-up reminders & closed lead history.</p>
         </div>
 
-        <div className="flex items-center gap-2.5 flex-wrap shrink-0">
+        <div className="enquiry-hero-actions flex items-center gap-2.5 flex-wrap shrink-0">
           <button
             onClick={() => setShowImportModal(true)}
-            className="px-4 py-3 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs rounded-2xl transition-all flex items-center gap-1.5 border border-slate-200 cursor-pointer shadow-2xs"
+            aria-label="Import enquiries from Excel"
+            title="Import Excel"
+            className="enquiry-import-button px-4 py-3 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs rounded-2xl transition-all flex items-center gap-1.5 border border-slate-200 cursor-pointer shadow-2xs"
           >
-            <Upload size={15} /> Import Excel (.xlsx)
+            <Upload size={15} /> <span>Import Excel (.xlsx)</span>
           </button>
 
           <button
@@ -771,7 +774,7 @@ export default function EnquiryGodLevelHub() {
       </div>
 
       {/* ── 2. DYNAMIC FILTER TABS ── */}
-      <div className="bg-white p-2 rounded-3xl border border-[#d9e7f7] shadow-[0_4px_20px_rgba(11,92,190,0.02)] flex items-center gap-1.5 overflow-x-auto custom-scrollbar">
+      <div className="enquiry-filter-tabs bg-white p-2 rounded-3xl border border-[#d9e7f7] shadow-[0_4px_20px_rgba(11,92,190,0.02)] flex items-center gap-1.5 overflow-x-auto custom-scrollbar">
         {[
           { id: 'all', label: 'All', count: allCount, color: 'bg-slate-100 text-slate-800' },
           { id: 'pending', label: 'Pending', count: pendingCount, color: 'bg-amber-100 text-amber-800' },
@@ -800,9 +803,9 @@ export default function EnquiryGodLevelHub() {
       </div>
 
       {/* ── 3. FILTER & SEARCH BAR (Unified with Members & Employees) ── */}
-      <div className="bg-white border border-[#d9e7f7] rounded-3xl p-4 flex flex-wrap gap-4 items-center shadow-[0_4px_20px_rgba(11,92,190,0.02)]">
+      <div className="enquiry-filter-panel bg-white border border-[#d9e7f7] rounded-3xl p-4 flex flex-wrap gap-4 items-center shadow-[0_4px_20px_rgba(11,92,190,0.02)]">
         {/* Search by name, phone or enquiry ID */}
-        <div className="relative flex-1 min-w-[240px]">
+        <div className="enquiry-search relative flex-1 min-w-[240px]">
           <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
           <input 
             type="text"
@@ -813,7 +816,7 @@ export default function EnquiryGodLevelHub() {
           />
         </div>
 
-        <div className="flex flex-wrap gap-2.5 items-center">
+        <div className="enquiry-filter-controls flex flex-wrap gap-2.5 items-center">
           {/* Dynamic Representatives Dropdown */}
           <select 
             value={staffFilter}
@@ -947,8 +950,106 @@ export default function EnquiryGodLevelHub() {
         
         {/* Left Col(s): Leads Table/Board */}
         <div className={`${selectedEnquiry ? 'xl:col-span-2' : 'xl:col-span-3'} space-y-4`}>
+          <div className="enquiry-mobile-list md:hidden space-y-3">
+            <div className="flex items-center justify-between px-1">
+              <h2 className="text-sm font-black text-slate-900">Leads</h2>
+              <span className="text-[11px] font-bold text-slate-500">{filteredEnquiries.length} results</span>
+            </div>
+            {filteredEnquiries.length === 0 ? (
+              <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-sm font-semibold text-slate-500">
+                No matching enquiries. Try changing your search or filters.
+              </div>
+            ) : filteredEnquiries.map((enq) => {
+              const cleanDate = (enq.nextFollowUpDate || enq.nextFollowUp || '').split('T')[0];
+              const isDueToday = cleanDate === todayStr;
+              const isTaskOverdue = isOverdueInIndia(cleanDate);
+              const enqCode = String((enq as any).enquiryId || enq.id || '').slice(-4).toUpperCase();
+              const avatar = resolveAvatarUrl(enq);
+              const repName = formatRepInfo(enq.assignedTo).name;
+              const followUpLabel = cleanDate
+                ? (isDueToday ? 'Today' : formatIndianDate(cleanDate))
+                : 'Not scheduled';
+              return (
+                <article
+                  key={enq.id}
+                  onClick={() => setSelectedEnquiry(enq)}
+                  className="enquiry-mobile-card bg-white rounded-2xl border border-slate-200 shadow-sm p-3.5 active:scale-[0.99] transition-transform"
+                >
+                  <div className="flex items-start gap-3">
+                    <img
+                      src={avatar}
+                      onError={(e) => {
+                        const target = e.currentTarget;
+                        const g = String(enq.gender || '').trim().toLowerCase();
+                        target.src = (g === 'female' || g === 'f') ? FEMALE_DEFAULT_AVATAR : MALE_DEFAULT_AVATAR;
+                      }}
+                      className="w-11 h-11 rounded-full bg-slate-100 border border-slate-200 object-cover shrink-0"
+                      alt=""
+                    />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <h3 className="text-[15px] leading-tight font-extrabold text-slate-900 truncate">{enq.name || 'Unnamed lead'}</h3>
+                          <p className="text-[10px] text-slate-400 font-mono font-bold mt-0.5">ENQ-{enqCode}</p>
+                        </div>
+                        <span className={`shrink-0 px-2 py-1 rounded-full border text-[9px] font-black uppercase tracking-wide ${
+                          enq.status === 'Converted' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                          enq.status === 'Closed' ? 'bg-slate-100 text-slate-600 border-slate-200' :
+                          'bg-amber-50 text-amber-700 border-amber-200'
+                        }`}>{enq.status || 'Pending'}</span>
+                      </div>
+                      <a
+                        href={`tel:${enq.phone || ''}`}
+                        onClick={(event) => event.stopPropagation()}
+                        className="inline-flex items-center gap-1.5 mt-2 text-sm font-bold text-[#0b5cbe] no-underline"
+                      >
+                        <Phone size={14} /> {enq.phone || 'No phone number'}
+                      </a>
+                    </div>
+                    <button
+                      type="button"
+                      aria-label={`More actions for ${enq.name}`}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        const rect = event.currentTarget.getBoundingClientRect();
+                        setActionsMenu({ enquiry: enq, rect });
+                      }}
+                      className="w-9 h-9 -mr-1 -mt-1 rounded-xl border border-slate-200 bg-slate-50 text-slate-600 flex items-center justify-center shrink-0"
+                    ><MoreHorizontal size={18} /></button>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 mt-3 pt-3 border-t border-slate-100">
+                    <div className={`rounded-xl px-2.5 py-2 ${isTaskOverdue && enq.status === 'Pending' ? 'bg-rose-50' : 'bg-slate-50'}`}>
+                      <span className="block text-[9px] uppercase tracking-wide font-extrabold text-slate-400">Follow-up</span>
+                      <span className={`block text-[11px] font-bold truncate ${isTaskOverdue && enq.status === 'Pending' ? 'text-rose-600' : 'text-slate-800'}`}>{followUpLabel}</span>
+                    </div>
+                    <div className="rounded-xl px-2.5 py-2 bg-slate-50 min-w-0">
+                      <span className="block text-[9px] uppercase tracking-wide font-extrabold text-slate-400">Plan · Representative</span>
+                      <span className="block text-[11px] font-bold text-slate-800 truncate">{enq.duration || enq.interestedPlan || 'Plan not set'} · {repName}</span>
+                    </div>
+                  </div>
+                  {(enq.remarks || (enq as any).remark) && (
+                    <p className="mt-2 text-[11px] leading-snug text-slate-600 line-clamp-2">{enq.remarks || (enq as any).remark}</p>
+                  )}
+                  <div className="grid grid-cols-2 gap-2 mt-3">
+                    <button
+                      type="button"
+                      onClick={(event) => { event.stopPropagation(); handleOpenScheduleFollowup(enq); }}
+                      className="h-10 rounded-xl border border-blue-200 bg-blue-50 text-[#0b5cbe] text-xs font-extrabold flex items-center justify-center gap-1.5"
+                    ><Calendar size={14} /> Follow-up</button>
+                    <button
+                      type="button"
+                      onClick={(event) => { event.stopPropagation(); launchWhatsApp(enq); }}
+                      className="h-10 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-700 text-xs font-extrabold flex items-center justify-center gap-1.5"
+                    ><MessageSquare size={14} /> WhatsApp</button>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+
           {viewMode === 'table' ? (
-            <div className="bg-white border border-[#d9e7f7] rounded-3xl overflow-hidden shadow-[0_4px_25px_rgba(11,92,190,0.03)]">
+            <div className="enquiry-table bg-white border border-[#d9e7f7] rounded-3xl overflow-hidden shadow-[0_4px_25px_rgba(11,92,190,0.03)]">
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs whitespace-nowrap">
                   <thead className="bg-[#0b5cbe] text-[#fdfdfd] font-extrabold uppercase tracking-wider text-[9.5px] border-b border-[#084a99]">
@@ -1121,7 +1222,7 @@ export default function EnquiryGodLevelHub() {
             </div>
           ) : (
             /* Kanban Board Mode */
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="enquiry-kanban grid grid-cols-1 md:grid-cols-2 gap-4">
               {(['Pending', 'Closed'] as const).map(colStatus => {
                 const colLeads = filteredEnquiries.filter(e => e.status === colStatus);
                 return (
@@ -1171,9 +1272,10 @@ export default function EnquiryGodLevelHub() {
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: 20 }}
-              className="xl:col-span-1"
+              onClick={() => setSelectedEnquiry(null)}
+              className="enquiry-inspector xl:col-span-1"
             >
-              <div className="bg-white rounded-3xl p-6 border border-[#d9e7f7] shadow-[0_4px_20px_rgba(11,92,190,0.03)] sticky top-6 space-y-6">
+              <div onClick={(event) => event.stopPropagation()} className="bg-white rounded-3xl p-6 border border-[#d9e7f7] shadow-[0_4px_20px_rgba(11,92,190,0.03)] sticky top-6 space-y-6">
                 
                 {/* Header */}
                 <div className="flex items-center justify-between pb-3 border-b border-slate-100">

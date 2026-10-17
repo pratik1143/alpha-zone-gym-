@@ -34,7 +34,29 @@
   .crm-mobile-topbar {
     padding-left: max(14px, env(safe-area-inset-left, 0px));
     padding-right: max(14px, env(safe-area-inset-right, 0px));
-    min-height: 58px;
+    min-height: 66px;
+    align-items: center;
+    overflow: visible;
+  }
+
+  .crm-mobile-topbar > a {
+    min-width: 0;
+    min-height: 44px;
+    align-items: center;
+  }
+
+  .crm-mobile-logo {
+    width: 40px;
+    height: 40px;
+    display: block;
+    object-fit: contain;
+    flex: 0 0 40px;
+    background: #fff;
+  }
+
+  .crm-mobile-topbar > div,
+  .crm-mobile-topbar button {
+    flex-shrink: 0;
   }
 
   .crm-mobile-search {

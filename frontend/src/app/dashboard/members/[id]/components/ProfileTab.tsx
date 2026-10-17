@@ -306,13 +306,13 @@ export default function ProfileTab({ member, onOpenRenewModal }: { member: any; 
   };
 
   return (
-    <div className="space-y-6 text-slate-800 text-left font-display">
+    <div className="member-profile-tab space-y-6 text-slate-800 text-left font-display">
       
       {/* TOP ROW: Membership Card & Personal Info */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="member-profile-top-grid grid grid-cols-1 lg:grid-cols-2 gap-6">
         
         {/* Active Membership Card (Brand Deep Blue Gradient) */}
-        <div className="bg-gradient-to-br from-[#083f82] via-[#0b5cbe] to-[#064a9b] rounded-[32px] p-8 text-white shadow-2xl relative overflow-hidden flex flex-col justify-between border border-blue-400/30">
+        <div className="member-active-membership bg-gradient-to-br from-[#083f82] via-[#0b5cbe] to-[#064a9b] rounded-[32px] p-8 text-white shadow-2xl relative overflow-hidden flex flex-col justify-between border border-blue-400/30">
           <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full blur-3xl pointer-events-none" />
           
           <div>
@@ -421,7 +421,7 @@ export default function ProfileTab({ member, onOpenRenewModal }: { member: any; 
         </div>
 
         {/* Personal Details Card */}
-        <div className="bg-white rounded-[32px] shadow-[0_2px_20px_rgba(0,0,0,0.02)] border border-slate-100 p-8 relative group">
+        <div className="member-personal-info bg-white rounded-[32px] shadow-[0_2px_20px_rgba(0,0,0,0.02)] border border-slate-100 p-8 relative group">
           <div className="flex justify-between items-center mb-6">
             <h3 className="text-lg font-black text-slate-900 tracking-tight flex items-center gap-2">
               <User size={18} className="text-blue-500" /> Personal Info
@@ -435,7 +435,7 @@ export default function ProfileTab({ member, onOpenRenewModal }: { member: any; 
             </button>
           </div>
           
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">
+          <div className="member-personal-fields grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">
             <Field icon={Phone} label="Phone Number" value={member.phone} />
             <Field icon={Mail} label="Email Address" value={member.email || 'No email provided'} />
             <Field icon={Calendar} label="Date of Birth" value={member.dob ? new Date(member.dob).toLocaleDateString() : 'N/A'} />
@@ -447,7 +447,7 @@ export default function ProfileTab({ member, onOpenRenewModal }: { member: any; 
       </div>
 
       {/* BIOMETRIC & HARDWARE ACCESS CARD */}
-      <div className="bg-white rounded-[32px] shadow-[0_2px_20px_rgba(0,0,0,0.02)] border border-slate-100 p-8 space-y-4">
+      <div className="member-biometric-card bg-white rounded-[32px] shadow-[0_2px_20px_rgba(0,0,0,0.02)] border border-slate-100 p-8 space-y-4">
         <div className="flex justify-between items-center">
           <div className="flex items-center gap-2">
             <div className="w-9 h-9 rounded-xl bg-blue-50 border border-blue-200 text-blue-600 flex items-center justify-center">
@@ -463,7 +463,7 @@ export default function ProfileTab({ member, onOpenRenewModal }: { member: any; 
           </span>
         </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 pt-1">
+      <div className="member-biometric-grid grid grid-cols-1 sm:grid-cols-4 gap-4 pt-1">
           <div className="p-4 bg-slate-50/80 rounded-2xl border border-slate-200/80 flex flex-col justify-between space-y-2">
             <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Biometric ID</span>
             <span className="text-xl font-mono font-black text-blue-700">#{member.biometricId || member.memberId || 'N/A'}</span>
@@ -499,7 +499,7 @@ export default function ProfileTab({ member, onOpenRenewModal }: { member: any; 
         </div>
 
         {member.biometricBlocked !== true && member.fingerprintStatus !== 'ENROLLED' && member.fingerprintEnrolled !== true && (
-          <div className="sm:col-span-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+          <div className="member-biometric-warning sm:col-span-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4">
             <div>
               <p className="text-sm font-black text-amber-900">Access is unblocked, but this device has no fingerprint template.</p>
               <p className="mt-1 text-xs text-amber-800">Ask the member to scan the same finger three times at the gym terminal to restore fingerprint entry.</p>
@@ -517,10 +517,10 @@ export default function ProfileTab({ member, onOpenRenewModal }: { member: any; 
       </div>
 
       {/* BOTTOM ROW: Health Measurements & Personal Trainer */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="member-health-row grid grid-cols-1 lg:grid-cols-3 gap-6">
         
         {/* Physical & Medical Info (Adaptive width) */}
-        <div className={hasTrainer ? "lg:col-span-2 bg-white rounded-[32px] shadow-[0_2px_20px_rgba(0,0,0,0.02)] border border-slate-100 p-8" : "lg:col-span-3 bg-white rounded-[32px] shadow-[0_2px_20px_rgba(0,0,0,0.02)] border border-slate-100 p-8"}>
+        <div className={`member-health-card ${hasTrainer ? "lg:col-span-2" : "lg:col-span-3"} bg-white rounded-[32px] shadow-[0_2px_20px_rgba(0,0,0,0.02)] border border-slate-100 p-8`}>
           <div className="flex justify-between items-center mb-6">
             <h3 className="text-lg font-black text-slate-900 tracking-tight flex items-center gap-2">
               <Activity size={18} className="text-rose-500" /> Health & Measurements
@@ -534,7 +534,7 @@ export default function ProfileTab({ member, onOpenRenewModal }: { member: any; 
             </button>
           </div>
           
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-6">
+          <div className="member-health-metrics grid grid-cols-2 sm:grid-cols-4 gap-6">
             <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 text-center">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-2">Weight</span>
               <span className="text-2xl font-black text-slate-900">{member.weight || '--'} <span className="text-sm font-bold text-slate-400">kg</span></span>
@@ -560,7 +560,7 @@ export default function ProfileTab({ member, onOpenRenewModal }: { member: any; 
 
         {/* Assigned Trainer Card (ONLY RENDERED IF TRAINER IS ASSIGNED) */}
         {hasTrainer && (
-          <div className="bg-white rounded-[32px] shadow-[0_2px_20px_rgba(0,0,0,0.02)] border border-[#d9e7f7] p-8 flex flex-col items-center text-center justify-between">
+          <div className="member-trainer-card bg-white rounded-[32px] shadow-[0_2px_20px_rgba(0,0,0,0.02)] border border-[#d9e7f7] p-8 flex flex-col items-center text-center justify-between">
             <div className="flex flex-col items-center w-full">
               <div className="w-12 h-12 bg-[#eaf3ff] rounded-2xl flex items-center justify-center text-[#0b5cbe] mb-3 border border-[#b9d6f5]">
                 <Dumbbell size={22} />

@@ -361,7 +361,7 @@ export default function DashboardLayout({
             style={{ paddingTop: 'max(env(safe-area-inset-top, 0px), 12px)' }}
           >
             <Link href="/dashboard/overview" className="flex items-center gap-2 cursor-pointer no-underline">
-              <img src="/gymlogo.png" alt="Logo" className="h-8 w-8 object-contain rounded-full" />
+              <img src="/gymlogo.png" alt="Alpha Zone Gym" className="crm-mobile-logo h-9 w-9 object-contain rounded-full shrink-0" />
               <span className="font-rowdies font-extrabold text-sm text-slate-900 tracking-tight uppercase leading-none">
                 Alpha <span className="text-[#0b5cbe]">CRM</span>
               </span>

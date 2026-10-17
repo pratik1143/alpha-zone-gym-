@@ -29,6 +29,7 @@ import ProfileTab from './components/ProfileTab';
 import BillingTab from './components/BillingTab';
 import CommunicationTab from './components/CommunicationTab';
 import AttendanceTab, { buildAttendanceSessions, isLogForMember } from './components/AttendanceTab';
+import './member-detail-mobile.css';
 
 const TABS = [
   'Profile', 'Billing', 'Communication', 'Attendance'
@@ -333,21 +334,21 @@ export default function ClientProfileSystem() {
   }
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] p-4 sm:p-6 font-sans pb-32">
+    <div className="member-detail-page min-h-screen bg-[#F8FAFC] p-4 sm:p-6 font-sans pb-32">
       {/* ══ PREMIUM MEMBER COMMAND CENTER HERO CARD ════════════════════════ */}
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3, ease: 'easeOut' }}
-        className="bg-white rounded-[22px] border border-slate-200/90 shadow-[0_4px_24px_rgba(11,92,190,0.05)] mb-5 overflow-hidden relative"
+        className="member-detail-hero bg-white rounded-[22px] border border-slate-200/90 shadow-[0_4px_24px_rgba(11,92,190,0.05)] mb-5 overflow-hidden relative"
       >
         {/* Subtle top brand accent stripe */}
         <div className="h-1 w-full bg-gradient-to-r from-[#0066FF] via-[#38bdf8] to-[#10b981]" />
 
-        <div className="p-4 sm:p-5 lg:p-6 space-y-4">
+        <div className="member-detail-hero-content p-4 sm:p-5 lg:p-6 space-y-4">
           
           {/* ── TOP BAR: BACK NAVIGATION & MEMBER ID ── */}
-          <div className="flex items-center justify-between gap-3">
+          <div className="member-detail-topbar flex items-center justify-between gap-3">
             <button
               onClick={() => router.push('/dashboard/members')}
               className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-[#0066FF] bg-transparent border-none cursor-pointer transition-colors group"
@@ -362,10 +363,10 @@ export default function ClientProfileSystem() {
           </div>
 
           {/* ── MAIN HERO BODY (IDENTITY + MEMBERSHIP CARD) ── */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
+          <div className="member-detail-primary grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
             
             {/* ── ZONE 1: IDENTITY (Span 7) ── */}
-            <div className="lg:col-span-7 flex flex-col sm:flex-row items-start sm:items-center gap-4.5 min-w-0">
+            <div className="member-detail-identity lg:col-span-7 flex flex-col sm:flex-row items-start sm:items-center gap-4.5 min-w-0">
               {/* Photo Avatar */}
               <div
                 onClick={() => setShowPhotoModal(true)}
@@ -453,7 +454,7 @@ export default function ClientProfileSystem() {
             </div>
 
             {/* ── ZONE 2: MEMBERSHIP CARD BLOCK (Span 5) ── */}
-            <div className="lg:col-span-5 bg-gradient-to-br from-slate-50 to-blue-50/60 border border-blue-100/80 rounded-2xl p-4 sm:p-5 flex flex-col justify-between gap-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]">
+            <div className="member-detail-membership lg:col-span-5 bg-gradient-to-br from-slate-50 to-blue-50/60 border border-blue-100/80 rounded-2xl p-4 sm:p-5 flex flex-col justify-between gap-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]">
               <div>
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Membership</span>
@@ -523,8 +524,8 @@ export default function ClientProfileSystem() {
           </div>
 
           {/* ── ROW 2: FULL-WIDTH METRICS + ACTIONS ── */}
-          <div className="space-y-3.5 pt-4 border-t border-slate-100">
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+          <div className="member-detail-actions-block space-y-3.5 pt-4 border-t border-slate-100">
+            <div className="member-detail-metrics grid grid-cols-2 sm:grid-cols-4 gap-2.5">
               {[
                 {
                   label: 'HEALTH SCORE',
@@ -563,7 +564,7 @@ export default function ClientProfileSystem() {
               ))}
             </div>
 
-            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-2.5">
+            <div className="member-detail-actions grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-2.5">
               <button
                 onClick={() => router.push(`/dashboard/billing/create?mode=upgrade&id=${id}`)}
                 className="w-full min-w-0 h-11 px-3 sm:px-4 bg-gradient-to-r from-[#0B5CBE] to-[#064A9B] hover:from-[#064A9B] hover:to-[#083F82] text-white rounded-xl flex items-center justify-center gap-1.5 text-xs font-black whitespace-nowrap transition-all cursor-pointer shadow-xs active:scale-[0.98] border-none"
@@ -669,7 +670,7 @@ export default function ClientProfileSystem() {
       {/* ══ END HERO CARD ══════════════════════════════════════════════════ */}
 
       {/* 2. PROFILE NAVIGATION (Segmented Tabs) */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-5 scrollbar-hide">
+      <div className="member-detail-tabs flex items-center gap-2 overflow-x-auto pb-5 scrollbar-hide">
         {TABS.map(tab => (
           <button
             key={tab}
