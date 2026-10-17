@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { User, ChevronDown, Search, Check, UserMinus, Sparkles, Shield, BadgeCheck, Dumbbell, AlertTriangle } from 'lucide-react';
 import { db } from '@/lib/firebase';
-import { collection, query, onSnapshot, doc, updateDoc } from 'firebase/firestore';
+import { collection, query, onSnapshot, doc, updateDoc, getDocs, where } from 'firebase/firestore';
 import toast from '@/lib/toast';
 import API from '@/services/api';
 import PtBillingModal from './PtBillingModal';
@@ -142,6 +142,19 @@ export default function TrainerSelectorDropdown({
   const currentTrainerName = member?.trainerName || member?.trainer || 'Unassigned';
   const currentTrainerId = member?.trainerId || null;
   const isAssigned = currentTrainerId && currentTrainerId !== 'null' && currentTrainerName !== 'Unassigned';
+  const existingPtRecord = member?.ptMembership || member?.pt || {};
+  const existingPtInvoiceNo = existingPtRecord.invoiceNo || existingPtRecord.invoiceNumber || existingPtRecord.billingId || '';
+  const existingPtExpiry = String(existingPtRecord.expiryDate || member?.ptExpiryDate || '').slice(0, 10);
+  const localToday = (() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  })();
+  const hasActivePtBilling = Boolean(
+    existingPtInvoiceNo &&
+    String(existingPtRecord.status || 'ACTIVE').toLowerCase() !== 'inactive' &&
+    String(existingPtRecord.status || 'ACTIVE').toLowerCase() !== 'expired' &&
+    (!existingPtExpiry || existingPtExpiry >= localToday)
+  );
 
   const filteredTrainers = trainers.filter((t) => {
     const name = String(t.name || '').toLowerCase();
@@ -194,14 +207,23 @@ export default function TrainerSelectorDropdown({
   };
 
   // Direct Reassign Without New Bill (for trainer swap)
-  const handleKeepBillingReassign = async () => {
-    if (!member || !member.id || !pendingTrainer) return;
+  const handleKeepBillingReassign = async (trainerOverride: any = pendingTrainer) => {
+    if (!member || !member.id || !trainerOverride) return;
     setSaving(true);
     try {
-      const newTrainerId = pendingTrainer.employeeId || pendingTrainer.id;
-      const newTrainerName = pendingTrainer.name;
-      const newTrainerRole = pendingTrainer.specialization || pendingTrainer.role || 'Personal Trainer & Strength';
-      const newTrainerAvatar = pendingTrainer.avatarUrl || `https://i.pravatar.cc/150?u=${encodeURIComponent(newTrainerName)}`;
+      const newTrainerId = trainerOverride.employeeId || trainerOverride.id;
+      const newTrainerName = trainerOverride.name;
+      const newTrainerRole = trainerOverride.specialization || trainerOverride.role || 'Personal Trainer & Strength';
+      const newTrainerAvatar = trainerOverride.avatarUrl || `https://i.pravatar.cc/150?u=${encodeURIComponent(newTrainerName)}`;
+      const ptHistory = Array.isArray(member.ptHistory) ? member.ptHistory : [];
+      const updatedPtHistory = existingPtInvoiceNo
+        ? ptHistory.map((entry: any) => {
+            const entryInvoiceNo = entry.invoiceNo || entry.invoiceNumber || entry.invoice || '';
+            return entryInvoiceNo === existingPtInvoiceNo
+              ? { ...entry, trainerId: newTrainerId, trainerName: newTrainerName, trainerRole: newTrainerRole, trainerAvatar: newTrainerAvatar }
+              : entry;
+          })
+        : ptHistory;
 
       const updateData = {
         trainerId: newTrainerId,
@@ -213,6 +235,11 @@ export default function TrainerSelectorDropdown({
         'pt.trainerName': newTrainerName,
         'pt.trainerRole': newTrainerRole,
         'pt.trainerAvatar': newTrainerAvatar,
+        'ptMembership.trainerId': newTrainerId,
+        'ptMembership.trainerName': newTrainerName,
+        'ptMembership.trainerRole': newTrainerRole,
+        'ptMembership.trainerAvatar': newTrainerAvatar,
+        ...(existingPtInvoiceNo ? { ptHistory: updatedPtHistory } : {}),
         updatedAt: new Date().toISOString(),
       };
 
@@ -226,6 +253,29 @@ export default function TrainerSelectorDropdown({
       if (member.pt) {
         member.pt.trainerId = newTrainerId;
         member.pt.trainerName = newTrainerName;
+        member.pt.trainerRole = newTrainerRole;
+        member.pt.trainerAvatar = newTrainerAvatar;
+      }
+      if (member.ptMembership) {
+        member.ptMembership.trainerId = newTrainerId;
+        member.ptMembership.trainerName = newTrainerName;
+        member.ptMembership.trainerRole = newTrainerRole;
+        member.ptMembership.trainerAvatar = newTrainerAvatar;
+      }
+      if (existingPtInvoiceNo) {
+        member.ptHistory = updatedPtHistory;
+        try {
+          const paymentSnap = await getDocs(query(collection(db, 'payments'), where('invoiceNumber', '==', existingPtInvoiceNo)));
+          await Promise.all(paymentSnap.docs.map(paymentDoc => updateDoc(paymentDoc.ref, {
+            trainerId: newTrainerId,
+            trainerName: newTrainerName,
+            trainerRole: newTrainerRole,
+            trainerAvatar: newTrainerAvatar,
+            updatedAt: new Date().toISOString(),
+          })));
+        } catch (paymentUpdateError) {
+          console.warn('Trainer assigned to active PT plan, but payment receipt trainer details could not be refreshed:', paymentUpdateError);
+        }
       }
 
       if (onTrainerUpdated) {
@@ -255,6 +305,9 @@ export default function TrainerSelectorDropdown({
     if (isAssigned) {
       // Member already has an assigned trainer -> Ask reassign confirmation
       setShowReassignConfirmModal(true);
+    } else if (hasActivePtBilling) {
+      // Existing active PT billing: assign its trainer without creating another bill.
+      void handleKeepBillingReassign(trainer);
     } else {
       // First-time trainer assignment -> Open PT Billing Modal
       setShowPtBillingModal(true);
