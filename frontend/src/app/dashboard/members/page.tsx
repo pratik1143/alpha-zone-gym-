@@ -169,8 +169,12 @@ export default function MembersPage() {
         }
       }
 
-      // 4. Phone check (valid numbers with >= 7 digits)
-      if (m.phone) {
+      // 4. Use phone only as a fallback identity when the record has no stable ID.
+      // Distinct members can legitimately share a family phone number.
+      const hasStableIdentity = Boolean(
+        m.id || m.clientId || (m.memberId && String(m.memberId).trim() !== 'AZ-2026-0000')
+      );
+      if (!hasStableIdentity && m.phone) {
         const cleanPhone = String(m.phone).replace(/\D/g, '');
         if (cleanPhone.length >= 7) {
           if (seenPhones.has(cleanPhone)) return false;

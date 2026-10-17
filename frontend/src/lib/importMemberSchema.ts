@@ -7,13 +7,16 @@ import * as XLSX from 'xlsx';
  */
 export function normalizeDate(val: any): string {
   if (!val && val !== 0) return '';
+  const toIsoDate = (year: number, month: number, day: number): string => {
+    const date = new Date(Date.UTC(year, month - 1, day));
+    if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return '';
+    return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+  };
 
   if (val instanceof Date) {
     if (isNaN(val.getTime())) return '';
     const y = val.getUTCFullYear();
-    const m = String(val.getUTCMonth() + 1).padStart(2, '0');
-    const d = String(val.getUTCDate()).padStart(2, '0');
-    return `${y}-${m}-${d}`;
+    return toIsoDate(y, val.getUTCMonth() + 1, val.getUTCDate());
   }
 
   if (typeof val === 'number') {
@@ -21,9 +24,7 @@ export function normalizeDate(val: any): string {
       const d = XLSX.SSF.parse_date_code(val);
       if (!d) return '';
       const y = d.y;
-      const m = String(d.m).padStart(2, '0');
-      const day = String(d.d).padStart(2, '0');
-      return `${y}-${m}-${day}`;
+      return toIsoDate(y, d.m, d.d);
     } catch (_) {
       return '';
     }
@@ -56,9 +57,19 @@ export function normalizeDate(val: any): string {
       let year = parseInt(textMatch[3], 10);
       if (year < 100) year += 2000;
       const mon = monthNames[monStr];
-      if (mon && day >= 1 && day <= 31) {
-        return `${year}-${String(mon).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      if (mon) {
+        return toIsoDate(year, mon, day);
       }
+    }
+
+    // The CRM's primary export format uses Indian day-first numeric dates (DD/MM/YYYY).
+    const dayFirstMatch = s.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/);
+    if (dayFirstMatch) {
+      const day = parseInt(dayFirstMatch[1], 10);
+      const month = parseInt(dayFirstMatch[2], 10);
+      let year = parseInt(dayFirstMatch[3], 10);
+      if (year < 100) year += 2000;
+      return toIsoDate(year, month, day);
     }
 
     // Match standard ISO YYYY-MM-DD
@@ -67,16 +78,13 @@ export function normalizeDate(val: any): string {
       const y = parseInt(isoMatch[1], 10);
       const m = parseInt(isoMatch[2], 10);
       const d = parseInt(isoMatch[3], 10);
-      return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      return toIsoDate(y, m, d);
     }
 
     // Fallback standard Date parsing
     const parsed = new Date(s);
     if (!isNaN(parsed.getTime())) {
-      const y = parsed.getFullYear();
-      const m = String(parsed.getMonth() + 1).padStart(2, '0');
-      const day = String(parsed.getDate()).padStart(2, '0');
-      return `${y}-${m}-${day}`;
+      return toIsoDate(parsed.getFullYear(), parsed.getMonth() + 1, parsed.getDate());
     }
   }
 
@@ -232,8 +240,14 @@ export function parseAndValidateMemberRow(raw: Record<string, any>, rowNumber: n
   const originalPackageName = String(rawPackage).trim();
   const packageName = normalizePackageName(rawPackage);
 
-  const amountPaid = typeof rawAmount === 'number' ? rawAmount : (parseFloat(String(rawAmount).replace(/[^0-9.]/g, '')) || 0);
-  const balanceAmount = typeof rawBalance === 'number' ? rawBalance : (parseFloat(String(rawBalance).replace(/[^0-9.]/g, '')) || 0);
+  const parseAmount = (value: any): number => {
+    if (typeof value === 'number') return value;
+    const cleaned = String(value ?? '').trim().replace(/[₹,\s]/g, '');
+    if (!cleaned) return 0;
+    return /^-?\d+(\.\d{1,2})?$/.test(cleaned) ? Number(cleaned) : Number.NaN;
+  };
+  const amountPaid = parseAmount(rawAmount);
+  const balanceAmount = parseAmount(rawBalance);
   
   const photoTrimmed = String(rawPhoto).trim();
   const photoUrl = photoTrimmed && (photoTrimmed.startsWith('http://') || photoTrimmed.startsWith('https://')) ? photoTrimmed : null;
@@ -244,16 +258,24 @@ export function parseAndValidateMemberRow(raw: Record<string, any>, rowNumber: n
   // Validation Rules
   if (!clientId) errors.push('Client ID is required');
   if (!name) errors.push('Client Name is required');
-  if (!phone) errors.push('Phone Number is required');
+  if (!phone || phone.replace(/\D/g, '').length < 5) errors.push('Phone Number must contain at least 5 digits');
   if (!packageName) errors.push('Package Name is required');
   if (!startDate) errors.push('Invalid Start Date format');
   if (!expiryDate) errors.push('Invalid Expiry Date format');
-  if (amountPaid < 0) errors.push('Amount paid must be >= 0');
-  if (balanceAmount < 0) errors.push('Balance amount must be >= 0');
+  if (!Number.isFinite(amountPaid) || amountPaid < 0) errors.push('Amount paid must be a valid number >= 0');
+  if (!Number.isFinite(balanceAmount) || balanceAmount < 0) errors.push('Balance amount must be a valid number >= 0');
 
   // Source Data Warnings (Preserve values, flag for inspection)
   if (balanceAmount > amountPaid && amountPaid > 0) {
     warnings.push(`⚠️ Source data warning: Balance (₹${balanceAmount.toLocaleString('en-IN')}) is greater than Amount Paid (₹${amountPaid.toLocaleString('en-IN')})`);
+  }
+
+  if (!photoUrl) {
+    warnings.push('No photo URL supplied; the member profile will use its default avatar.');
+  }
+
+  if (/^\d+(?:\.\d+)?$/.test(originalPackageName)) {
+    warnings.push(`Package value "${originalPackageName}" looks numeric; it will be preserved as supplied for review.`);
   }
 
   if (startDate && expiryDate && expiryDate < startDate) {

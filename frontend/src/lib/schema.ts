@@ -25,6 +25,11 @@ export const homeSchemas = {
     { "@type": "City", "name": "Sohana" },
     { "@type": "City", "name": "Mohali" },
     { "@type": "AdministrativeArea", "name": "SAS Nagar" }
+  ],
+  "sameAs": [
+    "https://www.instagram.com/alphazonegym/",
+    "https://www.facebook.com/profile.php?id=61586834013922",
+    "https://www.youtube.com/@Alphazonegym"
   ]
 };
 

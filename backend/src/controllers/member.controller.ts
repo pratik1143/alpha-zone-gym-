@@ -368,7 +368,7 @@ export const createMember = async (req: Request, res: Response) => {
       });
     }
 
-    console.log(`[Credentials Notification] Sent credentials to ${name} (${loginEmail}) via simulated SMS & WhatsApp. Password: ${password || '1234567'}`);
+    console.log(`[Credentials Notification] Credentials prepared for ${name} (${loginEmail}) via simulated SMS & WhatsApp.`);
 
     // Trigger Automated Emails
     triggerWelcomeEmail(member).catch(err => console.error('[Automation] Welcome email failed:', err));
@@ -492,9 +492,9 @@ export const resetMemberPassword = async (req: Request, res: Response) => {
     
     if (isFirebaseInitialized && admin) {
       await admin.auth().updateUser(id, { password });
-      console.log(`[Credentials Notification] Reset password for member uid ${id} to ${password}`);
+      console.log(`[Credentials Notification] Password reset for member uid ${id}.`);
     } else {
-      console.log(`[Mock Mode] Reset password for member ${id} to ${password}`);
+      console.log(`[Mock Mode] Password reset for member ${id}.`);
     }
 
     res.json({ success: true, message: 'Password reset successful' });

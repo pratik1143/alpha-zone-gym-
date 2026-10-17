@@ -25,7 +25,7 @@ import { getSmtpConfig, saveSmtpConfig, getTemplates, saveTemplatesController, s
 import { getPlansController, createPlanController, updatePlanController, deletePlanController } from '../controllers/plan.controller';
 import { getEmployees, createEmployee, updateEmployee, deleteEmployee, getEmployeeAttendance } from '../controllers/employee.controller';
 import { globalSearch } from '../controllers/search.controller';
-import { authenticateToken } from '../middleware/auth';
+import { authenticateToken, authorizeRoles } from '../middleware/auth';
 
 
 const router = Router();
@@ -54,17 +54,18 @@ router.use('/whatsapp', whatsappRoutes);
 router.get('/members', getMembers);
 router.get('/members/paginated', getMembersPaginated);
 router.get('/members/next-biometric-id', nextBiometricId);
-router.post('/members/migrate', migrateMembers);
-router.post('/members/dry-run-migration', dryRunMigration);
-router.post('/members/repair-photos', repairImportedPhotos);
-router.post('/members/repair-billing', repairImportedBilling);
-router.post('/members/patch-legacy-amounts', patchLegacyAmounts);
-router.post('/members/mark-all-paid', markAllBillsPaid);
-router.post('/members/resume-migration', resumeMigration);
-router.post('/members/rebuild-analytics', rebuildAnalyticsAndIndex);
-router.get('/members/audit-verification', auditVerification);
-router.post('/members/rollback-migration', rollbackMigration);
-router.post('/members/purge-all', purgeCRMData);
+const requireCrmAdmin = authorizeRoles('super_admin', 'gym_owner');
+router.post('/members/migrate', requireCrmAdmin, migrateMembers);
+router.post('/members/dry-run-migration', requireCrmAdmin, dryRunMigration);
+router.post('/members/repair-photos', requireCrmAdmin, repairImportedPhotos);
+router.post('/members/repair-billing', requireCrmAdmin, repairImportedBilling);
+router.post('/members/patch-legacy-amounts', requireCrmAdmin, patchLegacyAmounts);
+router.post('/members/mark-all-paid', requireCrmAdmin, markAllBillsPaid);
+router.post('/members/resume-migration', requireCrmAdmin, resumeMigration);
+router.post('/members/rebuild-analytics', requireCrmAdmin, rebuildAnalyticsAndIndex);
+router.get('/members/audit-verification', requireCrmAdmin, auditVerification);
+router.post('/members/rollback-migration', requireCrmAdmin, rollbackMigration);
+router.post('/members/purge-all', requireCrmAdmin, purgeCRMData);
 router.post('/members/map-biometric', mapBiometricUser);
 router.get('/members/:id', getMemberById);
 router.post('/members', createMember);

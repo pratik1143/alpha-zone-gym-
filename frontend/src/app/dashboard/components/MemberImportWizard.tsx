@@ -67,21 +67,47 @@ export default function MemberImportWizard({
         throw new Error('Workbook contains no sheets.');
       }
 
-      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      const sheetCandidates = workbook.SheetNames.map(name => {
+        const candidate = workbook.Sheets[name];
+        const matrix = XLSX.utils.sheet_to_json(candidate, { header: 1, defval: '' }) as any[][];
+        const headers = (matrix[0] || []).map(value => String(value).trim().toLowerCase());
+        const hasMemberHeaders = headers.includes('client id')
+          && headers.includes('client name')
+          && headers.includes('number');
+        const hasContent = matrix.some(row => row.some(value => String(value ?? '').trim() !== ''));
+        return { sheet: candidate, hasMemberHeaders, hasContent };
+      });
+      const selectedSheet = sheetCandidates.find(candidate => candidate.hasMemberHeaders)
+        || sheetCandidates.find(candidate => candidate.hasContent);
+      if (!selectedSheet) {
+        throw new Error('Workbook contains no non-empty worksheet.');
+      }
+      const sheet = selectedSheet.sheet;
       const rawMatrix: any[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '', raw: false });
       const rawObjects: Record<string, any>[] = XLSX.utils.sheet_to_json(sheet, { defval: '' });
 
-      const totalRaw = Math.max(rawMatrix.length, rawObjects.length + 1);
+      // Ignore formatting-only rows that Excel still includes in the sheet range.
+      const totalRaw = rawMatrix.filter(row =>
+        row.some(value => value !== null && value !== undefined && String(value).trim() !== '')
+      ).length;
       setTotalRawRows(totalRaw);
 
       const rows: ParsedImportRow[] = [];
       let blankCount = 0;
 
+      const seenClientIds = new Set<string>();
       rawObjects.forEach((rawObj, idx) => {
         const parsed = parseAndValidateMemberRow(rawObj, idx + 2); // 1-indexed row number after header
         if (parsed === null) {
           blankCount++;
         } else {
+          const normalizedId = parsed.clientId.trim().toLowerCase();
+          if (normalizedId && seenClientIds.has(normalizedId)) {
+            parsed.errors.push(`Duplicate Client ID "${parsed.clientId}" also appears in another row`);
+            parsed.isValid = false;
+          } else if (normalizedId) {
+            seenClientIds.add(normalizedId);
+          }
           rows.push(parsed);
         }
       });
@@ -117,6 +143,7 @@ export default function MemberImportWizard({
   const warningsCount = useMemo(() => parsedRows.filter(r => r.warnings.length > 0).length, [parsedRows]);
   const errorsCount = useMemo(() => parsedRows.filter(r => r.errors.length > 0).length, [parsedRows]);
   const validCount = useMemo(() => parsedRows.filter(r => r.isValid && r.warnings.length === 0).length, [parsedRows]);
+  const readyCount = useMemo(() => parsedRows.filter(r => r.isValid).length, [parsedRows]);
 
   const filteredRows = useMemo(() => {
     return parsedRows.filter(r => {
@@ -141,7 +168,7 @@ export default function MemberImportWizard({
 
   // ── 3. EXECUTE SAFE CHUNKED IMPORT TO FIREBASE ────────────────────────────
   const handleExecuteImport = async () => {
-    if (parsedRows.length === 0) return;
+    if (parsedRows.length === 0 || errorsCount > 0) return;
 
     setStep('importing');
     setProgressPct(5);
@@ -153,6 +180,7 @@ export default function MemberImportWizard({
 
     let totalCreated = 0;
     let totalUpdated = 0;
+    let totalImported = 0;
     let totalSkipped = skippedBlankCount;
     let totalWarnings = warningsCount;
     let totalErrors = errorsCount;
@@ -187,13 +215,16 @@ export default function MemberImportWizard({
           dryRun: false,
           excelFileName: fileName || 'all members 23082026 (1).xlsx',
           sessionId
-        });
+        }, { timeout: 120000 });
 
         const summary = res.data.migrationSummary || res.data.stats;
-        if (summary) {
-          totalCreated += (summary.created || summary.createdMembers || 0);
-          totalUpdated += (summary.updated || summary.updatedMembers || 0);
+        const importedCount = Number(summary?.importedMembers);
+        if (!Number.isFinite(importedCount) || importedCount !== chunk.length) {
+          throw new Error(`Batch ${b + 1} reported ${Number.isFinite(importedCount) ? importedCount : 'no'} imported rows; expected ${chunk.length}.`);
         }
+        totalImported += importedCount;
+        totalCreated += Number(summary.created ?? summary.createdMembers ?? 0);
+        totalUpdated += Number(summary.updated ?? summary.updatedMembers ?? 0);
       }
 
       setProgressPct(100);
@@ -203,8 +234,8 @@ export default function MemberImportWizard({
 
       setImportResult({
         totalRows: totalRawRows,
-        importedMembers: parsedRows.length,
-        created: totalCreated || parsedRows.length,
+        importedMembers: totalImported,
+        created: totalCreated,
         updated: totalUpdated,
         skippedBlankRows: totalSkipped,
         warningsCount: totalWarnings,
@@ -212,7 +243,7 @@ export default function MemberImportWizard({
       });
 
       setStep('completed');
-      toast.success(`🎉 Successfully imported ${parsedRows.length} members into Alpha Zone CRM!`);
+      toast.success(`🎉 Successfully imported ${totalImported} members into Alpha Zone CRM!`);
 
       if (onImportSuccess) onImportSuccess();
     } catch (err: any) {
@@ -250,10 +281,11 @@ export default function MemberImportWizard({
               </button>
               <button
                 onClick={handleExecuteImport}
-                className="px-6 py-2.5 rounded-xl bg-white text-[#0052FF] hover:bg-[#F0F5FF] text-xs font-black shadow-md transition-all flex items-center gap-2"
+                disabled={errorsCount > 0 || readyCount === 0}
+                className="px-6 py-2.5 rounded-xl bg-white text-[#0052FF] hover:bg-[#F0F5FF] disabled:opacity-50 disabled:cursor-not-allowed text-xs font-black shadow-md transition-all flex items-center gap-2"
               >
                 <CheckCircle2 size={16} />
-                <span>Import {parsedRows.length} Members</span>
+                <span>{errorsCount ? `Fix ${errorsCount} error rows first` : `Import ${readyCount} Members`}</span>
               </button>
             </div>
           )}
@@ -349,8 +381,8 @@ export default function MemberImportWizard({
 
             <div className="bg-white p-4 rounded-2xl border border-emerald-200/80 bg-emerald-50/20 shadow-2xs">
               <div className="text-xs text-emerald-700 font-bold uppercase">Members Ready</div>
-              <div className="text-2xl font-black text-emerald-600 mt-1">{parsedRows.length}</div>
-              <div className="text-[10px] text-emerald-600 font-medium mt-0.5">✓ 100% Validated</div>
+              <div className="text-2xl font-black text-emerald-600 mt-1">{readyCount}</div>
+              <div className="text-[10px] text-emerald-600 font-medium mt-0.5">Rows with no blocking errors</div>
             </div>
 
             <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs">
@@ -368,7 +400,7 @@ export default function MemberImportWizard({
             <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs">
               <div className="text-xs text-slate-400 font-bold uppercase">Data Conflicts</div>
               <div className="text-2xl font-black text-slate-900 mt-1">{errorsCount}</div>
-              <div className="text-[10px] text-slate-400 mt-0.5">0 fatal blockers</div>
+              <div className="text-[10px] text-slate-400 mt-0.5">Fix these rows before importing</div>
             </div>
           </div>
 
@@ -594,9 +626,10 @@ export default function MemberImportWizard({
               </button>
               <button
                 onClick={handleExecuteImport}
-                className="px-6 py-2.5 rounded-xl bg-[#0052FF] hover:bg-blue-600 text-white text-xs font-black shadow-md transition-all flex items-center justify-center gap-2 w-full sm:w-auto"
+                disabled={errorsCount > 0 || readyCount === 0}
+                className="px-6 py-2.5 rounded-xl bg-[#0052FF] hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-black shadow-md transition-all flex items-center justify-center gap-2 w-full sm:w-auto"
               >
-                <span>Import {parsedRows.length} Members</span>
+                <span>{errorsCount ? `Fix ${errorsCount} error rows first` : `Import ${readyCount} Members`}</span>
                 <ArrowRight size={14} />
               </button>
             </div>

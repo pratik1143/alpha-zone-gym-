@@ -8,6 +8,9 @@ export const loginUser = async (req: Request, res: Response) => {
 
     // Fallback mode if Firebase is not active
     if (!isFirebaseInitialized) {
+      if (process.env.NODE_ENV === 'production') {
+        return res.status(503).json({ error: 'Authentication service is unavailable.' });
+      }
       console.log('Firebase fallback login requested.');
       // Find role by email
       const roleMap: Record<string, string> = {

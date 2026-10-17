@@ -832,6 +832,62 @@
   gap: 8px;
   align-items: center;
 }
+.az-footer-socials {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.az-footer-socials-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: #849187;
+}
+.az-footer-socials-list {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.az-footer-top > div.az-footer-socials {
+  gap: 12px;
+}
+.az-footer-top > div.az-footer-socials a.az-social-btn {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9px;
+  background: #0e1410;
+  border: 1px solid var(--az-line);
+  color: #9ba59d;
+  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  text-decoration: none;
+  flex-shrink: 0;
+}
+.az-footer-top > div.az-footer-socials a.az-social-btn:hover {
+  transform: translateY(-2px);
+}
+.az-footer-top > div.az-footer-socials a.az-social-instagram:hover {
+  color: #ff3377;
+  border-color: rgba(255, 51, 119, 0.5);
+  background: rgba(255, 51, 119, 0.12);
+  box-shadow: 0 4px 14px rgba(255, 51, 119, 0.25);
+}
+.az-footer-top > div.az-footer-socials a.az-social-facebook:hover {
+  color: #38bdf8;
+  border-color: rgba(56, 189, 248, 0.5);
+  background: rgba(56, 189, 248, 0.12);
+  box-shadow: 0 4px 14px rgba(56, 189, 248, 0.25);
+}
+.az-footer-top > div.az-footer-socials a.az-social-youtube:hover {
+  color: #ff3333;
+  border-color: rgba(255, 51, 51, 0.5);
+  background: rgba(255, 51, 51, 0.12);
+  box-shadow: 0 4px 14px rgba(255, 51, 51, 0.25);
+}
 .az-footer-bottom {
   border-top: 1px solid var(--az-line);
   display: flex;
@@ -1162,6 +1218,10 @@
   .az-faq {
     gap: 40px;
   }
+  .az-footer-top {
+    flex-wrap: wrap;
+    gap: 25px;
+  }
   .az-footer-top > div {
     gap: 15px;
   }
@@ -1426,6 +1486,7 @@
     align-items: flex-start;
     padding-top: 35px;
     padding-bottom: 30px;
+    gap: 24px;
   }
   .az-footer-top > div {
     flex-wrap: wrap;

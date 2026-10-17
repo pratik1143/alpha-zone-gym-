@@ -119,7 +119,8 @@ export function getGymSchema() {
       }
     ],
     'sameAs': [
-      'https://www.instagram.com/alphazonegym',
+      'https://www.instagram.com/alphazonegym/',
+      'https://www.facebook.com/profile.php?id=61586834013922',
       'https://www.youtube.com/@Alphazonegym'
     ]
   };

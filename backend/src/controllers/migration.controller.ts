@@ -657,6 +657,25 @@ export const migrateMembers = async (req: Request, res: Response) => {
     const existingMembers = await db.getMembers();
     const existingDocIds = new Set(existingMembers.map((m: any) => String(m.id || m.uid || '').trim()));
     const existingClientIds = new Set(existingMembers.map((m: any) => String(m.clientId || '').trim()));
+    const seenPayloadClientIds = new Set<string>();
+    for (const [idx, record] of payload.entries()) {
+      const clientId = String(record?.clientId || record?.['Client ID'] || record?.id || '').trim();
+      if (!clientId) continue;
+      if (clientId.includes('/')) {
+        return res.status(400).json({ error: `Row #${idx + 1}: Client ID cannot contain a slash.` });
+      }
+      if (seenPayloadClientIds.has(clientId)) {
+        return res.status(400).json({ error: `Duplicate Client ID "${clientId}" in this batch. Remove or correct the duplicate row before importing.` });
+      }
+      seenPayloadClientIds.add(clientId);
+    }
+    const existingByClientId = new Map<string, any>();
+    existingMembers.forEach((member: any) => {
+      const clientId = String(member.clientId || '').trim();
+      const documentId = String(member.id || member.uid || '').trim();
+      if (clientId) existingByClientId.set(clientId, member);
+      if (documentId.startsWith('member_')) existingByClientId.set(documentId.slice('member_'.length), member);
+    });
 
     const firestore = isFirebaseInitialized && admin ? admin.firestore() : null;
     const auth = isFirebaseInitialized && admin ? admin.auth() : null;
@@ -777,6 +796,8 @@ export const migrateMembers = async (req: Request, res: Response) => {
         createdAt: new Date().toISOString()
       };
 
+      const existingMember = existingByClientId.get(clientId);
+      const priorBillingHistory = Array.isArray(existingMember?.billingHistory) ? existingMember.billingHistory : [];
       const memberData = {
         uid: docId,
         id: docId,
@@ -813,10 +834,13 @@ export const migrateMembers = async (req: Request, res: Response) => {
         daysLeft: currentSmart.daysLeft,
         branch: record.branch || 'Mohali, Punjab',
         trainer: record.trainer || '',
-        biometricId: clientId,
+        // Device IDs are intentionally left unmapped during migration. They must be
+        // assigned from the live scanner by an operator after the member records load.
+        biometricId: null,
+        deviceUserId: null,
         isImportedMember: true,
         migrationSessionId,
-        billingHistory: [invoiceObj],
+        billingHistory: [...priorBillingHistory.filter((invoice: any) => invoice?.id !== invoiceObj.id), invoiceObj],
         updatedAt: new Date().toISOString()
       };
 
