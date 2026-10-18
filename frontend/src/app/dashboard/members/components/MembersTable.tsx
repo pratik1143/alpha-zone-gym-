@@ -38,6 +38,38 @@ const getDynamicStatus = (m: any) => {
   return 'active';
 };
 
+const isPtMember = (member: any) => {
+  const planName = String(member?.packageName || member?.plan || '').toLowerCase();
+  const hasPtPlan = /\bpt\b|personal\s*training/.test(planName);
+  const hasPtObject = (value: any) => value && typeof value === 'object' && value.enabled !== false;
+  return member?.isPt === true
+    || hasPtObject(member?.ptMembership)
+    || hasPtObject(member?.pt)
+    || member?.ptBilling?.enabled === true
+    || (Array.isArray(member?.ptHistory) && member.ptHistory.length > 0)
+    || hasPtPlan;
+};
+
+const getNumericMemberId = (member: any): number | null => {
+  for (const value of [member?.clientId, member?.memberId, member?.id]) {
+    if (value === undefined || value === null || value === '') continue;
+    const matches = String(value).match(/\d+/g);
+    if (!matches?.length) continue;
+    const parsed = Number(matches[matches.length - 1]);
+    if (Number.isFinite(parsed) && parsed > 0) return parsed;
+  }
+  return null;
+};
+
+const compareMembersById = (a: any, b: any) => {
+  const aId = getNumericMemberId(a);
+  const bId = getNumericMemberId(b);
+  if (aId === null && bId !== null) return 1;
+  if (aId !== null && bId === null) return -1;
+  if (aId !== null && bId !== null && aId !== bId) return aId - bId;
+  return String(a?.name || '').localeCompare(String(b?.name || ''));
+};
+
 const initialFilterState: FilterState = {
   gender: 'all',
   memberType: 'all',
@@ -101,6 +133,7 @@ const MemberTableRow = memo(function MemberTableRow({
       : 'bg-rose-50 text-rose-700 border-rose-200';
 
   const displayClientId = member.clientId ? `AZ-${member.clientId}` : (member.memberId || member.id);
+  const hasPt = isPtMember(member);
 
   // Gender resolution (Strict - No guessing or random assigning)
   const rawGender = String(member.gender || member.sex || '').trim().toLowerCase();
@@ -113,9 +146,10 @@ const MemberTableRow = memo(function MemberTableRow({
   return (
     <tr 
       onClick={onRowClick}
-      className={`hover:bg-slate-50/80 transition-colors cursor-pointer border-b border-slate-100 ${
-        isSelected ? 'bg-indigo-50/40' : ''
+      className={`transition-colors cursor-pointer border-b border-slate-100 ${
+        isSelected ? 'bg-indigo-50/70' : hasPt ? 'bg-amber-50/65 hover:bg-amber-100/75' : 'hover:bg-slate-50/80'
       }`}
+      style={hasPt ? { boxShadow: 'inset 4px 0 0 #f59e0b' } : undefined}
     >
       {/* 1. Member Profile */}
       <td className="px-4 py-3.5 border-b border-slate-100">
@@ -131,8 +165,8 @@ const MemberTableRow = memo(function MemberTableRow({
           <div>
             <div className="font-extrabold text-slate-900 text-sm flex items-center gap-1.5">
               <span>{member.name}</span>
-              {member.isPt && (
-                <span className="px-1.5 py-0.2 bg-amber-100 text-amber-800 text-[9px] font-black rounded uppercase border border-amber-300">
+              {hasPt && (
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-amber-100 text-amber-900 text-[9px] font-black rounded-md uppercase border border-amber-300 shadow-[0_1px_2px_rgba(146,64,14,0.08)]">
                   PT
                 </span>
               )}
@@ -375,8 +409,7 @@ export default function MembersTable({
       else if (ds === 'expired') expired++;
       else if (ds === 'frozen') frozen++;
 
-      const isPtMember = m.isPt === true || (m.ptHistory && m.ptHistory.length > 0) || (m.plan && String(m.plan).toLowerCase().includes('pt')) || (m.trainer && m.trainer !== 'Unassigned');
-      if (isPtMember) pt++;
+      if (isPtMember(m)) pt++;
     });
 
     return { all, active, expired, frozen, pt };
@@ -429,8 +462,7 @@ export default function MembersTable({
       if (statusFilter === 'expired' && dynStatus !== 'expired') return false;
       if (statusFilter === 'frozen' && m.status !== 'frozen') return false;
       if (statusFilter === 'pt') {
-        const isPtMember = m.isPt === true || (m.ptHistory && m.ptHistory.length > 0) || (m.plan && String(m.plan).toLowerCase().includes('pt')) || (m.trainer && m.trainer !== 'Unassigned');
-        if (!isPtMember) return false;
+        if (!isPtMember(m)) return false;
       }
 
       // 3. Detailed Filters System
@@ -445,7 +477,7 @@ export default function MembersTable({
       }
 
       // B. Member Type Filter
-      const hasPt = m.isPt === true || (m.ptHistory && m.ptHistory.length > 0) || (m.plan && String(m.plan).toLowerCase().includes('pt'));
+      const hasPt = isPtMember(m);
       const hasGym = !hasPt || (m.plan && !String(m.plan).toLowerCase().includes('pt'));
       if (filters.memberType === 'gym' && (hasPt && !hasGym)) return false;
       if (filters.memberType === 'pt' && !hasPt) return false;
@@ -514,7 +546,7 @@ export default function MembersTable({
       }
 
       return true;
-    });
+    }).sort(compareMembersById);
   }, [members, search, statusFilter, filters]);
 
   // Active filter count
@@ -840,6 +872,7 @@ export default function MembersTable({
         </div>
         <div className="text-xs font-bold text-slate-500">
           Showing <b className="text-[#10233f] font-mono">{filtered.length}</b> members
+          <span className="ml-2 inline-flex items-center rounded-full border border-blue-100 bg-blue-50 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-[#0b5cbe]">ID ↑</span>
         </div>
       </div>
 
@@ -860,7 +893,7 @@ export default function MembersTable({
             return (
               <div
                 key={member.id ? `${member.id}_${idx}` : `mem_${idx}`}
-                className="members-mobile-card bg-white border border-slate-200/80 rounded-2xl p-4 shadow-xs space-y-3 text-left"
+                className={`members-mobile-card rounded-2xl p-4 shadow-xs space-y-3 text-left ${isPtMember(member) ? 'members-mobile-card-pt bg-amber-50/70 border border-amber-200' : 'bg-white border border-slate-200/80'}`}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-center gap-3">
@@ -868,7 +901,7 @@ export default function MembersTable({
                     <div>
                       <div className="font-extrabold text-slate-900 text-sm flex items-center gap-1.5">
                         <span>{member.name}</span>
-                        {member.isPt && <span className="px-1.5 py-0.2 bg-amber-100 text-amber-800 text-[9px] font-black rounded uppercase">PT</span>}
+                        {isPtMember(member) && <span className="inline-flex items-center gap-1 px-2 py-1 bg-amber-100 text-amber-900 text-[9px] font-black rounded-md uppercase border border-amber-300">PT MEMBER</span>}
                       </div>
                       <div className="text-xs text-slate-500 font-mono mt-0.5">ID: <strong className="text-slate-800">#{displayId}</strong></div>
                       <div className="text-[11px] text-slate-400 font-mono">{member.phone || 'No phone'}</div>
