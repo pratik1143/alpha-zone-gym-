@@ -205,6 +205,7 @@ export const checkoutLog = async (req: Request, res: Response) => {
 };
 
 let lastGateUnlockTime = 0;
+const LOCAL_GATE_UNLOCK_URL = process.env.LOCAL_GATE_UNLOCK_URL || 'http://127.0.0.1:8765/unlock';
 
 export function getLocalIpAddress(): string {
   try {
@@ -269,6 +270,33 @@ export const triggerGateUnlock = async (req: Request, res: Response) => {
   const authenticatedUser = (req as any).user?.email || (req as any).user?.name || (req as any).user?.uid || 'Staff / Authorized LAN User';
   const firestore = getFirestoreDb();
   console.log('[GATE] Request received from ' + authenticatedUser);
+
+  // Fast path: the local device service on this PC pulses the relay over its
+  // live device connection and answers directly (~100ms). The Firestore
+  // command queue below is only the fallback when that service is unreachable.
+  lastGateUnlockTime = now;
+  try {
+    const localRes = await fetch(LOCAL_GATE_UNLOCK_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ deviceId, durationSeconds, source: authenticatedUser }),
+      signal: AbortSignal.timeout(2500)
+    });
+    const local: any = await localRes.json().catch(() => ({}));
+    if (localRes.ok && local.success) {
+      console.log('[GATE] Local fast unlock acknowledged in ' + local.elapsedMs + 'ms.');
+      return res.json({
+        success: true, status: 'UNLOCK_COMMAND_ACKNOWLEDGED',
+        message: 'EasyBio acknowledged the ' + durationSeconds + '-second gate relay command.',
+        deviceIp, devicePort, durationSeconds, path: 'local', elapsedMs: local.elapsedMs,
+        timestamp: new Date().toLocaleTimeString('en-IN')
+      });
+    }
+    console.warn('[GATE] Local fast unlock unavailable (' + localRes.status + '): ' + (local.error || 'no detail') + '. Falling back to Firestore queue.');
+  } catch (localErr: any) {
+    console.warn('[GATE] Local fast unlock unreachable: ' + localErr.message + '. Falling back to Firestore queue.');
+  }
+
   console.log('[GATE] Device IP: ' + deviceIp);
   console.log('[GATE] Device Port: ' + devicePort);
   console.log('[GATE] Connecting through the existing local device service...');

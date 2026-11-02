@@ -138,6 +138,10 @@ processed_fingerprints = set()
 processed_unlock_requests = set()
 membership_expiry_timers = {}
 membership_policy_cache = {}
+# Live pyzk connection per device, published by device_worker_thread so the
+# local fast-unlock endpoint can pulse the relay without a Firestore round trip.
+active_device_conns = {}
+LOCAL_GATE_PORT = int(os.getenv("ALPHA_ZONE_LOCAL_GATE_PORT", "8765"))
 
 
 @contextmanager
@@ -2122,7 +2126,7 @@ def device_worker_thread(device_id, ip, port, device_name, branch, sync_interval
         conn = None
         try:
             conn = zk.connect()
-            
+
             # Attach Firestore snapshot listener for real-time manual unlocks
             device_ref = db.collection('devices').document(device_id)
             watch = device_ref.on_snapshot(make_device_listener(conn, device_id, device_name))
@@ -2143,6 +2147,9 @@ def device_worker_thread(device_id, ip, port, device_name, branch, sync_interval
             # Live capture swipes loop
             logging.info(f"Entering realtime live_capture mode for {device_name}...")
             connection_time = time.time()
+            # Publish only now: the startup user sync and clock set above use this
+            # same socket, and a concurrent relay command corrupts their packets.
+            active_device_conns[device_id] = (conn, device_name)
             for event in conn.live_capture():
                 if not threads_running:
                     break
@@ -2246,6 +2253,8 @@ def device_worker_thread(device_id, ip, port, device_name, branch, sync_interval
                 'timestamp': datetime.utcnow().isoformat() + 'Z'
             })
         finally:
+            if active_device_conns.get(device_id, (None,))[0] is conn:
+                active_device_conns.pop(device_id, None)
             if watch:
                 try:
                     watch.unsubscribe()
@@ -2259,6 +2268,92 @@ def device_worker_thread(device_id, ip, port, device_name, branch, sync_interval
             
             # Wait 10 seconds before attempting connection recovery
             time.sleep(10)
+
+def _log_fast_unlock(device_id, device_name, duration, source, error=None):
+    """Record a fast-path unlock in Firestore off the request path."""
+    try:
+        now_iso = datetime.utcnow().isoformat() + 'Z'
+        db.collection('deviceLogs').add({
+            'deviceId': device_id,
+            'deviceName': device_name,
+            'level': 'ERROR' if error else 'SUCCESS',
+            'message': (f"[GATE ERROR] Local fast unlock failed: {error}" if error
+                        else f"[GATE] Local fast unlock: device acknowledged {duration}s relay command ({source})."),
+            'timestamp': now_iso
+        })
+    except Exception as log_err:
+        logging.warning(f"[GATE] Could not log fast unlock: {log_err}")
+
+
+def start_local_gate_server():
+    """Loopback-only HTTP endpoint the Node gate server calls to open the relay
+    directly over the live device connection (~100ms instead of several
+    Firestore round trips). Bound to 127.0.0.1 so only this PC can reach it."""
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+    class LocalGateHandler(BaseHTTPRequestHandler):
+        def log_message(self, fmt, *args):
+            pass
+
+        def _reply(self, code, payload):
+            body = json.dumps(payload).encode('utf-8')
+            self.send_response(code)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Content-Length', str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def do_POST(self):
+            if self.path != '/unlock':
+                return self._reply(404, {'success': False, 'error': 'Not found'})
+            try:
+                length = int(self.headers.get('Content-Length') or 0)
+                payload = json.loads(self.rfile.read(length) or b'{}') if length else {}
+            except (ValueError, json.JSONDecodeError):
+                return self._reply(400, {'success': False, 'error': 'Invalid JSON body'})
+            device_id = str(payload.get('deviceId') or 'dev_k90_main')
+            source = str(payload.get('source') or 'gate_server')[:80]
+            try:
+                duration = int(payload.get('durationSeconds', 15))
+            except (TypeError, ValueError):
+                duration = 0
+            if duration < 1 or duration > 30:
+                return self._reply(400, {'success': False, 'error': f'Unsupported relay duration: {duration}s'})
+            entry = active_device_conns.get(device_id)
+            if not entry:
+                return self._reply(503, {'success': False, 'error': 'Device is not connected to the local service.'})
+            conn, device_name = entry
+            started = time.time()
+            try:
+                with biometric_operation(manual_access=True):
+                    try:
+                        result = conn.unlock(duration)
+                    except ZKError as first_err:
+                        # A live-capture event can arrive on the socket mid-command;
+                        # one quick retry recovers without falling back to Firestore.
+                        logging.warning(f"[GATE] Fast unlock retry after: {first_err}")
+                        time.sleep(0.15)
+                        result = conn.unlock(duration)
+                if result is False:
+                    raise RuntimeError("Device library returned a negative relay command result.")
+            except Exception as ex:
+                logging.error(f"[GATE ERROR] Local fast unlock on {device_name}: {ex}")
+                threading.Thread(target=_log_fast_unlock, args=(device_id, device_name, duration, source, str(ex)), daemon=True).start()
+                return self._reply(502, {'success': False, 'error': str(ex)})
+            elapsed_ms = int((time.time() - started) * 1000)
+            logging.info(f"[GATE] Local fast unlock: {duration}s relay acknowledged by {device_name} in {elapsed_ms}ms ({source}).")
+            threading.Thread(target=_log_fast_unlock, args=(device_id, device_name, duration, source), daemon=True).start()
+            return self._reply(200, {'success': True, 'durationSeconds': duration, 'deviceName': device_name,
+                                     'elapsedMs': elapsed_ms, 'result': repr(result)[:240]})
+
+    try:
+        server = ThreadingHTTPServer(('127.0.0.1', LOCAL_GATE_PORT), LocalGateHandler)
+    except OSError as bind_err:
+        logging.error(f"[GATE] Local fast-unlock endpoint unavailable on 127.0.0.1:{LOCAL_GATE_PORT}: {bind_err}")
+        return
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    logging.info(f"[GATE] Local fast-unlock endpoint listening on http://127.0.0.1:{LOCAL_GATE_PORT}/unlock")
+
 
 def python_heartbeat_loop():
     """Continuous 5-second heartbeat for Real Device Status Engine."""
@@ -2335,6 +2430,7 @@ def main_sync_orchestrator():
 
     # Launch continuous heartbeat thread
     threading.Thread(target=python_heartbeat_loop, daemon=True).start()
+    start_local_gate_server()
     
     # Watch diagnostics document
     try:
