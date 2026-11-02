@@ -754,10 +754,10 @@ export default function SmartAutoMappingEngine({
                             const query = previewSearch.toLowerCase();
                             return (
                               (r.name || '').toLowerCase().includes(query) ||
-                              (r.phone || '').includes(query) ||
-                              (r.clientId || '').toLowerCase().includes(query) ||
-                              (r.amount || r.Amount || '').toLowerCase().includes(query) ||
-                              (r.membershipPackage || r.Package || '').toLowerCase().includes(query)
+                              String(r.phone || '').includes(query) ||
+                              String(r.clientId || '').toLowerCase().includes(query) ||
+                              String(r.amount || r.Amount || '').toLowerCase().includes(query) ||
+                              String(r.membershipPackage || r.Package || '').toLowerCase().includes(query)
                             );
                           })
                           .slice(0, 50)

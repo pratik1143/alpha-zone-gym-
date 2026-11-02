@@ -498,7 +498,7 @@ export default function FollowUpManager() {
       const sq = searchQuery.toLowerCase();
       result = result.filter(m => {
         const name = (m.name || '').toLowerCase();
-        const phone = (m.phone || '').toLowerCase();
+        const phone = String(m.phone || '').toLowerCase();
         const id = (m.memberId || m.id || '').toLowerCase();
         const inv = (m.invoiceNumber || '').toLowerCase();
         return name.includes(sq) || phone.includes(sq) || id.includes(sq) || inv.includes(sq);
@@ -1387,7 +1387,7 @@ export default function FollowUpManager() {
                         </a>
 
                         <a
-                          href={`https://wa.me/91${(m.phone || '').replace(/[^0-9]/g, '')}`}
+                          href={`https://wa.me/91${String(m.phone || '').replace(/[^0-9]/g, '')}`}
                           target="_blank"
                           rel="noreferrer"
                           className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 no-underline border border-emerald-200"
@@ -2772,7 +2772,7 @@ function SearchableMemberSelect({ members, selectedMemberId, onSelect }: { membe
     const q = search.toLowerCase();
     return members.filter((m: any) => {
       const name = (m.name || m.fullName || '').toLowerCase();
-      const phone = (m.phone || '').replace(/\D/g, '');
+      const phone = String(m.phone || '').replace(/\D/g, '');
       const id = (m.memberId || m.id || '').toLowerCase();
       return name.includes(q) || phone.includes(q) || id.includes(q);
     }).slice(0, 30);

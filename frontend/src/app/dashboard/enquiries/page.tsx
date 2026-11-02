@@ -249,7 +249,7 @@ export default function EnquiryGodLevelHub() {
       // Search Filter
       const q = searchQuery.toLowerCase();
       const nameMatch = (item.name || '').toLowerCase().includes(q) ||
-                        (item.phone || '').includes(q) ||
+                        String(item.phone || '').includes(q) ||
                         (item.email || '').toLowerCase().includes(q) ||
                         (item.interestedPlan || '').toLowerCase().includes(q) ||
                         String(item.id || '').toLowerCase().includes(q);

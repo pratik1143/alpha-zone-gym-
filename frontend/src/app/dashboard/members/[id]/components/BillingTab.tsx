@@ -259,7 +259,7 @@ export default function BillingTab({ member: initialMember }: { member: any }) {
 
   // WhatsApp Bill
   const handleWhatsApp = (inv: any) => {
-    const rawPhone = (member.phone || '').replace(/\D/g, '');
+    const rawPhone = String(member.phone || '').replace(/\D/g, '');
     const cleanPhone = rawPhone.length === 10 ? `91${rawPhone}` : rawPhone;
     const total = Number(inv.netPayable || inv.amount || 0);
     const invNum = inv.invoiceNumber || inv.invoice || 'INV-001';

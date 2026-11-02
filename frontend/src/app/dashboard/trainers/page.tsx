@@ -183,7 +183,7 @@ export default function TrainersPage() {
       // Search Query
       const q = searchQuery.toLowerCase();
       const matchName = (t.name || '').toLowerCase().includes(q);
-      const matchPhone = (t.phone || '').includes(q);
+      const matchPhone = String(t.phone || '').includes(q);
       const matchEmail = (t.email || '').toLowerCase().includes(q);
       const matchBio = String(t.biometricId || '').includes(q);
       const matchEmpId = String(t.employeeId || '').toLowerCase().includes(q);

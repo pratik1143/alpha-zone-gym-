@@ -155,7 +155,7 @@ export default function ExpiredPage() {
       // Search Query
       const q = search.toLowerCase();
       const matchName = (m.name || '').toLowerCase().includes(q);
-      const matchPhone = (m.phone || '').includes(q);
+      const matchPhone = String(m.phone || '').includes(q);
       const matchId = (m.memberId || m.id || '').toLowerCase().includes(q);
 
       return matchName || matchPhone || matchId;

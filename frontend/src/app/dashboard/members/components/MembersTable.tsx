@@ -425,11 +425,11 @@ export default function MembersTable({
       if (q) {
         const nameMatch = (m.name || m.fullName || '').toLowerCase().includes(q);
         const idMatch = (
-          (m.memberId || '').toLowerCase().includes(q) ||
-          (m.id || '').toLowerCase().includes(q) ||
-          (m.customId || '').toLowerCase().includes(q) ||
-          (m.clientId || '').toLowerCase().includes(q) ||
-          (m.biometricId || '').toLowerCase().includes(q)
+          String(m.memberId || '').toLowerCase().includes(q) ||
+          String(m.id || '').toLowerCase().includes(q) ||
+          String(m.customId || '').toLowerCase().includes(q) ||
+          String(m.clientId || '').toLowerCase().includes(q) ||
+          String(m.biometricId ?? '').toLowerCase().includes(q)
         );
         const addressStr = `${m.address || ''} ${m.city || ''} ${m.locality || ''} ${m.location || ''} ${m.branch || ''}`.toLowerCase();
         const addressMatch = addressStr.includes(q);

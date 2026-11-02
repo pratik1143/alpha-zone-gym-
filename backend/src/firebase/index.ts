@@ -785,7 +785,7 @@ export const db = {
       const digitsOnly = search.replace(/\D/g, '');
       filtered = filtered.filter(m => {
         const nameMatch = (m.name || '').toLowerCase().includes(search);
-        const idMatch = (m.memberId || '').toLowerCase().includes(search) || (m.id || '').toLowerCase().includes(search) || (m.biometricId || '').toLowerCase().includes(search);
+        const idMatch = String(m.memberId || '').toLowerCase().includes(search) || String(m.id || '').toLowerCase().includes(search) || String(m.biometricId ?? '').toLowerCase().includes(search);
         const phoneMatch = digitsOnly.length >= 3 && (m.phone || '').replace(/\D/g, '').includes(digitsOnly);
         const emailMatch = (m.email || '').toLowerCase().includes(search);
         return nameMatch || idMatch || phoneMatch || emailMatch;

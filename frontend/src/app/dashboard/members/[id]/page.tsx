@@ -583,7 +583,7 @@ export default function ClientProfileSystem() {
 
               <button
                 onClick={() => {
-                  const rawPhone = (member.phone || '').replace(/\D/g, '');
+                  const rawPhone = String(member.phone || '').replace(/\D/g, '');
                   const cleanPhone = rawPhone.length === 10 ? `91${rawPhone}` : rawPhone;
                   if (cleanPhone) window.open(`https://wa.me/${cleanPhone}`, '_blank');
                   else toast.error('No valid phone number for WhatsApp');

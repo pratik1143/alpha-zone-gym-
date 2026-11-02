@@ -122,7 +122,7 @@ export default function WebMessagesPage() {
       const q = searchQuery.toLowerCase();
       const matchesSearch = !searchQuery || 
         (msg.name || '').toLowerCase().includes(q) ||
-        (msg.phone || '').includes(q) ||
+        String(msg.phone || '').includes(q) ||
         (msg.email || '').toLowerCase().includes(q) ||
         (msg.goal || '').toLowerCase().includes(q) ||
         (msg.message || '').toLowerCase().includes(q);
