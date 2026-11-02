@@ -139,6 +139,7 @@ export const useAuthStore = create<AuthStore>((set) => ({
       console.warn('Firebase client signout failed:', fbErr);
     }
     localStorage.removeItem('alpha_zone_user');
+    clearPersistedGymCache();
     set({ user: null, isAuthenticated: false });
   }
 }));
@@ -225,6 +226,60 @@ let _attendanceCacheTs = 0;
 let _paymentsCacheTs = 0;
 const STALE_MS = 30_000; // 30 seconds
 
+// In-flight requests, so the layout, the page and realtime listeners share one
+// network call instead of each downloading the full collection.
+let _membersInflight: Promise<void> | null = null;
+let _attendanceInflight: Promise<void> | null = null;
+let _paymentsInflight: Promise<void> | null = null;
+
+// Persisted snapshot of the last successful load. Pages render this instantly
+// on reload while a fresh copy is fetched in the background (stale-while-revalidate).
+const PERSIST_PREFIX = 'az_cache_v1_';
+const PERSISTED_KEYS = ['members', 'payments', 'attendance', 'plans'] as const;
+
+const readPersisted = (key: string): any[] => {
+  if (typeof window === 'undefined' || !initialAuthUser) return [];
+  try {
+    const raw = localStorage.getItem(PERSIST_PREFIX + key);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+};
+
+// Inline base64 photos can blow the ~5MB localStorage quota; drop them from the
+// persisted copy only (the live fetch restores them).
+const stripInlineImages = (list: any[]) =>
+  list.map((item) => {
+    if (!item || typeof item !== 'object') return item;
+    const out: any = {};
+    for (const [k, v] of Object.entries(item)) {
+      out[k] = typeof v === 'string' && v.startsWith('data:') && v.length > 2000 ? '' : v;
+    }
+    return out;
+  });
+
+const writePersisted = (key: string, list: any[]) => {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(PERSIST_PREFIX + key, JSON.stringify(list));
+  } catch {
+    try {
+      localStorage.setItem(PERSIST_PREFIX + key, JSON.stringify(stripInlineImages(list)));
+    } catch {
+      try { localStorage.removeItem(PERSIST_PREFIX + key); } catch {}
+    }
+  }
+};
+
+export const clearPersistedGymCache = () => {
+  if (typeof window === 'undefined') return;
+  PERSISTED_KEYS.forEach((key) => {
+    try { localStorage.removeItem(PERSIST_PREFIX + key); } catch {}
+  });
+};
+
 interface GymStore {
   members: any[];
   attendance: any[];
@@ -276,9 +331,9 @@ interface GymStore {
 }
 
 export const useGymStore = create<GymStore>((set, get) => ({
-  members: [],
-  attendance: [],
-  payments: [],
+  members: readPersisted('members'),
+  attendance: readPersisted('attendance'),
+  payments: readPersisted('payments'),
   gymPresence: [],
   setGymPresence: (presence) => set({ gymPresence: presence }),
   selectedBranch: 'Mohali, Punjab',
@@ -347,6 +402,8 @@ export const useGymStore = create<GymStore>((set, get) => ({
   fetchMembers: async (force = false) => {
     const now = Date.now();
     if (!force && get().members.length > 0 && (now - _membersCacheTs) < STALE_MS) return;
+    if (!force && _membersInflight) return _membersInflight;
+    const run = (async () => {
     try {
       const res = await API.get('/members');
       const rawData = (res.data && Array.isArray(res.data)) ? res.data : [];
@@ -458,6 +515,13 @@ export const useGymStore = create<GymStore>((set, get) => ({
     if (get().members.length === 0) {
       set({ members: [] });
     }
+    })();
+    _membersInflight = run;
+    try {
+      await run;
+    } finally {
+      if (_membersInflight === run) _membersInflight = null;
+    }
   },
   fetchNextBiometricId: async () => {
     try {
@@ -524,6 +588,8 @@ export const useGymStore = create<GymStore>((set, get) => ({
   fetchAttendance: async (force = false) => {
     const now = Date.now();
     if (!force && get().attendance.length > 0 && (now - _attendanceCacheTs) < STALE_MS) return;
+    if (!force && _attendanceInflight) return _attendanceInflight;
+    const run = (async () => {
     try {
       const res = await API.get('/attendance');
       if (res.data && Array.isArray(res.data) && res.data.length > 0) {
@@ -547,6 +613,13 @@ export const useGymStore = create<GymStore>((set, get) => ({
       }
     } catch (fsErr) {
       console.error('Direct Firestore attendance fetch failed:', fsErr);
+    }
+    })();
+    _attendanceInflight = run;
+    try {
+      await run;
+    } finally {
+      if (_attendanceInflight === run) _attendanceInflight = null;
     }
   },
   triggerCheckIn: async (payload) => {
@@ -610,6 +683,8 @@ export const useGymStore = create<GymStore>((set, get) => ({
   fetchPayments: async (force = false) => {
     const now = Date.now();
     if (!force && get().payments.length > 0 && (now - _paymentsCacheTs) < STALE_MS) return;
+    if (!force && _paymentsInflight) return _paymentsInflight;
+    const run = (async () => {
     try {
       const res = await API.get('/billing');
       if (res.data && Array.isArray(res.data) && res.data.length > 0) {
@@ -635,6 +710,13 @@ export const useGymStore = create<GymStore>((set, get) => ({
     } catch (fsErr) {
       console.error('Direct Firestore payments fetch failed:', fsErr);
     }
+    })();
+    _paymentsInflight = run;
+    try {
+      await run;
+    } finally {
+      if (_paymentsInflight === run) _paymentsInflight = null;
+    }
   },
   addPayment: async (payment) => {
     const res = await API.post('/billing', payment);
@@ -649,7 +731,7 @@ export const useGymStore = create<GymStore>((set, get) => ({
   setSelectedBranch: (selectedBranch) => set({ selectedBranch }),
   setSidebarCollapsed: (sidebarCollapsed) => set({ sidebarCollapsed }),
 
-  plans: [],
+  plans: readPersisted('plans'),
   fetchPlans: async () => {
     try {
       const res = await API.get('/memberships');
@@ -687,6 +769,22 @@ export const useGymStore = create<GymStore>((set, get) => ({
     set({ plans: get().plans.filter(p => p.id !== id) });
   }
 }));
+
+// Persist list changes (fetches and local mutations alike), debounced so rapid
+// realtime updates don't serialize hundreds of records on every change.
+if (typeof window !== 'undefined') {
+  const timers: Record<string, ReturnType<typeof setTimeout>> = {};
+  useGymStore.subscribe((state, prev) => {
+    PERSISTED_KEYS.forEach((key) => {
+      if (state[key] === prev[key]) return;
+      clearTimeout(timers[key]);
+      timers[key] = setTimeout(() => {
+        if (!useAuthStore.getState().isAuthenticated) return;
+        writePersisted(key, useGymStore.getState()[key]);
+      }, 500);
+    });
+  });
+}
 
 // 3. CHAT STORE
 interface ChatStore {

@@ -22,6 +22,12 @@ const DEMO_FALLBACK_USER = {
   gymId: 'gym_001'
 };
 
+// Short-lived profile cache: every authenticated request otherwise pays an extra
+// Firestore round trip to load the same users/{uid} document. Role changes take
+// effect within PROFILE_TTL_MS.
+const PROFILE_TTL_MS = 60_000;
+const profileCache = new Map<string, { user: AuthenticatedRequest['user']; expiresAt: number }>();
+
 export const authenticateToken = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   const firestore = getFirestoreDb();
   if (!isFirebaseInitialized || !firestore) {
@@ -47,6 +53,12 @@ export const authenticateToken = async (req: AuthenticatedRequest, res: Response
   try {
     const decodedToken = await admin.auth().verifyIdToken(token);
 
+    const cachedProfile = profileCache.get(decodedToken.uid);
+    if (cachedProfile && cachedProfile.expiresAt > Date.now()) {
+      req.user = cachedProfile.user;
+      return next();
+    }
+
     // Retrieve user profile from Firestore
     try {
       const userDoc = await firestore.collection('users').doc(decodedToken.uid).get();
@@ -66,6 +78,7 @@ export const authenticateToken = async (req: AuthenticatedRequest, res: Response
       } else {
         req.user = { uid: decodedToken.uid, ...userDoc.data() } as any;
       }
+      profileCache.set(decodedToken.uid, { user: req.user, expiresAt: Date.now() + PROFILE_TTL_MS });
     } catch (fErr: any) {
       if (fErr?.message?.includes('PERMISSION_DENIED') || fErr?.message?.includes('disabled')) {
         disableFirestore();

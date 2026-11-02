@@ -68,7 +68,8 @@ export default function AnalyticsPage() {
 
   useEffect(() => {
     const load = async () => {
-      setLoading(true);
+      // Cached data renders immediately; only show the spinner on a cold start.
+      if (members.length === 0) setLoading(true);
       try {
         await Promise.all([fetchMembers(), fetchPayments(), fetchAttendance()]);
       } catch (e) {

@@ -618,6 +618,9 @@ export const classifyHistoricalPayments = async () => {
 };
 
 let membersCache: any[] | null = null;
+// Concurrent callers (dashboard layout, page, realtime refetches) share one
+// full-collection read instead of each scanning every member document.
+let membersInflight: Promise<any[]> | null = null;
 
 export function getMemberSortTime(m: any): number {
   if (m?.createdAt) {
@@ -647,12 +650,15 @@ export const db = {
   },
   invalidateMembersCache: () => {
     membersCache = null;
+    membersInflight = null;
   },
 
   getMembers: async (): Promise<any[]> => {
     // Single-source-of-truth from Firestore
     const firestore = getFirestoreDb();
     if (firestore) {
+      if (membersInflight) return membersInflight;
+      const run = (async () => {
       try {
         const membersSnap = await firestore.collection('members').get();
         const rawMembers = membersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -696,6 +702,13 @@ export const db = {
         });
         mockList.sort((a: any, b: any) => getMemberSortTime(b) - getMemberSortTime(a));
         return mockList;
+      }
+      })();
+      membersInflight = run;
+      try {
+        return await run;
+      } finally {
+        if (membersInflight === run) membersInflight = null;
       }
     }
     const seenMockKeys = new Set<string>();

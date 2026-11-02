@@ -18,8 +18,6 @@ import toast from '@/lib/toast';
 import { collection, query, orderBy, limit, onSnapshot } from 'firebase/firestore';
 import { db as fDb, isFirebaseReady } from '@/lib/firebase';
 import { useCallback } from 'react';
-import AttendancePopupManager from './components/AttendancePopupManager';
-import EmployeePopupManager from './components/EmployeePopupManager';
 import UniversalSearchBar from './components/UniversalSearchBar';
 import LiveTimeCard from './components/LiveTimeCard';
 import SoftwareFooter from './components/SoftwareFooter';
@@ -110,7 +108,7 @@ export default function DashboardLayout({
       return null;
     };
 
-    // 1. Listen for popup check-ins logic has been moved to AttendancePopupManager
+    // 1. Scan popups are shown only by the gate PC's desktop overlay (device-service/desktop_popup.py)
 
     const attCollection = collection(fDb, 'attendance_logs');
 
@@ -741,8 +739,6 @@ export default function DashboardLayout({
           </>
         )}
       </AnimatePresence>
-    <AttendancePopupManager />
-    <EmployeePopupManager />
     <MobileBottomNav onOpenAddMember={() => setIsMobileAddModalOpen(true)} />
     <AddMemberModal isOpen={isMobileAddModalOpen} onClose={() => setIsMobileAddModalOpen(false)} />
     </div>

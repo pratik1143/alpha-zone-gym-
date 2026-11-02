@@ -312,12 +312,24 @@ export default function MembersPage() {
   // Realtime Firestore listener for new/updated members
   useEffect(() => {
     if (!isFirebaseReady || !fDb) return;
+    // The first snapshot only mirrors the current state, which the mount fetch
+    // already loads; refetch on later changes, debounced to coalesce bursts.
+    let isInitialSnapshot = true;
+    let refetchTimer: ReturnType<typeof setTimeout> | undefined;
     const unsub = onSnapshot(collection(fDb, 'members'), () => {
-      fetchMembers(true);
+      if (isInitialSnapshot) {
+        isInitialSnapshot = false;
+        return;
+      }
+      clearTimeout(refetchTimer);
+      refetchTimer = setTimeout(() => fetchMembers(true), 600);
     }, (err) => {
       console.warn("Realtime members sync notice:", err);
     });
-    return () => unsub();
+    return () => {
+      clearTimeout(refetchTimer);
+      unsub();
+    };
   }, [fetchMembers]);
 
   // ── Biometric Enrollment State ──────────────────────────────────────────────

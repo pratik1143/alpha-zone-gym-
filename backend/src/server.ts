@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import path from 'path';
 import * as dotenv from 'dotenv';
 import router from './routes';
 import { provisionAdminAccounts, db, getFirestoreDb } from './firebase';
@@ -55,10 +56,46 @@ app.post('/gate-unlock', triggerGateUnlock);
 app.post('/api/gate/enroll-fingerprint', startEnrollFingerprint);
 app.post('/api/devices/biometric/enroll-fingerprint', startEnrollFingerprint);
 
+// The roster reads every member, employee and device user (~2-3s from Firestore).
+// Serve the last copy instantly and refresh it in the background; callers that
+// just changed something pass ?fresh=1 to wait for a new read.
+const GATE_ROSTER_FRESH_MS = 15_000;
+let gateRosterCache: { payload: any; at: number } | null = null;
+let gateRosterInflight: Promise<any> | null = null;
+
+const loadGateRoster = (): Promise<any> => {
+  if (gateRosterInflight) return gateRosterInflight;
+  const run = buildGateRoster()
+    .then(payload => {
+      gateRosterCache = { payload, at: Date.now() };
+      return payload;
+    })
+    .finally(() => {
+      if (gateRosterInflight === run) gateRosterInflight = null;
+    });
+  gateRosterInflight = run;
+  return run;
+};
+
 app.get('/api/gate/roster', async (req: express.Request, res: express.Response) => {
   try {
-    const firestore = getFirestoreDb();
-    if (!firestore) return res.status(503).json({ success: false, error: 'CRM/Firebase connection is unavailable.' });
+    if (!getFirestoreDb()) return res.status(503).json({ success: false, error: 'CRM/Firebase connection is unavailable.' });
+    const wantsFresh = req.query.fresh === '1';
+    if (!wantsFresh && gateRosterCache) {
+      if (Date.now() - gateRosterCache.at > GATE_ROSTER_FRESH_MS) {
+        loadGateRoster().catch(err => console.error('[CRM ROSTER REFRESH ERROR] ' + err.message));
+      }
+      return res.json(gateRosterCache.payload);
+    }
+    res.json(await loadGateRoster());
+  } catch (err: any) {
+    console.error('[CRM ROSTER ERROR] ' + err.message);
+    res.status(503).json({ success: false, error: 'Could not load the live CRM roster: ' + err.message });
+  }
+});
+
+async function buildGateRoster() {
+    const firestore = getFirestoreDb()!;
     const deviceId = process.env.EASYBIO_DEVICE_ID || 'dev_k90_main';
     const [memberSnap, employeeSnap, deviceUserSnap, deviceSnap] = await Promise.all([
       firestore.collection('members').get(),
@@ -66,6 +103,8 @@ app.get('/api/gate/roster', async (req: express.Request, res: express.Response) 
       firestore.collection('deviceUsers').where('deviceId', '==', deviceId).get(),
       firestore.collection('devices').doc(deviceId).get()
     ]);
+    const deviceUserById = new Map<string, any>();
+    deviceUserSnap.docs.forEach(userDoc => deviceUserById.set(String(userDoc.data().userId ?? ''), userDoc.data()));
     const members = memberSnap.docs
       .filter(doc => !doc.data().isDeleted && !doc.data().deletedAt)
       .map(doc => {
@@ -73,7 +112,7 @@ app.get('/api/gate/roster', async (req: express.Request, res: express.Response) 
         const memberFingerprintStatus = String(member.fingerprintStatus || member.fingerprint?.status || '').toUpperCase();
         const memberFingerprintEnrolled = member.fingerprintEnrolled === true || member.fingerprint?.enrolled === true;
         const memberBioId = String(member.biometricId ?? member.deviceUserId ?? '');
-        const memberDeviceUser = deviceUserSnap.docs.find(userDoc => String(userDoc.data().userId ?? '') === memberBioId)?.data();
+        const memberDeviceUser = deviceUserById.get(memberBioId);
         const memberHasFingerprint = memberFingerprintStatus === 'ENROLLED' || memberFingerprintEnrolled
           || Number(memberDeviceUser?.fingerprintsCount || 0) > 0;
         return {
@@ -132,7 +171,7 @@ app.get('/api/gate/roster', async (req: express.Request, res: express.Response) 
       };
     });
     const device = deviceSnap.exists ? deviceSnap.data() : null;
-    res.json({
+    return {
       success: true, members, employees, deviceUsers,
       device: {
         id: deviceId,
@@ -141,11 +180,15 @@ app.get('/api/gate/roster', async (req: express.Request, res: express.Response) 
         status: device?.status || 'unknown',
         lastSync: device?.lastSync || null
       }
-    });
-  } catch (err: any) {
-    console.error('[CRM ROSTER ERROR] ' + err.message);
-    res.status(503).json({ success: false, error: 'Could not load the live CRM roster: ' + err.message });
-  }
+    };
+}
+
+// Gate terminal branding, served locally so the LAN page works without internet.
+app.get('/gate-assets/logo.png', (req: express.Request, res: express.Response) => {
+  res.setHeader('Cache-Control', 'public, max-age=86400');
+  res.sendFile(path.join(__dirname, '..', '..', 'frontend', 'public', 'gym_logo.png'), err => {
+    if (err && !res.headersSent) res.status(404).end();
+  });
 });
 
 app.post('/api/gate/members/:memberId/assign-biometric-id', async (req: express.Request, res: express.Response) => {
@@ -203,29 +246,29 @@ const renderGateHtml = (req: express.Request, res: express.Response) => {
     .pulse-glow { animation: pulse-ring 2.8s infinite ease-in-out; }
   </style>
 </head>
-<body class="bg-slate-950 text-slate-100 min-h-screen font-sans flex flex-col justify-between antialiased selection:bg-blue-600 selection:text-white">
+<body class="bg-slate-50 text-slate-800 min-h-screen font-sans flex flex-col justify-between antialiased selection:bg-blue-600 selection:text-white">
   
   <!-- Header -->
-  <header class="bg-slate-900/90 border-b border-slate-800 p-4 px-6 backdrop-blur-xl sticky top-0 z-30 shadow-xl">
+  <header class="bg-white border-b border-slate-200 p-4 px-6 backdrop-blur sticky top-0 z-30 shadow-sm">
     <div class="max-w-5xl mx-auto flex items-center justify-between">
       <div class="flex items-center gap-3.5">
-        <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 p-0.5 shadow-md shadow-blue-500/20 shrink-0 flex items-center justify-center">
-          <img 
-            src="https://i.ibb.co/vzG7CgD/alpha-zone-logo.png" 
-            alt="Alpha Zone Gym" 
-            class="w-full h-full object-contain p-1 rounded-xl bg-white" 
+        <div class="w-14 h-14 rounded-2xl bg-black ring-1 ring-slate-200 shadow-sm shrink-0 flex items-center justify-center overflow-hidden">
+          <img
+            src="/gate-assets/logo.png"
+            alt="Alpha Zone Gym"
+            class="w-full h-full object-cover scale-110"
             onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';"
           />
           <div class="hidden w-full h-full items-center justify-center text-white font-black text-xl">AZ</div>
         </div>
         <div>
           <div class="flex items-center gap-2">
-            <h1 class="text-lg font-black text-white tracking-tight uppercase">ALPHA ZONE GYM</h1>
-            <span class="px-2 py-0.5 rounded-full bg-blue-900/80 text-blue-300 text-[10px] font-black uppercase tracking-wider border border-blue-700">
+            <h1 class="text-lg font-black text-slate-900 tracking-tight uppercase">ALPHA ZONE GYM</h1>
+            <span class="px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 text-[10px] font-black uppercase tracking-wider border border-blue-200">
               LAN TERMINAL
             </span>
           </div>
-          <p class="text-xs text-slate-400 font-semibold mt-0.5">EasyBio Hardware Access & Fingerprint Engine</p>
+          <p class="text-xs text-slate-500 font-semibold mt-0.5">EasyBio Hardware Access & Fingerprint Engine</p>
         </div>
       </div>
 
@@ -234,12 +277,12 @@ const renderGateHtml = (req: express.Request, res: express.Response) => {
           <span>🚀 Open Deployed CRM</span>
         </a>
 
-        <div class="flex items-center gap-2 bg-slate-800/90 border border-slate-700 px-3.5 py-1.5 rounded-full shadow-inner">
+        <div class="flex items-center gap-2 bg-slate-100 border border-slate-200 px-3.5 py-1.5 rounded-full ">
           <span class="relative flex h-2.5 w-2.5">
             <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
           <span id="deviceStatusDot" class="relative inline-flex rounded-full h-2.5 w-2.5 bg-slate-500"></span>
           </span>
-          <span id="deviceStatusText" class="text-xs font-mono font-black text-slate-300">
+          <span id="deviceStatusText" class="text-xs font-mono font-black text-slate-600">
             ${lanIp}
           </span>
         </div>
@@ -252,28 +295,28 @@ const renderGateHtml = (req: express.Request, res: express.Response) => {
     <button 
       id="tabBtnGate" 
       onclick="switchTab('gate')"
-      class="px-5 py-2.5 rounded-2xl text-xs font-black uppercase tracking-wider transition-all border cursor-pointer flex items-center gap-2 bg-blue-600 text-white border-blue-500 shadow-lg shadow-blue-900/40"
+      class="px-5 py-2.5 rounded-2xl text-xs font-black uppercase tracking-wider transition-all border cursor-pointer flex items-center gap-2 bg-blue-600 text-white border-blue-500 shadow-lg shadow-blue-500/20"
     >
       🔓 Gate Control
     </button>
     <button 
       id="tabBtnClient" 
       onclick="switchTab('client')"
-      class="px-5 py-2.5 rounded-2xl text-xs font-black uppercase tracking-wider transition-all border cursor-pointer flex items-center gap-2 bg-slate-900 text-slate-400 border-slate-800 hover:bg-slate-800 hover:text-white"
+      class="px-5 py-2.5 rounded-2xl text-xs font-black uppercase tracking-wider transition-all border cursor-pointer flex items-center gap-2 bg-white text-slate-500 border-slate-200 hover:bg-slate-100 hover:text-slate-900"
     >
       👤 Enroll Client
     </button>
     <button 
       id="tabBtnEmployee" 
       onclick="switchTab('employee')"
-      class="px-5 py-2.5 rounded-2xl text-xs font-black uppercase tracking-wider transition-all border cursor-pointer flex items-center gap-2 bg-slate-900 text-slate-400 border-slate-800 hover:bg-slate-800 hover:text-white"
+      class="px-5 py-2.5 rounded-2xl text-xs font-black uppercase tracking-wider transition-all border cursor-pointer flex items-center gap-2 bg-white text-slate-500 border-slate-200 hover:bg-slate-100 hover:text-slate-900"
     >
       👔 Enroll Employee
     </button>
     <button
       id="tabBtnBlocked"
       onclick="switchTab('blocked')"
-      class="px-5 py-2.5 rounded-2xl text-xs font-black uppercase tracking-wider transition-all border cursor-pointer flex items-center gap-2 bg-slate-900 text-slate-400 border-slate-800 hover:bg-slate-800 hover:text-white"
+      class="px-5 py-2.5 rounded-2xl text-xs font-black uppercase tracking-wider transition-all border cursor-pointer flex items-center gap-2 bg-white text-slate-500 border-slate-200 hover:bg-slate-100 hover:text-slate-900"
     >
       🚫 Blocked Access
     </button>
@@ -284,38 +327,38 @@ const renderGateHtml = (req: express.Request, res: express.Response) => {
     
     <!-- Status Dashboard Cards -->
     <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 w-full">
-      <div class="bg-slate-900/90 border border-slate-800 rounded-3xl p-5 shadow-xl flex flex-col justify-between">
-        <div class="flex items-center justify-between text-slate-400 mb-2">
-          <span class="text-[10px] font-black uppercase tracking-wider text-slate-400">HARDWARE TERMINAL</span>
+      <div class="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm flex flex-col justify-between">
+        <div class="flex items-center justify-between text-slate-500 mb-2">
+          <span class="text-[10px] font-black uppercase tracking-wider text-slate-500">HARDWARE TERMINAL</span>
           <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
         </div>
         <div>
-          <div class="text-base font-black text-white">EasyBio Biometric</div>
-          <div id="deviceEndpointText" class="text-xs font-mono text-blue-400 font-bold mt-1 bg-blue-950/60 px-2 py-0.5 rounded-md inline-block border border-blue-800">Checking device...</div>
+          <div class="text-base font-black text-slate-900">EasyBio Biometric</div>
+          <div id="deviceEndpointText" class="text-xs font-mono text-blue-600 font-bold mt-1 bg-blue-50 px-2 py-0.5 rounded-md inline-block border border-blue-200">Checking device...</div>
         </div>
       </div>
 
-      <div class="bg-slate-900/90 border border-slate-800 rounded-3xl p-5 shadow-xl flex flex-col justify-between">
-        <div class="flex items-center justify-between text-slate-400 mb-2">
-          <span class="text-[10px] font-black uppercase tracking-wider text-slate-400">RELAY DURATION</span>
-          <span class="text-[10px] font-extrabold text-blue-400 bg-blue-950/80 px-2 py-0.5 rounded border border-blue-800">15 SECONDS</span>
+      <div class="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm flex flex-col justify-between">
+        <div class="flex items-center justify-between text-slate-500 mb-2">
+          <span class="text-[10px] font-black uppercase tracking-wider text-slate-500">RELAY DURATION</span>
+          <span class="text-[10px] font-extrabold text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">15 SECONDS</span>
         </div>
         <div>
-          <div class="text-base font-black text-white">Direct Gate Unlock</div>
-          <div class="text-xs text-emerald-400 font-bold mt-1 flex items-center gap-1">
+          <div class="text-base font-black text-slate-900">Direct Gate Unlock</div>
+          <div class="text-xs text-emerald-600 font-bold mt-1 flex items-center gap-1">
             <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Auto-Relay Lock Active
           </div>
         </div>
       </div>
 
-      <div class="bg-slate-900/90 border border-slate-800 rounded-3xl p-5 shadow-xl flex flex-col justify-between">
-        <div class="flex items-center justify-between text-slate-400 mb-2">
-          <span class="text-[10px] font-black uppercase tracking-wider text-slate-400">PRODUCTION CRM SITE</span>
-          <span class="text-[10px] font-extrabold text-emerald-400 bg-emerald-950 px-2 py-0.5 rounded border border-emerald-800">alphazonegym.in</span>
+      <div class="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm flex flex-col justify-between">
+        <div class="flex items-center justify-between text-slate-500 mb-2">
+          <span class="text-[10px] font-black uppercase tracking-wider text-slate-500">PRODUCTION CRM SITE</span>
+          <span class="text-[10px] font-extrabold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">alphazonegym.in</span>
         </div>
         <div>
-          <div class="text-base font-black text-white">Alpha Zone OS</div>
-          <a href="${crmUrl}" target="_blank" class="text-xs font-bold text-blue-400 hover:text-blue-300 mt-1 inline-flex items-center gap-1 group">
+          <div class="text-base font-black text-slate-900">Alpha Zone OS</div>
+          <a href="${crmUrl}" target="_blank" class="text-xs font-bold text-blue-600 hover:text-blue-300 mt-1 inline-flex items-center gap-1 group">
             Launch Main CRM <span class="group-hover:translate-x-0.5 transition-transform">&rarr;</span>
           </a>
         </div>
@@ -331,7 +374,7 @@ const renderGateHtml = (req: express.Request, res: express.Response) => {
           onclick="triggerGateUnlock()"
           class="relative w-56 h-56 rounded-full bg-gradient-to-tr from-blue-700 via-blue-600 to-indigo-600 hover:from-blue-600 hover:to-indigo-500 active:scale-95 text-white shadow-[0_20px_60px_rgba(37,99,235,0.4)] transition-all cursor-pointer flex flex-col items-center justify-center border-4 border-white/20 group text-center"
         >
-          <div class="w-16 h-16 rounded-2xl bg-white/15 backdrop-blur-md flex items-center justify-center mb-2 shadow-inner group-hover:scale-110 transition-transform">
+          <div class="w-16 h-16 rounded-2xl bg-white/15 backdrop-blur-md flex items-center justify-center mb-2  group-hover:scale-110 transition-transform">
             <span id="lockIcon" class="text-3xl">🔓</span>
           </div>
           <span class="text-xl font-black tracking-wider uppercase">OPEN GATE</span>
@@ -341,28 +384,28 @@ const renderGateHtml = (req: express.Request, res: express.Response) => {
         </button>
       </div>
 
-      <div id="statusBanner" class="hidden w-full bg-slate-900 border border-slate-800 p-5 rounded-3xl shadow-xl space-y-3 transition-all text-center">
+      <div id="statusBanner" class="hidden w-full bg-white border border-slate-200 p-5 rounded-3xl shadow-sm space-y-3 transition-all text-center">
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-2">
             <div id="statusDot" class="w-3 h-3 rounded-full bg-emerald-500 animate-ping"></div>
-            <span id="bannerTitle" class="text-sm font-black text-white uppercase tracking-tight">GATE UNLOCKED!</span>
+            <span id="bannerTitle" class="text-sm font-black text-slate-900 uppercase tracking-tight">GATE UNLOCKED!</span>
           </div>
-          <span id="timerText" class="text-xs font-mono font-black text-blue-400 bg-blue-950 px-2.5 py-1 rounded-full border border-blue-800">15s Left</span>
+          <span id="timerText" class="text-xs font-mono font-black text-blue-600 bg-blue-50 px-2.5 py-1 rounded-full border border-blue-200">15s Left</span>
         </div>
-        <p id="bannerDesc" class="text-xs text-slate-400 font-semibold text-left">Hardware relay signal triggered. Gate is open for 15 seconds.</p>
-        <div class="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+        <p id="bannerDesc" class="text-xs text-slate-500 font-semibold text-left">Hardware relay signal triggered. Gate is open for 15 seconds.</p>
+        <div class="w-full bg-slate-50 h-2 rounded-full overflow-hidden">
           <div id="progressBar" class="h-full bg-gradient-to-r from-blue-600 to-emerald-500 transition-all duration-1000 w-full"></div>
         </div>
       </div>
     </div>
 
     <!-- ── TAB 2: ENROLL CLIENT (MEMBERS) ── -->
-    <div id="tabContentClient" class="hidden w-full max-w-2xl bg-slate-900/90 border border-slate-800 rounded-3xl p-6 shadow-2xl space-y-5">
+    <div id="tabContentClient" class="hidden w-full max-w-2xl bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-5">
       <div>
-        <h2 className="text-lg font-black text-white uppercase tracking-tight flex items-center gap-2">
+        <h2 class="text-lg font-black text-slate-900 uppercase tracking-tight flex items-center gap-2">
           <span>👤 Enroll Client Fingerprint</span>
         </h2>
-        <p class="text-xs text-slate-400 mt-1">
+        <p class="text-xs text-slate-500 mt-1">
           Select member to capture finger scan on ESSL scanner & map to permanent Biometric ID
         </p>
       </div>
@@ -373,37 +416,37 @@ const renderGateHtml = (req: express.Request, res: express.Response) => {
           id="searchClient" 
           oninput="renderRoster()"
           placeholder="Search client by Biometric ID (e.g. 222), Name, or Phone..."
-          class="w-full h-11 bg-slate-800 border border-slate-700 rounded-2xl px-4 text-xs font-bold text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
+          class="w-full h-11 bg-slate-50 border border-slate-200 rounded-2xl px-4 text-xs font-bold text-slate-900 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
         />
 
         <div class="flex items-center justify-between text-xs">
-          <div class="flex items-center gap-1.5 bg-slate-800/80 p-1 rounded-xl border border-slate-700">
+          <div class="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl border border-slate-200">
             <button onclick="setFilter('client', 'pending')" id="btnFilterClientPending" class="px-3 py-1.5 rounded-lg text-[11px] font-black uppercase transition-all bg-amber-500 text-slate-950">Pending</button>
-            <button onclick="setFilter('client', 'enrolled')" id="btnFilterClientEnrolled" class="px-3 py-1.5 rounded-lg text-[11px] font-black uppercase transition-all text-slate-400 hover:text-white">Enrolled</button>
-            <button onclick="setFilter('client', 'all')" id="btnFilterClientAll" class="px-3 py-1.5 rounded-lg text-[11px] font-black uppercase transition-all text-slate-400 hover:text-white">All</button>
+            <button onclick="setFilter('client', 'enrolled')" id="btnFilterClientEnrolled" class="px-3 py-1.5 rounded-lg text-[11px] font-black uppercase transition-all text-slate-500 hover:text-slate-900">Enrolled</button>
+            <button onclick="setFilter('client', 'all')" id="btnFilterClientAll" class="px-3 py-1.5 rounded-lg text-[11px] font-black uppercase transition-all text-slate-500 hover:text-slate-900">All</button>
           </div>
         <div class="flex items-center gap-2">
-          <span id="clientCountText" class="text-[11px] text-slate-400 font-mono">Loading members...</span>
-          <button onclick="refreshAll()" class="px-3 py-1.5 rounded-lg bg-slate-800 text-slate-200 text-[10px] font-black uppercase border border-slate-700">Refresh</button>
+          <span id="clientCountText" class="text-[11px] text-slate-500 font-mono">Loading members...</span>
+          <button onclick="refreshAll()" class="px-3 py-1.5 rounded-lg bg-slate-50 text-slate-700 text-[10px] font-black uppercase border border-slate-200">Refresh</button>
         </div>
         </div>
       </div>
 
       <!-- Enrollment Progress Banner -->
-      <div id="enrollProgressBannerClient" class="hidden p-4 bg-slate-800 border border-blue-500/40 rounded-2xl space-y-3">
-        <div class="flex items-center justify-between border-b border-slate-700 pb-2">
+      <div id="enrollProgressBannerClient" class="hidden p-4 bg-slate-50 border border-blue-500/40 rounded-2xl space-y-3">
+        <div class="flex items-center justify-between border-b border-slate-200 pb-2">
           <div class="flex items-center gap-2">
             <span class="w-2.5 h-2.5 rounded-full bg-blue-500 animate-ping"></span>
-            <span id="enrollProgressTargetClient" class="text-xs font-black uppercase text-white tracking-wider">Target Client</span>
+            <span id="enrollProgressTargetClient" class="text-xs font-black uppercase text-slate-900 tracking-wider">Target Client</span>
           </div>
-          <span id="enrollProgressStateClient" class="text-[10px] font-mono font-bold text-blue-400 bg-blue-950 border border-blue-800 px-2 py-0.5 rounded-md">INITIALIZING</span>
+          <span id="enrollProgressStateClient" class="text-[10px] font-mono font-bold text-blue-600 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-md">INITIALIZING</span>
         </div>
-        <div id="enrollProgressMsgClient" class="text-xs font-semibold text-slate-300">Place finger on scanner 3 times...</div>
+        <div id="enrollProgressMsgClient" class="text-xs font-semibold text-slate-600">Place finger on scanner 3 times...</div>
         <div class="grid grid-cols-4 gap-2 pt-1 text-center text-[10px] font-mono font-bold">
-          <div id="scanStep1_client" class="p-2 rounded-xl border bg-slate-900 border-slate-800 text-slate-600">SCAN 1</div>
-          <div id="scanStep2_client" class="p-2 rounded-xl border bg-slate-900 border-slate-800 text-slate-600">SCAN 2</div>
-          <div id="scanStep3_client" class="p-2 rounded-xl border bg-slate-900 border-slate-800 text-slate-600">SCAN 3</div>
-          <div id="scanStep4_client" class="p-2 rounded-xl border bg-slate-900 border-slate-800 text-slate-600">MAPPED ✓</div>
+          <div id="scanStep1_client" class="p-2 rounded-xl border bg-white border-slate-200 text-slate-400">SCAN 1</div>
+          <div id="scanStep2_client" class="p-2 rounded-xl border bg-white border-slate-200 text-slate-400">SCAN 2</div>
+          <div id="scanStep3_client" class="p-2 rounded-xl border bg-white border-slate-200 text-slate-400">SCAN 3</div>
+          <div id="scanStep4_client" class="p-2 rounded-xl border bg-white border-slate-200 text-slate-400">MAPPED ✓</div>
         </div>
       </div>
 
@@ -411,12 +454,12 @@ const renderGateHtml = (req: express.Request, res: express.Response) => {
     </div>
 
     <!-- ── TAB 3: ENROLL EMPLOYEE (STAFF) ── -->
-    <div id="tabContentEmployee" class="hidden w-full max-w-2xl bg-slate-900/90 border border-slate-800 rounded-3xl p-6 shadow-2xl space-y-5">
+    <div id="tabContentEmployee" class="hidden w-full max-w-2xl bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-5">
       <div>
-        <h2 className="text-lg font-black text-white uppercase tracking-tight flex items-center gap-2">
+        <h2 class="text-lg font-black text-slate-900 uppercase tracking-tight flex items-center gap-2">
           <span>👔 Enroll Employee Fingerprint</span>
         </h2>
-        <p class="text-xs text-slate-400 mt-1">
+        <p class="text-xs text-slate-500 mt-1">
           Select staff/trainer to map their fingerprint for attendance & gate access
         </p>
       </div>
@@ -427,70 +470,70 @@ const renderGateHtml = (req: express.Request, res: express.Response) => {
           id="searchEmployee" 
           oninput="renderRoster()"
           placeholder="Search employee by Biometric ID, Name, Role, or Phone..."
-          class="w-full h-11 bg-slate-800 border border-slate-700 rounded-2xl px-4 text-xs font-bold text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
+          class="w-full h-11 bg-slate-50 border border-slate-200 rounded-2xl px-4 text-xs font-bold text-slate-900 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
         />
 
         <div class="flex items-center justify-between text-xs">
-          <div class="flex items-center gap-1.5 bg-slate-800/80 p-1 rounded-xl border border-slate-700">
+          <div class="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl border border-slate-200">
             <button onclick="setFilter('employee', 'pending')" id="btnFilterEmpPending" class="px-3 py-1.5 rounded-lg text-[11px] font-black uppercase transition-all bg-amber-500 text-slate-950">Pending</button>
-            <button onclick="setFilter('employee', 'enrolled')" id="btnFilterEmpEnrolled" class="px-3 py-1.5 rounded-lg text-[11px] font-black uppercase transition-all text-slate-400 hover:text-white">Enrolled</button>
-            <button onclick="setFilter('employee', 'all')" id="btnFilterEmpAll" class="px-3 py-1.5 rounded-lg text-[11px] font-black uppercase transition-all text-slate-400 hover:text-white">All</button>
+            <button onclick="setFilter('employee', 'enrolled')" id="btnFilterEmpEnrolled" class="px-3 py-1.5 rounded-lg text-[11px] font-black uppercase transition-all text-slate-500 hover:text-slate-900">Enrolled</button>
+            <button onclick="setFilter('employee', 'all')" id="btnFilterEmpAll" class="px-3 py-1.5 rounded-lg text-[11px] font-black uppercase transition-all text-slate-500 hover:text-slate-900">All</button>
           </div>
           <div class="flex items-center gap-2">
-            <span id="employeeCountText" class="text-[11px] text-slate-400 font-mono">Loading staff...</span>
-            <button onclick="refreshAll()" class="px-3 py-1.5 rounded-lg bg-slate-800 text-slate-200 text-[10px] font-black uppercase border border-slate-700">Refresh</button>
+            <span id="employeeCountText" class="text-[11px] text-slate-500 font-mono">Loading staff...</span>
+            <button onclick="refreshAll()" class="px-3 py-1.5 rounded-lg bg-slate-50 text-slate-700 text-[10px] font-black uppercase border border-slate-200">Refresh</button>
           </div>
         </div>
       </div>
 
       <!-- Enrollment Progress Banner -->
-      <div id="enrollProgressBannerEmployee" class="hidden p-4 bg-slate-800 border border-blue-500/40 rounded-2xl space-y-3">
-        <div class="flex items-center justify-between border-b border-slate-700 pb-2">
+      <div id="enrollProgressBannerEmployee" class="hidden p-4 bg-slate-50 border border-blue-500/40 rounded-2xl space-y-3">
+        <div class="flex items-center justify-between border-b border-slate-200 pb-2">
           <div class="flex items-center gap-2">
             <span class="w-2.5 h-2.5 rounded-full bg-blue-500 animate-ping"></span>
-            <span id="enrollProgressTargetEmployee" class="text-xs font-black uppercase text-white tracking-wider">Target Staff</span>
+            <span id="enrollProgressTargetEmployee" class="text-xs font-black uppercase text-slate-900 tracking-wider">Target Staff</span>
           </div>
-          <span id="enrollProgressStateEmployee" class="text-[10px] font-mono font-bold text-blue-400 bg-blue-950 border border-blue-800 px-2 py-0.5 rounded-md">INITIALIZING</span>
+          <span id="enrollProgressStateEmployee" class="text-[10px] font-mono font-bold text-blue-600 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-md">INITIALIZING</span>
         </div>
-        <div id="enrollProgressMsgEmployee" class="text-xs font-semibold text-slate-300">Place finger on scanner 3 times...</div>
+        <div id="enrollProgressMsgEmployee" class="text-xs font-semibold text-slate-600">Place finger on scanner 3 times...</div>
         <div class="grid grid-cols-4 gap-2 pt-1 text-center text-[10px] font-mono font-bold">
-          <div id="scanStep1_emp" class="p-2 rounded-xl border bg-slate-900 border-slate-800 text-slate-600">SCAN 1</div>
-          <div id="scanStep2_emp" class="p-2 rounded-xl border bg-slate-900 border-slate-800 text-slate-600">SCAN 2</div>
-          <div id="scanStep3_emp" class="p-2 rounded-xl border bg-slate-900 border-slate-800 text-slate-600">SCAN 3</div>
-          <div id="scanStep4_emp" class="p-2 rounded-xl border bg-slate-900 border-slate-800 text-slate-600">MAPPED ✓</div>
+          <div id="scanStep1_emp" class="p-2 rounded-xl border bg-white border-slate-200 text-slate-400">SCAN 1</div>
+          <div id="scanStep2_emp" class="p-2 rounded-xl border bg-white border-slate-200 text-slate-400">SCAN 2</div>
+          <div id="scanStep3_emp" class="p-2 rounded-xl border bg-white border-slate-200 text-slate-400">SCAN 3</div>
+          <div id="scanStep4_emp" class="p-2 rounded-xl border bg-white border-slate-200 text-slate-400">MAPPED ✓</div>
         </div>
       </div>
 
       <div id="employeeRosterList" class="space-y-2 max-h-96 overflow-y-auto pr-1"></div>
     </div>
 
-    <div id="tabContentBlocked" class="hidden w-full max-w-2xl bg-slate-900/90 border border-rose-900/50 rounded-3xl p-6 shadow-2xl space-y-5">
+    <div id="tabContentBlocked" class="hidden w-full max-w-2xl bg-white border border-rose-200 rounded-3xl p-6 shadow-sm space-y-5">
       <div>
-        <h2 class="text-lg font-black text-white uppercase tracking-tight">🚫 Blocked Client &amp; Employee Access</h2>
-        <p class="text-xs text-slate-400 mt-1">Block or restore the user on the terminal without deleting saved fingerprints. Expired memberships are denied automatically until renewed.</p>
+        <h2 class="text-lg font-black text-slate-900 uppercase tracking-tight">🚫 Blocked Client &amp; Employee Access</h2>
+        <p class="text-xs text-slate-500 mt-1">Block or restore the user on the terminal without deleting saved fingerprints. Expired memberships are denied automatically until renewed.</p>
       </div>
-      <input id="searchBlocked" type="search" oninput="renderBlockedRoster()" placeholder="Search by biometric ID, name, phone, or staff/member ID..." class="w-full h-11 bg-slate-800 border border-slate-700 rounded-2xl px-4 text-xs font-bold text-white placeholder-slate-500 focus:outline-none focus:border-blue-500" />
+      <input id="searchBlocked" type="search" oninput="renderBlockedRoster()" placeholder="Search by biometric ID, name, phone, or staff/member ID..." class="w-full h-11 bg-slate-50 border border-slate-200 rounded-2xl px-4 text-xs font-bold text-slate-900 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" />
       <div class="flex flex-wrap items-center justify-between gap-3">
-        <div class="flex items-center gap-1.5 bg-slate-800/80 p-1 rounded-xl border border-slate-700">
+        <div class="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl border border-slate-200">
           <button onclick="setBlockedFilter('all')" id="btnBlockedAll" class="px-3 py-1.5 rounded-lg text-[11px] font-black uppercase bg-blue-600 text-white">All</button>
-          <button onclick="setBlockedFilter('client')" id="btnBlockedClient" class="px-3 py-1.5 rounded-lg text-[11px] font-black uppercase text-slate-400">Clients</button>
-          <button onclick="setBlockedFilter('employee')" id="btnBlockedEmployee" class="px-3 py-1.5 rounded-lg text-[11px] font-black uppercase text-slate-400">Employees</button>
+          <button onclick="setBlockedFilter('client')" id="btnBlockedClient" class="px-3 py-1.5 rounded-lg text-[11px] font-black uppercase text-slate-500">Clients</button>
+          <button onclick="setBlockedFilter('employee')" id="btnBlockedEmployee" class="px-3 py-1.5 rounded-lg text-[11px] font-black uppercase text-slate-500">Employees</button>
         </div>
-        <div class="flex items-center gap-2"><span id="blockedCountText" class="text-[11px] text-slate-400 font-mono">Loading blocked access...</span><button onclick="refreshAll()" class="px-3 py-1.5 rounded-lg bg-slate-800 text-slate-200 text-[10px] font-black uppercase border border-slate-700">Refresh</button></div>
+        <div class="flex items-center gap-2"><span id="blockedCountText" class="text-[11px] text-slate-500 font-mono">Loading blocked access...</span><button onclick="refreshAll()" class="px-3 py-1.5 rounded-lg bg-slate-50 text-slate-700 text-[10px] font-black uppercase border border-slate-200">Refresh</button></div>
       </div>
       <div id="blockedRosterList" class="space-y-2 max-h-[32rem] overflow-y-auto pr-1"></div>
     </div>
 
     <!-- Quick Access Links Card -->
-    <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 px-6 text-center text-xs text-slate-400 max-w-lg shadow-sm">
-      💡 <strong class="text-white font-bold">Gym WiFi Quick Access:</strong> Connect to Gym WiFi and open <code class="bg-blue-950 text-blue-300 px-2 py-0.5 rounded font-mono font-bold border border-blue-800">http://${lanIp}:8000/gate-control</code> for 1-tap gate unlock & fingerprint enrollment.
+    <div class="bg-white border border-slate-200 rounded-2xl p-4 px-6 text-center text-xs text-slate-500 max-w-lg shadow-sm">
+      💡 <strong class="text-slate-900 font-bold">Gym WiFi Quick Access:</strong> Connect to Gym WiFi and open <code class="bg-blue-50 text-blue-700 px-2 py-0.5 rounded font-mono font-bold border border-blue-200">http://${lanIp}:8000/gate-control</code> for 1-tap gate unlock & fingerprint enrollment.
     </div>
 
   </main>
 
   <!-- Footer -->
-  <footer class="border-t border-slate-800 bg-slate-900/60 py-4 text-center text-xs font-semibold text-slate-500">
-    Alpha Zone Gym OS &copy; 2026 • Deployed Site: <a href="${crmUrl}" target="_blank" class="text-blue-400 underline">alphazonegym.in</a>
+  <footer class="border-t border-slate-200 bg-white py-4 text-center text-xs font-semibold text-slate-500">
+    Alpha Zone Gym OS &copy; 2026 • Deployed Site: <a href="${crmUrl}" target="_blank" class="text-blue-600 underline">alphazonegym.in</a>
   </footer>
 
   <script>
@@ -508,23 +551,25 @@ const renderGateHtml = (req: express.Request, res: express.Response) => {
     function switchTab(tab) {
       currentTab = tab;
       document.getElementById('tabContentGate').className = tab === 'gate' ? 'w-full max-w-md flex flex-col items-center justify-center space-y-6 py-4' : 'hidden';
-      document.getElementById('tabContentClient').className = tab === 'client' ? 'w-full max-w-2xl bg-slate-900/90 border border-slate-800 rounded-3xl p-6 shadow-2xl space-y-5' : 'hidden';
-      document.getElementById('tabContentEmployee').className = tab === 'employee' ? 'w-full max-w-2xl bg-slate-900/90 border border-slate-800 rounded-3xl p-6 shadow-2xl space-y-5' : 'hidden';
-      document.getElementById('tabContentBlocked').className = tab === 'blocked' ? 'w-full max-w-2xl bg-slate-900/90 border border-rose-900/50 rounded-3xl p-6 shadow-2xl space-y-5' : 'hidden';
+      document.getElementById('tabContentClient').className = tab === 'client' ? 'w-full max-w-2xl bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-5' : 'hidden';
+      document.getElementById('tabContentEmployee').className = tab === 'employee' ? 'w-full max-w-2xl bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-5' : 'hidden';
+      document.getElementById('tabContentBlocked').className = tab === 'blocked' ? 'w-full max-w-2xl bg-white border border-rose-200 rounded-3xl p-6 shadow-sm space-y-5' : 'hidden';
 
-      document.getElementById('tabBtnGate').className = tab === 'gate' ? 'px-5 py-2.5 rounded-2xl text-xs font-black uppercase tracking-wider transition-all border cursor-pointer flex items-center gap-2 bg-blue-600 text-white border-blue-500 shadow-lg shadow-blue-900/40' : 'px-5 py-2.5 rounded-2xl text-xs font-black uppercase tracking-wider transition-all border cursor-pointer flex items-center gap-2 bg-slate-900 text-slate-400 border-slate-800 hover:bg-slate-800 hover:text-white';
-      document.getElementById('tabBtnClient').className = tab === 'client' ? 'px-5 py-2.5 rounded-2xl text-xs font-black uppercase tracking-wider transition-all border cursor-pointer flex items-center gap-2 bg-blue-600 text-white border-blue-500 shadow-lg shadow-blue-900/40' : 'px-5 py-2.5 rounded-2xl text-xs font-black uppercase tracking-wider transition-all border cursor-pointer flex items-center gap-2 bg-slate-900 text-slate-400 border-slate-800 hover:bg-slate-800 hover:text-white';
-      document.getElementById('tabBtnEmployee').className = tab === 'employee' ? 'px-5 py-2.5 rounded-2xl text-xs font-black uppercase tracking-wider transition-all border cursor-pointer flex items-center gap-2 bg-blue-600 text-white border-blue-500 shadow-lg shadow-blue-900/40' : 'px-5 py-2.5 rounded-2xl text-xs font-black uppercase tracking-wider transition-all border cursor-pointer flex items-center gap-2 bg-slate-900 text-slate-400 border-slate-800 hover:bg-slate-800 hover:text-white';
-      document.getElementById('tabBtnBlocked').className = tab === 'blocked' ? 'px-5 py-2.5 rounded-2xl text-xs font-black uppercase tracking-wider transition-all border cursor-pointer flex items-center gap-2 bg-rose-700 text-white border-rose-500 shadow-lg shadow-rose-900/40' : 'px-5 py-2.5 rounded-2xl text-xs font-black uppercase tracking-wider transition-all border cursor-pointer flex items-center gap-2 bg-slate-900 text-slate-400 border-slate-800 hover:bg-slate-800 hover:text-white';
+      document.getElementById('tabBtnGate').className = tab === 'gate' ? 'px-5 py-2.5 rounded-2xl text-xs font-black uppercase tracking-wider transition-all border cursor-pointer flex items-center gap-2 bg-blue-600 text-white border-blue-500 shadow-lg shadow-blue-500/20' : 'px-5 py-2.5 rounded-2xl text-xs font-black uppercase tracking-wider transition-all border cursor-pointer flex items-center gap-2 bg-white text-slate-500 border-slate-200 hover:bg-slate-100 hover:text-slate-900';
+      document.getElementById('tabBtnClient').className = tab === 'client' ? 'px-5 py-2.5 rounded-2xl text-xs font-black uppercase tracking-wider transition-all border cursor-pointer flex items-center gap-2 bg-blue-600 text-white border-blue-500 shadow-lg shadow-blue-500/20' : 'px-5 py-2.5 rounded-2xl text-xs font-black uppercase tracking-wider transition-all border cursor-pointer flex items-center gap-2 bg-white text-slate-500 border-slate-200 hover:bg-slate-100 hover:text-slate-900';
+      document.getElementById('tabBtnEmployee').className = tab === 'employee' ? 'px-5 py-2.5 rounded-2xl text-xs font-black uppercase tracking-wider transition-all border cursor-pointer flex items-center gap-2 bg-blue-600 text-white border-blue-500 shadow-lg shadow-blue-500/20' : 'px-5 py-2.5 rounded-2xl text-xs font-black uppercase tracking-wider transition-all border cursor-pointer flex items-center gap-2 bg-white text-slate-500 border-slate-200 hover:bg-slate-100 hover:text-slate-900';
+      document.getElementById('tabBtnBlocked').className = tab === 'blocked' ? 'px-5 py-2.5 rounded-2xl text-xs font-black uppercase tracking-wider transition-all border cursor-pointer flex items-center gap-2 bg-rose-700 text-white border-rose-500 shadow-lg shadow-rose-500/20' : 'px-5 py-2.5 rounded-2xl text-xs font-black uppercase tracking-wider transition-all border cursor-pointer flex items-center gap-2 bg-white text-slate-500 border-slate-200 hover:bg-slate-100 hover:text-slate-900';
 
       if (tab === 'client' || tab === 'employee' || tab === 'blocked') {
         fetchRoster();
       }
     }
 
-    async function fetchRoster() {
+    // fresh=true waits for a new CRM read (after Refresh or a change made here);
+    // otherwise the server answers instantly from its cached roster.
+    async function fetchRoster(fresh = false) {
       try {
-        const res = await fetch('/api/gate/roster');
+        const res = await fetch('/api/gate/roster' + (fresh ? '?fresh=1' : ''));
         const data = await res.json().catch(() => ({}));
         if (!res.ok || !data.success) throw new Error(data.error || 'CRM roster request failed.');
         membersData = data.members || [];
@@ -539,7 +584,7 @@ const renderGateHtml = (req: express.Request, res: express.Response) => {
         const message = err && err.message ? err.message : 'CRM connection failed.';
         for (const listId of ['clientRosterList', 'employeeRosterList', 'blockedRosterList']) {
           const errorBox = document.createElement('div');
-          errorBox.className = 'p-8 text-center text-xs text-rose-300 bg-rose-950/40 rounded-2xl border border-rose-800';
+          errorBox.className = 'p-8 text-center text-xs text-rose-700 bg-rose-50 rounded-2xl border border-rose-200';
           errorBox.textContent = message;
           document.getElementById(listId).replaceChildren(errorBox);
         }
@@ -567,11 +612,8 @@ const renderGateHtml = (req: express.Request, res: express.Response) => {
       const employeeCount = document.getElementById('employeeCountText');
       const employeeList = document.getElementById('employeeRosterList');
       employeeCount.innerText = 'Refreshing...';
-      employeeList.innerHTML = '<div class="p-8 text-center text-xs text-blue-200 bg-slate-800/40 rounded-2xl border border-slate-800">Fetching CRM employees...</div>';
-      await refreshDeviceStatus();
-      employeeCount.innerText = 'Reconciling device users and CRM enrollment...';
-      employeeList.innerHTML = '<div class="p-8 text-center text-xs text-blue-200 bg-slate-800/40 rounded-2xl border border-slate-800">Updating enrollment status...</div>';
-      await fetchRoster();
+      employeeList.innerHTML = '<div class="p-8 text-center text-xs text-blue-700 bg-slate-50 rounded-2xl border border-slate-200">Fetching CRM employees...</div>';
+      await Promise.all([refreshDeviceStatus(), fetchRoster(true)]);
     }
 
     function hasFingerprintTemplate(item) {
@@ -597,15 +639,16 @@ const renderGateHtml = (req: express.Request, res: express.Response) => {
     function setFilter(type, filter) {
       if (type === 'client') {
         filterClient = filter;
-        document.getElementById('btnFilterClientPending').className = filter === 'pending' ? 'px-3 py-1.5 rounded-lg text-[11px] font-black uppercase transition-all bg-amber-500 text-slate-950' : 'px-3 py-1.5 rounded-lg text-[11px] font-black uppercase transition-all text-slate-400 hover:text-white';
-        document.getElementById('btnFilterClientEnrolled').className = filter === 'enrolled' ? 'px-3 py-1.5 rounded-lg text-[11px] font-black uppercase transition-all bg-emerald-500 text-slate-950' : 'px-3 py-1.5 rounded-lg text-[11px] font-black uppercase transition-all text-slate-400 hover:text-white';
-        document.getElementById('btnFilterClientAll').className = filter === 'all' ? 'px-3 py-1.5 rounded-lg text-[11px] font-black uppercase transition-all bg-blue-600 text-white' : 'px-3 py-1.5 rounded-lg text-[11px] font-black uppercase transition-all text-slate-400 hover:text-white';
+        document.getElementById('btnFilterClientPending').className = filter === 'pending' ? 'px-3 py-1.5 rounded-lg text-[11px] font-black uppercase transition-all bg-amber-500 text-slate-950' : 'px-3 py-1.5 rounded-lg text-[11px] font-black uppercase transition-all text-slate-500 hover:text-slate-900';
+        document.getElementById('btnFilterClientEnrolled').className = filter === 'enrolled' ? 'px-3 py-1.5 rounded-lg text-[11px] font-black uppercase transition-all bg-emerald-500 text-slate-950' : 'px-3 py-1.5 rounded-lg text-[11px] font-black uppercase transition-all text-slate-500 hover:text-slate-900';
+        document.getElementById('btnFilterClientAll').className = filter === 'all' ? 'px-3 py-1.5 rounded-lg text-[11px] font-black uppercase transition-all bg-blue-600 text-white' : 'px-3 py-1.5 rounded-lg text-[11px] font-black uppercase transition-all text-slate-500 hover:text-slate-900';
       } else {
         filterEmployee = filter;
-        document.getElementById('btnFilterEmpPending').className = filter === 'pending' ? 'px-3 py-1.5 rounded-lg text-[11px] font-black uppercase transition-all bg-amber-500 text-slate-950' : 'px-3 py-1.5 rounded-lg text-[11px] font-black uppercase transition-all text-slate-400 hover:text-white';
-        document.getElementById('btnFilterEmpEnrolled').className = filter === 'enrolled' ? 'px-3 py-1.5 rounded-lg text-[11px] font-black uppercase transition-all bg-emerald-500 text-slate-950' : 'px-3 py-1.5 rounded-lg text-[11px] font-black uppercase transition-all text-slate-400 hover:text-white';
-        document.getElementById('btnFilterEmpAll').className = filter === 'all' ? 'px-3 py-1.5 rounded-lg text-[11px] font-black uppercase transition-all bg-blue-600 text-white' : 'px-3 py-1.5 rounded-lg text-[11px] font-black uppercase transition-all text-slate-400 hover:text-white';
+        document.getElementById('btnFilterEmpPending').className = filter === 'pending' ? 'px-3 py-1.5 rounded-lg text-[11px] font-black uppercase transition-all bg-amber-500 text-slate-950' : 'px-3 py-1.5 rounded-lg text-[11px] font-black uppercase transition-all text-slate-500 hover:text-slate-900';
+        document.getElementById('btnFilterEmpEnrolled').className = filter === 'enrolled' ? 'px-3 py-1.5 rounded-lg text-[11px] font-black uppercase transition-all bg-emerald-500 text-slate-950' : 'px-3 py-1.5 rounded-lg text-[11px] font-black uppercase transition-all text-slate-500 hover:text-slate-900';
+        document.getElementById('btnFilterEmpAll').className = filter === 'all' ? 'px-3 py-1.5 rounded-lg text-[11px] font-black uppercase transition-all bg-blue-600 text-white' : 'px-3 py-1.5 rounded-lg text-[11px] font-black uppercase transition-all text-slate-500 hover:text-slate-900';
       }
+      renderRoster();
     }
 
     function setBlockedFilter(filter) {
@@ -614,7 +657,7 @@ const renderGateHtml = (req: express.Request, res: express.Response) => {
         const button = document.getElementById('btnBlocked' + key.charAt(0).toUpperCase() + key.slice(1));
         button.className = filter === key
           ? 'px-3 py-1.5 rounded-lg text-[11px] font-black uppercase bg-blue-600 text-white'
-          : 'px-3 py-1.5 rounded-lg text-[11px] font-black uppercase text-slate-400 hover:text-white';
+          : 'px-3 py-1.5 rounded-lg text-[11px] font-black uppercase text-slate-500 hover:text-slate-900';
       }
       renderBlockedRoster();
     }
@@ -632,7 +675,7 @@ const renderGateHtml = (req: express.Request, res: express.Response) => {
       document.getElementById('blockedCountText').textContent = records.length + ' BLOCKED / PENDING';
       const list = document.getElementById('blockedRosterList');
       if (!records.length) {
-        list.innerHTML = '<div class="p-8 text-center text-xs text-slate-400 bg-slate-800/40 rounded-2xl border border-slate-800">No blocked clients or employees match this search.</div>';
+        list.innerHTML = '<div class="p-8 text-center text-xs text-slate-500 bg-slate-50 rounded-2xl border border-slate-200">No blocked clients or employees match this search.</div>';
         return;
       }
       list.innerHTML = records.map(person => {
@@ -642,10 +685,10 @@ const renderGateHtml = (req: express.Request, res: express.Response) => {
         const contact = escapeHtml(person.phone || person.employeeId || person.memberId || 'No contact');
         const reason = person.biometricBlockReason ? '<div class="text-[10px] text-slate-500 mt-0.5">' + escapeHtml(person.biometricBlockReason) + '</div>' : '';
         const action = pending && retryAction ? 'Retry Unblock' : 'Unblock';
-        return '<div class="p-4 rounded-2xl border bg-slate-800/70 border-rose-900/50 flex flex-wrap items-center justify-between gap-3">'
-          + '<div class="flex items-center gap-3 min-w-0"><div class="w-10 h-10 rounded-xl bg-slate-900 border border-rose-800 flex items-center justify-center font-mono text-xs font-black text-rose-300 shrink-0">#' + (getCleanNumericId(person) || '—') + '</div>'
-          + '<div class="min-w-0"><div class="text-xs font-black text-white truncate">' + name + ' <span class="text-[10px] uppercase text-slate-400">· ' + person.accessKind + '</span></div>'
-          + '<div class="text-[11px] text-slate-400 mt-1">' + contact + ' · ' + (pending ? (retryAction ? 'UNBLOCK SYNC PENDING' : 'BLOCK SYNC PENDING') : 'ACCESS BLOCKED') + '</div>' + reason + '</div></div>'
+        return '<div class="p-4 rounded-2xl border bg-slate-50 border-rose-200 flex flex-wrap items-center justify-between gap-3">'
+          + '<div class="flex items-center gap-3 min-w-0"><div class="w-10 h-10 rounded-xl bg-white border border-rose-200 flex items-center justify-center font-mono text-xs font-black text-rose-700 shrink-0">#' + (getCleanNumericId(person) || '—') + '</div>'
+          + '<div class="min-w-0"><div class="text-xs font-black text-slate-900 truncate">' + name + ' <span class="text-[10px] uppercase text-slate-500">· ' + person.accessKind + '</span></div>'
+          + '<div class="text-[11px] text-slate-500 mt-1">' + contact + ' · ' + (pending ? (retryAction ? 'UNBLOCK SYNC PENDING' : 'BLOCK SYNC PENDING') : 'ACCESS BLOCKED') + '</div>' + reason + '</div></div>'
           + '<button type="button" data-blocked-action="unblock" data-person-kind="' + person.accessKind + '" data-person-id="' + encodeURIComponent(String(person.id || '')) + '" class="px-4 py-2 rounded-xl text-xs font-black uppercase border border-emerald-500 bg-emerald-600 hover:bg-emerald-500 text-white disabled:opacity-60">' + action + '</button></div>';
       }).join('');
     }
@@ -684,7 +727,7 @@ const renderGateHtml = (req: express.Request, res: express.Response) => {
         person.biometricBlockCommandId = null;
         const label = kind === 'employee' ? 'Employee' : 'Client';
         document.getElementById('blockedCountText').textContent = label + ' enabled on terminal · saved fingerprint kept';
-        await fetchRoster();
+        await fetchRoster(true);
       } catch (error) {
         button.disabled = false;
         button.textContent = original;
@@ -731,7 +774,7 @@ const renderGateHtml = (req: express.Request, res: express.Response) => {
         const result = await response.json().catch(() => ({}));
         if (!response.ok || !result.success || !result.biometricId) throw new Error(result.error || 'Biometric ID assignment failed');
         countText.innerText = 'BIO ID #' + result.biometricId + ' ASSIGNED — READY TO ENROLL';
-        const refreshed = await fetchRoster();
+        const refreshed = await fetchRoster(true);
         if (!refreshed) throw new Error('ID assigned, but member list did not refresh. Press Refresh to verify before enrollment.');
       } catch (error) {
         button.disabled = false;
@@ -761,7 +804,7 @@ const renderGateHtml = (req: express.Request, res: express.Response) => {
       document.getElementById('clientCountText').innerText = 'TOTAL PENDING: ' + totalPendingClients + ' · SHOWING ' + filteredMembers.length;
       const clientList = document.getElementById('clientRosterList');
       if (filteredMembers.length === 0) {
-        clientList.innerHTML = '<div class="p-8 text-center text-xs text-slate-500 bg-slate-800/40 rounded-2xl border border-slate-800">No members found matching selected filter & search keyword.</div>';
+        clientList.innerHTML = '<div class="p-8 text-center text-xs text-slate-500 bg-slate-50 rounded-2xl border border-slate-200">No members found matching selected filter & search keyword.</div>';
       } else {
         clientList.innerHTML = filteredMembers.map(m => {
           const bioId = getCleanNumericId(m);
@@ -771,21 +814,21 @@ const renderGateHtml = (req: express.Request, res: express.Response) => {
           const accessText = m.biometricBlocked ? 'Unblock Access' : 'Block Access';
           const accessClass = m.biometricBlocked ? 'bg-emerald-600 hover:bg-emerald-500 border-emerald-500' : 'bg-rose-700 hover:bg-rose-600 border-rose-600';
           return \`
-            <div class="p-3.5 rounded-2xl border bg-slate-800/60 border-slate-700/60 flex items-center justify-between hover:border-slate-700 transition-all">
+            <div class="p-3.5 rounded-2xl border bg-white border-slate-200 flex items-center justify-between hover:border-blue-300 transition-all">
               <div class="flex items-center gap-3">
-                <div class="w-10 h-10 rounded-xl bg-slate-900 border border-slate-700 flex items-center justify-center font-mono text-xs font-black text-blue-400 shrink-0">
+                <div class="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center font-mono text-xs font-black text-blue-600 shrink-0">
                   #\${bioId || '—'}
                 </div>
                 <div>
-                  <div class="text-xs font-black text-white">\${m.name || 'Member'} <span class="text-[10px] font-mono text-slate-400">(\${m.phone || 'No phone'})</span></div>
-                  <div class="text-[11px] text-slate-400 mt-0.5">Fingerprint: <span class="\${isEnrolled ? 'text-emerald-400 font-bold' : 'text-amber-400 font-bold'}">\${isEnrolled ? 'ENROLLED' : 'NOT ENROLLED'}</span> • Device: <span class="\${isMapped ? 'text-emerald-400 font-bold' : 'text-slate-400'}">\${isMapped ? 'MAPPED' : 'NOT MAPPED'}</span></div>
+                  <div class="text-xs font-black text-slate-900">\${m.name || 'Member'} <span class="text-[10px] font-mono text-slate-500">(\${m.phone || 'No phone'})</span></div>
+                  <div class="text-[11px] text-slate-500 mt-0.5">Fingerprint: <span class="\${isEnrolled ? 'text-emerald-600 font-bold' : 'text-amber-600 font-bold'}">\${isEnrolled ? 'ENROLLED' : 'NOT ENROLLED'}</span> • Device: <span class="\${isMapped ? 'text-emerald-600 font-bold' : 'text-slate-500'}">\${isMapped ? 'MAPPED' : 'NOT MAPPED'}</span></div>
                 </div>
               </div>
               <div class="flex items-center gap-2">
-                <button type="button" data-client-action="\${bioId ? 'enroll' : 'assign'}" data-member-id="\${encodeURIComponent(memberId)}" data-biometric-id="\${bioId}" data-encoded-name="\${encodeURIComponent(m.name || '')}" class="px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider border cursor-pointer \${bioId ? (isEnrolled ? 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700' : 'bg-blue-600 hover:bg-blue-500 text-white border-blue-500 shadow-md') : 'bg-amber-600 hover:bg-amber-500 text-white border-amber-500'}">
+                <button type="button" data-client-action="\${bioId ? 'enroll' : 'assign'}" data-member-id="\${encodeURIComponent(memberId)}" data-biometric-id="\${bioId}" data-encoded-name="\${encodeURIComponent(m.name || '')}" class="px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider border cursor-pointer \${bioId ? (isEnrolled ? 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100' : 'bg-blue-600 hover:bg-blue-500 text-white border-blue-500 shadow-md') : 'bg-amber-600 hover:bg-amber-500 text-white border-amber-500'}">
                   \${bioId ? (isEnrolled ? 'Re-Enroll' : 'Start Enroll') : 'Assign Biometric ID'}
                 </button>
-                <button type="button" data-roster-access="1" data-person-kind="client" data-person-id="\${encodeURIComponent(memberId)}" data-biometric-id="\${bioId}" data-enabled="\${m.biometricBlocked ? 'false' : 'true'}" \${bioId ? '' : 'disabled'} class="px-3 py-2 rounded-xl text-[10px] font-black uppercase text-white border disabled:opacity-40 \${accessClass}">\${bioId ? accessText : 'No Bio ID'}</button>
+                <button type="button" data-roster-access="1" data-person-kind="client" data-person-id="\${encodeURIComponent(memberId)}" data-biometric-id="\${bioId}" data-enabled="\${m.biometricBlocked ? 'true' : 'false'}" \${bioId ? '' : 'disabled'} class="px-3 py-2 rounded-xl text-[10px] font-black uppercase text-white border disabled:opacity-40 \${accessClass}">\${bioId ? accessText : 'No Bio ID'}</button>
               </div>
             </div>
           \`;
@@ -812,7 +855,7 @@ const renderGateHtml = (req: express.Request, res: express.Response) => {
       document.getElementById('employeeCountText').innerText = 'Showing ' + filteredEmployees.length + ' staff members';
       const empList = document.getElementById('employeeRosterList');
       if (filteredEmployees.length === 0) {
-        empList.innerHTML = '<div class="p-8 text-center text-xs text-slate-500 bg-slate-800/40 rounded-2xl border border-slate-800">No staff members found matching selected filter & search keyword.</div>';
+        empList.innerHTML = '<div class="p-8 text-center text-xs text-slate-500 bg-slate-50 rounded-2xl border border-slate-200">No staff members found matching selected filter & search keyword.</div>';
       } else {
         empList.innerHTML = filteredEmployees.map(e => {
           const bioId = getCleanNumericId(e);
@@ -822,22 +865,22 @@ const renderGateHtml = (req: express.Request, res: express.Response) => {
           const accessText = e.biometricBlocked ? 'Unblock Access' : 'Block Access';
           const accessClass = e.biometricBlocked ? 'bg-emerald-600 hover:bg-emerald-500 border-emerald-500' : 'bg-rose-700 hover:bg-rose-600 border-rose-600';
           return \`
-            <div class="p-3.5 rounded-2xl border bg-slate-800/60 border-slate-700/60 flex items-center justify-between hover:border-slate-700 transition-all">
+            <div class="p-3.5 rounded-2xl border bg-white border-slate-200 flex items-center justify-between hover:border-blue-300 transition-all">
               <div class="flex items-center gap-3">
-                <div class="w-10 h-10 rounded-xl bg-slate-900 border border-slate-700 flex items-center justify-center font-mono text-xs font-black text-purple-400 shrink-0">
+                <div class="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center font-mono text-xs font-black text-purple-600 shrink-0">
                   #\${bioId || '—'}
                 </div>
                 <div>
-                  <div class="text-xs font-black text-white">\${e.name || 'Staff'} <span class="text-[10px] font-mono text-purple-300">(\${e.role || 'Staff'})</span></div>
-                  <div class="text-[10px] font-mono text-slate-400 mt-0.5">\${employeeCode} · \${e.status || 'Status unavailable'}</div>
-                  <div class="text-[11px] text-slate-400 mt-0.5">\${e.phone || 'No Phone'} • <span class="\${isEnrolled ? 'text-emerald-400 font-bold' : 'text-amber-400 font-bold'}">\${isEnrolled ? '✓ Enrolled' : (hasDeviceTemplate ? 'Pending · device template needs CRM verification' : 'Pending')}</span></div>
+                  <div class="text-xs font-black text-slate-900">\${e.name || 'Staff'} <span class="text-[10px] font-mono text-purple-600">(\${e.role || 'Staff'})</span></div>
+                  <div class="text-[10px] font-mono text-slate-500 mt-0.5">\${employeeCode} · \${e.status || 'Status unavailable'}</div>
+                  <div class="text-[11px] text-slate-500 mt-0.5">\${e.phone || 'No Phone'} • <span class="\${isEnrolled ? 'text-emerald-600 font-bold' : 'text-amber-600 font-bold'}">\${isEnrolled ? '✓ Enrolled' : (hasDeviceTemplate ? 'Pending · device template needs CRM verification' : 'Pending')}</span></div>
                 </div>
               </div>
               <div class="flex items-center gap-2">
-                <button \${bioId ? '' : 'disabled'} onclick="triggerEnroll('\${e.id}', '\${bioId}', '\${encodeURIComponent(e.name || '')}', true)" class="px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider border cursor-pointer \${bioId ? (isEnrolled ? 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700' : 'bg-purple-600 hover:bg-purple-500 text-white border-purple-500 shadow-md') : 'bg-slate-800 text-slate-500 border-slate-700 cursor-not-allowed'}">
+                <button \${bioId ? '' : 'disabled'} onclick="triggerEnroll('\${e.id}', '\${bioId}', '\${encodeURIComponent(e.name || '')}', true)" class="px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider border cursor-pointer \${bioId ? (isEnrolled ? 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100' : 'bg-purple-600 hover:bg-purple-500 text-white border-purple-500 shadow-md') : 'bg-slate-50 text-slate-500 border-slate-200 cursor-not-allowed'}">
                   \${bioId ? (isEnrolled ? 'Re-Enroll' : 'Start Enroll') : 'Assign Biometric ID'}
                 </button>
-                <button type="button" data-roster-access="1" data-person-kind="employee" data-person-id="\${encodeURIComponent(String(e.id || ''))}" data-biometric-id="\${bioId}" data-enabled="\${e.biometricBlocked ? 'false' : 'true'}" \${bioId ? '' : 'disabled'} class="px-3 py-2 rounded-xl text-[10px] font-black uppercase text-white border disabled:opacity-40 \${accessClass}">\${bioId ? accessText : 'No Bio ID'}</button>
+                <button type="button" data-roster-access="1" data-person-kind="employee" data-person-id="\${encodeURIComponent(String(e.id || ''))}" data-biometric-id="\${bioId}" data-enabled="\${e.biometricBlocked ? 'true' : 'false'}" \${bioId ? '' : 'disabled'} class="px-3 py-2 rounded-xl text-[10px] font-black uppercase text-white border disabled:opacity-40 \${accessClass}">\${bioId ? accessText : 'No Bio ID'}</button>
               </div>
             </div>
           \`;
@@ -868,7 +911,7 @@ const renderGateHtml = (req: express.Request, res: express.Response) => {
           const status = await statusResponse.json().catch(() => ({}));
           if (!statusResponse.ok) throw new Error(status.error || 'Could not read terminal status.');
           if (status.status === 'success') {
-            await fetchRoster();
+            await fetchRoster(true);
             return;
           }
           if (status.status === 'failed') throw new Error(status.message || 'Terminal rejected the access change.');
@@ -882,6 +925,8 @@ const renderGateHtml = (req: express.Request, res: express.Response) => {
       }
     }
 
+    // data-enabled on these buttons is the state the click requests:
+    // "Block Access" sends enabled=false, "Unblock Access" sends enabled=true.
     for (const listId of ['clientRosterList', 'employeeRosterList']) {
       document.getElementById(listId).addEventListener('click', event => {
         const button = event.target && event.target.closest ? event.target.closest('button[data-roster-access]') : null;
@@ -915,7 +960,7 @@ const renderGateHtml = (req: express.Request, res: express.Response) => {
       const step3 = document.getElementById(isEmployee ? 'scanStep3_emp' : 'scanStep3_client');
       const step4 = document.getElementById(isEmployee ? 'scanStep4_emp' : 'scanStep4_client');
 
-      banner.className = 'block p-4 bg-slate-800 border border-blue-500/40 rounded-2xl space-y-3';
+      banner.className = 'block p-4 bg-slate-50 border border-blue-500/40 rounded-2xl space-y-3';
       targetText.innerText = 'TARGET ' + prefix.toUpperCase() + ': #' + bioId + ' — ' + name;
       stateText.innerText = retryCrmSync ? 'VERIFYING DEVICE TEMPLATE...' : 'CONNECTING TO DEVICE...';
       msgText.innerText = retryCrmSync ? 'Verifying the saved template before retrying CRM sync...' : 'Waiting for the device. Follow its prompts and complete the fingerprint scans.';
@@ -924,10 +969,10 @@ const renderGateHtml = (req: express.Request, res: express.Response) => {
       const originalButtonText = triggerButton ? triggerButton.textContent : '';
       if (triggerButton) { triggerButton.disabled = true; triggerButton.textContent = retryCrmSync ? 'RETRYING...' : 'WAIT FOR SCANNER...'; }
 
-      step1.className = 'p-2 rounded-xl border bg-slate-900 border-slate-800 text-slate-600';
-      step2.className = 'p-2 rounded-xl border bg-slate-900 border-slate-800 text-slate-600';
-      step3.className = 'p-2 rounded-xl border bg-slate-900 border-slate-800 text-slate-600';
-      step4.className = 'p-2 rounded-xl border bg-slate-900 border-slate-800 text-slate-600';
+      step1.className = 'p-2 rounded-xl border bg-white border-slate-200 text-slate-400';
+      step2.className = 'p-2 rounded-xl border bg-white border-slate-200 text-slate-400';
+      step3.className = 'p-2 rounded-xl border bg-white border-slate-200 text-slate-400';
+      step4.className = 'p-2 rounded-xl border bg-white border-slate-200 text-slate-400';
 
       try {
         const payload = {
@@ -950,21 +995,21 @@ const renderGateHtml = (req: express.Request, res: express.Response) => {
         const data = await res.json().catch(() => ({}));
 
         if (data.success) {
-          step1.className = 'p-2 rounded-xl border bg-blue-900/60 border-blue-500 text-blue-300';
-          step2.className = 'p-2 rounded-xl border bg-blue-900/60 border-blue-500 text-blue-300';
-          step3.className = 'p-2 rounded-xl border bg-blue-900/60 border-blue-500 text-blue-300';
-          step4.className = 'p-2 rounded-xl border bg-emerald-900/60 border-emerald-500 text-emerald-300';
+          step1.className = 'p-2 rounded-xl border bg-blue-50 border-blue-500 text-blue-700';
+          step2.className = 'p-2 rounded-xl border bg-blue-50 border-blue-500 text-blue-700';
+          step3.className = 'p-2 rounded-xl border bg-blue-50 border-blue-500 text-blue-700';
+          step4.className = 'p-2 rounded-xl border bg-emerald-50 border-emerald-500 text-emerald-700';
           stateText.innerText = 'TEMPLATE VERIFIED · MAPPED ✓';
-          stateText.className = 'text-[10px] font-mono font-bold text-emerald-400 bg-emerald-950 border border-emerald-800 px-2 py-0.5 rounded-md';
+          stateText.className = 'text-[10px] font-mono font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md';
           msgText.innerText = data.message || 'Fingerprint template verified on the device and mapped to CRM ID #' + bioId + ' (' + name + ')';
-          await fetchRoster();
+          await fetchRoster(true);
         } else {
-          step1.className = 'p-2 rounded-xl border bg-rose-950 border-rose-800 text-rose-400';
-          step2.className = 'p-2 rounded-xl border bg-rose-950 border-rose-800 text-rose-400';
-          step3.className = 'p-2 rounded-xl border bg-rose-950 border-rose-800 text-rose-400';
-          step4.className = 'p-2 rounded-xl border bg-rose-950 border-rose-800 text-rose-400';
+          step1.className = 'p-2 rounded-xl border bg-rose-50 border-rose-200 text-rose-600';
+          step2.className = 'p-2 rounded-xl border bg-rose-50 border-rose-200 text-rose-600';
+          step3.className = 'p-2 rounded-xl border bg-rose-50 border-rose-200 text-rose-600';
+          step4.className = 'p-2 rounded-xl border bg-rose-50 border-rose-200 text-rose-600';
           stateText.innerText = data.status || 'ENROLLMENT FAILED';
-          stateText.className = 'text-[10px] font-mono font-bold text-rose-400 bg-rose-950 border border-rose-800 px-2 py-0.5 rounded-md';
+          stateText.className = 'text-[10px] font-mono font-bold text-rose-600 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-md';
           msgText.innerText = '❌ ' + (data.error || data.message || 'Device did not confirm a saved fingerprint template.');
           if (data.deviceEnrolled && data.retryable) {
             stateText.innerText = 'CRM SYNC PENDING';
@@ -977,9 +1022,9 @@ const renderGateHtml = (req: express.Request, res: express.Response) => {
           }
         }
       } catch (err) {
-        step1.className = 'p-2 rounded-xl border bg-rose-950 border-rose-800 text-rose-400';
+        step1.className = 'p-2 rounded-xl border bg-rose-50 border-rose-200 text-rose-600';
         stateText.innerText = 'ERROR ❌';
-        stateText.className = 'text-[10px] font-mono font-bold text-rose-400 bg-rose-950 border border-rose-800 px-2 py-0.5 rounded-md';
+        stateText.className = 'text-[10px] font-mono font-bold text-rose-600 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-md';
         msgText.innerText = '❌ ' + (err && err.message ? err.message : 'Unable to reach the local enrollment service.');
       } finally {
         if (triggerButton) { triggerButton.disabled = false; triggerButton.textContent = originalButtonText; }
@@ -999,7 +1044,7 @@ const renderGateHtml = (req: express.Request, res: express.Response) => {
       btn.style.opacity = '0.7';
       lockIcon.innerText = '🔓';
 
-      banner.className = 'block w-full bg-slate-900 border border-slate-800 p-5 rounded-3xl shadow-xl space-y-3 transition-all text-center';
+      banner.className = 'block w-full bg-white border border-slate-200 p-5 rounded-3xl shadow-sm space-y-3 transition-all text-center';
       bannerTitle.innerText = '⏳ TRANSMITTING UNLOCK SIGNAL...';
       bannerDesc.innerText = 'Sending signal to EasyBio hardware at ${deviceIp}...';
       timerText.innerText = '15s';
@@ -1052,7 +1097,9 @@ const renderGateHtml = (req: express.Request, res: express.Response) => {
       }
     }
 
-    // Initial load
+    // Initial load (sync filter button highlights with the default filters)
+    setFilter('client', filterClient);
+    setFilter('employee', filterEmployee);
     refreshDeviceStatus();
     fetchRoster();
     if (requestedBioId) {

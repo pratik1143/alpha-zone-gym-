@@ -23,7 +23,8 @@ import RenewalWizardModal from '../members/components/RenewalWizardModal';
 export default function ExpiredPage() {
   const router = useRouter();
   const { members, fetchMembers, deleteMember, isLoading: storeLoading } = useGymStore() as any;
-  const [loading, setLoading] = useState(true);
+  // Only block on the spinner when there is no cached roster to show yet.
+  const [loading, setLoading] = useState(() => members.length === 0);
 
   // Filters & Search
   const [search, setSearch] = useState('');
