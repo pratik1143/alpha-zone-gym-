@@ -43,17 +43,28 @@ def _create_circular_image(image_bytes, size=(104, 104)):
         return None
 
 
-def _load_photo(photo_url):
+_photo_bytes_cache = {}
+
+
+def _fetch_photo_bytes(photo_url):
+    """Return raw image bytes for a data: or http(s) URL, cached per URL."""
+    if photo_url in _photo_bytes_cache:
+        return _photo_bytes_cache[photo_url]
+    data = None
     try:
         if photo_url.startswith('data:image') and ',' in photo_url:
-            return _create_circular_image(base64.b64decode(photo_url.split(',', 1)[1]))
-        if photo_url.startswith('https://') or photo_url.startswith('http://'):
+            data = base64.b64decode(photo_url.split(',', 1)[1])
+        elif photo_url.startswith('https://') or photo_url.startswith('http://'):
             request = urllib.request.Request(photo_url, headers={'User-Agent': 'AlphaZoneGym-Terminal/1.0'})
             with urllib.request.urlopen(request, timeout=3) as response:
-                return _create_circular_image(response.read(5 * 1024 * 1024))
+                data = response.read(5 * 1024 * 1024)
     except Exception as exc:
         logging.warning(f"Could not load member photo: {exc}")
-    return None
+    if data:
+        if len(_photo_bytes_cache) > 300:
+            _photo_bytes_cache.clear()
+        _photo_bytes_cache[photo_url] = data
+    return data
 
 
 def _age_from_dob(dob):
@@ -153,16 +164,38 @@ def show_attendance_popup(popup_data):
             identity.pack(side=tk.LEFT, fill=tk.Y, padx=(2, 14), pady=2)
             identity.pack_propagate(False)
 
-            photo = _load_photo(str(popup_data.get('avatarUrl') or ''))
             avatar = tk.Canvas(identity, width=108, height=108, bg='#FFFFFF', highlightthickness=0)
             avatar.pack(pady=(0, 4))
-            if photo:
-                avatar.create_image(54, 54, image=photo)
-                avatar.image = photo
-            else:
-                initials = ''.join(part[0] for part in name.split()[:2]).upper() or 'AZ'
-                avatar.create_oval(4, 4, 104, 104, fill='#EEF4FF', outline='#2563EB', width=2)
-                avatar.create_text(54, 54, text=initials, font=('Segoe UI', 24, 'bold'), fill='#1E40AF')
+            initials = ''.join(part[0] for part in name.split()[:2]).upper() or 'AZ'
+            avatar.create_oval(4, 4, 104, 104, fill='#EEF4FF', outline='#2563EB', width=2)
+            avatar.create_text(54, 54, text=initials, font=('Segoe UI', 24, 'bold'), fill='#1E40AF')
+
+            # Show the card immediately with initials; swap in the photo once it
+            # downloads so a slow image never delays the popup itself.
+            def _apply_photo(photo_bytes):
+                if not photo_bytes or not root.winfo_exists():
+                    return
+                photo = _create_circular_image(photo_bytes)
+                if photo:
+                    avatar.delete('all')
+                    avatar.create_image(54, 54, image=photo)
+                    avatar.image = photo
+
+            photo_url = str(popup_data.get('avatarUrl') or '')
+            if photo_url:
+                if photo_url in _photo_bytes_cache:
+                    _apply_photo(_photo_bytes_cache[photo_url])
+                else:
+                    # Download off the GUI thread; Tk calls stay on this thread via polling.
+                    downloaded = []
+                    threading.Thread(target=lambda: downloaded.append(_fetch_photo_bytes(photo_url)), daemon=True).start()
+
+                    def _poll_photo(attempts=0):
+                        if downloaded:
+                            _apply_photo(downloaded[0])
+                        elif attempts < 50 and root.winfo_exists():
+                            root.after(100, lambda: _poll_photo(attempts + 1))
+                    root.after(100, _poll_photo)
 
             tk.Label(identity, text=name, font=('Segoe UI', 15, 'bold'), fg='#0F172A', bg='#FFFFFF', wraplength=204, justify=tk.CENTER).pack(fill=tk.X, pady=(0, 3))
             ref_text = f'CRM {member_code}' if status != 'unmapped' else f'BIO ID  #{biometric_id}'

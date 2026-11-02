@@ -142,6 +142,12 @@ membership_policy_cache = {}
 # local fast-unlock endpoint can pulse the relay without a Firestore round trip.
 active_device_conns = {}
 LOCAL_GATE_PORT = int(os.getenv("ALPHA_ZONE_LOCAL_GATE_PORT", "8765"))
+# Live in-memory copies of members/employees, kept current by Firestore
+# listeners, so a punch is matched in milliseconds instead of running several
+# sequential queries plus a full-collection scan (~9-12s) on every swipe.
+roster_cache = {'members': {}, 'employees': {}}
+roster_cache_ready = {'members': False, 'employees': False}
+roster_cache_lock = threading.Lock()
 
 
 @contextmanager
@@ -1316,6 +1322,100 @@ def membership_policy_allows_terminal_access(data, today=None):
     return membership_allows_terminal_access(policy_record, today=today)
 
 
+def start_roster_cache():
+    """Mirror members and employees into memory via Firestore snapshot listeners."""
+    if db is None:
+        return
+
+    def make_listener(collection_name):
+        def on_snapshot(col_snapshot, changes, read_time):
+            with roster_cache_lock:
+                docs = roster_cache[collection_name]
+                for change in changes:
+                    if change.type.name == 'REMOVED':
+                        docs.pop(change.document.id, None)
+                    else:
+                        docs[change.document.id] = {'id': change.document.id, **(change.document.to_dict() or {})}
+                if not roster_cache_ready[collection_name]:
+                    roster_cache_ready[collection_name] = True
+                    logging.info(f"[Roster Cache] {collection_name}: {len(docs)} records loaded into memory.")
+        return on_snapshot
+
+    for collection_name in ('members', 'employees'):
+        try:
+            db.collection(collection_name).on_snapshot(make_listener(collection_name))
+        except Exception as cache_err:
+            logging.error(f"[Roster Cache] Could not attach {collection_name} listener: {cache_err}")
+
+
+def cached_roster(collection_name):
+    """Snapshot of the cached collection (doc-id order, like a Firestore stream), or None if not loaded."""
+    with roster_cache_lock:
+        if not roster_cache_ready[collection_name]:
+            return None
+        return [roster_cache[collection_name][doc_id] for doc_id in sorted(roster_cache[collection_name])]
+
+
+def _field_equals(value, as_str, as_int):
+    # Firestore equality is type-strict; mirror the string and int queries exactly.
+    if isinstance(value, bool):
+        return False
+    if isinstance(value, str):
+        return value == as_str
+    if isinstance(value, int):
+        return as_int is not None and value == as_int
+    return False
+
+
+def find_member_for_punch(user_id_str):
+    """Resolve the CRM member for a punch, using the live cache when it is loaded.
+
+    Same precedence as the Firestore queries: exact string then int matches on
+    biometricId / deviceUserId / memberId, then the legacy loose scan.
+    """
+    try:
+        num_id = int(user_id_str)
+    except ValueError:
+        num_id = None
+
+    all_members = cached_roster('members')
+    if all_members is None:
+        return None, False
+
+    exact_checks = [('biometricId', user_id_str, None), ('deviceUserId', user_id_str, None), ('memberId', user_id_str, None)]
+    if num_id is not None:
+        exact_checks += [('biometricId', None, num_id), ('deviceUserId', None, num_id)]
+    for field, as_str, as_int in exact_checks:
+        for m in all_members:
+            if _field_equals(m.get(field), as_str, as_int):
+                return m, True
+
+    m_str_clean = user_id_str.lower().strip()
+    for m in all_members:
+        bio_id = str(m.get('biometricId', '')).lower().strip()
+        dev_id = str(m.get('deviceUserId', '')).lower().strip()
+        c_id = str(m.get('clientId', '')).lower().strip()
+        cust_id = str(m.get('customId', '')).lower().strip()
+        mem_id = str(m.get('memberId', '')).lower().strip()
+        m_id = str(m.get('id', '')).lower().strip()
+        phone = str(m.get('phone', '')).lower().strip()
+        if bio_id and (bio_id == m_str_clean or bio_id.lstrip('0') == m_str_clean.lstrip('0')):
+            return m, True
+        if dev_id and (dev_id == m_str_clean or dev_id.lstrip('0') == m_str_clean.lstrip('0')):
+            return m, True
+        if c_id and (c_id == m_str_clean or c_id.lstrip('0') == m_str_clean.lstrip('0')):
+            return m, True
+        if cust_id and (cust_id == m_str_clean or cust_id.lstrip('0') == m_str_clean.lstrip('0')):
+            return m, True
+        if mem_id and (mem_id == m_str_clean or mem_id.endswith(f"-{m_str_clean}") or mem_id.endswith(m_str_clean)):
+            return m, True
+        if m_id and m_id == m_str_clean:
+            return m, True
+        if phone and (phone == m_str_clean or phone.endswith(m_str_clean)):
+            return m, True
+    return None, True
+
+
 def is_biometric_access_allowed_now(biometric_uid):
     """Re-check the latest CRM access decision immediately before pulsing the gate."""
     if db is None:
@@ -1328,6 +1428,19 @@ def is_biometric_access_allowed_now(biometric_uid):
         candidates.add(str(int(uid)))
     except ValueError:
         pass
+
+    # Live listener copies reflect CRM blocks/expiry within about a second.
+    cached_members, cached_employees = cached_roster('members'), cached_roster('employees')
+    if cached_members is not None and cached_employees is not None:
+        int_candidates = {int(c) for c in candidates}
+        found = False
+        for record in cached_members + cached_employees:
+            if any(_field_equals(record.get(field), c, None) or _field_equals(record.get(field), None, n)
+                   for field in ('biometricId', 'deviceUserId') for c in candidates for n in int_candidates):
+                found = True
+                if not membership_allows_terminal_access(record):
+                    return False
+        return found
 
     found = False
     for collection_name in ('members', 'employees'):
@@ -1494,9 +1607,13 @@ def run_membership_validation(user_id, device_id, device_name, branch, timestamp
     if len(processed_fingerprints) > 1000:
         processed_fingerprints.clear()
 
-    # 2. Check API checkin endpoint
+    # 2. Check API checkin endpoint (only when explicitly configured: the default
+    # local URL is not where the gate server listens, so it only ever timed out
+    # and added 3s before every popup).
     api_result = None
     try:
+        if not os.getenv('ALPHA_ZONE_API_URL'):
+            raise RuntimeError('CRM check-in API not configured')
         req_data = json.dumps({
             'memberId': user_id_str,
             'method': 'ESSL K90 Pro Biometric',
@@ -1509,7 +1626,7 @@ def run_membership_validation(user_id, device_id, device_name, branch, timestamp
             headers={'Content-Type': 'application/json'}
         )
         
-        with urllib.request.urlopen(req, timeout=3) as resp:
+        with urllib.request.urlopen(req, timeout=1.5) as resp:
             api_result = json.loads(resp.read().decode('utf-8'))
     except urllib.error.HTTPError as err:
         # An explicit membership denial from the API always wins.
@@ -1526,11 +1643,12 @@ def run_membership_validation(user_id, device_id, device_name, branch, timestamp
     except Exception as err:
         # If the CRM API is unavailable, only a fresh direct Firestore record may
         # authorize entry below. An absent/failed roster lookup stays unmapped/denied.
-        logging.warning(f"[API Checkin Notice]: {err}; applying direct Firestore gate validation.")
+        if os.getenv('ALPHA_ZONE_API_URL'):
+            logging.warning(f"[API Checkin Notice]: {err}; applying direct Firestore gate validation.")
 
-    # 3. Lookup member in Firestore / local roster with multi-type matching
-    member = None
-    if db is not None:
+    # 3. Lookup member in the live roster cache, or Firestore before it has loaded
+    member, resolved_from_cache = find_member_for_punch(user_id_str)
+    if db is not None and not resolved_from_cache:
         try:
             members_ref = db.collection('members')
             
@@ -2431,6 +2549,7 @@ def main_sync_orchestrator():
     # Launch continuous heartbeat thread
     threading.Thread(target=python_heartbeat_loop, daemon=True).start()
     start_local_gate_server()
+    start_roster_cache()
     
     # Watch diagnostics document
     try:
